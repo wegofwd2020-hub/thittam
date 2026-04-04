@@ -1,7 +1,18 @@
 -- name: GetVerticalConfigForTenant :one
--- Returns the base vertical config deep-merged with any tenant-specific overrides.
+-- Returns the base vertical config merged with any tenant-specific overrides.
+-- Uses PostgreSQL shallow merge for backward compatibility.
 SELECT
     vd.config || COALESCE(tv.config_override, '{}'::jsonb) AS merged_config
+FROM tenant_verticals tv
+JOIN vertical_definitions vd ON vd.id = tv.vertical_id
+WHERE tv.tenant_id = $1
+  AND vd.is_active = true;
+
+-- name: GetVerticalConfigAndOverride :one
+-- Returns base config and override separately for Go-side deep-merge.
+SELECT
+    vd.config AS base_config,
+    tv.config_override AS config_override
 FROM tenant_verticals tv
 JOIN vertical_definitions vd ON vd.id = tv.vertical_id
 WHERE tv.tenant_id = $1

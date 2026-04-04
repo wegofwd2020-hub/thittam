@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -30,6 +31,39 @@ func (s *Store) GetVerticalConfigForTenant(ctx context.Context, tenantID uuid.UU
 		}
 		return nil, fmt.Errorf("query vertical config for tenant %s: %w", tenantID, err)
 	}
+	return data, nil
+}
+
+// GetVerticalConfigWithDeepMerge returns the vertical config with deep-merge applied.
+// Uses the structured override format (append/override/remove) instead of PostgreSQL
+// shallow merge. Returns vertical.ErrNotFound if the tenant has no bound vertical.
+func (s *Store) GetVerticalConfigWithDeepMerge(ctx context.Context, tenantID uuid.UUID) ([]byte, error) {
+	result, err := s.q.GetVerticalConfigAndOverride(ctx, tenantID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("tenant %s: %w", tenantID, vertical.ErrNotFound)
+		}
+		return nil, fmt.Errorf("query vertical config for tenant %s: %w", tenantID, err)
+	}
+
+	// Parse base config
+	var base vertical.Config
+	if err := json.Unmarshal(result.BaseConfig, &base); err != nil {
+		return nil, fmt.Errorf("unmarshal base config: %w", err)
+	}
+
+	// Apply deep-merge if override exists
+	merged, err := vertical.ApplyOverride(&base, result.ConfigOverride)
+	if err != nil {
+		return nil, fmt.Errorf("apply override for tenant %s: %w", tenantID, err)
+	}
+
+	// Re-serialize the merged config
+	data, err := json.Marshal(merged)
+	if err != nil {
+		return nil, fmt.Errorf("marshal merged config: %w", err)
+	}
+
 	return data, nil
 }
 

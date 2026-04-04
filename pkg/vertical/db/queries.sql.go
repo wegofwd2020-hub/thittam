@@ -26,6 +26,29 @@ func (q *Queries) GetVerticalConfigForTenant(ctx context.Context, tenantID uuid.
 	return mergedConfig, err
 }
 
+const getVerticalConfigAndOverride = `-- name: GetVerticalConfigAndOverride :one
+SELECT
+    vd.config AS base_config,
+    tv.config_override AS config_override
+FROM tenant_verticals tv
+JOIN vertical_definitions vd ON vd.id = tv.vertical_id
+WHERE tv.tenant_id = $1
+  AND vd.is_active = true
+`
+
+// ConfigAndOverride holds the base config and optional override separately.
+type ConfigAndOverride struct {
+	BaseConfig     json.RawMessage
+	ConfigOverride json.RawMessage // may be nil
+}
+
+func (q *Queries) GetVerticalConfigAndOverride(ctx context.Context, tenantID uuid.UUID) (ConfigAndOverride, error) {
+	row := q.db.QueryRowContext(ctx, getVerticalConfigAndOverride, tenantID)
+	var result ConfigAndOverride
+	err := row.Scan(&result.BaseConfig, &result.ConfigOverride)
+	return result, err
+}
+
 const getVerticalDefinition = `-- name: GetVerticalDefinition :one
 SELECT id, name, version, description, config, is_active, created_at, updated_at
 FROM vertical_definitions WHERE id = $1 AND is_active = true
