@@ -24,7 +24,8 @@ type Config struct {
 	ApprovalWorkflow    ApprovalWorkflow    `json:"approval_workflow"`
 	InventoryCategories []InventoryCategory `json:"inventory_categories"`
 	ReportDefinitions   []ReportDefinition  `json:"report_definitions"`
-	CustomFields        CustomFields        `json:"custom_fields"`
+	CustomFields           CustomFields         `json:"custom_fields"`
+	DefaultChartOfAccounts []ChartOfAccountEntry `json:"default_chart_of_accounts"`
 }
 
 type EntityLabels struct {
@@ -111,4 +112,13 @@ type CustomField struct {
 	Type     string   `json:"type"`    // "text" | "number" | "date" | "select"
 	Options  []string `json:"options"` // for "select" type
 	Required bool     `json:"required"`
+}
+
+// ChartOfAccountEntry represents a single account in the default chart of accounts.
+// Used during tenant registration to seed the general-ledger service.
+type ChartOfAccountEntry struct {
+	Code        string  `json:"code" yaml:"code"`
+	Name        string  `json:"name" yaml:"name"`
+	AccountType string  `json:"account_type" yaml:"account_type"`
+	ParentCode  *string `json:"parent_code" yaml:"parent_code"`
 }

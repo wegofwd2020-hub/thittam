@@ -118,12 +118,7 @@ type CustomFieldYAML struct {
 	Required bool     `yaml:"required"`
 }
 
-type ChartOfAccountEntry struct {
-	Code        string  `yaml:"code"`
-	Name        string  `yaml:"name"`
-	AccountType string  `yaml:"account_type"`
-	ParentCode  *string `yaml:"parent_code"`
-}
+// ChartOfAccountEntry is defined in types.go with both json and yaml tags.
 
 // ValidationError represents a single validation failure.
 type ValidationError struct {
