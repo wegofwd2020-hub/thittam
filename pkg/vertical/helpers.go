@@ -76,6 +76,16 @@ func (c *Config) FindBudgetTemplate(name string) *BudgetTemplate {
 	return nil
 }
 
+// FindInventoryCategory returns the InventoryCategory with the given ID, or nil.
+func (c *Config) FindInventoryCategory(id string) *InventoryCategory {
+	for i := range c.InventoryCategories {
+		if c.InventoryCategories[i].ID == id {
+			return &c.InventoryCategories[i]
+		}
+	}
+	return nil
+}
+
 // FindReportDefinition returns the ReportDefinition with the given ID, or nil.
 func (c *Config) FindReportDefinition(id string) *ReportDefinition {
 	for i := range c.ReportDefinitions {

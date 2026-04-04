@@ -1,0 +1,98 @@
+// Project Management Service — Thittam
+// This proto file is documentation/contract for future code generation.
+// Run `buf generate` to produce Go stubs.
+
+syntax = "proto3";
+
+package thittam.project.v1;
+
+option go_package = "github.com/wegofwd2020/thittam/gen/project/v1;projectv1";
+
+import "google/protobuf/timestamp.proto";
+
+service ProjectService {
+  rpc CreateProduction(CreateProductionRequest) returns (Production);
+  rpc GetProduction(GetProductionRequest) returns (Production);
+  rpc ListProductions(ListProductionsRequest) returns (ListProductionsResponse);
+  rpc UpdateProduction(UpdateProductionRequest) returns (Production);
+  rpc ArchiveProduction(ArchiveProductionRequest) returns (Production);
+
+  rpc CreatePhase(CreatePhaseRequest) returns (Phase);
+  rpc ListPhases(ListPhasesRequest) returns (ListPhasesResponse);
+  rpc UpdatePhaseStatus(UpdatePhaseStatusRequest) returns (Phase);
+
+  rpc AddCrewMember(AddCrewMemberRequest) returns (CrewMember);
+  rpc ListCrewMembers(ListCrewMembersRequest) returns (ListCrewMembersResponse);
+  rpc RemoveCrewMember(RemoveCrewMemberRequest) returns (RemoveCrewMemberResponse);
+
+  rpc GetEntityLabels(GetEntityLabelsRequest) returns (EntityLabels);
+  rpc GetPhaseTypes(GetPhaseTypesRequest) returns (GetPhaseTypesResponse);
+}
+
+message Production {
+  string id = 1;
+  string tenant_id = 2;
+  string title = 3;
+  string slug = 4;
+  string description = 5;
+  string genre = 6;
+  string language = 7;
+  string status = 8;
+  string start_date = 9;
+  string end_date = 10;
+  string created_by = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+message Phase {
+  string id = 1;
+  string production_id = 2;
+  string phase_type = 3;
+  string status = 4;
+  string start_date = 5;
+  string end_date = 6;
+}
+
+message CrewMember {
+  string id = 1;
+  string production_id = 2;
+  string user_id = 3;
+  string name = 4;
+  string role = 5;
+  string department = 6;
+  string day_rate = 7;
+  string currency = 8;
+}
+
+message EntityLabels {
+  string project = 1;
+  string project_plural = 2;
+  string phase = 3;
+  string phase_plural = 4;
+  string team_member = 5;
+  string team_member_plural = 6;
+  string rate_label = 7;
+  string rate_unit = 8;
+}
+
+// Request/Response messages
+message CreateProductionRequest { string title = 1; string description = 2; string genre = 3; }
+message GetProductionRequest { string id = 1; }
+message ListProductionsRequest { string status = 1; int32 limit = 2; string after = 3; }
+message ListProductionsResponse { repeated Production productions = 1; }
+message UpdateProductionRequest { string id = 1; string title = 2; string description = 3; }
+message ArchiveProductionRequest { string id = 1; }
+message CreatePhaseRequest { string production_id = 1; string phase_type = 2; }
+message ListPhasesRequest { string production_id = 1; }
+message ListPhasesResponse { repeated Phase phases = 1; }
+message UpdatePhaseStatusRequest { string phase_id = 1; string new_phase_type = 2; }
+message AddCrewMemberRequest { string production_id = 1; string name = 2; string role = 3; string department = 4; string day_rate = 5; }
+message ListCrewMembersRequest { string production_id = 1; }
+message ListCrewMembersResponse { repeated CrewMember members = 1; }
+message RemoveCrewMemberRequest { string id = 1; }
+message RemoveCrewMemberResponse {}
+message GetEntityLabelsRequest {}
+message GetPhaseTypesRequest {}
+message GetPhaseTypesResponse { repeated PhaseTypeInfo phase_types = 1; }
+message PhaseTypeInfo { string id = 1; string label = 2; int32 order = 3; bool is_billable = 4; repeated string allowed_transitions = 5; }

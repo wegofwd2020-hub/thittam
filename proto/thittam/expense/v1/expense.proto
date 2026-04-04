@@ -1,0 +1,143 @@
+// Expense Tracking Service — Thittam
+// This proto file is documentation/contract for future code generation.
+// Run `buf generate` to produce Go stubs.
+
+syntax = "proto3";
+
+package thittam.expense.v1;
+
+option go_package = "github.com/wegofwd2020/thittam/gen/expense/v1;expensev1";
+
+import "google/protobuf/timestamp.proto";
+
+service ExpenseService {
+  rpc CreatePurchaseOrder(CreatePurchaseOrderRequest) returns (PurchaseOrder);
+  rpc GetPurchaseOrder(GetPurchaseOrderRequest) returns (PurchaseOrder);
+  rpc ListPurchaseOrders(ListPurchaseOrdersRequest) returns (ListPurchaseOrdersResponse);
+
+  rpc SubmitExpense(SubmitExpenseRequest) returns (Expense);
+  rpc GetExpense(GetExpenseRequest) returns (Expense);
+  rpc ListExpenses(ListExpensesRequest) returns (ListExpensesResponse);
+  rpc ApproveExpense(ApproveExpenseRequest) returns (Expense);
+
+  rpc CreatePettyCashAdvance(CreatePettyCashAdvanceRequest) returns (PettyCashAdvance);
+  rpc GetPettyCashAdvance(GetPettyCashAdvanceRequest) returns (PettyCashAdvance);
+  rpc ListPettyCashAdvances(ListPettyCashAdvancesRequest) returns (ListPettyCashAdvancesResponse);
+
+  rpc GetExpenseCategories(GetExpenseCategoriesRequest) returns (GetExpenseCategoriesResponse);
+  rpc GetApprovalLimits(GetApprovalLimitsRequest) returns (GetApprovalLimitsResponse);
+}
+
+message PurchaseOrder {
+  string id = 1;
+  string production_id = 2;
+  string tenant_id = 3;
+  string budget_line_id = 4;
+  string po_number = 5;
+  string vendor_name = 6;
+  string vendor_gstin = 7;
+  string description = 8;
+  string amount = 9;
+  string currency = 10;
+  string status = 11;
+  string raised_by = 12;
+  string approved_by = 13;
+  google.protobuf.Timestamp raised_at = 14;
+  google.protobuf.Timestamp approved_at = 15;
+  google.protobuf.Timestamp created_at = 16;
+}
+
+message Expense {
+  string id = 1;
+  string production_id = 2;
+  string tenant_id = 3;
+  string budget_line_id = 4;
+  string purchase_order_id = 5;
+  string category_id = 6;
+  string description = 7;
+  string amount = 8;
+  string currency = 9;
+  string tax_amount = 10;
+  string status = 11;
+  string submitted_by = 12;
+  string approved_by = 13;
+  google.protobuf.Timestamp submitted_at = 14;
+  google.protobuf.Timestamp approved_at = 15;
+  google.protobuf.Timestamp created_at = 16;
+}
+
+message PettyCashAdvance {
+  string id = 1;
+  string production_id = 2;
+  string tenant_id = 3;
+  string issued_to = 4;
+  string amount = 5;
+  string purpose = 6;
+  string status = 7;
+  google.protobuf.Timestamp issued_at = 8;
+  google.protobuf.Timestamp settled_at = 9;
+  string unspent_amount = 10;
+}
+
+message ExpenseCategoryInfo {
+  string id = 1;
+  string label = 2;
+  string tax_treatment = 3;
+  string default_account_code = 4;
+  bool requires_po = 5;
+}
+
+message ApprovalLimitInfo {
+  string role = 1;
+  string max_amount = 2;
+}
+
+// Request/Response messages
+message CreatePurchaseOrderRequest {
+  string production_id = 1;
+  string budget_line_id = 2;
+  string po_number = 3;
+  string vendor_name = 4;
+  string vendor_gstin = 5;
+  string description = 6;
+  string amount = 7;
+  string currency = 8;
+}
+
+message GetPurchaseOrderRequest { string id = 1; }
+message ListPurchaseOrdersRequest { string production_id = 1; string status = 2; int32 limit = 3; string after = 4; }
+message ListPurchaseOrdersResponse { repeated PurchaseOrder purchase_orders = 1; }
+
+message SubmitExpenseRequest {
+  string production_id = 1;
+  string budget_line_id = 2;
+  string purchase_order_id = 3;
+  string category_id = 4;
+  string description = 5;
+  string amount = 6;
+  string currency = 7;
+}
+
+message GetExpenseRequest { string id = 1; }
+message ListExpensesRequest { string production_id = 1; string status = 2; int32 limit = 3; string after = 4; }
+message ListExpensesResponse { repeated Expense expenses = 1; }
+message ApproveExpenseRequest { string expense_id = 1; }
+
+message CreatePettyCashAdvanceRequest {
+  string production_id = 1;
+  string issued_to = 2;
+  string amount = 3;
+  string purpose = 4;
+}
+
+message GetPettyCashAdvanceRequest { string id = 1; }
+message ListPettyCashAdvancesRequest { string production_id = 1; string status = 2; int32 limit = 3; string after = 4; }
+message ListPettyCashAdvancesResponse { repeated PettyCashAdvance advances = 1; }
+
+message GetExpenseCategoriesRequest {}
+message GetExpenseCategoriesResponse { repeated ExpenseCategoryInfo categories = 1; }
+message GetApprovalLimitsRequest {}
+message GetApprovalLimitsResponse {
+  repeated ApprovalLimitInfo limits = 1;
+  string dual_approval_above = 2;
+}

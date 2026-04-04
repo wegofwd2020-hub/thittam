@@ -1,0 +1,68 @@
+// Reporting Analytics Service — Thittam
+// This proto file is documentation/contract for future code generation.
+// Run `buf generate` to produce Go stubs.
+
+syntax = "proto3";
+
+package thittam.reporting.v1;
+
+option go_package = "github.com/wegofwd2020/thittam/gen/reporting/v1;reportingv1";
+
+import "google/protobuf/timestamp.proto";
+
+service ReportingService {
+  rpc GetReportDefinition(GetReportDefinitionRequest) returns (ReportDefinition);
+  rpc ListReportDefinitions(ListReportDefinitionsRequest) returns (ListReportDefinitionsResponse);
+
+  rpc GetExpenseFacts(GetExpenseFactsRequest) returns (GetExpenseFactsResponse);
+  rpc GetBudgetFacts(GetBudgetFactsRequest) returns (GetBudgetFactsResponse);
+
+  rpc GetDashboardSummary(GetDashboardSummaryRequest) returns (DashboardSummary);
+}
+
+message ReportDefinition {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  repeated string data_sources = 4;
+  repeated string default_columns = 5;
+}
+
+message ExpenseFact {
+  string expense_id = 1;
+  string production_id = 2;
+  string tenant_id = 3;
+  string budget_line_id = 4;
+  string category_id = 5;
+  string amount = 6;
+  google.protobuf.Timestamp approved_at = 7;
+}
+
+message BudgetFact {
+  string budget_id = 1;
+  string production_id = 2;
+  string tenant_id = 3;
+  string total_budgeted = 4;
+  string total_actual = 5;
+  string total_committed = 6;
+}
+
+message DashboardSummary {
+  string tenant_id = 1;
+  string project_label = 2;
+  int32 project_count = 3;
+  string total_budgeted = 4;
+  string total_actual = 5;
+  string total_committed = 6;
+  string variance = 7;
+}
+
+// Request/Response messages
+message GetReportDefinitionRequest { string report_id = 1; }
+message ListReportDefinitionsRequest {}
+message ListReportDefinitionsResponse { repeated ReportDefinition definitions = 1; }
+message GetExpenseFactsRequest { string production_id = 1; }
+message GetExpenseFactsResponse { repeated ExpenseFact facts = 1; }
+message GetBudgetFactsRequest { string production_id = 1; }
+message GetBudgetFactsResponse { repeated BudgetFact facts = 1; }
+message GetDashboardSummaryRequest {}

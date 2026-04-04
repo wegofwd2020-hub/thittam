@@ -1,0 +1,71 @@
+// Inventory Management Service — Thittam
+// This proto file is documentation/contract for future code generation.
+// Run `buf generate` to produce Go stubs.
+
+syntax = "proto3";
+
+package thittam.inventory.v1;
+
+option go_package = "github.com/wegofwd2020/thittam/gen/inventory/v1;inventoryv1";
+
+import "google/protobuf/timestamp.proto";
+
+service InventoryService {
+  rpc CreateAsset(CreateAssetRequest) returns (Asset);
+  rpc GetAsset(GetAssetRequest) returns (Asset);
+  rpc ListAssets(ListAssetsRequest) returns (ListAssetsResponse);
+
+  rpc CheckOutAsset(CheckOutAssetRequest) returns (AssetCheckout);
+  rpc CheckInAsset(CheckInAssetRequest) returns (AssetCheckout);
+  rpc ListCheckouts(ListCheckoutsRequest) returns (ListCheckoutsResponse);
+
+  rpc GetInventoryCategories(GetInventoryCategoriesRequest) returns (GetInventoryCategoriesResponse);
+}
+
+message Asset {
+  string id = 1;
+  string tenant_id = 2;
+  string asset_code = 3;
+  string name = 4;
+  string category_id = 5;
+  string description = 6;
+  string ownership_type = 7;
+  string status = 8;
+  string purchase_date = 9;
+  string purchase_cost = 10;
+  string serial_number = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+message AssetCheckout {
+  string id = 1;
+  string asset_id = 2;
+  string production_id = 3;
+  string tenant_id = 4;
+  string checked_out_to = 5;
+  google.protobuf.Timestamp checked_out_at = 6;
+  string expected_return = 7;
+  google.protobuf.Timestamp checked_in_at = 8;
+  string condition_out = 9;
+  string condition_in = 10;
+}
+
+message InventoryCategoryInfo {
+  string id = 1;
+  string label = 2;
+  bool is_trackable = 3;
+  int32 depreciation_years = 4;
+}
+
+// Request/Response messages
+message CreateAssetRequest { string asset_code = 1; string name = 2; string category_id = 3; string description = 4; string ownership_type = 5; string purchase_date = 6; string purchase_cost = 7; string serial_number = 8; }
+message GetAssetRequest { string id = 1; }
+message ListAssetsRequest { string status = 1; int32 limit = 2; string after = 3; }
+message ListAssetsResponse { repeated Asset assets = 1; }
+message CheckOutAssetRequest { string asset_id = 1; string production_id = 2; string checked_out_to = 3; string expected_return = 4; string condition_out = 5; }
+message CheckInAssetRequest { string checkout_id = 1; string asset_id = 2; string condition_in = 3; }
+message ListCheckoutsRequest { string asset_id = 1; }
+message ListCheckoutsResponse { repeated AssetCheckout checkouts = 1; }
+message GetInventoryCategoriesRequest {}
+message GetInventoryCategoriesResponse { repeated InventoryCategoryInfo categories = 1; }
