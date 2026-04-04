@@ -12,6 +12,7 @@ import { InviteUserDialog } from "@/components/settings/invite-user-dialog";
 import { RolePermissionMatrix } from "@/components/settings/role-permission-matrix";
 import { OidcConfigForm } from "@/components/settings/oidc-config-form";
 import { AuditLogViewer, type AuditEntry } from "@/components/settings/audit-log-viewer";
+import { ThemeCustomizer } from "@/components/settings/theme-customizer";
 
 // ---------------------------------------------------------------------------
 // Tab definitions
@@ -23,6 +24,7 @@ const TABS = [
   { key: "auth", label: "Authentication" },
   { key: "audit", label: "Audit Log" },
   { key: "tenant", label: "Tenant Info" },
+  { key: "appearance", label: "Appearance" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -883,6 +885,31 @@ export default function SettingsPage() {
               .
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* Appearance Tab                                                    */}
+      {/* ================================================================= */}
+      {activeTab === "appearance" && (
+        <div>
+          <div className="mb-6">
+            <h2
+              className="font-heading text-lg font-semibold"
+              style={{ color: "var(--thittam-foreground, #0f172a)" }}
+            >
+              Theme & Appearance
+            </h2>
+            <p
+              className="mt-1 text-sm font-body"
+              style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+            >
+              Customize colors, branding, and typography for your organization.
+              Changes are previewed in real time.
+            </p>
+          </div>
+
+          <ThemeCustomizer />
         </div>
       )}
     </div>
