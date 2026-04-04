@@ -29,6 +29,15 @@ export interface ThemeColors {
 
 export interface ThemeIcons {
   sidebar: Record<string, string>;
+  // Per-vertical entity icons (grouped by project type)
+  entities: Record<string, string>;
+}
+
+// Typography configuration
+export interface ThemeTypography {
+  headingFont: string; // CSS font-family for headings/labels (default: Inter)
+  bodyFont: string;    // CSS font-family for body text (default: Merriweather)
+  monoFont: string;    // CSS font-family for numbers/codes (default: JetBrains Mono)
 }
 
 export interface ThemeBranding {
@@ -43,6 +52,7 @@ export interface ThittamTheme {
   colors: ThemeColors;
   icons: ThemeIcons;
   branding: ThemeBranding;
+  typography: ThemeTypography;
 }
 
 export interface EntityLabels {

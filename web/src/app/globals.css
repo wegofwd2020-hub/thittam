@@ -3,24 +3,81 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Typography system — 3 distinct font stacks */
+  --font-heading: "Inter", system-ui, sans-serif;
+  --font-body: "Merriweather", Georgia, serif;
+  --font-mono: "JetBrains Mono", Consolas, monospace;
+
+  /* Accessibility defaults (overridden by dyslexia mode) */
+  --letter-spacing: normal;
+  --line-height: 1.6;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* Typography utility classes */
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+  letter-spacing: var(--letter-spacing);
+  line-height: var(--line-height);
+}
+
+h1, h2, h3, h4, h5, h6,
+label, button, nav, .font-heading {
+  font-family: var(--font-heading);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+.font-mono,
+td[data-type="number"],
+[data-monetary],
+.amount,
+.account-code {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Dyslexia mode — toggled by AccessibilityProvider */
+.dyslexia-mode {
+  letter-spacing: 0.05em;
+  line-height: 1.8;
+  word-spacing: 0.1em;
+}
+
+.dyslexia-mode h1,
+.dyslexia-mode h2,
+.dyslexia-mode h3,
+.dyslexia-mode h4,
+.dyslexia-mode h5,
+.dyslexia-mode h6,
+.dyslexia-mode label,
+.dyslexia-mode button,
+.dyslexia-mode nav,
+.dyslexia-mode .font-heading {
+  font-family: var(--font-heading);
+}
+
+.dyslexia-mode body,
+.dyslexia-mode .font-body {
+  font-family: var(--font-body);
+}
+
+.dyslexia-mode .font-mono,
+.dyslexia-mode td[data-type="number"],
+.dyslexia-mode [data-monetary],
+.dyslexia-mode .amount,
+.dyslexia-mode .account-code {
+  font-family: var(--font-mono);
 }

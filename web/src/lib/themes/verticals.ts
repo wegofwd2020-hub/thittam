@@ -1,5 +1,13 @@
-import type { VerticalDefinition } from "./types";
+import type { VerticalDefinition, ThemeTypography } from "./types";
 
+// Default typography — all verticals share this unless overridden.
+const defaultTypography: ThemeTypography = {
+  headingFont: "var(--font-heading), 'Inter', system-ui, sans-serif",
+  bodyFont: "var(--font-body), 'Merriweather', Georgia, serif",
+  monoFont: "var(--font-mono), 'JetBrains Mono', Consolas, monospace",
+};
+
+// ── Movie Production ──────────────────────────────────────────────────
 const movieProduction: VerticalDefinition = {
   theme: {
     id: "movie-production",
@@ -16,17 +24,8 @@ const movieProduction: VerticalDefinition = {
       muted: "#F1F5F9",
       mutedForeground: "#64748B",
       border: "#E2E8F0",
-      sidebar: {
-        bg: "#1E1B2E",
-        text: "#CBD5E1",
-        activeItem: "#F59E0B",
-        activeBg: "#2D2A3E",
-      },
-      status: {
-        onTrack: "#16A34A",
-        atRisk: "#F59E0B",
-        overBudget: "#DC2626",
-      },
+      sidebar: { bg: "#1E1B2E", text: "#CBD5E1", activeItem: "#F59E0B", activeBg: "#2D2A3E" },
+      status: { onTrack: "#16A34A", atRisk: "#F59E0B", overBudget: "#DC2626" },
     },
     icons: {
       sidebar: {
@@ -39,8 +38,21 @@ const movieProduction: VerticalDefinition = {
         team: "Users",
         settings: "Settings",
       },
+      entities: {
+        project: "Clapperboard",
+        phase: "Film",
+        teamMember: "Camera",
+        budget: "DollarSign",
+        expense: "Receipt",
+        asset: "Video",
+        report: "BarChart3",
+        director: "Megaphone",
+        talent: "Star",
+        ticket: "Ticket",
+      },
     },
     branding: {},
+    typography: defaultTypography,
   },
   entityLabels: {
     project: "Production",
@@ -54,6 +66,7 @@ const movieProduction: VerticalDefinition = {
   },
 };
 
+// ── Software Development ──────────────────────────────────────────────
 const softwareDevelopment: VerticalDefinition = {
   theme: {
     id: "software-development",
@@ -70,17 +83,8 @@ const softwareDevelopment: VerticalDefinition = {
       muted: "#F1F5F9",
       mutedForeground: "#64748B",
       border: "#E2E8F0",
-      sidebar: {
-        bg: "#0F172A",
-        text: "#94A3B8",
-        activeItem: "#38BDF8",
-        activeBg: "#1E293B",
-      },
-      status: {
-        onTrack: "#16A34A",
-        atRisk: "#EAB308",
-        overBudget: "#DC2626",
-      },
+      sidebar: { bg: "#0F172A", text: "#94A3B8", activeItem: "#38BDF8", activeBg: "#1E293B" },
+      status: { onTrack: "#16A34A", atRisk: "#EAB308", overBudget: "#DC2626" },
     },
     icons: {
       sidebar: {
@@ -93,21 +97,36 @@ const softwareDevelopment: VerticalDefinition = {
         team: "Users",
         settings: "Settings",
       },
+      entities: {
+        project: "FolderKanban",
+        phase: "GitBranch",
+        teamMember: "Code",
+        budget: "DollarSign",
+        expense: "Receipt",
+        asset: "Monitor",
+        report: "BarChart3",
+        sprint: "Terminal",
+        bug: "Bug",
+        deploy: "Rocket",
+        cloud: "Cloud",
+      },
     },
     branding: {},
+    typography: defaultTypography,
   },
   entityLabels: {
     project: "Project",
     projectPlural: "Projects",
-    phase: "Sprint",
-    phasePlural: "Sprints",
-    teamMember: "Developer",
-    teamMemberPlural: "Developers",
+    phase: "Milestone",
+    phasePlural: "Milestones",
+    teamMember: "Team Member",
+    teamMemberPlural: "Team Members",
     rateLabel: "Hourly Rate",
     rateUnit: "/hr",
   },
 };
 
+// ── Construction ──────────────────────────────────────────────────────
 const construction: VerticalDefinition = {
   theme: {
     id: "construction",
@@ -124,17 +143,8 @@ const construction: VerticalDefinition = {
       muted: "#F1F5F9",
       mutedForeground: "#64748B",
       border: "#E2E8F0",
-      sidebar: {
-        bg: "#1C1917",
-        text: "#A8A29E",
-        activeItem: "#F59E0B",
-        activeBg: "#292524",
-      },
-      status: {
-        onTrack: "#16A34A",
-        atRisk: "#F59E0B",
-        overBudget: "#DC2626",
-      },
+      sidebar: { bg: "#1C1917", text: "#A8A29E", activeItem: "#F59E0B", activeBg: "#292524" },
+      status: { onTrack: "#16A34A", atRisk: "#F59E0B", overBudget: "#DC2626" },
     },
     icons: {
       sidebar: {
@@ -147,21 +157,36 @@ const construction: VerticalDefinition = {
         team: "Users",
         settings: "Settings",
       },
+      entities: {
+        project: "Building2",
+        phase: "Hammer",
+        teamMember: "HardHat",
+        budget: "DollarSign",
+        expense: "Receipt",
+        asset: "Truck",
+        report: "BarChart3",
+        blueprint: "Ruler",
+        site: "Landmark",
+        material: "Warehouse",
+        crane: "Wrench",
+      },
     },
     branding: {},
+    typography: defaultTypography,
   },
   entityLabels: {
-    project: "Job Site",
-    projectPlural: "Job Sites",
-    phase: "Phase",
-    phasePlural: "Phases",
-    teamMember: "Worker",
-    teamMemberPlural: "Workers",
+    project: "Contract",
+    projectPlural: "Contracts",
+    phase: "Work Package",
+    phasePlural: "Work Packages",
+    teamMember: "Site Worker",
+    teamMemberPlural: "Site Workers",
     rateLabel: "Day Rate",
     rateUnit: "/day",
   },
 };
 
+// ── Events Management ─────────────────────────────────────────────────
 const eventsManagement: VerticalDefinition = {
   theme: {
     id: "events-management",
@@ -178,17 +203,8 @@ const eventsManagement: VerticalDefinition = {
       muted: "#F1F5F9",
       mutedForeground: "#64748B",
       border: "#E2E8F0",
-      sidebar: {
-        bg: "#1E1033",
-        text: "#C4B5FD",
-        activeItem: "#EC4899",
-        activeBg: "#2D1F4E",
-      },
-      status: {
-        onTrack: "#16A34A",
-        atRisk: "#F59E0B",
-        overBudget: "#DC2626",
-      },
+      sidebar: { bg: "#1E1033", text: "#C4B5FD", activeItem: "#EC4899", activeBg: "#2D1F4E" },
+      status: { onTrack: "#16A34A", atRisk: "#F59E0B", overBudget: "#DC2626" },
     },
     icons: {
       sidebar: {
@@ -201,18 +217,33 @@ const eventsManagement: VerticalDefinition = {
         team: "Users",
         settings: "Settings",
       },
+      entities: {
+        project: "CalendarDays",
+        phase: "PartyPopper",
+        teamMember: "Users",
+        budget: "DollarSign",
+        expense: "Receipt",
+        asset: "Package",
+        report: "BarChart3",
+        venue: "MapPin",
+        performer: "Mic",
+        music: "Music",
+        gift: "Gift",
+        sparkle: "Sparkles",
+      },
     },
     branding: {},
+    typography: defaultTypography,
   },
   entityLabels: {
     project: "Event",
     projectPlural: "Events",
     phase: "Stage",
     phasePlural: "Stages",
-    teamMember: "Staff Member",
-    teamMemberPlural: "Staff Members",
-    rateLabel: "Hourly Rate",
-    rateUnit: "/hr",
+    teamMember: "Event Staff",
+    teamMemberPlural: "Event Staff",
+    rateLabel: "Day Rate",
+    rateUnit: "/day",
   },
 };
 
@@ -223,9 +254,7 @@ export const verticals: Record<string, VerticalDefinition> = {
   "events-management": eventsManagement,
 };
 
-export function getVerticalDefinition(
-  verticalId: string,
-): VerticalDefinition | undefined {
+export function getVerticalDefinition(verticalId: string): VerticalDefinition | undefined {
   return verticals[verticalId];
 }
 
