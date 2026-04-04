@@ -1,0 +1,25 @@
+# Compiled binaries
+budget-planning
+expense-tracking
+inventory-management
+project-management
+reporting-analytics
+thittam-cli
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+coverage.out
+*.test
+
+# Environment
+.env
+.env.local
