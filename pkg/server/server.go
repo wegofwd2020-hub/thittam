@@ -13,6 +13,7 @@ import (
 	"runtime/debug"
 	"syscall"
 
+	"github.com/wegofwd2020/thittam/pkg/observability"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -22,16 +23,19 @@ import (
 
 // Config holds the server configuration.
 type Config struct {
-	Name   string // service name (e.g., "project-management")
-	Port   int
-	Loader *vertical.Loader // vertical config loader (nil = skip vertical interceptor)
+	Name        string           // service name (e.g., "project-management")
+	Port        int
+	MetricsPort int              // health/metrics HTTP port (default: 9090)
+	Loader      *vertical.Loader // vertical config loader (nil = skip vertical interceptor)
 }
 
 // Server wraps a gRPC server with interceptors and lifecycle management.
 type Server struct {
-	cfg    Config
-	gs     *grpc.Server
-	logger Logger
+	cfg     Config
+	gs      *grpc.Server
+	metrics *observability.Metrics
+	health  *observability.HealthServer
+	logger  Logger
 }
 
 // Logger defines structured logging.
@@ -46,17 +50,25 @@ func (l defaultLogger) Info(msg string, kv ...interface{})  { log.Printf("[INFO]
 func (l defaultLogger) Error(msg string, kv ...interface{}) { log.Printf("[ERROR] %s: %s %v", l.name, msg, kv) }
 
 // New creates a gRPC server with the standard interceptor chain.
-// Interceptor order (outermost first): recovery → vertical → (custom).
+// Interceptor order (outermost first): recovery → metrics → vertical → handler.
 func New(cfg Config, logger Logger) *Server {
 	if logger == nil {
 		logger = defaultLogger{name: cfg.Name}
 	}
+	if cfg.MetricsPort == 0 {
+		cfg.MetricsPort = 9090
+	}
+
+	// Create metrics collectors
+	metrics := observability.NewMetrics(sanitizeName(cfg.Name))
 
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		recoveryUnaryInterceptor(logger),
+		observability.UnaryMetricsInterceptor(metrics),
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		recoveryStreamInterceptor(logger),
+		observability.StreamMetricsInterceptor(metrics),
 	}
 
 	if cfg.Loader != nil {
@@ -71,12 +83,44 @@ func New(cfg Config, logger Logger) *Server {
 
 	reflection.Register(gs)
 
-	return &Server{cfg: cfg, gs: gs, logger: logger}
+	// Create health server
+	health := observability.NewHealthServer(cfg.Name, cfg.MetricsPort)
+
+	return &Server{cfg: cfg, gs: gs, metrics: metrics, health: health, logger: logger}
+}
+
+// sanitizeName converts service names to Prometheus-safe subsystem names.
+// "project-management" → "project_management"
+func sanitizeName(name string) string {
+	result := make([]byte, len(name))
+	for i, c := range name {
+		if c == '-' {
+			result[i] = '_'
+		} else {
+			result[i] = byte(c)
+		}
+	}
+	return string(result)
 }
 
 // GRPCServer returns the underlying grpc.Server for service registration.
 func (s *Server) GRPCServer() *grpc.Server {
 	return s.gs
+}
+
+// Metrics returns the Prometheus metrics collectors for custom business metrics.
+func (s *Server) Metrics() *observability.Metrics {
+	return s.metrics
+}
+
+// Health returns the health server for registering dependency checkers.
+func (s *Server) Health() *observability.HealthServer {
+	return s.health
+}
+
+// RegisterHealthChecker adds a named health check (e.g., "postgres", "redis").
+func (s *Server) RegisterHealthChecker(name string, checker observability.HealthChecker) {
+	s.health.RegisterChecker(name, checker)
 }
 
 // Run starts the gRPC server and blocks until interrupted.
@@ -97,9 +141,15 @@ func (s *Server) Run() error {
 		s.gs.GracefulStop()
 	}()
 
+	// Start health/metrics HTTP server
+	if err := s.health.Start(); err != nil {
+		return fmt.Errorf("health server: %w", err)
+	}
+
 	s.logger.Info("starting",
 		"service", s.cfg.Name,
-		"addr", addr,
+		"grpc_addr", addr,
+		"metrics_addr", fmt.Sprintf(":%d", s.cfg.MetricsPort),
 	)
 
 	return s.gs.Serve(lis)
