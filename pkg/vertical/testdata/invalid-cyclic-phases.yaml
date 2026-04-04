@@ -1,0 +1,70 @@
+vertical:
+  id: cyclic-test
+  name: Cyclic Test
+  version: 1.0.0
+  description: Test vertical with cyclic phase transitions.
+
+  entity_labels:
+    project: Project
+    project_plural: Projects
+    phase: Phase
+    phase_plural: Phases
+    team_member: Member
+    team_member_plural: Members
+    rate_label: Rate
+    rate_unit: day
+
+  phase_types:
+    - id: alpha
+      label: Alpha
+      order: 1
+      is_billable: false
+      allowed_transitions: [beta]
+    - id: beta
+      label: Beta
+      order: 2
+      is_billable: false
+      allowed_transitions: [gamma]
+    - id: gamma
+      label: Gamma
+      order: 3
+      is_billable: false
+      allowed_transitions: [alpha]
+
+  budget_categories:
+    - id: general
+      label: General
+      description: General costs
+      default_account_code: "5000"
+
+  expense_categories:
+    - id: misc
+      label: Miscellaneous
+      tax_treatment: none
+      default_account_code: "5000"
+      requires_po: false
+
+  approval_workflow:
+    limits:
+      - role: manager
+        max_amount: 100000
+    dual_approval_above: 500000
+
+  inventory_categories:
+    - id: equipment
+      label: Equipment
+      is_trackable: true
+      depreciation_years: 3
+
+  default_chart_of_accounts:
+    - code: "5000"
+      name: General Expenses
+      account_type: expense
+      parent_code: null
+
+  report_definitions:
+    - id: summary
+      name: Summary
+      description: Basic summary
+      data_sources: [budget-planning]
+      default_columns: [total]

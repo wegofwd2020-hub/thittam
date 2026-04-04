@@ -1,0 +1,15 @@
+vertical:
+  id: incomplete
+  name: Incomplete Vertical
+  version: 1.0.0
+  description: Missing required sections.
+
+  entity_labels:
+    project: Project
+    project_plural: Projects
+    phase: Phase
+    phase_plural: Phases
+    team_member: Member
+    team_member_plural: Members
+    rate_label: Rate
+    rate_unit: day
