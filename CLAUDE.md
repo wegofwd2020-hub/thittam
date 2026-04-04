@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is the **application code repository** for Thittam (திட்டம் — "plan" in Tamil), a multi-tenant SaaS platform for production management. Documentation lives in a separate repo (`github.com/wegofwd2020-hub/thittam_docs`).
+This is the **application code repository** for Thittam (திட்டம் — "plan" in Tamil), a multi-tenant SaaS platform for production management. Documentation lives in a separate repo: [`github.com/wegofwd2020-hub/thittam_docs`](https://github.com/wegofwd2020-hub/thittam_docs).
 
 **Company:** WeGoFwd2020
 
