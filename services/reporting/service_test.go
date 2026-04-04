@@ -31,6 +31,21 @@ func (m *mockRepo) GetBudgetFacts(ctx context.Context, tenantID, productionID uu
 	}
 	return nil, nil
 }
+func (m *mockRepo) GetPortfolioOverview(ctx context.Context, tenantID uuid.UUID) (*PortfolioOverview, error) {
+	return &PortfolioOverview{TenantID: tenantID}, nil
+}
+func (m *mockRepo) GetFinancialSummary(ctx context.Context, tenantID uuid.UUID) (*FinancialSummary, error) {
+	return &FinancialSummary{TenantID: tenantID}, nil
+}
+func (m *mockRepo) GetApprovalPipeline(ctx context.Context, tenantID uuid.UUID) (*ApprovalPipeline, error) {
+	return &ApprovalPipeline{TenantID: tenantID}, nil
+}
+func (m *mockRepo) GetTeamUtilization(ctx context.Context, tenantID uuid.UUID) (*TeamUtilization, error) {
+	return &TeamUtilization{TenantID: tenantID}, nil
+}
+func (m *mockRepo) GetComplianceStatus(ctx context.Context, tenantID uuid.UUID) (*ComplianceStatus, error) {
+	return &ComplianceStatus{TenantID: tenantID}, nil
+}
 func (m *mockRepo) GetDashboardSummary(ctx context.Context, tenantID uuid.UUID) (*DashboardSummary, error) {
 	if m.getDashboardSummaryFn != nil {
 		return m.getDashboardSummaryFn(ctx, tenantID)
