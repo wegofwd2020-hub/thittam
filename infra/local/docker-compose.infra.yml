@@ -1,0 +1,63 @@
+# Thittam — middleware only (no postgres)
+#
+# Use this when pointing DATABASE_URL at the system PostgreSQL (port 5433).
+# This avoids conflicts with other projects that also run Docker postgres.
+#
+# Run:  docker compose -f infra/local/docker-compose.infra.yml up -d
+# Stop: docker compose -f infra/local/docker-compose.infra.yml down
+
+services:
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"   # 6380 avoids conflict with StudyBuddy's 6379
+    command: redis-server --save ""   # no persistence in dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]   # JetStream + monitoring
+    ports:
+      - "4222:4222"   # client connections
+      - "8222:8222"   # HTTP monitoring UI
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz | grep -q ok"]
+      interval: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: thittam
+      MINIO_ROOT_PASSWORD: thittam_dev
+    ports:
+      - "9000:9000"   # S3-compatible API
+      - "9001:9001"   # MinIO web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live"]
+      interval: 10s
+      retries: 5
+
+  # Creates the thittam-documents bucket then exits
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 thittam thittam_dev &&
+        mc mb --ignore-existing local/thittam-documents &&
+        echo 'Bucket thittam-documents ready.'
+      "
+    restart: "no"
+
+volumes:
+  minio_data:

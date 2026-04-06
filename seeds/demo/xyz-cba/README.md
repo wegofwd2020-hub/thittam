@@ -56,20 +56,37 @@ All users share password: `demo1234`
 - Executive Producer (Priya Sharma) can approve up to ₹10,00,000
 - Dual approval required above ₹10,00,000
 
+## Seed Files
+
+| File | Contents | Depends On |
+|---|---|---|
+| `001_tenant.sql` | Tenant record + vertical binding | shared migrations |
+| `002_users.sql` | 8 demo users (all roles, password: `demo1234`) | 001 |
+| `003_productions.sql` | 3 productions in different phases | 002 |
+| `004_budgets.sql` | Budget versions + 13 ATL/BTL/Post line items | 003 |
+| `005_expenses.sql` | 20 expenses (paid, approved, submitted, rejected, draft) | 003 |
+| `006_inventory.sql` | 8 equipment/prop assets | 001 |
+| `007_iam_roles.sql` | 6 system roles + user role assignments | 002 |
+| `008_ledger.sql` | Chart of accounts (16 accounts) + 4 open accounting periods | 001 |
+| `009_notification_templates.sql` | 9 templates for expense/budget/document events | 001 |
+| `010_document_folders.sql` | 13 folders (tenant-wide + production-scoped) | 003 |
+
 ## Loading the Seed Data
 
 ```bash
-# Prerequisites: shared and IAM migrations must be run first
+# Prerequisites: all migrations must be run first
 make migrate-all
 
-# Load demo data
-psql $DATABASE_URL -f seeds/demo/xyz-cba/001_tenant.sql
-psql $DATABASE_URL -f seeds/demo/xyz-cba/002_users.sql
-
-# Productions, budgets, expenses, and inventory require their respective
-# service schemas to be migrated first. The SQL is commented out in
-# 003-006 and ready to uncomment when those services are built.
+# Load all seed files in order (each is idempotent — safe to re-run)
+DB="postgres://thittam:thittam_dev@localhost:5432/thittam?sslmode=disable"
+for f in seeds/demo/xyz-cba/*.sql; do
+  echo "Loading $f ..."
+  psql $DB -f "$f"
+done
 ```
+
+For detailed testing instructions see:
+[`thittam_docs/docs/operations/local-testing-guide.md`](https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/local-testing-guide.md)
 
 ## UUID Convention
 

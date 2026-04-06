@@ -23,3 +23,8 @@ coverage.out
 # Environment
 .env
 .env.local
+
+# JWT keys — generated locally, never committed
+keys/*.pem
+keys/*.pem
+infra/local/keys/*.pem

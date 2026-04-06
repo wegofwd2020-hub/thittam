@@ -1,0 +1,77 @@
+# Thittam local infrastructure
+# Run: docker compose up -d
+# Stop: docker compose down
+# Wipe data: docker compose down -v
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: thittam
+      POSTGRES_USER: thittam
+      POSTGRES_PASSWORD: thittam_dev
+    ports:
+      - "5434:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thittam"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    command: redis-server --save ""   # no persistence in dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]   # JetStream enabled, monitoring on 8222
+    ports:
+      - "4222:4222"   # client connections
+      - "8222:8222"   # HTTP monitoring UI
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz | grep -q ok"]
+      interval: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: thittam
+      MINIO_ROOT_PASSWORD: thittam_dev
+    ports:
+      - "9000:9000"   # S3-compatible API
+      - "9001:9001"   # MinIO web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live"]
+      interval: 10s
+      retries: 5
+
+  # MinIO bucket initialiser — creates the documents bucket then exits
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 thittam thittam_dev &&
+        mc mb --ignore-existing local/thittam-documents &&
+        echo 'Bucket thittam-documents ready.'
+      "
+    restart: "no"
+
+volumes:
+  pg_data:
+  minio_data:

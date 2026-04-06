@@ -22,12 +22,12 @@
 -- Production 2: d2000000-0000-0000-0000-000000000002
 -- Production 3: d2000000-0000-0000-0000-000000000003
 
-/*
-INSERT INTO productions (id, tenant_id, title, description, phase, created_by, created_at) VALUES
+INSERT INTO productions (id, tenant_id, title, slug, description, status, created_by, created_at) VALUES
 
 ('d2000000-0000-0000-0000-000000000001',
  'd0000000-0000-0000-0000-000000000001',
  'The Last Horizon',
+ 'the-last-horizon',
  'A sci-fi thriller set in 2087 where a research team discovers a signal from beyond the observable universe. Filming across Mumbai, Goa, and Ladakh.',
  'production',
  'd1000000-0000-0000-0000-000000000002',  -- Priya Sharma (Exec Producer)
@@ -36,6 +36,7 @@ INSERT INTO productions (id, tenant_id, title, description, phase, created_by, c
 ('d2000000-0000-0000-0000-000000000002',
  'd0000000-0000-0000-0000-000000000001',
  'Midnight Express Reboot',
+ 'midnight-express-reboot',
  'A modern reimagining of the classic action drama. Set in contemporary Mumbai underworld. Featuring an ensemble cast.',
  'post_production',
  'd1000000-0000-0000-0000-000000000002',
@@ -44,10 +45,10 @@ INSERT INTO productions (id, tenant_id, title, description, phase, created_by, c
 ('d2000000-0000-0000-0000-000000000003',
  'd0000000-0000-0000-0000-000000000001',
  'Project Starfall',
+ 'project-starfall',
  'An animated feature film targeting family audiences. A young girl discovers she can communicate with stars. India''s first large-scale animated theatrical release by XYZ_CBA.',
  'development',
  'd1000000-0000-0000-0000-000000000001',  -- Rajesh Kumar (Owner)
  '2026-01-10T10:00:00Z')
 
 ON CONFLICT (id) DO NOTHING;
-*/

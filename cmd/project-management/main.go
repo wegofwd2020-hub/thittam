@@ -13,8 +13,9 @@ func main() {
 	// In production, the Loader would be wired with Redis + DB.
 	// For now, we pass nil (vertical interceptor skipped) to allow startup.
 	srv := server.New(server.Config{
-		Name: "project-management",
-		Port: 8080,
+		Name:        "project-management",
+		Port:        8080,
+		MetricsPort: 9090,
 		// Loader: vertical.NewLoader(redisClient, dbStore, nil),
 	}, nil)
 

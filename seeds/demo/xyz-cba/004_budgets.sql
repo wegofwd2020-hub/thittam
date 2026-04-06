@@ -6,11 +6,10 @@
 -- d3000000-0000-0000-0000-000000000002  "Midnight Express Reboot" V2 (Draft — revision)
 -- d3000000-0000-0000-0000-000000000003  "Project Starfall" V1 (Draft)
 
-/*
 -- ═══════════════════════════════════════════════════════════
 -- "The Last Horizon" — Approved Budget V1 (₹8.5 Cr)
 -- ═══════════════════════════════════════════════════════════
-INSERT INTO budget_versions (id, production_id, tenant_id, label, status, currency, total_amount, approved_by, approved_at, created_by) VALUES
+INSERT INTO budgets (id, production_id, tenant_id, label, status, currency, total_amount, approved_by, approved_at, created_by) VALUES
 ('d3000000-0000-0000-0000-000000000001',
  'd2000000-0000-0000-0000-000000000001',
  'd0000000-0000-0000-0000-000000000001',
@@ -47,7 +46,7 @@ INSERT INTO budget_line_items (id, budget_id, tenant_id, category_id, descriptio
 -- ═══════════════════════════════════════════════════════════
 -- "Midnight Express Reboot" — Draft Budget V2 (₹12 Cr, revision)
 -- ═══════════════════════════════════════════════════════════
-INSERT INTO budget_versions (id, production_id, tenant_id, label, status, currency, total_amount, created_by) VALUES
+INSERT INTO budgets (id, production_id, tenant_id, label, status, currency, total_amount, created_by) VALUES
 ('d3000000-0000-0000-0000-000000000002',
  'd2000000-0000-0000-0000-000000000002',
  'd0000000-0000-0000-0000-000000000001',
@@ -60,7 +59,7 @@ INSERT INTO budget_versions (id, production_id, tenant_id, label, status, curren
 -- ═══════════════════════════════════════════════════════════
 -- "Project Starfall" — Draft Budget V1 (₹4 Cr, estimated)
 -- ═══════════════════════════════════════════════════════════
-INSERT INTO budget_versions (id, production_id, tenant_id, label, status, currency, total_amount, created_by) VALUES
+INSERT INTO budgets (id, production_id, tenant_id, label, status, currency, total_amount, created_by) VALUES
 ('d3000000-0000-0000-0000-000000000003',
  'd2000000-0000-0000-0000-000000000003',
  'd0000000-0000-0000-0000-000000000001',
@@ -69,4 +68,3 @@ INSERT INTO budget_versions (id, production_id, tenant_id, label, status, curren
  'INR',
  '40000000.00',
  'd1000000-0000-0000-0000-000000000001');
-*/
