@@ -1,0 +1,306 @@
+# Istio DestinationRules — Thittam
+#
+# Purpose: force L7 per-request ROUND_ROBIN load balancing for all gRPC services.
+#
+# Why this is necessary:
+#   gRPC multiplexes requests over a single long-lived HTTP/2 connection. A standard
+#   Kubernetes L4 load balancer (kube-proxy iptables rules) sees one TCP connection
+#   and routes all traffic to the same pod — leaving 2 out of 3 replicas idle under
+#   any sustained load. Istio's Envoy sidecar intercepts traffic at L7, allowing
+#   ROUND_ROBIN distribution of individual gRPC requests across all healthy pods.
+#
+# Required settings per service:
+#   trafficPolicy.loadBalancer.simple: ROUND_ROBIN
+#     — distribute each RPC to the next available pod in round-robin order.
+#   trafficPolicy.connectionPool.http.h2UpgradePolicy: UPGRADE
+#     — tell Envoy to use HTTP/2 (required for gRPC) even if the service cluster
+#       was discovered as HTTP/1.1.
+#   trafficPolicy.outlierDetection (all services)
+#     — eject pods returning ≥5 consecutive 5xx errors for at least 30 seconds.
+#       This prevents a crashing pod from continuing to receive traffic during a
+#       rolling update or OOM event.
+#
+# Verification (after apply):
+#   kubectl exec -n thittam deploy/expense-tracking -c istio-proxy -- \
+#     pilot-agent request GET clusters | grep project_management | grep -i lb_policy
+#   # Expected output: ROUND_ROBIN
+#
+# Load distribution check (see load-tests/scenarios/lb-distribution.js):
+#   k6 run load-tests/scenarios/lb-distribution.js
+#   # Then verify via Prometheus:
+#   kubectl exec -n monitoring deploy/prometheus -- \
+#     promtool query instant \
+#       'rate(istio_requests_total{destination_service_namespace="thittam"}[5m])
+#        by (destination_workload_instance)'
+#   # Each instance should receive ~33% ± 20% of total traffic.
+#
+# How to apply:
+#   kubectl apply -f infra/k8s/istio/destination-rules.yaml
+#
+# How to verify load balancer policy per service:
+#   kubectl get destinationrule -n thittam
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# project-management (port 8080)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: project-management
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: traffic-policy
+spec:
+  host: project-management.thittam.svc.cluster.local
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# budget-planning (port 8081)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: budget-planning
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: traffic-policy
+spec:
+  host: budget-planning.thittam.svc.cluster.local
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# expense-tracking (port 8082)
+# Extends the pre-existing circuit breaker with ROUND_ROBIN.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: expense-tracking
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: traffic-policy
+spec:
+  host: expense-tracking.thittam.svc.cluster.local
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+    # Circuit breaker thresholds kept from prior configuration.
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# general-ledger (port 8083)
+# Financial service — tighter circuit breaker (3 errors, not 5).
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: general-ledger
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: traffic-policy
+spec:
+  host: general-ledger.thittam.svc.cluster.local
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+    # Tighter threshold: ledger errors are high-severity — eject after 3, not 5.
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 15s
+      baseEjectionTime: 60s
+      maxEjectionPercent: 33
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# inventory-management (port 8084)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: inventory-management
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: traffic-policy
+spec:
+  host: inventory-management.thittam.svc.cluster.local
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# reporting-analytics (port 8085)
+# Read-heavy, long-running queries — larger connection pool.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: reporting-analytics
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: traffic-policy
+spec:
+  host: reporting-analytics.thittam.svc.cluster.local
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+        # Reporting queries can be slow — allow more concurrent streams.
+        http2MaxRequests: 200
+        maxRequestsPerConnection: 100
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# iam (port 8086)
+# Called on every request — tighter circuit breaker, higher availability.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: iam
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: traffic-policy
+spec:
+  host: iam.thittam.svc.cluster.local
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+        # IAM is on the hot path — allow higher concurrency.
+        http2MaxRequests: 500
+        maxRequestsPerConnection: 200
+    # IAM errors affect every service — eject faster.
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 33
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# notifications (port 8087)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: notifications
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: traffic-policy
+spec:
+  host: notifications.thittam.svc.cluster.local
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# document (port 8088)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: document
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: traffic-policy
+spec:
+  host: document.thittam.svc.cluster.local
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# billing (port 8089)
+# Financial service — same tight circuit breaker as general-ledger.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: billing
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: traffic-policy
+spec:
+  host: billing.thittam.svc.cluster.local
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      http:
+        h2UpgradePolicy: UPGRADE
+    # Billing errors affect subscription enforcement — eject after 3, not 5.
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 15s
+      baseEjectionTime: 60s
+      maxEjectionPercent: 33
