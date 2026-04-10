@@ -117,7 +117,8 @@ func TestFinancialConsumers_FilterSubjectsAreFinancial(t *testing.T) {
 		for _, sub := range c.FilterSubjects {
 			isFinancial := strings.HasPrefix(sub, "thittam.budget.") ||
 				strings.HasPrefix(sub, "thittam.expense.") ||
-				strings.HasPrefix(sub, "thittam.ledger.")
+				strings.HasPrefix(sub, "thittam.ledger.") ||
+				strings.HasPrefix(sub, "thittam.billing.")
 			assert.True(t, isFinancial,
 				"consumer %s has non-financial filter subject: %s", c.DurableName, sub)
 		}

@@ -4,7 +4,7 @@
 // # Stream topology
 //
 //	EVENTS          thittam.>                     — all domain events (full history)
-//	FINANCIAL       thittam.budget.> thittam.expense.> thittam.ledger.>   — financial subjects only (7-day retention for fast replay)
+//	FINANCIAL       thittam.budget.> thittam.expense.> thittam.ledger.> thittam.billing.>   — financial subjects only (7-day retention for fast replay)
 //	FINANCIAL_DLQ   $JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.FINANCIAL.> — dead-letter advisory stream
 //
 // # Dead-letter strategy
@@ -55,6 +55,7 @@ var FinancialSubjects = []string{
 	"thittam.budget.>",
 	"thittam.expense.>",
 	"thittam.ledger.>",
+	"thittam.billing.>",
 }
 
 // MaxDeliverAttempts is the number of times NATS will attempt to deliver a

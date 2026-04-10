@@ -1,0 +1,206 @@
+// Billing Service — Thittam
+// This proto file is documentation/contract for future code generation.
+// Run `buf generate` to produce Go stubs.
+
+syntax = "proto3";
+
+package thittam.billing.v1;
+
+option go_package = "github.com/wegofwd2020/thittam/gen/billing/v1;billingv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+service BillingService {
+  // --- Subscriptions ---
+  rpc GetSubscription(GetSubscriptionRequest) returns (Subscription);
+  rpc CreateSubscription(CreateSubscriptionRequest) returns (Subscription);
+  rpc UpgradeSubscription(UpgradeSubscriptionRequest) returns (Subscription);
+  rpc CancelSubscription(CancelSubscriptionRequest) returns (Subscription);
+
+  // --- Plan enforcement (called by IAM and project-management interceptors) ---
+  rpc CheckPlanLimit(CheckPlanLimitRequest) returns (CheckPlanLimitResponse);
+
+  // --- Invoices ---
+  rpc ListInvoices(ListInvoicesRequest) returns (ListInvoicesResponse);
+  rpc GetInvoice(GetInvoiceRequest) returns (Invoice);
+  rpc DownloadInvoice(DownloadInvoiceRequest) returns (InvoiceDownloadURL);
+
+  // --- Payment methods ---
+  rpc AddPaymentMethod(AddPaymentMethodRequest) returns (PaymentMethod);
+  rpc RemovePaymentMethod(RemovePaymentMethodRequest) returns (google.protobuf.Empty);
+  rpc ListPaymentMethods(ListPaymentMethodsRequest) returns (ListPaymentMethodsResponse);
+  rpc SetDefaultPaymentMethod(SetDefaultPaymentMethodRequest) returns (PaymentMethod);
+
+  // --- Usage ---
+  rpc GetUsageSummary(GetUsageSummaryRequest) returns (UsageSummary);
+
+  // --- Webhooks (internal — receives events from Razorpay / Stripe) ---
+  rpc HandlePaymentWebhook(WebhookPayload) returns (google.protobuf.Empty);
+}
+
+// ── Subscription ─────────────────────────────────────────────────────────────
+
+message Subscription {
+  string id                    = 1;
+  string tenant_id             = 2;
+  string plan                  = 3; // starter | professional | enterprise
+  string status                = 4; // trialing | active | past_due | cancelled | suspended
+  string billing_cycle         = 5; // monthly | annual
+  google.protobuf.Timestamp current_period_start = 6;
+  google.protobuf.Timestamp current_period_end   = 7;
+  google.protobuf.Timestamp trial_ends_at        = 8;
+  google.protobuf.Timestamp cancelled_at         = 9;
+  google.protobuf.Timestamp created_at           = 10;
+  google.protobuf.Timestamp updated_at           = 11;
+}
+
+message GetSubscriptionRequest {
+  string tenant_id = 1;
+}
+
+message CreateSubscriptionRequest {
+  string tenant_id      = 1;
+  string plan           = 2; // starter | professional | enterprise
+  string billing_cycle  = 3; // monthly | annual
+}
+
+message UpgradeSubscriptionRequest {
+  string tenant_id = 1;
+  string new_plan  = 2;
+}
+
+message CancelSubscriptionRequest {
+  string tenant_id = 1;
+}
+
+// ── Plan enforcement ──────────────────────────────────────────────────────────
+
+message CheckPlanLimitRequest {
+  string tenant_id            = 1;
+  string resource             = 2; // "production" | "user"
+  int32  current_productions  = 3;
+  int32  current_users        = 4;
+}
+
+message CheckPlanLimitResponse {
+  bool   allowed = 1;
+  string reason  = 2; // set when allowed = false
+}
+
+// ── Invoice ───────────────────────────────────────────────────────────────────
+
+message Invoice {
+  string id              = 1;
+  string tenant_id       = 2;
+  string subscription_id = 3;
+  string invoice_number  = 4; // INV-YYYY-NNNNN
+  string plan            = 5;
+  // Amounts are strings per Rule #1 — money is never a float.
+  string amount          = 6;
+  string tax_amount      = 7;
+  string total_amount    = 8;
+  string currency        = 9;  // INR | USD | EUR
+  string status          = 10; // pending | paid | overdue | void
+  google.protobuf.Timestamp period_start = 11;
+  google.protobuf.Timestamp period_end   = 12;
+  google.protobuf.Timestamp due_date     = 13;
+  google.protobuf.Timestamp paid_at      = 14;
+  string gateway_txn_id  = 15;
+  google.protobuf.Timestamp created_at   = 16;
+}
+
+message ListInvoicesRequest {
+  string tenant_id = 1;
+  int32  limit     = 2;
+  int32  offset    = 3;
+}
+
+message ListInvoicesResponse {
+  repeated Invoice invoices = 1;
+  int32            total    = 2;
+}
+
+message GetInvoiceRequest {
+  string tenant_id  = 1;
+  string invoice_id = 2;
+}
+
+message DownloadInvoiceRequest {
+  string tenant_id  = 1;
+  string invoice_id = 2;
+}
+
+message InvoiceDownloadURL {
+  string url        = 1; // presigned URL from document service
+  string expires_at = 2; // RFC 3339
+}
+
+// ── Payment method ────────────────────────────────────────────────────────────
+
+message PaymentMethod {
+  string id           = 1;
+  string tenant_id    = 2;
+  string type         = 3; // card | upi | netbanking | bank_transfer
+  string display_name = 4; // e.g. "Visa ending 4242"
+  bool   is_default   = 5;
+  // expires_at is optional; omitted for UPI and net-banking.
+  google.protobuf.Timestamp expires_at  = 6;
+  google.protobuf.Timestamp created_at  = 7;
+  // Gateway tokens are never returned to clients. They are stored encrypted
+  // server-side and used only for automatic charges.
+}
+
+message AddPaymentMethodRequest {
+  string tenant_id       = 1;
+  string type            = 2;
+  string display_name    = 3;
+  string razorpay_token  = 4; // provided for INR customers
+  string stripe_pm_id    = 5; // provided for international customers
+  string expires_at      = 6; // RFC 3339; optional
+}
+
+message RemovePaymentMethodRequest {
+  string tenant_id         = 1;
+  string payment_method_id = 2;
+}
+
+message ListPaymentMethodsRequest {
+  string tenant_id = 1;
+}
+
+message ListPaymentMethodsResponse {
+  repeated PaymentMethod payment_methods = 1;
+}
+
+message SetDefaultPaymentMethodRequest {
+  string tenant_id         = 1;
+  string payment_method_id = 2;
+}
+
+// ── Usage ─────────────────────────────────────────────────────────────────────
+
+message GetUsageSummaryRequest {
+  string tenant_id = 1;
+}
+
+message UsageSummary {
+  string tenant_id           = 1;
+  string plan                = 2;
+  int32  active_productions  = 3;
+  int32  user_count          = 4;
+  string storage_gb          = 5; // string per Rule #1
+  int32  max_productions     = 6; // -1 = unlimited
+  int32  max_users           = 7; // -1 = unlimited
+  int32  max_storage_gb      = 8; // -1 = unlimited
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+// ── Webhooks ──────────────────────────────────────────────────────────────────
+
+message WebhookPayload {
+  string gateway   = 1;    // "razorpay" | "stripe"
+  string event     = 2;    // gateway-specific event name
+  bytes  body      = 3;    // raw JSON body for signature verification
+  string signature = 4;    // HMAC-SHA256 signature from gateway header
+}

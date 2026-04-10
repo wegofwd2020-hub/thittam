@@ -33,6 +33,14 @@ const (
 	SubjectProjectMemberAssigned = "thittam.project.member_assigned"
 	SubjectTenantCreated      = "thittam.iam.tenant.created"
 	SubjectLedgerJournalPosted = "thittam.ledger.journal.posted"
+
+	// Billing domain events
+	SubjectBillingSubscriptionCreated   = "thittam.billing.subscription.created"
+	SubjectBillingSubscriptionUpgraded  = "thittam.billing.subscription.upgraded"
+	SubjectBillingSubscriptionCancelled = "thittam.billing.subscription.cancelled"
+	SubjectBillingSubscriptionSuspended = "thittam.billing.subscription.suspended"
+	SubjectBillingInvoicePaid           = "thittam.billing.invoice.paid"
+	SubjectBillingInvoiceOverdue        = "thittam.billing.invoice.overdue"
 )
 
 // Envelope wraps every domain event published to NATS JetStream.
@@ -159,6 +167,68 @@ type LedgerJournalPostedPayload struct {
 }
 
 // --- Project domain events ---
+
+// --- Billing domain events ---
+
+// BillingSubscriptionCreatedPayload is published when a new tenant subscription is created.
+// Subject: SubjectBillingSubscriptionCreated
+type BillingSubscriptionCreatedPayload struct {
+	SubscriptionID string `json:"subscription_id"`
+	Plan           string `json:"plan"`
+	BillingCycle   string `json:"billing_cycle"` // monthly, annual
+	TrialEndsAt    string `json:"trial_ends_at"` // RFC 3339
+}
+
+// BillingSubscriptionUpgradedPayload is published when a tenant changes their plan.
+// Subject: SubjectBillingSubscriptionUpgraded
+type BillingSubscriptionUpgradedPayload struct {
+	SubscriptionID string `json:"subscription_id"`
+	OldPlan        string `json:"old_plan"`
+	NewPlan        string `json:"new_plan"`
+}
+
+// BillingSubscriptionCancelledPayload is published when a tenant cancels.
+// Subject: SubjectBillingSubscriptionCancelled
+type BillingSubscriptionCancelledPayload struct {
+	SubscriptionID string `json:"subscription_id"`
+	Plan           string `json:"plan"`
+	CancelledAt    string `json:"cancelled_at"` // RFC 3339
+	// ActiveUntil is CurrentPeriodEnd — access continues until this date.
+	ActiveUntil string `json:"active_until"` // RFC 3339
+}
+
+// BillingSubscriptionSuspendedPayload is published when an account is suspended
+// after exhausting dunning retries.
+// Subject: SubjectBillingSubscriptionSuspended
+type BillingSubscriptionSuspendedPayload struct {
+	SubscriptionID string `json:"subscription_id"`
+	SuspendedAt    string `json:"suspended_at"` // RFC 3339
+	// PurgeAfter is 30 days after suspension — tenant data is deleted on this date.
+	PurgeAfter string `json:"purge_after"` // RFC 3339
+}
+
+// BillingInvoicePaidPayload is published when a payment succeeds.
+// Subject: SubjectBillingInvoicePaid
+type BillingInvoicePaidPayload struct {
+	InvoiceID     string `json:"invoice_id"`
+	InvoiceNumber string `json:"invoice_number"` // INV-YYYY-NNNNN
+	// TotalAmount serialized as string per Rule #1.
+	TotalAmount  string `json:"total_amount"`
+	Currency     string `json:"currency"`
+	GatewayTxnID string `json:"gateway_txn_id"`
+	PaidAt       string `json:"paid_at"` // RFC 3339
+}
+
+// BillingInvoiceOverduePayload is published when an invoice becomes overdue
+// after all dunning retries fail.
+// Subject: SubjectBillingInvoiceOverdue
+type BillingInvoiceOverduePayload struct {
+	InvoiceID     string `json:"invoice_id"`
+	InvoiceNumber string `json:"invoice_number"`
+	// TotalAmount serialized as string per Rule #1.
+	TotalAmount string `json:"total_amount"`
+	DunningAttempts int `json:"dunning_attempts"`
+}
 
 // ProjectMemberAssignedPayload is published when a crew member is assigned to a project.
 // Subject: SubjectProjectMemberAssigned
