@@ -1,0 +1,138 @@
+vertical:
+  id: movie-production
+  name: Movie & Film Production
+  version: 1.0.0
+  description: For film production companies and independent producers.
+
+  entity_labels:
+    project: Production
+    project_plural: Productions
+    phase: Phase
+    phase_plural: Phases
+    team_member: Crew Member
+    team_member_plural: Crew Members
+    rate_label: Day Rate
+    rate_unit: day
+
+  phase_types:
+    - id: development
+      label: Development
+      order: 1
+      is_billable: false
+      allowed_transitions: [pre_production]
+    - id: pre_production
+      label: Pre-Production
+      order: 2
+      is_billable: false
+      allowed_transitions: [production]
+    - id: production
+      label: Production
+      order: 3
+      is_billable: true
+      allowed_transitions: [post_production]
+    - id: post_production
+      label: Post-Production
+      order: 4
+      is_billable: true
+      allowed_transitions: [released]
+    - id: released
+      label: Released
+      order: 5
+      is_billable: false
+      allowed_transitions: []
+
+  budget_categories:
+    - id: above_the_line
+      label: Above the Line
+      description: Key creative talent
+      default_account_code: "5100"
+    - id: below_the_line
+      label: Below the Line
+      description: Technical crew and production costs
+      default_account_code: "5200"
+    - id: post_production
+      label: Post-Production
+      description: Editing, VFX, sound
+      default_account_code: "5300"
+
+  budget_templates:
+    - name: Feature Film
+      description: Standard feature film budget template
+      line_items:
+        - category_id: above_the_line
+          description: Director
+          account_code: "5100"
+          default_amount: 500000
+          is_required: true
+        - category_id: below_the_line
+          description: Cinematographer
+          account_code: "5200"
+          default_amount: 200000
+          is_required: true
+
+  expense_categories:
+    - id: location_rental
+      label: Location Rental
+      tax_treatment: input_gst
+      default_account_code: "5200"
+      requires_po: true
+    - id: equipment_rental
+      label: Equipment Rental
+      tax_treatment: input_gst
+      default_account_code: "5200"
+      requires_po: true
+
+  approval_workflow:
+    limits:
+      - role: line_producer
+        max_amount: 200000
+      - role: executive_producer
+        max_amount: 1000000
+    dual_approval_above: 1000000
+
+  inventory_categories:
+    - id: camera
+      label: Camera Equipment
+      is_trackable: true
+      depreciation_years: 5
+    - id: props
+      label: Props
+      is_trackable: false
+      depreciation_years: null
+
+  default_chart_of_accounts:
+    - code: "1000"
+      name: Cash and Bank
+      account_type: asset
+      parent_code: null
+    - code: "5100"
+      name: Above the Line Expenses
+      account_type: expense
+      parent_code: null
+    - code: "5200"
+      name: Below the Line Expenses
+      account_type: expense
+      parent_code: null
+    - code: "5300"
+      name: Post-Production Expenses
+      account_type: expense
+      parent_code: null
+
+  report_definitions:
+    - id: cost_report
+      name: Daily Cost Report
+      description: Budget vs actuals by category
+      data_sources: [budget-planning, expense-tracking]
+      default_columns: [category, budget, actual, variance]
+
+  custom_fields:
+    project:
+      - key: call_sheet_time
+        label: Call Sheet Time
+        type: text
+        required: false
+    expense:
+      - key: vendor_gstin
+        label: Vendor GSTIN
+        type: text
+        required: true

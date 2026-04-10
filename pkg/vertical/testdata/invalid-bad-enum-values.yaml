@@ -1,0 +1,64 @@
+vertical:
+  id: bad-enums
+  name: Bad Enum Values
+  version: 1.0.0
+  description: Test vertical with invalid enum values for rate_unit and tax_treatment.
+
+  entity_labels:
+    project: Project
+    project_plural: Projects
+    phase: Phase
+    phase_plural: Phases
+    team_member: Member
+    team_member_plural: Members
+    rate_label: Rate
+    rate_unit: weekly          # invalid: must be day|hour|month|fixed
+
+  phase_types:
+    - id: start
+      label: Start
+      order: 1
+      is_billable: false
+      allowed_transitions: [done]
+    - id: done
+      label: Done
+      order: 2
+      is_billable: false
+      allowed_transitions: []
+
+  budget_categories:
+    - id: general
+      label: General
+      description: General
+      default_account_code: "5000"
+
+  expense_categories:
+    - id: misc
+      label: Miscellaneous
+      tax_treatment: banana     # invalid: must be input_gst|tds_applicable|none
+      default_account_code: "5000"
+      requires_po: false
+
+  approval_workflow:
+    limits:
+      - role: manager
+        max_amount: 100000
+    dual_approval_above: 500000
+
+  inventory_categories:
+    - id: equipment
+      label: Equipment
+      is_trackable: true
+
+  default_chart_of_accounts:
+    - code: "5000"
+      name: General Expenses
+      account_type: expense
+      parent_code: null
+
+  report_definitions:
+    - id: summary
+      name: Summary
+      description: Basic summary
+      data_sources: [budget-planning]
+      default_columns: [total]

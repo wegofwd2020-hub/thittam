@@ -1,0 +1,290 @@
+vertical:
+  id: construction
+  name: Construction & Civil Engineering
+  version: 1.0.0
+  description: >
+    For construction companies, civil engineering firms, EPC contractors, and
+    infrastructure developers. Supports BOQ-based contracts, milestone billing,
+    subcontractor management, material procurement, plant and equipment tracking,
+    and retention accounting.
+
+  entity_labels:
+    project: Project
+    project_plural: Projects
+    phase: Stage
+    phase_plural: Stages
+    team_member: Site Staff
+    team_member_plural: Site Staff
+    rate_label: Day Rate
+    rate_unit: day
+
+  phase_types:
+    - id: tender
+      label: Tender / Bid
+      order: 1
+      is_billable: false
+      allowed_transitions: [mobilisation, cancelled]
+    - id: mobilisation
+      label: Mobilisation
+      order: 2
+      is_billable: true
+      allowed_transitions: [construction, on_hold]
+    - id: construction
+      label: Construction
+      order: 3
+      is_billable: true
+      allowed_transitions: [commissioning, on_hold]
+    - id: commissioning
+      label: Commissioning & Testing
+      order: 4
+      is_billable: true
+      allowed_transitions: [handover, on_hold]
+    - id: handover
+      label: Handover & Defects Liability
+      order: 5
+      is_billable: true
+      allowed_transitions: [completed]
+    - id: on_hold
+      label: On Hold
+      order: 6
+      is_billable: false
+      allowed_transitions: [cancelled]
+    - id: cancelled
+      label: Cancelled
+      order: 7
+      is_billable: false
+      allowed_transitions: []
+    - id: completed
+      label: Completed
+      order: 8
+      is_billable: false
+      allowed_transitions: []
+
+  budget_categories:
+    - id: materials
+      label: Materials & Procurement
+      description: Concrete, steel, timber, and other raw materials
+      default_account_code: "5100"
+    - id: labour
+      label: Direct Labour
+      description: Site workers, supervisors, safety officers
+      default_account_code: "5200"
+    - id: subcontract
+      label: Subcontract Works
+      description: Specialist subcontractors (MEP, piling, etc.)
+      default_account_code: "5300"
+    - id: plant_equipment
+      label: Plant & Equipment
+      description: Cranes, excavators, scaffolding hire
+      default_account_code: "5400"
+    - id: preliminaries
+      label: Preliminaries & Overheads
+      description: Site establishment, temporary works, insurances
+      default_account_code: "5500"
+    - id: contingency
+      label: Contingency
+      description: Risk allowance per contract
+      default_account_code: "5600"
+
+  budget_templates:
+    - name: BOQ-Based Contract
+      description: Standard bill of quantities contract budget
+      line_items:
+        - category_id: materials
+          description: Structural Materials
+          account_code: "5100"
+          default_amount: 5000000
+          is_required: true
+        - category_id: labour
+          description: Direct Labour Force
+          account_code: "5200"
+          default_amount: 3000000
+          is_required: true
+        - category_id: subcontract
+          description: MEP Subcontractors
+          account_code: "5300"
+          default_amount: 2000000
+          is_required: false
+        - category_id: plant_equipment
+          description: Plant Hire
+          account_code: "5400"
+          default_amount: 1000000
+          is_required: true
+        - category_id: preliminaries
+          description: Site Establishment
+          account_code: "5500"
+          default_amount: 500000
+          is_required: true
+        - category_id: contingency
+          description: Risk Contingency (10%)
+          account_code: "5600"
+          default_amount: 1150000
+          is_required: true
+
+  expense_categories:
+    - id: material_purchase
+      label: Material Purchase
+      tax_treatment: input_gst
+      default_account_code: "5100"
+      requires_po: true
+    - id: labour_payroll
+      label: Labour Payroll
+      tax_treatment: tds_applicable
+      default_account_code: "5200"
+      requires_po: false
+    - id: subcontractor_invoice
+      label: Subcontractor Invoice
+      tax_treatment: tds_applicable
+      default_account_code: "5300"
+      requires_po: true
+    - id: plant_hire
+      label: Plant & Equipment Hire
+      tax_treatment: input_gst
+      default_account_code: "5400"
+      requires_po: true
+    - id: site_overheads
+      label: Site Overheads
+      tax_treatment: input_gst
+      default_account_code: "5500"
+      requires_po: false
+    - id: miscellaneous
+      label: Miscellaneous
+      tax_treatment: none
+      default_account_code: "5500"
+      requires_po: false
+
+  approval_workflow:
+    limits:
+      - role: site_manager
+        max_amount: 100000
+      - role: project_manager
+        max_amount: 500000
+      - role: contracts_manager
+        max_amount: 2000000
+    dual_approval_above: 1000000
+
+  inventory_categories:
+    - id: owned_plant
+      label: Owned Plant & Equipment
+      is_trackable: true
+      depreciation_years: 10
+    - id: hired_plant
+      label: Hired Plant & Equipment
+      is_trackable: true
+      depreciation_years: null
+    - id: materials_store
+      label: Materials on Site
+      is_trackable: true
+      depreciation_years: null
+    - id: safety_equipment
+      label: Safety Equipment
+      is_trackable: true
+      depreciation_years: 3
+    - id: temporary_works
+      label: Temporary Works
+      is_trackable: false
+      depreciation_years: null
+
+  default_chart_of_accounts:
+    - code: "1000"
+      name: Cash and Bank
+      account_type: asset
+      parent_code: null
+    - code: "1100"
+      name: Accounts Receivable
+      account_type: asset
+      parent_code: null
+    - code: "1200"
+      name: Retention Receivable
+      account_type: asset
+      parent_code: null
+    - code: "1300"
+      name: Materials on Site (Asset)
+      account_type: asset
+      parent_code: null
+    - code: "2000"
+      name: Accounts Payable
+      account_type: liability
+      parent_code: null
+    - code: "2100"
+      name: Retention Payable
+      account_type: liability
+      parent_code: null
+    - code: "3000"
+      name: Owner's Equity
+      account_type: equity
+      parent_code: null
+    - code: "4000"
+      name: Contract Revenue
+      account_type: revenue
+      parent_code: null
+    - code: "4100"
+      name: Variation Revenue
+      account_type: revenue
+      parent_code: null
+    - code: "5100"
+      name: Materials Costs
+      account_type: expense
+      parent_code: null
+    - code: "5200"
+      name: Labour Costs
+      account_type: expense
+      parent_code: null
+    - code: "5300"
+      name: Subcontract Costs
+      account_type: expense
+      parent_code: null
+    - code: "5400"
+      name: Plant & Equipment Costs
+      account_type: expense
+      parent_code: null
+    - code: "5500"
+      name: Preliminary & Overhead Costs
+      account_type: expense
+      parent_code: null
+    - code: "5600"
+      name: Contingency
+      account_type: expense
+      parent_code: null
+
+  report_definitions:
+    - id: cost_to_complete
+      name: Cost to Complete
+      description: Earned value analysis — budgeted vs actual vs forecast to complete
+      data_sources: [budget-planning, expense-tracking]
+      default_columns: [stage, budgeted, actual, committed, forecast, variance]
+    - id: subcontractor_ledger
+      name: Subcontractor Ledger
+      description: Certified amounts, payments, and retention per subcontractor
+      data_sources: [expense-tracking, general-ledger]
+      default_columns: [subcontractor, certified, paid, retention, balance]
+    - id: plant_utilization
+      name: Plant Utilization
+      description: Hired vs owned plant costs and utilization days per project
+      data_sources: [inventory-management, expense-tracking]
+      default_columns: [plant_item, days_hired, cost, utilization_pct]
+
+  custom_fields:
+    project:
+      - key: contract_number
+        label: Contract Number
+        type: text
+        required: true
+      - key: client_reference
+        label: Client Reference
+        type: text
+        required: false
+      - key: contract_type
+        label: Contract Type
+        type: select
+        options: [lump_sum, boq, cost_plus, epc]
+        required: true
+    expense:
+      - key: work_order_number
+        label: Work Order Number
+        type: text
+        required: false
+      - key: boq_item_ref
+        label: BOQ Item Reference
+        type: text
+        required: false

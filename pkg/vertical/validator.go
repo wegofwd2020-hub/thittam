@@ -185,6 +185,7 @@ func Validate(yamlData []byte) ([]ValidationError, error) {
 
 	// Duplicate ID checks
 	errs = append(errs, checkDuplicateIDs("vertical.phase_types", phaseTypeIDs(v.PhaseTypes))...)
+	errs = append(errs, checkDuplicateNames("vertical.phase_types", phaseTypeLabels(v.PhaseTypes))...)
 	errs = append(errs, checkDuplicateIDs("vertical.budget_categories", budgetCategoryIDs(v.BudgetCategories))...)
 	errs = append(errs, checkDuplicateIDs("vertical.expense_categories", expenseCategoryIDs(v.ExpenseCategories))...)
 	errs = append(errs, checkDuplicateIDs("vertical.inventory_categories", inventoryCategoryIDs(v.InventoryCategories))...)
@@ -205,6 +206,13 @@ func Validate(yamlData []byte) ([]ValidationError, error) {
 			errs = append(errs, ValidationError{
 				fmt.Sprintf("vertical.expense_categories[%d].default_account_code", i),
 				fmt.Sprintf("account code %q not found in default_chart_of_accounts", cat.DefaultAccountCode),
+			})
+		}
+		// Enum check for tax_treatment.
+		if cat.TaxTreatment != "" && !validTaxTreatments[cat.TaxTreatment] {
+			errs = append(errs, ValidationError{
+				fmt.Sprintf("vertical.expense_categories[%d].tax_treatment", i),
+				fmt.Sprintf("invalid value %q: must be one of input_gst, tds_applicable, none", cat.TaxTreatment),
 			})
 		}
 	}
@@ -242,6 +250,22 @@ func Validate(yamlData []byte) ([]ValidationError, error) {
 	return nil, nil
 }
 
+// validRateUnits is the closed set of allowed rate_unit values.
+// Expanding this set requires a vertical schema version bump.
+var validRateUnits = map[string]bool{
+	"day":   true,
+	"hour":  true,
+	"month": true,
+	"fixed": true,
+}
+
+// validTaxTreatments is the closed set of allowed tax_treatment values.
+var validTaxTreatments = map[string]bool{
+	"input_gst":      true,
+	"tds_applicable": true,
+	"none":           true,
+}
+
 func validateEntityLabels(el EntityLabelsYAML) []ValidationError {
 	var errs []ValidationError
 	fields := map[string]string{
@@ -260,6 +284,13 @@ func validateEntityLabels(el EntityLabelsYAML) []ValidationError {
 				"vertical.entity_labels." + name, "required",
 			})
 		}
+	}
+	// Enum check: only validate when non-empty (empty already reported above).
+	if el.RateUnit != "" && !validRateUnits[el.RateUnit] {
+		errs = append(errs, ValidationError{
+			"vertical.entity_labels.rate_unit",
+			fmt.Sprintf("invalid value %q: must be one of day, hour, month, fixed", el.RateUnit),
+		})
 	}
 	return errs
 }
@@ -380,6 +411,14 @@ func phaseTypeIDs(pts []PhaseTypeYAML) []string {
 		ids[i] = p.ID
 	}
 	return ids
+}
+
+func phaseTypeLabels(pts []PhaseTypeYAML) []string {
+	labels := make([]string, len(pts))
+	for i, p := range pts {
+		labels[i] = p.Label
+	}
+	return labels
 }
 
 func budgetCategoryIDs(cats []BudgetCategoryYAML) []string {

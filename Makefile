@@ -4,6 +4,7 @@
         migrate-all migrate-down seed \
         run-all run-web \
         test test-race test-cover test-integration \
+        validate-verticals \
         lint build clean
 
 # ── Database URL ───────────────────────────────────────────────────────────────
@@ -40,10 +41,11 @@ help:
 	@echo "    make run-web        Start Next.js frontend on :3000"
 	@echo ""
 	@echo "  Quality:"
-	@echo "    make test           Unit tests"
-	@echo "    make test-race      Unit tests with race detector"
-	@echo "    make test-cover     Coverage report (opens in browser)"
-	@echo "    make lint           golangci-lint"
+	@echo "    make test                Unit tests"
+	@echo "    make test-race           Unit tests with race detector"
+	@echo "    make test-cover          Coverage report (opens in browser)"
+	@echo "    make validate-verticals  Validate all vertical YAML configs"
+	@echo "    make lint                golangci-lint"
 	@echo ""
 	@echo "  DB_URL currently: $(DB_URL)"
 	@echo ""
@@ -137,6 +139,13 @@ test-cover:
 
 test-integration:
 	go test ./... -tags=integration -race
+
+# ── Vertical schema validation ────────────────────────────────────────────────
+# Validates every *.yaml file in pkg/vertical/configs/ against the vertical
+# schema rules (required fields, enum values, acyclic phase graph, etc.).
+# Run automatically in CI and locally via: make validate-verticals
+validate-verticals:
+	go test -run TestValidateAllProductionVerticals ./pkg/vertical/...
 
 # ── Code quality ──────────────────────────────────────────────────────────────
 

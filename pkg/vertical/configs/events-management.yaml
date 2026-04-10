@@ -1,0 +1,301 @@
+vertical:
+  id: events-management
+  name: Events & Experiential Management
+  version: 1.0.0
+  description: >
+    For event management companies, experiential marketing agencies, MICE operators,
+    wedding planners, and live entertainment producers. Supports the full event lifecycle
+    from concept through post-event reconciliation, with multi-event portfolio management
+    and client milestone billing.
+
+  entity_labels:
+    project: Event
+    project_plural: Events
+    phase: Stage
+    phase_plural: Stages
+    team_member: Event Staff
+    team_member_plural: Event Staff
+    rate_label: Day Rate
+    rate_unit: day
+
+  phase_types:
+    - id: concept
+      label: Concept & Briefing
+      order: 1
+      is_billable: false
+      allowed_transitions: [planning, cancelled]
+    - id: planning
+      label: Planning & Design
+      order: 2
+      is_billable: true
+      allowed_transitions: [procurement, on_hold]
+    - id: procurement
+      label: Vendor Procurement
+      order: 3
+      is_billable: true
+      allowed_transitions: [production, on_hold]
+    - id: production
+      label: Event Production
+      order: 4
+      is_billable: true
+      allowed_transitions: [live, on_hold]
+    - id: live
+      label: Live Event
+      order: 5
+      is_billable: true
+      allowed_transitions: [wrap]
+    - id: wrap
+      label: Wrap & Reconciliation
+      order: 6
+      is_billable: true
+      allowed_transitions: [completed]
+    - id: on_hold
+      label: On Hold
+      order: 7
+      is_billable: false
+      allowed_transitions: [cancelled]
+    - id: cancelled
+      label: Cancelled
+      order: 8
+      is_billable: false
+      allowed_transitions: []
+    - id: completed
+      label: Completed
+      order: 9
+      is_billable: false
+      allowed_transitions: []
+
+  budget_categories:
+    - id: venue
+      label: Venue & Facilities
+      description: Venue hire, temporary structures, power, water
+      default_account_code: "5100"
+    - id: creative_production
+      label: Creative & Production
+      description: Stage design, AV, lighting, rigging
+      default_account_code: "5200"
+    - id: talent_entertainment
+      label: Talent & Entertainment
+      description: Performers, speakers, MCs, entertainment
+      default_account_code: "5300"
+    - id: catering
+      label: Catering & Hospitality
+      description: Food, beverages, service staff
+      default_account_code: "5400"
+    - id: logistics
+      label: Logistics & Transport
+      description: Freight, transport, parking, shuttle services
+      default_account_code: "5500"
+    - id: marketing_collateral
+      label: Marketing & Collateral
+      description: Branding, print, digital, merchandise
+      default_account_code: "5600"
+    - id: staffing
+      label: Event Staffing
+      description: Event managers, crew, ushers, security
+      default_account_code: "5700"
+
+  budget_templates:
+    - name: Corporate Conference
+      description: Standard budget for a full-day corporate conference
+      line_items:
+        - category_id: venue
+          description: Conference Centre Hire
+          account_code: "5100"
+          default_amount: 500000
+          is_required: true
+        - category_id: creative_production
+          description: AV & Technical Production
+          account_code: "5200"
+          default_amount: 300000
+          is_required: true
+        - category_id: catering
+          description: Full Day Catering (delegates)
+          account_code: "5400"
+          default_amount: 200000
+          is_required: true
+        - category_id: staffing
+          description: Event Management Team
+          account_code: "5700"
+          default_amount: 150000
+          is_required: true
+    - name: Product Launch
+      description: Budget template for a product launch event
+      line_items:
+        - category_id: venue
+          description: Launch Venue Hire
+          account_code: "5100"
+          default_amount: 800000
+          is_required: true
+        - category_id: creative_production
+          description: Stage & Display Production
+          account_code: "5200"
+          default_amount: 600000
+          is_required: true
+        - category_id: talent_entertainment
+          description: Keynote Speaker / MC
+          account_code: "5300"
+          default_amount: 100000
+          is_required: false
+        - category_id: marketing_collateral
+          description: Event Branding & Collateral
+          account_code: "5600"
+          default_amount: 200000
+          is_required: true
+
+  expense_categories:
+    - id: venue_invoice
+      label: Venue Invoice
+      tax_treatment: input_gst
+      default_account_code: "5100"
+      requires_po: true
+    - id: vendor_invoice
+      label: Vendor / Supplier Invoice
+      tax_treatment: input_gst
+      default_account_code: "5200"
+      requires_po: true
+    - id: talent_fee
+      label: Talent / Performer Fee
+      tax_treatment: tds_applicable
+      default_account_code: "5300"
+      requires_po: true
+    - id: catering_invoice
+      label: Catering Invoice
+      tax_treatment: input_gst
+      default_account_code: "5400"
+      requires_po: true
+    - id: transport
+      label: Transport & Logistics
+      tax_treatment: input_gst
+      default_account_code: "5500"
+      requires_po: false
+    - id: staff_reimbursement
+      label: Staff Reimbursement
+      tax_treatment: none
+      default_account_code: "5700"
+      requires_po: false
+    - id: miscellaneous
+      label: Miscellaneous On-Site
+      tax_treatment: none
+      default_account_code: "5700"
+      requires_po: false
+
+  approval_workflow:
+    limits:
+      - role: event_coordinator
+        max_amount: 50000
+      - role: event_manager
+        max_amount: 250000
+      - role: account_director
+        max_amount: 1000000
+    dual_approval_above: 500000
+
+  inventory_categories:
+    - id: av_equipment
+      label: AV & Technical Equipment
+      is_trackable: true
+      depreciation_years: 5
+    - id: furniture_decor
+      label: Furniture & Decor
+      is_trackable: true
+      depreciation_years: 7
+    - id: signage
+      label: Signage & Branding Assets
+      is_trackable: true
+      depreciation_years: 3
+    - id: consumables
+      label: Event Consumables
+      is_trackable: false
+      depreciation_years: null
+
+  default_chart_of_accounts:
+    - code: "1000"
+      name: Cash and Bank
+      account_type: asset
+      parent_code: null
+    - code: "1100"
+      name: Accounts Receivable
+      account_type: asset
+      parent_code: null
+    - code: "2000"
+      name: Accounts Payable
+      account_type: liability
+      parent_code: null
+    - code: "3000"
+      name: Owner's Equity
+      account_type: equity
+      parent_code: null
+    - code: "4000"
+      name: Event Management Fees
+      account_type: revenue
+      parent_code: null
+    - code: "4100"
+      name: Pass-Through Revenue
+      account_type: revenue
+      parent_code: null
+    - code: "5100"
+      name: Venue Costs
+      account_type: expense
+      parent_code: null
+    - code: "5200"
+      name: Creative & Production Costs
+      account_type: expense
+      parent_code: null
+    - code: "5300"
+      name: Talent & Entertainment Costs
+      account_type: expense
+      parent_code: null
+    - code: "5400"
+      name: Catering Costs
+      account_type: expense
+      parent_code: null
+    - code: "5500"
+      name: Logistics Costs
+      account_type: expense
+      parent_code: null
+    - code: "5600"
+      name: Marketing & Collateral Costs
+      account_type: expense
+      parent_code: null
+    - code: "5700"
+      name: Staffing Costs
+      account_type: expense
+      parent_code: null
+
+  report_definitions:
+    - id: event_pnl
+      name: Event P&L
+      description: Revenue, costs, and margin per event
+      data_sources: [budget-planning, expense-tracking, general-ledger]
+      default_columns: [event, revenue, cost, margin, margin_pct]
+    - id: vendor_spend
+      name: Vendor Spend Analysis
+      description: Spend by vendor category across all events
+      data_sources: [expense-tracking]
+      default_columns: [category, vendor, invoiced, paid, outstanding]
+    - id: budget_vs_actual
+      name: Budget vs Actual
+      description: Budgeted vs actual spend by category per event
+      data_sources: [budget-planning, expense-tracking]
+      default_columns: [category, budget, actual, variance, variance_pct]
+
+  custom_fields:
+    project:
+      - key: client_name
+        label: Client Name
+        type: text
+        required: true
+      - key: event_type
+        label: Event Type
+        type: select
+        options: [conference, product_launch, gala_dinner, exhibition, wedding, concert, corporate_day]
+        required: true
+      - key: expected_attendance
+        label: Expected Attendance
+        type: number
+        required: false
+    expense:
+      - key: vendor_name
+        label: Vendor / Supplier Name
+        type: text
+        required: false

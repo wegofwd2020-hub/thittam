@@ -1,0 +1,272 @@
+vertical:
+  id: software-development
+  name: Software Development Services
+  version: 1.0.0
+  description: >
+    For software development agencies, IT consultancies, product studios, and managed
+    services providers. Supports fixed-price, T&M, and retainer engagements. Includes
+    cloud infrastructure cost tracking and software license management.
+
+  entity_labels:
+    project: Project
+    project_plural: Projects
+    phase: Milestone
+    phase_plural: Milestones
+    team_member: Team Member
+    team_member_plural: Team Members
+    rate_label: Hourly Rate
+    rate_unit: hour
+
+  phase_types:
+    - id: discovery
+      label: Discovery & Scoping
+      order: 1
+      is_billable: true
+      allowed_transitions: [proposal, cancelled]
+    - id: proposal
+      label: Proposal / Estimation
+      order: 2
+      is_billable: false
+      allowed_transitions: [design, cancelled]
+    - id: design
+      label: UX Design & Architecture
+      order: 3
+      is_billable: true
+      allowed_transitions: [development, cancelled]
+    - id: development
+      label: Development
+      order: 4
+      is_billable: true
+      allowed_transitions: [qa, on_hold]
+    - id: qa
+      label: Quality Assurance
+      order: 5
+      is_billable: true
+      allowed_transitions: [uat, on_hold]
+    - id: uat
+      label: User Acceptance Testing
+      order: 6
+      is_billable: true
+      allowed_transitions: [deployment, on_hold]
+    - id: deployment
+      label: Deployment
+      order: 7
+      is_billable: true
+      allowed_transitions: [support, completed]
+    - id: support
+      label: Hypercare / Support
+      order: 8
+      is_billable: true
+      allowed_transitions: [completed]
+    - id: on_hold
+      label: On Hold
+      order: 9
+      is_billable: false
+      allowed_transitions: [cancelled]
+    - id: cancelled
+      label: Cancelled
+      order: 10
+      is_billable: false
+      allowed_transitions: []
+    - id: completed
+      label: Completed
+      order: 11
+      is_billable: false
+      allowed_transitions: []
+
+  budget_categories:
+    - id: personnel
+      label: Personnel / Labour
+      description: Salaries, contractor fees, freelance charges
+      default_account_code: "5100"
+    - id: infrastructure
+      label: Cloud & Infrastructure
+      description: AWS, GCP, Azure, hosting, CDN
+      default_account_code: "5200"
+    - id: software_licenses
+      label: Software Licenses & SaaS
+      description: Third-party tools, APIs, subscriptions
+      default_account_code: "5300"
+    - id: subcontractor
+      label: Subcontractor / Outsourcing
+      description: Offshore development, specialised consultants
+      default_account_code: "5400"
+    - id: travel
+      label: Travel & Accommodation
+      description: Client visits, on-site work, training
+      default_account_code: "5500"
+
+  budget_templates:
+    - name: Fixed-Price Web Application
+      description: Standard budget for a fixed-scope web app engagement
+      line_items:
+        - category_id: personnel
+          description: Project Manager
+          account_code: "5100"
+          default_amount: 300000
+          is_required: true
+        - category_id: personnel
+          description: Senior Developer (x2)
+          account_code: "5100"
+          default_amount: 800000
+          is_required: true
+        - category_id: personnel
+          description: UX Designer
+          account_code: "5100"
+          default_amount: 200000
+          is_required: false
+        - category_id: infrastructure
+          description: Cloud Infrastructure (dev + staging + prod)
+          account_code: "5200"
+          default_amount: 50000
+          is_required: true
+        - category_id: software_licenses
+          description: Third-party SaaS and APIs
+          account_code: "5300"
+          default_amount: 30000
+          is_required: false
+    - name: Time & Materials Retainer
+      description: Monthly T&M engagement budget
+      line_items:
+        - category_id: personnel
+          description: Dedicated Developer Hours
+          account_code: "5100"
+          default_amount: 400000
+          is_required: true
+        - category_id: infrastructure
+          description: Monthly Infra Costs
+          account_code: "5200"
+          default_amount: 20000
+          is_required: true
+
+  expense_categories:
+    - id: salary
+      label: Salary / Payroll
+      tax_treatment: tds_applicable
+      default_account_code: "5100"
+      requires_po: false
+    - id: contractor_invoice
+      label: Contractor Invoice
+      tax_treatment: tds_applicable
+      default_account_code: "5100"
+      requires_po: true
+    - id: cloud_invoice
+      label: Cloud Provider Invoice
+      tax_treatment: input_gst
+      default_account_code: "5200"
+      requires_po: false
+    - id: saas_subscription
+      label: SaaS Subscription
+      tax_treatment: input_gst
+      default_account_code: "5300"
+      requires_po: false
+    - id: travel_reimbursement
+      label: Travel Reimbursement
+      tax_treatment: none
+      default_account_code: "5500"
+      requires_po: false
+    - id: miscellaneous
+      label: Miscellaneous
+      tax_treatment: none
+      default_account_code: "5100"
+      requires_po: false
+
+  approval_workflow:
+    limits:
+      - role: team_lead
+        max_amount: 50000
+      - role: project_manager
+        max_amount: 200000
+      - role: director
+        max_amount: 1000000
+    dual_approval_above: 500000
+
+  inventory_categories:
+    - id: hardware
+      label: Hardware / Devices
+      is_trackable: true
+      depreciation_years: 3
+    - id: software_license
+      label: Perpetual Software License
+      is_trackable: true
+      depreciation_years: 5
+    - id: office_equipment
+      label: Office Equipment
+      is_trackable: true
+      depreciation_years: 5
+
+  default_chart_of_accounts:
+    - code: "1000"
+      name: Cash and Bank
+      account_type: asset
+      parent_code: null
+    - code: "1100"
+      name: Accounts Receivable
+      account_type: asset
+      parent_code: null
+    - code: "2000"
+      name: Accounts Payable
+      account_type: liability
+      parent_code: null
+    - code: "3000"
+      name: Owner's Equity
+      account_type: equity
+      parent_code: null
+    - code: "4000"
+      name: Project Revenue
+      account_type: revenue
+      parent_code: null
+    - code: "5100"
+      name: Personnel Costs
+      account_type: expense
+      parent_code: null
+    - code: "5200"
+      name: Cloud & Infrastructure Costs
+      account_type: expense
+      parent_code: null
+    - code: "5300"
+      name: Software Licenses
+      account_type: expense
+      parent_code: null
+    - code: "5400"
+      name: Subcontractor Costs
+      account_type: expense
+      parent_code: null
+    - code: "5500"
+      name: Travel & Accommodation
+      account_type: expense
+      parent_code: null
+
+  report_definitions:
+    - id: project_profitability
+      name: Project Profitability
+      description: Revenue vs cost per project with margin %
+      data_sources: [budget-planning, expense-tracking, general-ledger]
+      default_columns: [project, revenue, cost, margin_pct, status]
+    - id: resource_utilization
+      name: Resource Utilization
+      description: Billable hours by team member across projects
+      data_sources: [project-management, expense-tracking]
+      default_columns: [team_member, billable_hours, total_hours, utilization_pct]
+    - id: budget_burndown
+      name: Budget Burndown
+      description: Remaining budget over time per project
+      data_sources: [budget-planning, expense-tracking]
+      default_columns: [date, budget_remaining, actual_spend, forecast]
+
+  custom_fields:
+    project:
+      - key: engagement_type
+        label: Engagement Type
+        type: select
+        options: [fixed_price, time_and_materials, retainer]
+        required: true
+      - key: client_po_number
+        label: Client PO Number
+        type: text
+        required: false
+    expense:
+      - key: jira_ticket
+        label: Jira Ticket Reference
+        type: text
+        required: false
