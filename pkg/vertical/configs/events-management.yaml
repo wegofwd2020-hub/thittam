@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../schema.json
 vertical:
   id: events-management
   name: Events & Experiential Management
