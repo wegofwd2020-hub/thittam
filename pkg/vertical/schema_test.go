@@ -12,6 +12,7 @@ package vertical
 //      this is the test run by `make validate-verticals`.
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,47 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// ── 0. JSON Schema file is valid JSON ────────────────────────────────────────
+
+// TestSchemaJSON verifies that schema.json is well-formed JSON and contains the
+// required top-level keys. This ensures the schema file stays in sync with the
+// Go validator and is parseable by JSON Schema tooling.
+func TestSchemaJSON_IsWellFormed(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile("schema.json")
+	require.NoError(t, err, "schema.json must exist in pkg/vertical/")
+
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(data, &doc), "schema.json must be valid JSON")
+
+	// Must have the JSON Schema meta-fields.
+	assert.Equal(t, "https://json-schema.org/draft/2020-12/schema", doc["$schema"],
+		"schema.json must declare its meta-schema")
+	assert.NotEmpty(t, doc["$id"], "schema.json must have an $id")
+	assert.NotEmpty(t, doc["title"], "schema.json must have a title")
+
+	// The root must require the top-level `vertical` key.
+	props, _ := doc["properties"].(map[string]any)
+	require.NotNil(t, props["vertical"], "schema.json must define a 'vertical' property")
+
+	vertical, _ := props["vertical"].(map[string]any)
+	required, _ := vertical["required"].([]any)
+	requiredStrs := make([]string, len(required))
+	for i, r := range required {
+		requiredStrs[i], _ = r.(string)
+	}
+
+	for _, field := range []string{
+		"id", "name", "version", "entity_labels",
+		"phase_types", "budget_categories", "expense_categories",
+		"inventory_categories", "default_chart_of_accounts", "report_definitions",
+	} {
+		assert.Contains(t, requiredStrs, field,
+			"schema.json vertical.required must include %q", field)
+	}
+}
 
 // ── 1. All 4 GA verticals ────────────────────────────────────────────────────
 
