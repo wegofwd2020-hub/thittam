@@ -1,0 +1,54 @@
+# Chaos scenario: NATS JetStream connection lost for 60 seconds.
+#
+# Goal: verify that no financial event (expense approved, budget approved,
+# ledger journal posted) is silently dropped when NATS is unreachable for
+# a 60-second window. Events buffered in-memory during the partition must
+# be published on reconnect.
+#
+# Implementation: a Kubernetes NetworkPolicy that drops all ingress/egress
+# traffic to/from NATS pods on port 4222. Applied for 60 seconds, then deleted.
+#
+# How to apply:
+#   kubectl apply -f infra/chaos/nats-partition.yaml
+#   # concurrent: run expense approvals and budget approvals
+#   sleep 60
+#   kubectl delete -f infra/chaos/nats-partition.yaml
+#   # wait 10 seconds for reconnect + redelivery
+#   # then run: scripts/verify-no-lost-events.sh
+#
+# Expected behaviour during partition:
+#   - Services continue accepting HTTP requests (write to DB succeeds)
+#   - NATS publish calls fail/buffer; services must not return 500 to clients
+#   - If services use synchronous NATS publish on the critical path, they MUST
+#     have circuit-breaker logic or async fire-and-forget to avoid blocking
+#
+# Expected behaviour after recovery:
+#   - All buffered events published to NATS within 10 seconds of reconnect
+#   - nats_consumer_num_redelivered metric spikes then returns to 0
+#   - FINANCIAL_DLQ stream has 0 messages (all events delivered successfully)
+#
+# Acceptance criteria:
+#   - HTTP 5xx rate during partition < 0.1% (NATS failure must not surface as HTTP 500)
+#   - 0 events in FINANCIAL_DLQ after recovery
+#   - All expense/budget/ledger DB records have corresponding NATS events
+#     (verified by scripts/verify-no-lost-events.sh)
+---
+# Block all traffic to NATS pods (simulates network partition)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nats-chaos-partition
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    chaos.thittam.io/scenario: nats-partition
+spec:
+  podSelector:
+    matchLabels:
+      app: nats
+  policyTypes:
+    - Ingress
+    - Egress
+  # Empty ingress/egress rules = deny all (no rules = deny all traffic)
+  ingress: []
+  egress: []

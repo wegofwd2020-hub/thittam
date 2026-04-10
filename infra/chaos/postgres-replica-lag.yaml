@@ -1,0 +1,89 @@
+# Chaos scenario: PostgreSQL read replica lag of 5 seconds.
+#
+# Goal: verify that read paths (ListProductions, ListExpenses, GetBudget)
+# remain consistent and do not serve stale data beyond the replica lag SLA.
+# Write paths (creates, approvals) must route to the primary and be unaffected.
+#
+# Implementation: Istio injects a 5-second delay on HTTP traffic to the
+# read-replica routing label. For direct TCP connections (pgBouncer → Postgres),
+# a tc (traffic control) command is run in the postgres-replica pod sidecar.
+#
+# NOTE: Istio VirtualService delay injection only applies to services with an
+# Envoy sidecar. Since Postgres is a TCP service (not HTTP), the VirtualService
+# below applies to the *application services* reading from the replica, simulating
+# the effect of replica lag as seen by those services.
+#
+# How to apply (Istio HTTP delay — simulates downstream lag for read services):
+#   kubectl apply -f infra/chaos/postgres-replica-lag.yaml
+#   # run read-path load test concurrently
+#   sleep 120
+#   kubectl delete -f infra/chaos/postgres-replica-lag.yaml
+#
+# How to apply (direct TCP lag — actual replica lag simulation):
+#   # SSH into the postgres-replica pod:
+#   kubectl exec -n thittam deploy/postgres-replica -- \
+#     tc qdisc add dev eth0 root netem delay 5000ms
+#   # To remove:
+#   kubectl exec -n thittam deploy/postgres-replica -- \
+#     tc qdisc del dev eth0 root
+#
+# Acceptance criteria:
+#   - Write operations (POST, PATCH) are unaffected (p99 < 500ms)
+#   - Read operations (GET) respond within p99 < 6 000ms (5s lag + 1s service)
+#   - No read returns data with created_at > now() + 5s (staleness guard)
+#   - After fault removal, read latency returns to baseline within 30 seconds
+---
+# Inject a 5-second delay on reporting-analytics (read-heavy service)
+# to simulate the experience of reading from a lagged replica.
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: postgres-replica-lag-reporting
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    chaos.thittam.io/scenario: postgres-replica-lag
+spec:
+  hosts:
+    - reporting-analytics.thittam.svc.cluster.local
+  http:
+    - fault:
+        delay:
+          percentage:
+            value: 100.0
+          fixedDelay: 5s
+      match:
+        - method:
+            exact: GET
+      route:
+        - destination:
+            host: reporting-analytics.thittam.svc.cluster.local
+            port:
+              number: 8085
+---
+# Same delay on inventory-management (another read-heavy service)
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: postgres-replica-lag-inventory
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    chaos.thittam.io/scenario: postgres-replica-lag
+spec:
+  hosts:
+    - inventory-management.thittam.svc.cluster.local
+  http:
+    - fault:
+        delay:
+          percentage:
+            value: 100.0
+          fixedDelay: 5s
+      match:
+        - method:
+            exact: GET
+      route:
+        - destination:
+            host: inventory-management.thittam.svc.cluster.local
+            port:
+              number: 8084

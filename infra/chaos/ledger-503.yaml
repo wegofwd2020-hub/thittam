@@ -1,0 +1,47 @@
+# Chaos scenario: general-ledger returns 503 for 30 seconds.
+#
+# Goal: verify that expense-tracking degrades gracefully (returns a 503 to
+# clients rather than hanging) and resumes automatically when the ledger
+# recovers. No financial event should be lost — NATS ensures retry.
+#
+# How to apply:
+#   kubectl apply -f infra/chaos/ledger-503.yaml
+#   # wait 30 seconds, observe expense approval behaviour
+#   kubectl delete -f infra/chaos/ledger-503.yaml
+#
+# Expected behaviour:
+#   - POST /api/v1/expenses/{id}/approve returns 503 while fault is active
+#   - Error rate alert fires in Grafana (thittam/d/services)
+#   - After fault is removed, approvals succeed; no entries were lost in NATS
+#
+# Acceptance criteria:
+#   - No 5xx responses before or after the 30-second fault window
+#   - NATS FINANCIAL stream has 0 messages in DLQ after recovery
+#   - expense_approvals_total metric resumes incrementing within 5 seconds
+#     of fault removal
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: general-ledger-chaos-503
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    chaos.thittam.io/scenario: ledger-503
+spec:
+  hosts:
+    - general-ledger.thittam.svc.cluster.local
+  http:
+    - fault:
+        abort:
+          percentage:
+            value: 100.0
+          httpStatus: 503
+      match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: general-ledger.thittam.svc.cluster.local
+            port:
+              number: 8083

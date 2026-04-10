@@ -1,0 +1,150 @@
+name: Load & Chaos Tests
+
+on:
+  schedule:
+    # Every Thursday at 20:30 UTC (02:00 IST Friday) — low-traffic window
+    - cron: "30 20 * * 4"
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Scenario to run (expense-submissions|budget-approvals|ledger-throughput|report-under-load|full-suite)"
+        required: false
+        default: "full-suite"
+      base_url:
+        description: "API Gateway base URL (defaults to staging)"
+        required: false
+        default: ""
+
+concurrency:
+  group: load-tests
+  cancel-in-progress: false  # never cancel a running load test mid-flight
+
+jobs:
+  load-test:
+    name: k6 Load Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASE_URL: ${{ github.event.inputs.base_url || vars.LOAD_TEST_BASE_URL || 'http://localhost:8000' }}
+      TOKEN: ${{ secrets.LOAD_TEST_TOKEN }}
+      TENANT_ID: ${{ secrets.LOAD_TEST_TENANT_ID }}
+      PRODUCTION_ID: ${{ secrets.LOAD_TEST_PRODUCTION_ID }}
+      DEBIT_ACCOUNT_ID: ${{ secrets.LOAD_TEST_DEBIT_ACCOUNT_ID }}
+      CREDIT_ACCOUNT_ID: ${{ secrets.LOAD_TEST_CREDIT_ACCOUNT_ID }}
+      PERIOD_ID: ${{ secrets.LOAD_TEST_PERIOD_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          curl -fsSL https://github.com/grafana/k6/releases/download/v0.51.0/k6-v0.51.0-linux-amd64.tar.gz \
+            | tar -xz --strip-components=1 -C /usr/local/bin k6-v0.51.0-linux-amd64/k6
+          k6 version
+
+      - name: Determine scenario
+        id: scenario
+        run: |
+          SCENARIO="${{ github.event.inputs.scenario || 'full-suite' }}"
+          echo "file=load-tests/scenarios/${SCENARIO}.js" >> "$GITHUB_OUTPUT"
+          echo "name=${SCENARIO}" >> "$GITHUB_OUTPUT"
+
+      - name: Run k6 load test
+        id: k6
+        run: |
+          k6 run \
+            --out json=load-test-results.json \
+            --summary-export=load-test-summary.json \
+            "${{ steps.scenario.outputs.file }}"
+
+      - name: Verify ledger balance (post-load)
+        if: always()
+        env:
+          DB_URL: ${{ secrets.LOAD_TEST_DB_URL }}
+        run: |
+          if [ -n "$DB_URL" ]; then
+            ./load-tests/scripts/verify-ledger-balance.sh
+          else
+            echo "SKIP: DB_URL not set — skipping ledger consistency check"
+          fi
+
+      - name: Upload k6 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results-${{ github.run_id }}
+          path: |
+            load-test-results.json
+            load-test-summary.json
+          retention-days: 90
+
+      - name: Parse and annotate results
+        if: always()
+        run: |
+          if [ -f load-test-summary.json ]; then
+            python3 - <<'PYEOF'
+          import json, sys
+
+          with open("load-test-summary.json") as f:
+              summary = json.load(f)
+
+          metrics = summary.get("metrics", {})
+
+          def get_p(metric, pct):
+              m = metrics.get(metric, {})
+              return m.get("values", {}).get(f"p({pct})", None)
+
+          def get_rate(metric):
+              m = metrics.get(metric, {})
+              return m.get("values", {}).get("rate", None)
+
+          print("## Load Test Results\n")
+          print("| Metric | Value | Threshold |")
+          print("|--------|-------|-----------|")
+
+          checks = {
+              "http_req_duration p95": (get_p("http_req_duration", 95), 500, "ms"),
+              "http_req_duration p99": (get_p("http_req_duration", 99), 1000, "ms"),
+              "http_req_failed rate": (get_rate("http_req_failed"), 0.001, "rate"),
+              "checks rate": (get_rate("checks"), None, "rate"),
+          }
+
+          failed = False
+          for name, (val, threshold, unit) in checks.items():
+              if val is None:
+                  print(f"| {name} | N/A | - |")
+                  continue
+              status = "✅"
+              if threshold is not None:
+                  if unit == "ms" and val > threshold:
+                      status = "❌"
+                      failed = True
+                  elif unit == "rate" and name == "http_req_failed rate" and val > threshold:
+                      status = "❌"
+                      failed = True
+              fmt_val = f"{val:.2f} {unit}" if unit == "ms" else f"{val:.6f}"
+              fmt_thr = f"< {threshold}" if threshold is not None else "—"
+              print(f"| {name} | {fmt_val} | {fmt_thr} |")
+
+          if failed:
+              print("\n**One or more thresholds exceeded.** Review the k6 summary artifact.")
+              sys.exit(1)
+          else:
+              print("\n**All thresholds passed.**")
+          PYEOF
+          fi
+
+      - name: Alert on regression
+        if: failure()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          channel-id: ${{ vars.SLACK_OPS_CHANNEL || 'platform-ops' }}
+          slack-message: |
+            *:warning: Load Test Regression Detected*
+            Scenario: `${{ steps.scenario.outputs.name }}`
+            Run: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>
+            Branch: `${{ github.ref_name }}`
+            One or more acceptance thresholds were exceeded. Review the k6 results artifact.
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        continue-on-error: true  # don't fail the job if Slack notification fails
