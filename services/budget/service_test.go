@@ -2,6 +2,7 @@ package budget
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -329,4 +330,136 @@ func TestListBudgets_DefaultLimit(t *testing.T) {
 	})
 	svc.ListBudgets(context.Background(), uuid.New(), uuid.New(), "", 0, 0)
 	assert.Equal(t, 20, capturedLimit)
+}
+
+// --- Additional coverage tests ---
+
+func TestGetBudget_Success(t *testing.T) {
+	t.Parallel()
+	budgetID := uuid.New()
+	svc := NewService(&mockRepo{
+		getBudgetFn: func(_ context.Context, tenantID, id uuid.UUID) (*Budget, error) {
+			return &Budget{ID: id, TenantID: tenantID, Status: "draft"}, nil
+		},
+	})
+
+	b, err := svc.GetBudget(context.Background(), uuid.New(), budgetID)
+	require.NoError(t, err)
+	assert.Equal(t, budgetID, b.ID)
+}
+
+func TestSubmitBudget_Success(t *testing.T) {
+	t.Parallel()
+	var capturedStatus string
+	svc := NewService(&mockRepo{
+		getBudgetFn: func(_ context.Context, tenantID, id uuid.UUID) (*Budget, error) {
+			return &Budget{ID: id, TenantID: tenantID, Status: "draft"}, nil
+		},
+		updateBudgetStatusFn: func(_ context.Context, _ uuid.UUID, status string, _ *uuid.UUID) error {
+			capturedStatus = status
+			return nil
+		},
+	})
+
+	err := svc.SubmitBudget(context.Background(), uuid.New(), uuid.New(), uuid.New())
+	require.NoError(t, err)
+	assert.Equal(t, "submitted", capturedStatus)
+}
+
+func TestSubmitBudget_NotDraft_Rejected(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		getBudgetFn: func(_ context.Context, tenantID, id uuid.UUID) (*Budget, error) {
+			return &Budget{ID: id, TenantID: tenantID, Status: "submitted"}, nil
+		},
+	})
+
+	err := svc.SubmitBudget(context.Background(), uuid.New(), uuid.New(), uuid.New())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrBudgetLocked)
+}
+
+func TestApproveBudget_LockedStatus_Rejected(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		getBudgetFn: func(_ context.Context, tenantID, id uuid.UUID) (*Budget, error) {
+			return &Budget{ID: id, TenantID: tenantID, Status: "locked"}, nil
+		},
+	})
+
+	err := svc.ApproveBudget(context.Background(), uuid.New(), uuid.New(), uuid.New())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrAlreadyApproved)
+}
+
+func TestGetLineItem_Success(t *testing.T) {
+	t.Parallel()
+	lineID := uuid.New()
+	svc := NewService(&mockRepo{
+		getLineItemFn: func(_ context.Context, id uuid.UUID) (*BudgetLineItem, error) {
+			return &BudgetLineItem{ID: id, CategoryID: "above_the_line"}, nil
+		},
+	})
+
+	li, err := svc.GetLineItem(context.Background(), lineID)
+	require.NoError(t, err)
+	assert.Equal(t, lineID, li.ID)
+}
+
+func TestListLineItems_Success(t *testing.T) {
+	t.Parallel()
+	budgetID := uuid.New()
+	svc := NewService(&mockRepo{
+		listLineItemsFn: func(_ context.Context, bid uuid.UUID) ([]BudgetLineItem, error) {
+			return []BudgetLineItem{
+				{ID: uuid.New(), BudgetID: bid, CategoryID: "above_the_line"},
+				{ID: uuid.New(), BudgetID: bid, CategoryID: "below_the_line"},
+			}, nil
+		},
+	})
+
+	items, err := svc.ListLineItems(context.Background(), budgetID)
+	require.NoError(t, err)
+	assert.Len(t, items, 2)
+}
+
+func TestUpdateLineItemActuals_Success(t *testing.T) {
+	t.Parallel()
+	var capturedActual, capturedCommitted decimal.Decimal
+	lineID := uuid.New()
+	svc := NewService(&mockRepo{
+		updateLineItemActualsFn: func(_ context.Context, id uuid.UUID, actual, committed decimal.Decimal) error {
+			capturedActual = actual
+			capturedCommitted = committed
+			return nil
+		},
+	})
+
+	err := svc.UpdateLineItemActuals(context.Background(), lineID, decimal.NewFromInt(100000), decimal.NewFromInt(50000))
+	require.NoError(t, err)
+	assert.True(t, decimal.NewFromInt(100000).Equal(capturedActual))
+	assert.True(t, decimal.NewFromInt(50000).Equal(capturedCommitted))
+}
+
+func TestCreateBudget_ExplicitStatus(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{})
+	b := &Budget{TenantID: uuid.New(), Label: "Test Budget", Status: "submitted", CreatedBy: uuid.New()}
+	err := svc.CreateBudget(context.Background(), b)
+	require.NoError(t, err)
+	// Pre-set status should be preserved
+	assert.Equal(t, "submitted", b.Status)
+}
+
+func TestCreateBudgetFromTemplate_LineItemError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		createLineItemFn: func(_ context.Context, _ *BudgetLineItem) error {
+			return fmt.Errorf("db error on line item")
+		},
+	})
+
+	b := &Budget{TenantID: uuid.New(), Label: "Test", CreatedBy: uuid.New()}
+	err := svc.CreateBudgetFromTemplate(ctxWithVertical(), b, "standard_feature")
+	require.Error(t, err)
 }

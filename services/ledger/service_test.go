@@ -391,17 +391,30 @@ func TestVoidJournalEntry_ReversesLines(t *testing.T) {
 	var createdLines []JournalLine
 	svc := NewService(&mockRepo{
 		getJournalEntryFn: func(_ context.Context, _, id uuid.UUID) (*JournalEntry, error) {
-			// First call returns the posted original; subsequent calls (for reversing entry) return draft.
+			if id == fixedJEID {
+				// Original posted entry.
+				return &JournalEntry{
+					ID:          fixedJEID,
+					TenantID:    fixedTenantID,
+					PeriodID:    fixedPeriodID,
+					EntryNumber: "JE-2024-00001",
+					Narration:   "Original",
+					Status:      "posted",
+					Lines: []JournalLine{
+						{ID: uuid.New(), AccountID: fixedAccountID, DebitAmount: decimal.NewFromInt(500), Currency: "INR"},
+						{ID: uuid.New(), AccountID: fixedAccount2, CreditAmount: decimal.NewFromInt(500), Currency: "INR"},
+					},
+				}, nil
+			}
+			// Reversing entry (new UUID) — must be draft with balanced lines for PostJournalEntry to succeed.
 			return &JournalEntry{
-				ID:          id,
-				TenantID:    fixedTenantID,
-				PeriodID:    fixedPeriodID,
-				EntryNumber: "JE-2024-00001",
-				Narration:   "Original",
-				Status:      "posted",
+				ID:       id,
+				TenantID: fixedTenantID,
+				PeriodID: fixedPeriodID,
+				Status:   "draft",
 				Lines: []JournalLine{
-					{ID: uuid.New(), AccountID: fixedAccountID, DebitAmount: decimal.NewFromInt(500), Currency: "INR"},
-					{ID: uuid.New(), AccountID: fixedAccount2, CreditAmount: decimal.NewFromInt(500), Currency: "INR"},
+					{ID: uuid.New(), AccountID: fixedAccount2, DebitAmount: decimal.NewFromInt(500), Currency: "INR"},
+					{ID: uuid.New(), AccountID: fixedAccountID, CreditAmount: decimal.NewFromInt(500), Currency: "INR"},
 				},
 			}, nil
 		},
@@ -515,4 +528,168 @@ func TestValidateBalance_Unbalanced(t *testing.T) {
 	err := validateBalance(lines)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrJournalNotBalanced)
+}
+
+// --- Additional coverage tests ---
+
+func TestGetAccount_Success(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{})
+
+	acct, err := svc.GetAccount(context.Background(), fixedTenantID, fixedAccountID)
+	require.NoError(t, err)
+	assert.Equal(t, fixedAccountID, acct.ID)
+}
+
+func TestGetAccount_Error(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		getAccountByIDFn: func(_ context.Context, _, _ uuid.UUID) (*Account, error) {
+			return nil, ErrAccountNotFound
+		},
+	})
+
+	_, err := svc.GetAccount(context.Background(), fixedTenantID, fixedAccountID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrAccountNotFound)
+}
+
+func TestListAccounts_Success(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		listAccountsFn: func(_ context.Context, _ uuid.UUID) ([]Account, error) {
+			return []Account{{ID: fixedAccountID, Code: "5000"}}, nil
+		},
+	})
+
+	accounts, err := svc.ListAccounts(context.Background(), fixedTenantID)
+	require.NoError(t, err)
+	assert.Len(t, accounts, 1)
+	assert.Equal(t, "5000", accounts[0].Code)
+}
+
+func TestGetJournalEntry_Success(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		getJournalEntryFn: func(_ context.Context, _, id uuid.UUID) (*JournalEntry, error) {
+			return &JournalEntry{ID: id, Status: "posted"}, nil
+		},
+	})
+
+	je, err := svc.GetJournalEntry(context.Background(), fixedTenantID, fixedJEID)
+	require.NoError(t, err)
+	assert.Equal(t, fixedJEID, je.ID)
+	assert.Equal(t, "posted", je.Status)
+}
+
+func TestGetJournalEntry_Error(t *testing.T) {
+	t.Parallel()
+	sentinel := fmt.Errorf("not found")
+	svc := NewService(&mockRepo{
+		getJournalEntryFn: func(_ context.Context, _, _ uuid.UUID) (*JournalEntry, error) {
+			return nil, sentinel
+		},
+	})
+
+	_, err := svc.GetJournalEntry(context.Background(), fixedTenantID, fixedJEID)
+	require.Error(t, err)
+}
+
+func TestGetTrialBalance_Success(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		getTrialBalanceFn: func(_ context.Context, _ uuid.UUID, _ time.Time) ([]TrialBalanceEntry, error) {
+			return []TrialBalanceEntry{
+				{Code: "5000", Debit: decimal.NewFromInt(10000)},
+			}, nil
+		},
+	})
+
+	entries, err := svc.GetTrialBalance(context.Background(), fixedTenantID, time.Now())
+	require.NoError(t, err)
+	assert.Len(t, entries, 1)
+	assert.Equal(t, "5000", entries[0].Code)
+}
+
+func TestCreateAccount_RepoError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		createAccountFn: func(_ context.Context, _ *Account) error {
+			return fmt.Errorf("db error")
+		},
+	})
+
+	_, err := svc.CreateAccount(context.Background(), &Account{
+		TenantID:    fixedTenantID,
+		Code:        "5001",
+		AccountType: "expense",
+	})
+	require.Error(t, err)
+}
+
+func TestOpenAccountingPeriod_RepoError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		createPeriodFn: func(_ context.Context, _ *AccountingPeriod) error {
+			return fmt.Errorf("db error")
+		},
+	})
+
+	err := svc.OpenAccountingPeriod(context.Background(), fixedTenantID, 2024, time.April)
+	require.Error(t, err)
+}
+
+func TestCloseAccountingPeriod_RepoError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		closePeriodFn: func(_ context.Context, _, _, _ uuid.UUID, _ time.Time) error {
+			return fmt.Errorf("db error")
+		},
+	})
+
+	_, err := svc.CloseAccountingPeriod(context.Background(), fixedTenantID, fixedPeriodID, fixedUserID)
+	require.Error(t, err)
+}
+
+func TestPostJournalEntry_VoidStatus(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		getJournalEntryFn: func(_ context.Context, _, id uuid.UUID) (*JournalEntry, error) {
+			return &JournalEntry{ID: id, Status: "void"}, nil
+		},
+	})
+
+	_, err := svc.PostJournalEntry(context.Background(), fixedTenantID, fixedJEID, fixedUserID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrJournalVoid)
+}
+
+func TestListJournalEntries_MaxLimitEnforced(t *testing.T) {
+	t.Parallel()
+	var capturedLimit int
+	svc := NewService(&mockRepo{
+		listJournalEntriesFn: func(_ context.Context, _ uuid.UUID, _ *uuid.UUID, _ string, limit, _ int) ([]JournalEntry, error) {
+			capturedLimit = limit
+			return nil, nil
+		},
+	})
+
+	_, err := svc.ListJournalEntries(context.Background(), fixedTenantID, nil, "", 9999, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 20, capturedLimit)
+}
+
+func TestSeedChartOfAccounts_CreateError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		createAccountFn: func(_ context.Context, _ *Account) error {
+			return fmt.Errorf("unexpected db error")
+		},
+	})
+
+	entries := []vertical.ChartOfAccountEntry{
+		{Code: "5000", Name: "Expenses", AccountType: "expense"},
+	}
+	err := svc.SeedChartOfAccounts(context.Background(), fixedTenantID, entries)
+	require.Error(t, err)
 }

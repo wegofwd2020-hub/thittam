@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -219,4 +220,76 @@ func TestGetInventoryCategories(t *testing.T) {
 	assert.Len(t, cats, 2)
 	assert.Equal(t, "camera", cats[0].ID)
 	assert.Equal(t, "lighting", cats[1].ID)
+}
+
+// --- Additional coverage tests ---
+
+func TestGetAsset_Success(t *testing.T) {
+	t.Parallel()
+	assetID := uuid.New()
+	svc := NewService(&mockRepo{
+		getAssetFn: func(_ context.Context, tenantID, id uuid.UUID) (*Asset, error) {
+			return &Asset{ID: id, TenantID: tenantID, Status: "available"}, nil
+		},
+	})
+
+	a, err := svc.GetAsset(context.Background(), uuid.New(), assetID)
+	require.NoError(t, err)
+	assert.Equal(t, assetID, a.ID)
+}
+
+func TestListAssets_DefaultLimit(t *testing.T) {
+	t.Parallel()
+	var capturedLimit int
+	svc := NewService(&mockRepo{
+		listAssetsFn: func(_ context.Context, _ uuid.UUID, _ string, limit, _ int) ([]Asset, error) {
+			capturedLimit = limit
+			return nil, nil
+		},
+	})
+
+	_, err := svc.ListAssets(context.Background(), uuid.New(), "", 0, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 20, capturedLimit)
+}
+
+func TestListAssets_MaxLimitEnforced(t *testing.T) {
+	t.Parallel()
+	var capturedLimit int
+	svc := NewService(&mockRepo{
+		listAssetsFn: func(_ context.Context, _ uuid.UUID, _ string, limit, _ int) ([]Asset, error) {
+			capturedLimit = limit
+			return nil, nil
+		},
+	})
+
+	_, err := svc.ListAssets(context.Background(), uuid.New(), "", 9999, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 20, capturedLimit)
+}
+
+func TestListCheckouts_Success(t *testing.T) {
+	t.Parallel()
+	assetID := uuid.New()
+	svc := NewService(&mockRepo{
+		listCheckoutsFn: func(_ context.Context, id uuid.UUID) ([]AssetCheckout, error) {
+			return []AssetCheckout{{ID: uuid.New(), AssetID: id}}, nil
+		},
+	})
+
+	checkouts, err := svc.ListCheckouts(context.Background(), assetID)
+	require.NoError(t, err)
+	assert.Len(t, checkouts, 1)
+}
+
+func TestCheckInAsset_Error(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		checkInAssetFn: func(_ context.Context, _ uuid.UUID, _ string) error {
+			return fmt.Errorf("db error")
+		},
+	})
+
+	err := svc.CheckInAsset(context.Background(), uuid.New(), uuid.New(), uuid.New(), "good")
+	require.Error(t, err)
 }

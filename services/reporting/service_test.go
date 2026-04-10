@@ -2,7 +2,9 @@ package reporting
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -14,9 +16,14 @@ import (
 // --- Mock repository ---
 
 type mockRepo struct {
-	getExpenseFactsFn     func(ctx context.Context, tenantID, productionID uuid.UUID) ([]ExpenseFact, error)
-	getBudgetFactsFn      func(ctx context.Context, tenantID, productionID uuid.UUID) ([]BudgetFact, error)
-	getDashboardSummaryFn func(ctx context.Context, tenantID uuid.UUID) (*DashboardSummary, error)
+	getExpenseFactsFn      func(ctx context.Context, tenantID, productionID uuid.UUID) ([]ExpenseFact, error)
+	getBudgetFactsFn       func(ctx context.Context, tenantID, productionID uuid.UUID) ([]BudgetFact, error)
+	getDashboardSummaryFn  func(ctx context.Context, tenantID uuid.UUID) (*DashboardSummary, error)
+	getPortfolioOverviewFn func(ctx context.Context, tenantID uuid.UUID) (*PortfolioOverview, error)
+	getFinancialSummaryFn  func(ctx context.Context, tenantID uuid.UUID) (*FinancialSummary, error)
+	getApprovalPipelineFn  func(ctx context.Context, tenantID uuid.UUID) (*ApprovalPipeline, error)
+	getTeamUtilizationFn   func(ctx context.Context, tenantID uuid.UUID) (*TeamUtilization, error)
+	getComplianceStatusFn  func(ctx context.Context, tenantID uuid.UUID) (*ComplianceStatus, error)
 }
 
 func (m *mockRepo) GetExpenseFacts(ctx context.Context, tenantID, productionID uuid.UUID) ([]ExpenseFact, error) {
@@ -32,18 +39,33 @@ func (m *mockRepo) GetBudgetFacts(ctx context.Context, tenantID, productionID uu
 	return nil, nil
 }
 func (m *mockRepo) GetPortfolioOverview(ctx context.Context, tenantID uuid.UUID) (*PortfolioOverview, error) {
+	if m.getPortfolioOverviewFn != nil {
+		return m.getPortfolioOverviewFn(ctx, tenantID)
+	}
 	return &PortfolioOverview{TenantID: tenantID}, nil
 }
 func (m *mockRepo) GetFinancialSummary(ctx context.Context, tenantID uuid.UUID) (*FinancialSummary, error) {
+	if m.getFinancialSummaryFn != nil {
+		return m.getFinancialSummaryFn(ctx, tenantID)
+	}
 	return &FinancialSummary{TenantID: tenantID}, nil
 }
 func (m *mockRepo) GetApprovalPipeline(ctx context.Context, tenantID uuid.UUID) (*ApprovalPipeline, error) {
+	if m.getApprovalPipelineFn != nil {
+		return m.getApprovalPipelineFn(ctx, tenantID)
+	}
 	return &ApprovalPipeline{TenantID: tenantID}, nil
 }
 func (m *mockRepo) GetTeamUtilization(ctx context.Context, tenantID uuid.UUID) (*TeamUtilization, error) {
+	if m.getTeamUtilizationFn != nil {
+		return m.getTeamUtilizationFn(ctx, tenantID)
+	}
 	return &TeamUtilization{TenantID: tenantID}, nil
 }
 func (m *mockRepo) GetComplianceStatus(ctx context.Context, tenantID uuid.UUID) (*ComplianceStatus, error) {
+	if m.getComplianceStatusFn != nil {
+		return m.getComplianceStatusFn(ctx, tenantID)
+	}
 	return &ComplianceStatus{TenantID: tenantID}, nil
 }
 func (m *mockRepo) GetDashboardSummary(ctx context.Context, tenantID uuid.UUID) (*DashboardSummary, error) {
@@ -51,12 +73,12 @@ func (m *mockRepo) GetDashboardSummary(ctx context.Context, tenantID uuid.UUID) 
 		return m.getDashboardSummaryFn(ctx, tenantID)
 	}
 	return &DashboardSummary{
-		TenantID:      tenantID,
-		ProjectCount:  5,
-		TotalBudgeted: decimal.NewFromInt(1000000),
-		TotalActual:   decimal.NewFromInt(750000),
+		TenantID:       tenantID,
+		ProjectCount:   5,
+		TotalBudgeted:  decimal.NewFromInt(1000000),
+		TotalActual:    decimal.NewFromInt(750000),
 		TotalCommitted: decimal.NewFromInt(100000),
-		Variance:      decimal.NewFromInt(150000),
+		Variance:       decimal.NewFromInt(150000),
 	}, nil
 }
 
@@ -159,4 +181,163 @@ func TestGetDashboardSummary_EntityLabels(t *testing.T) {
 	assert.Equal(t, "Productions", summary.ProjectLabel)
 	assert.Equal(t, 5, summary.ProjectCount)
 	assert.True(t, summary.TotalBudgeted.Equal(decimal.NewFromInt(1000000)))
+}
+
+// --- Additional coverage tests ---
+
+func TestGetExpenseFacts_Success(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	prodID := uuid.New()
+	svc := NewService(&mockRepo{
+		getExpenseFactsFn: func(_ context.Context, tid, pid uuid.UUID) ([]ExpenseFact, error) {
+			return []ExpenseFact{
+				{TenantID: tid, ProductionID: pid, CategoryID: "location_rental"},
+			}, nil
+		},
+	})
+
+	facts, err := svc.GetExpenseFacts(context.Background(), tenantID, prodID)
+	require.NoError(t, err)
+	assert.Len(t, facts, 1)
+	assert.Equal(t, "location_rental", facts[0].CategoryID)
+}
+
+func TestGetBudgetFacts_Success(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	prodID := uuid.New()
+	svc := NewService(&mockRepo{
+		getBudgetFactsFn: func(_ context.Context, tid, pid uuid.UUID) ([]BudgetFact, error) {
+			return []BudgetFact{
+				{TenantID: tid, ProductionID: pid, TotalBudgeted: decimal.NewFromInt(500000)},
+			}, nil
+		},
+	})
+
+	facts, err := svc.GetBudgetFacts(context.Background(), tenantID, prodID)
+	require.NoError(t, err)
+	assert.Len(t, facts, 1)
+	assert.True(t, decimal.NewFromInt(500000).Equal(facts[0].TotalBudgeted))
+}
+
+func TestGetDashboardSummary_RepoError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		getDashboardSummaryFn: func(_ context.Context, _ uuid.UUID) (*DashboardSummary, error) {
+			return nil, fmt.Errorf("db error")
+		},
+	})
+
+	_, err := svc.GetDashboardSummary(ctxWithVertical(), uuid.New())
+	require.Error(t, err)
+}
+
+// --- Dashboard service tests ---
+
+func TestGetPortfolioOverview_EnrichesLabel(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	svc := NewService(&mockRepo{})
+
+	overview, err := svc.GetPortfolioOverview(ctxWithVertical(), tenantID)
+	require.NoError(t, err)
+	assert.Equal(t, "Productions", overview.ProjectLabel)
+}
+
+func TestGetPortfolioOverview_ComputesHealthCounts(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	svc := NewService(&mockRepo{
+		getPortfolioOverviewFn: func(_ context.Context, tid uuid.UUID) (*PortfolioOverview, error) {
+			return &PortfolioOverview{
+				TenantID: tid,
+				Projects: []ProjectSummary{
+					{Health: "on_track"},
+					{Health: "on_track"},
+					{Health: "at_risk"},
+					{Health: "over_budget"},
+				},
+			}, nil
+		},
+	})
+
+	overview, err := svc.GetPortfolioOverview(ctxWithVertical(), tenantID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, overview.HealthCounts.OnTrack)
+	assert.Equal(t, 1, overview.HealthCounts.AtRisk)
+	assert.Equal(t, 1, overview.HealthCounts.OverBudget)
+}
+
+func TestGetFinancialSummary_ComputesAvailable(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	svc := NewService(&mockRepo{
+		getFinancialSummaryFn: func(_ context.Context, tid uuid.UUID) (*FinancialSummary, error) {
+			return &FinancialSummary{
+				TenantID:       tid,
+				TotalBudgeted:  decimal.NewFromInt(1000000),
+				TotalActual:    decimal.NewFromInt(600000),
+				TotalCommitted: decimal.NewFromInt(150000),
+			}, nil
+		},
+	})
+
+	summary, err := svc.GetFinancialSummary(ctxWithVertical(), tenantID)
+	require.NoError(t, err)
+	assert.True(t, decimal.NewFromInt(250000).Equal(summary.TotalAvailable))
+}
+
+func TestGetApprovalPipeline_ComputesAgeBands(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	now := time.Now()
+	svc := NewService(&mockRepo{
+		getApprovalPipelineFn: func(_ context.Context, tid uuid.UUID) (*ApprovalPipeline, error) {
+			return &ApprovalPipeline{
+				TenantID: tid,
+				PendingItems: []PendingApproval{
+					{SubmittedAt: now.Add(-12 * time.Hour)},  // under 24h
+					{SubmittedAt: now.Add(-48 * time.Hour)},  // 1-3 days
+					{SubmittedAt: now.Add(-96 * time.Hour)},  // 3-7 days
+					{SubmittedAt: now.Add(-200 * time.Hour)}, // over 7 days
+				},
+			}, nil
+		},
+	})
+
+	pipeline, err := svc.GetApprovalPipeline(context.Background(), tenantID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, pipeline.ByAge.Under24h)
+	assert.Equal(t, 1, pipeline.ByAge.OneToThreeDays)
+	assert.Equal(t, 1, pipeline.ByAge.ThreeToSevenDays)
+	assert.Equal(t, 1, pipeline.ByAge.OverSevenDays)
+}
+
+func TestGetTeamUtilization_ComputesPct(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	svc := NewService(&mockRepo{
+		getTeamUtilizationFn: func(_ context.Context, tid uuid.UUID) (*TeamUtilization, error) {
+			return &TeamUtilization{
+				TenantID:     tid,
+				TotalMembers: 10,
+				Assigned:     8,
+			}, nil
+		},
+	})
+
+	util, err := svc.GetTeamUtilization(ctxWithVertical(), tenantID)
+	require.NoError(t, err)
+	assert.Equal(t, "Crew Members", util.TeamMemberLabel)
+	assert.True(t, decimal.NewFromFloat(80).Equal(util.UtilizationPct))
+}
+
+func TestGetComplianceStatus_Success(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{})
+
+	status, err := svc.GetComplianceStatus(context.Background(), uuid.New())
+	require.NoError(t, err)
+	assert.NotNil(t, status)
 }

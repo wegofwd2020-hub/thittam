@@ -578,3 +578,56 @@ func TestLagChecker_UsesOldestWatermarkAcrossSubjects(t *testing.T) {
 	err := checker.CheckHealth(context.Background())
 	require.Error(t, err, "oldest watermark is 90s ago — should fail even though one subject is fresh")
 }
+
+// ── Additional consumer tests for error paths ────────────────────────────────
+
+// TestDecodeEnvelope_MissingType ensures an envelope missing the type field is rejected.
+func TestDecodeEnvelope_MissingType(t *testing.T) {
+	t.Parallel()
+	env := events.Envelope{
+		EventID:    uuid.MustParse("e1000000-0000-0000-0000-000000000001"),
+		OccurredAt: time.Now(),
+		// Type intentionally empty
+	}
+	data, err := json.Marshal(env)
+	require.NoError(t, err)
+
+	_, err = decodeEnvelope(data)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing type")
+}
+
+// TestDecodeEnvelope_MissingEventID ensures an envelope with nil event ID is rejected.
+func TestDecodeEnvelope_MissingEventID(t *testing.T) {
+	t.Parallel()
+	env := events.Envelope{
+		Type:       events.SubjectExpenseSubmitted,
+		OccurredAt: time.Now(),
+		// EventID intentionally zero
+	}
+	data, err := json.Marshal(env)
+	require.NoError(t, err)
+
+	_, err = decodeEnvelope(data)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing event_id")
+}
+
+// TestAdvanceWatermark_WatermarkError tests that watermark errors are logged but not fatal.
+func TestAdvanceWatermark_WatermarkErrorIsSilent(t *testing.T) {
+	t.Parallel()
+	failWM := &failingWatermarkStore{}
+	consumer := newTestConsumer(&stubProjectionWriter{}, failWM)
+
+	// Should not panic — error is absorbed.
+	consumer.advanceWatermark(context.Background(), events.SubjectExpenseSubmitted, time.Now())
+}
+
+type failingWatermarkStore struct{}
+
+func (*failingWatermarkStore) RecordWatermark(_ context.Context, _ string, _ time.Time) error {
+	return errors.New("watermark store unavailable")
+}
+func (*failingWatermarkStore) OldestWatermark(_ context.Context) (time.Time, error) {
+	return time.Time{}, nil
+}

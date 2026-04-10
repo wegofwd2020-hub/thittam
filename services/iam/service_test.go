@@ -605,3 +605,259 @@ func TestAcceptInvitation_TokenNotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrInvitationNotFound)
 }
+
+// --- Additional coverage tests ---
+
+func TestGetUser_Success(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getUserFn: func(_ context.Context, tenantID, id uuid.UUID) (*User, error) {
+			return &User{ID: id, TenantID: tenantID, Status: "active"}, nil
+		},
+	})
+
+	u, err := svc.GetUser(context.Background(), fixedTenantID, fixedUserID)
+	require.NoError(t, err)
+	assert.Equal(t, fixedUserID, u.ID)
+}
+
+func TestGetUser_Error(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getUserFn: func(_ context.Context, _, _ uuid.UUID) (*User, error) {
+			return nil, errors.New("not found")
+		},
+	})
+
+	_, err := svc.GetUser(context.Background(), fixedTenantID, fixedUserID)
+	require.Error(t, err)
+}
+
+func TestUpdateUser_Success(t *testing.T) {
+	t.Parallel()
+	var saved *User
+	svc := newTestService(&mockRepo{
+		updateUserFn: func(_ context.Context, u *User) error {
+			saved = u
+			return nil
+		},
+	})
+
+	user := &User{ID: fixedUserID, TenantID: fixedTenantID, DisplayName: "Updated Name"}
+	result, err := svc.UpdateUser(context.Background(), user)
+	require.NoError(t, err)
+	assert.Equal(t, "Updated Name", result.DisplayName)
+	assert.Equal(t, fixedUserID, saved.ID)
+}
+
+func TestDeactivateUser_Success(t *testing.T) {
+	t.Parallel()
+	var deactivatedID uuid.UUID
+	svc := newTestService(&mockRepo{
+		deactivateUserFn: func(_ context.Context, _, id uuid.UUID) error {
+			deactivatedID = id
+			return nil
+		},
+	})
+
+	err := svc.DeactivateUser(context.Background(), fixedTenantID, fixedUserID)
+	require.NoError(t, err)
+	assert.Equal(t, fixedUserID, deactivatedID)
+}
+
+func TestDeactivateUser_Error(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		deactivateUserFn: func(_ context.Context, _, _ uuid.UUID) error {
+			return errors.New("db error")
+		},
+	})
+
+	err := svc.DeactivateUser(context.Background(), fixedTenantID, fixedUserID)
+	require.Error(t, err)
+}
+
+func TestAssignRole_Success(t *testing.T) {
+	t.Parallel()
+	var capturedUR *UserRole
+	svc := newTestService(&mockRepo{
+		assignRoleFn: func(_ context.Context, ur *UserRole) error {
+			capturedUR = ur
+			return nil
+		},
+	})
+
+	err := svc.AssignRole(context.Background(), fixedTenantID, fixedUserID, fixedRoleID, fixedUserID)
+	require.NoError(t, err)
+	assert.Equal(t, fixedUserID, capturedUR.UserID)
+	assert.Equal(t, fixedRoleID, capturedUR.RoleID)
+}
+
+func TestAssignRole_Error(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		assignRoleFn: func(_ context.Context, _ *UserRole) error {
+			return errors.New("db error")
+		},
+	})
+
+	err := svc.AssignRole(context.Background(), fixedTenantID, fixedUserID, fixedRoleID, fixedUserID)
+	require.Error(t, err)
+}
+
+func TestRevokeRole_Success(t *testing.T) {
+	t.Parallel()
+	var capturedRoleID uuid.UUID
+	svc := newTestService(&mockRepo{
+		revokeRoleFn: func(_ context.Context, _, roleID uuid.UUID) error {
+			capturedRoleID = roleID
+			return nil
+		},
+	})
+
+	err := svc.RevokeRole(context.Background(), fixedUserID, fixedRoleID)
+	require.NoError(t, err)
+	assert.Equal(t, fixedRoleID, capturedRoleID)
+}
+
+func TestListRoles_Success(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		listRolesFn: func(_ context.Context, tenantID uuid.UUID) ([]Role, error) {
+			return []Role{
+				{ID: fixedRoleID, Name: "super_admin", TenantID: tenantID},
+			}, nil
+		},
+	})
+
+	roles, err := svc.ListRoles(context.Background(), fixedTenantID)
+	require.NoError(t, err)
+	assert.Len(t, roles, 1)
+	assert.Equal(t, "super_admin", roles[0].Name)
+}
+
+func TestGetTenant_Success(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Status: "active", Plan: "professional"}, nil
+		},
+	})
+
+	tenant, err := svc.GetTenant(context.Background(), fixedTenantID)
+	require.NoError(t, err)
+	assert.Equal(t, fixedTenantID, tenant.ID)
+	assert.Equal(t, "professional", tenant.Plan)
+}
+
+func TestGetTenant_Error(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, _ uuid.UUID) (*Tenant, error) {
+			return nil, errors.New("not found")
+		},
+	})
+
+	_, err := svc.GetTenant(context.Background(), fixedTenantID)
+	require.Error(t, err)
+}
+
+func TestLogin_IssueTokenError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(
+		&mockRepo{},
+		&mockAuthenticator{},
+		&mockTokenIssuer{
+			issueFn: func(_ context.Context, _ *auth.AuthResult) (*auth.TokenPair, error) {
+				return nil, errors.New("token signing failed")
+			},
+		},
+		&mockHasher{},
+		&mockVerifier{},
+	)
+
+	_, err := svc.Login(context.Background(), fixedTenantID, "user@example.com", "pass")
+	require.Error(t, err)
+}
+
+func TestRefreshToken_Error(t *testing.T) {
+	t.Parallel()
+	svc := NewService(
+		&mockRepo{},
+		&mockAuthenticator{},
+		&mockTokenIssuer{
+			refreshFn: func(_ context.Context, _ string) (*auth.TokenPair, error) {
+				return nil, auth.ErrInvalidCredentials
+			},
+		},
+		&mockHasher{},
+		&mockVerifier{},
+	)
+
+	_, err := svc.RefreshToken(context.Background(), "bad-token")
+	require.Error(t, err)
+}
+
+func TestLogout_Error(t *testing.T) {
+	t.Parallel()
+	svc := NewService(
+		&mockRepo{},
+		&mockAuthenticator{},
+		&mockTokenIssuer{
+			revokeFn: func(_ context.Context, _ string) error {
+				return errors.New("revoke failed")
+			},
+		},
+		&mockHasher{},
+		&mockVerifier{},
+	)
+
+	err := svc.Logout(context.Background(), "some-token")
+	require.Error(t, err)
+}
+
+func TestCreateTenant_DefaultPlan(t *testing.T) {
+	t.Parallel()
+	var savedTenant *Tenant
+	svc := newTestService(&mockRepo{
+		createTenantFn: func(_ context.Context, t *Tenant) error {
+			savedTenant = t
+			return nil
+		},
+	})
+
+	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme"})
+	require.NoError(t, err)
+	assert.Equal(t, "starter", savedTenant.Plan)
+	assert.Equal(t, "active", savedTenant.Status)
+}
+
+func TestSuspendTenant_Error(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string) error {
+			return errors.New("db error")
+		},
+	})
+
+	_, err := svc.SuspendTenant(context.Background(), fixedTenantID)
+	require.Error(t, err)
+}
+
+func TestCreateUser_HashError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(
+		&mockRepo{},
+		&mockAuthenticator{},
+		&mockTokenIssuer{},
+		&mockHasher{
+			hashFn: func(_ string) (string, error) {
+				return "", errors.New("bcrypt capacity exceeded")
+			},
+		},
+		&mockVerifier{},
+	)
+
+	_, err := svc.CreateUser(context.Background(), &User{TenantID: fixedTenantID, Email: "x@y.com"}, "pass")
+	require.Error(t, err)
+}

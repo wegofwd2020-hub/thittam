@@ -314,3 +314,132 @@ func TestGetApprovalLimits(t *testing.T) {
 	assert.Equal(t, "line_producer", wf.Limits[0].Role)
 	assert.True(t, wf.DualApprovalAbove.Equal(decimal.NewFromInt(1000000)))
 }
+
+// --- Additional coverage tests ---
+
+func TestApproveExpense_AlreadyApproved(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tenantID, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tenantID, Amount: decimal.NewFromInt(10000), Status: "approved"}, nil
+		},
+	})
+
+	err := svc.ApproveExpense(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), "line_producer")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrAlreadyApproved)
+}
+
+func TestApproveExpense_UnknownRole(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{})
+
+	err := svc.ApproveExpense(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), "receptionist")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrApprovalLimitExceeded)
+}
+
+func TestGetExpense_Success(t *testing.T) {
+	t.Parallel()
+	expID := uuid.New()
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tenantID, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tenantID, Amount: decimal.NewFromInt(5000), Status: "submitted"}, nil
+		},
+	})
+
+	exp, err := svc.GetExpense(ctxWithVertical(), uuid.New(), expID)
+	require.NoError(t, err)
+	assert.Equal(t, expID, exp.ID)
+}
+
+func TestListExpenses_DefaultLimit(t *testing.T) {
+	t.Parallel()
+	var capturedLimit int
+	svc := NewService(&mockRepo{
+		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, limit, _ int) ([]Expense, error) {
+			capturedLimit = limit
+			return nil, nil
+		},
+	})
+
+	_, err := svc.ListExpenses(ctxWithVertical(), uuid.New(), uuid.New(), "", 0, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 20, capturedLimit)
+}
+
+func TestListExpenses_MaxLimitEnforced(t *testing.T) {
+	t.Parallel()
+	var capturedLimit int
+	svc := NewService(&mockRepo{
+		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, limit, _ int) ([]Expense, error) {
+			capturedLimit = limit
+			return nil, nil
+		},
+	})
+
+	_, err := svc.ListExpenses(ctxWithVertical(), uuid.New(), uuid.New(), "", 9999, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 20, capturedLimit)
+}
+
+func TestCreatePurchaseOrder_GeneratesID(t *testing.T) {
+	t.Parallel()
+	var saved *PurchaseOrder
+	svc := NewService(&mockRepo{
+		createPOFn: func(_ context.Context, po *PurchaseOrder) error {
+			saved = po
+			return nil
+		},
+	})
+
+	po := &PurchaseOrder{TenantID: uuid.New(), ProductionID: uuid.New()}
+	err := svc.CreatePurchaseOrder(context.Background(), po)
+	require.NoError(t, err)
+	assert.NotEqual(t, uuid.Nil, saved.ID)
+}
+
+func TestGetPurchaseOrder_Success(t *testing.T) {
+	t.Parallel()
+	poID := uuid.New()
+	svc := NewService(&mockRepo{
+		getPOFn: func(_ context.Context, tenantID, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tenantID}, nil
+		},
+	})
+
+	po, err := svc.GetPurchaseOrder(context.Background(), uuid.New(), poID)
+	require.NoError(t, err)
+	assert.Equal(t, poID, po.ID)
+}
+
+func TestListPurchaseOrders_DefaultLimit(t *testing.T) {
+	t.Parallel()
+	var capturedLimit int
+	svc := NewService(&mockRepo{
+		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, limit, _ int) ([]PurchaseOrder, error) {
+			capturedLimit = limit
+			return nil, nil
+		},
+	})
+
+	_, err := svc.ListPurchaseOrders(context.Background(), uuid.New(), uuid.New(), "", 0, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 20, capturedLimit)
+}
+
+func TestCreatePettyCashAdvance_GeneratesID(t *testing.T) {
+	t.Parallel()
+	var saved *PettyCashAdvance
+	svc := NewService(&mockRepo{
+		createPettyCashFn: func(_ context.Context, pc *PettyCashAdvance) error {
+			saved = pc
+			return nil
+		},
+	})
+
+	pc := &PettyCashAdvance{TenantID: uuid.New()}
+	err := svc.CreatePettyCashAdvance(context.Background(), pc)
+	require.NoError(t, err)
+	assert.NotEqual(t, uuid.Nil, saved.ID)
+}

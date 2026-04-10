@@ -464,3 +464,143 @@ func TestMoveDocument_UpdatesFolderID(t *testing.T) {
 	assert.Equal(t, fixedFolderID, *doc.FolderID)
 	assert.Equal(t, fixedFolderID, *updatedDoc.FolderID)
 }
+
+// --- Additional coverage tests ---
+
+func TestConfirmVersion_Success(t *testing.T) {
+	t.Parallel()
+	var createdVersion *DocumentVersion
+	svc := NewService(&mockRepo{
+		getDocumentFn: func(_ context.Context, tenantID, id uuid.UUID) (*Document, error) {
+			return &Document{
+				ID:             id,
+				TenantID:       tenantID,
+				Name:           "contract.pdf",
+				StorageKey:     "key/v1/contract.pdf",
+				SizeBytes:      1024,
+				CurrentVersion: 1,
+				UploadedBy:     fixedUserID,
+			}, nil
+		},
+		createVersionFn: func(_ context.Context, v *DocumentVersion) error {
+			createdVersion = v
+			return nil
+		},
+	}, &mockStore{}, &mockPublisher{})
+
+	dv, err := svc.ConfirmVersion(context.Background(), fixedTenantID, fixedDocID, 2, fixedUserID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, dv.Version)
+	assert.Equal(t, 2, createdVersion.Version)
+}
+
+func TestConfirmVersion_WrongVersion(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getDocumentFn: func(_ context.Context, tenantID, id uuid.UUID) (*Document, error) {
+			return &Document{
+				ID: id, TenantID: tenantID, SizeBytes: 1024, CurrentVersion: 1,
+			}, nil
+		},
+	})
+
+	// Trying to confirm version 5, but document is on version 1 (next should be 2).
+	_, err := svc.ConfirmVersion(context.Background(), fixedTenantID, fixedDocID, 5, fixedUserID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "expected 2")
+}
+
+func TestListVersions_Success(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		listVersionsFn: func(_ context.Context, docID uuid.UUID) ([]DocumentVersion, error) {
+			return []DocumentVersion{
+				{ID: uuid.New(), DocumentID: docID, Version: 1},
+				{ID: uuid.New(), DocumentID: docID, Version: 2},
+			}, nil
+		},
+	}, &mockStore{}, &mockPublisher{})
+
+	versions, err := svc.ListVersions(context.Background(), fixedTenantID, fixedDocID)
+	require.NoError(t, err)
+	assert.Len(t, versions, 2)
+}
+
+func TestListFolders_Success(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		listFoldersFn: func(_ context.Context, tenantID uuid.UUID, _ *uuid.UUID) ([]Folder, error) {
+			return []Folder{{ID: fixedFolderID, TenantID: tenantID, Name: "Contracts"}}, nil
+		},
+	}, &mockStore{}, &mockPublisher{})
+
+	folders, err := svc.ListFolders(context.Background(), fixedTenantID, nil)
+	require.NoError(t, err)
+	assert.Len(t, folders, 1)
+	assert.Equal(t, "Contracts", folders[0].Name)
+}
+
+func TestGetDocument_Deleted(t *testing.T) {
+	t.Parallel()
+	now := time.Now()
+	svc := newTestService(&mockRepo{
+		getDocumentFn: func(_ context.Context, tenantID, id uuid.UUID) (*Document, error) {
+			return &Document{ID: id, TenantID: tenantID, DeletedAt: &now}, nil
+		},
+	})
+
+	_, err := svc.GetDocument(context.Background(), fixedTenantID, fixedDocID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrDocumentDeleted)
+}
+
+func TestGetDocument_RepoError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getDocumentFn: func(_ context.Context, _, _ uuid.UUID) (*Document, error) {
+			return nil, ErrDocumentNotFound
+		},
+	})
+
+	_, err := svc.GetDocument(context.Background(), fixedTenantID, fixedDocID)
+	require.Error(t, err)
+}
+
+func TestDeleteDocument_AlreadyDeleted_Idempotent(t *testing.T) {
+	t.Parallel()
+	now := time.Now()
+	svc := newTestService(&mockRepo{
+		getDocumentFn: func(_ context.Context, tenantID, id uuid.UUID) (*Document, error) {
+			return &Document{ID: id, TenantID: tenantID, DeletedAt: &now}, nil
+		},
+	})
+
+	err := svc.DeleteDocument(context.Background(), fixedTenantID, fixedDocID)
+	require.NoError(t, err) // idempotent — no error
+}
+
+func TestGetDownloadURL_UploadNotConfirmed(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getDocumentFn: func(_ context.Context, tenantID, id uuid.UUID) (*Document, error) {
+			return &Document{ID: id, TenantID: tenantID, SizeBytes: 0}, nil // no bytes yet
+		},
+	})
+
+	_, err := svc.GetDownloadURL(context.Background(), fixedTenantID, fixedDocID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrUploadNotConfirmed)
+}
+
+func TestCreateVersion_UploadNotConfirmed(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getDocumentFn: func(_ context.Context, tenantID, id uuid.UUID) (*Document, error) {
+			return &Document{ID: id, TenantID: tenantID, SizeBytes: 0}, nil
+		},
+	})
+
+	_, err := svc.CreateVersion(context.Background(), fixedTenantID, fixedDocID, fixedUserID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrUploadNotConfirmed)
+}

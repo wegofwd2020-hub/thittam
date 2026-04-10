@@ -411,3 +411,202 @@ func TestRenderString_InvalidTemplate(t *testing.T) {
 	_, err := renderString("{{.Unclosed", nil)
 	require.Error(t, err)
 }
+
+// --- Tests: UpdateTemplate ---
+
+func TestUpdateTemplate_Success(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{}, nil)
+
+	tmpl := &Template{
+		ID:           fixedTemplateID,
+		TenantID:     fixedTenantID,
+		EventType:    "expense.approved",
+		Channel:      "email",
+		Subject:      "Updated subject",
+		BodyTemplate: "Updated body",
+		IsActive:     true,
+	}
+	result, err := svc.UpdateTemplate(context.Background(), tmpl)
+	require.NoError(t, err)
+	assert.Equal(t, "Updated subject", result.Subject)
+}
+
+func TestUpdateTemplate_RepoError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		updateTemplateFn: func(_ context.Context, _ *Template) error {
+			return errors.New("db: connection lost")
+		},
+	}, nil)
+
+	_, err := svc.UpdateTemplate(context.Background(), &Template{ID: fixedTemplateID})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "update template")
+}
+
+// --- Tests: GetTemplate ---
+
+func TestGetTemplate_Success(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getTemplateFn: func(_ context.Context, tenantID, id uuid.UUID) (*Template, error) {
+			return &Template{ID: id, TenantID: tenantID, Channel: "email", IsActive: true}, nil
+		},
+	}, nil)
+
+	tmpl, err := svc.GetTemplate(context.Background(), fixedTenantID, fixedTemplateID)
+	require.NoError(t, err)
+	assert.Equal(t, fixedTemplateID, tmpl.ID)
+	assert.Equal(t, "email", tmpl.Channel)
+}
+
+func TestGetTemplate_NotFound(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getTemplateFn: func(_ context.Context, _, _ uuid.UUID) (*Template, error) {
+			return nil, ErrTemplateNotFound
+		},
+	}, nil)
+
+	_, err := svc.GetTemplate(context.Background(), fixedTenantID, fixedTemplateID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), fixedTemplateID.String())
+}
+
+// --- Tests: ListTemplates ---
+
+func TestListTemplates_Success(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		listTemplatesFn: func(_ context.Context, tenantID uuid.UUID) ([]Template, error) {
+			return []Template{
+				{ID: fixedTemplateID, TenantID: tenantID, Channel: "email"},
+				{ID: uuid.New(), TenantID: tenantID, Channel: "sms"},
+			}, nil
+		},
+	}, nil)
+
+	tmpls, err := svc.ListTemplates(context.Background(), fixedTenantID)
+	require.NoError(t, err)
+	assert.Len(t, tmpls, 2)
+}
+
+func TestListTemplates_RepoError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		listTemplatesFn: func(_ context.Context, _ uuid.UUID) ([]Template, error) {
+			return nil, errors.New("db error")
+		},
+	}, nil)
+
+	_, err := svc.ListTemplates(context.Background(), fixedTenantID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "list templates")
+}
+
+// --- Tests: GetNotification ---
+
+func TestGetNotification_Success(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getNotificationFn: func(_ context.Context, tenantID, id uuid.UUID) (*Notification, error) {
+			return &Notification{ID: id, TenantID: tenantID, Status: "sent", Channel: "email"}, nil
+		},
+	}, nil)
+
+	n, err := svc.GetNotification(context.Background(), fixedTenantID, fixedNotifID)
+	require.NoError(t, err)
+	assert.Equal(t, fixedNotifID, n.ID)
+	assert.Equal(t, "sent", n.Status)
+}
+
+func TestGetNotification_NotFound(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getNotificationFn: func(_ context.Context, _, _ uuid.UUID) (*Notification, error) {
+			return nil, errors.New("not found")
+		},
+	}, nil)
+
+	_, err := svc.GetNotification(context.Background(), fixedTenantID, fixedNotifID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), fixedNotifID.String())
+}
+
+// --- Tests: additional Send branches ---
+
+func TestSend_CreateNotificationError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		createNotificationFn: func(_ context.Context, _ *Notification) error {
+			return errors.New("db: insert failed")
+		},
+	}, nil)
+
+	_, err := svc.Send(context.Background(), &SendRequest{
+		TenantID:  fixedTenantID,
+		Channel:   "email",
+		EventType: "expense.approved",
+		Data:      map[string]any{},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "create log entry")
+}
+
+func TestSend_SubjectRenderError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getActiveTemplateFn: func(_ context.Context, _ uuid.UUID, _, _ string) (*Template, error) {
+			return &Template{
+				Subject:      "{{.Unclosed", // bad subject template
+				BodyTemplate: "body",
+				IsActive:     true,
+			}, nil
+		},
+	}, nil)
+
+	_, err := svc.Send(context.Background(), &SendRequest{
+		TenantID:  fixedTenantID,
+		Channel:   "email",
+		EventType: "budget.approved",
+		Data:      map[string]any{},
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrTemplateRender)
+}
+
+func TestDispatch_ChannelErrors_AreCollected(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getActiveTemplateFn: func(_ context.Context, _ uuid.UUID, _, channel string) (*Template, error) {
+			if channel == "email" {
+				return &Template{Channel: "email", BodyTemplate: "body"}, nil
+			}
+			return nil, ErrTemplateNotFound
+		},
+		createNotificationFn: func(_ context.Context, _ *Notification) error {
+			return errors.New("db down")
+		},
+	}, nil)
+
+	errs := svc.Dispatch(context.Background(), fixedTenantID, fixedRecipientID, "a@b.com", "expense.approved", nil)
+	assert.NotEmpty(t, errs, "dispatch should collect errors from failing channels")
+}
+
+func TestCreateTemplate_RepoError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		createTemplateFn: func(_ context.Context, _ *Template) error {
+			return errors.New("db: constraint violation")
+		},
+	}, nil)
+
+	_, err := svc.CreateTemplate(context.Background(), &Template{
+		TenantID:  fixedTenantID,
+		EventType: "expense.approved",
+		Channel:   "email",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "create template")
+}
