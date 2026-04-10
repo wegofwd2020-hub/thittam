@@ -20,4 +20,7 @@ var (
 
 	// ErrInvalidRequest is returned when required fields are missing or malformed.
 	ErrInvalidRequest = errors.New("registration: invalid request")
+
+	// ErrSagaNotFound is returned when no saga exists for the given ID or email.
+	ErrSagaNotFound = errors.New("registration: saga not found")
 )
