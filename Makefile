@@ -1,10 +1,11 @@
 .PHONY: help \
         infra-up infra-down infra-up-full \
+        nats-provision \
         db-init db-drop db-reset \
         migrate-all migrate-down seed \
         run-all run-web \
         test test-race test-cover test-integration \
-        validate-verticals \
+        validate-verticals coverage-check \
         lint build clean
 
 # ── Database URL ───────────────────────────────────────────────────────────────
@@ -25,6 +26,7 @@ help:
 	@echo "    make infra-up       Start Redis, NATS, MinIO via Docker"
 	@echo "    make infra-down     Stop middleware containers"
 	@echo "    make infra-up-full  Start all infra including Docker postgres (port 5434)"
+	@echo "    make nats-provision Provision JetStream streams and consumers (requires nats CLI)"
 	@echo ""
 	@echo "  Local database (system PostgreSQL on port 5433):"
 	@echo "    make db-init        Create thittam role + database on system postgres"
@@ -44,6 +46,7 @@ help:
 	@echo "    make test                Unit tests"
 	@echo "    make test-race           Unit tests with race detector"
 	@echo "    make test-cover          Coverage report (opens in browser)"
+	@echo "    make coverage-check      Enforce per-package coverage thresholds (CI parity)"
 	@echo "    make validate-verticals  Validate all vertical YAML configs"
 	@echo "    make lint                golangci-lint"
 	@echo ""
@@ -62,6 +65,9 @@ infra-down:
 infra-up-full:
 	docker compose -f $(INFRA_FULL) up -d
 	@echo "==> Redis :6380, NATS :4222, MinIO :9000, Postgres :5434 ready."
+
+nats-provision:
+	@./infra/nats/provision.sh
 
 # ── Local database (system PostgreSQL) ────────────────────────────────────────
 
@@ -146,6 +152,32 @@ test-integration:
 # Run automatically in CI and locally via: make validate-verticals
 validate-verticals:
 	go test -run TestValidateAllProductionVerticals ./pkg/vertical/...
+
+# ── Coverage enforcement ───────────────────────────────────────────────────────
+# Mirrors the CI thresholds: iam/ledger ≥85%, budget/expense ≥80%, others ≥75%
+# Usage: make coverage-check
+
+coverage-check:
+	@echo "==> Running coverage checks..."
+	@$(MAKE) _cov-enforce PKG=services/iam           MIN=85
+	@$(MAKE) _cov-enforce PKG=services/ledger        MIN=85
+	@$(MAKE) _cov-enforce PKG=services/budget        MIN=80
+	@$(MAKE) _cov-enforce PKG=services/expense       MIN=80
+	@$(MAKE) _cov-enforce PKG=services/document      MIN=75
+	@$(MAKE) _cov-enforce PKG=services/inventory     MIN=75
+	@$(MAKE) _cov-enforce PKG=services/reporting     MIN=75
+	@$(MAKE) _cov-enforce PKG=services/project       MIN=75
+	@$(MAKE) _cov-enforce PKG=services/notifications MIN=75
+	@echo "==> All coverage thresholds passed."
+
+_cov-enforce:
+	@go test ./$(PKG)/... -short -coverprofile=/tmp/cov_check.out 2>/dev/null
+	@PCT=$$(go tool cover -func=/tmp/cov_check.out | grep "^total:" | awk '{print $$3}' | tr -d '%'); \
+	 echo "  $(PKG): $${PCT}% (threshold: $(MIN)%)"; \
+	 if ! echo "$${PCT} >= $(MIN)" | bc -l | grep -q '^1$$'; then \
+	   echo "FAIL: $(PKG) coverage $${PCT}% is below $(MIN)%"; \
+	   exit 1; \
+	 fi
 
 # ── Code quality ──────────────────────────────────────────────────────────────
 

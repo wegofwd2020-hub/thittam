@@ -1,0 +1,69 @@
+groups:
+  - name: nats_dlq
+    interval: 60s
+    rules:
+      # ── Dead-letter queue depth ───────────────────────────────────────────
+      # Fires when any message lands in the FINANCIAL_DLQ stream.
+      # A depth > 0 means a financial event (budget, expense, or ledger) was
+      # not processed after 5 delivery attempts — this requires immediate ops
+      # investigation. See docs/operations/nats-dlq.md for the runbook.
+      - alert: FinancialDLQNonEmpty
+        expr: nats_stream_msgs{stream="FINANCIAL_DLQ"} > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          component: nats
+        annotations:
+          summary: "Financial dead-letter queue is non-empty ({{ $value }} message(s))"
+          description: >
+            The FINANCIAL_DLQ stream contains {{ $value }} unprocessed message(s).
+            A financial event (thittam.budget.*, thittam.expense.*, or thittam.ledger.*)
+            was not successfully consumed after {{ "5" }} delivery attempts.
+            Silent message loss on financial events means the ledger or reporting
+            projections may be out of sync.
+            Runbook: docs/operations/nats-dlq.md
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/nats-dlq.md"
+
+      # ── High redelivery rate ──────────────────────────────────────────────
+      # Fires when the FINANCIAL consumer redelivery rate is elevated, which
+      # indicates consumer instability before messages reach the DLQ.
+      - alert: FinancialConsumerHighRedeliveries
+        expr: |
+          rate(nats_consumer_num_redelivered{stream="FINANCIAL"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+          component: nats
+        annotations:
+          summary: "FINANCIAL consumer redeliveries > 1/s for 5 minutes (consumer={{ $labels.consumer }})"
+          description: >
+            Consumer {{ $labels.consumer }} on stream FINANCIAL is experiencing
+            more than 1 redelivery/second over the last 5 minutes.
+            This may indicate the downstream service (reporting-analytics or
+            notifications) is struggling to process financial events.
+            If redeliveries continue, messages will exhaust MaxDeliver=5 and
+            land in FINANCIAL_DLQ.
+            Check the service logs and /readyz endpoint for the affected consumer.
+
+      # ── Consumer ack wait exceeded ────────────────────────────────────────
+      # Fires when a financial consumer is not acking messages within the
+      # 30-second AckWait window. This indicates the consumer is blocked or
+      # slow — a precursor to redelivery accumulation.
+      - alert: FinancialConsumerAckTimeout
+        expr: |
+          nats_consumer_ack_wait_exceeded_total{stream="FINANCIAL"} > 0
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          component: nats
+        annotations:
+          summary: "FINANCIAL consumer ack timeouts detected (consumer={{ $labels.consumer }})"
+          description: >
+            Consumer {{ $labels.consumer }} on stream FINANCIAL has exceeded
+            the 30-second AckWait {{ $value }} time(s).
+            The consumer did not acknowledge a message in time, causing NATS
+            to redeliver it. If persistent, this will exhaust MaxDeliver and
+            route messages to the dead-letter queue.

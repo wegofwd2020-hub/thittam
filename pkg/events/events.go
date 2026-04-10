@@ -32,6 +32,7 @@ const (
 	SubjectProjectStatusChanged = "thittam.project.status_changed"
 	SubjectProjectMemberAssigned = "thittam.project.member_assigned"
 	SubjectTenantCreated      = "thittam.iam.tenant.created"
+	SubjectLedgerJournalPosted = "thittam.ledger.journal.posted"
 )
 
 // Envelope wraps every domain event published to NATS JetStream.
@@ -138,6 +139,26 @@ type ProjectStatusChangedPayload struct {
 	NewStatus    string    `json:"new_status"`
 	CurrentPhase string    `json:"current_phase"`
 }
+
+// --- Ledger domain events ---
+
+// LedgerJournalPostedPayload is published when a journal entry is posted to
+// the general ledger. This is a financial event: silent loss is a critical risk
+// because the ledger would fall out of sync with the originating service.
+// Subject: SubjectLedgerJournalPosted
+type LedgerJournalPostedPayload struct {
+	JournalEntryID string    `json:"journal_entry_id"`
+	EntryNumber    string    `json:"entry_number"` // e.g. "JE-2024-00001"
+	ProductionID   string    `json:"production_id,omitempty"`
+	PeriodID       string    `json:"period_id"`
+	// TotalDebit and TotalCredit are serialized as strings per Rule #1.
+	TotalDebit  string    `json:"total_debit"`
+	TotalCredit string    `json:"total_credit"`
+	Narration   string    `json:"narration"`
+	PostedAt    time.Time `json:"posted_at"`
+}
+
+// --- Project domain events ---
 
 // ProjectMemberAssignedPayload is published when a crew member is assigned to a project.
 // Subject: SubjectProjectMemberAssigned
