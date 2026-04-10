@@ -1,0 +1,221 @@
+// Document Service — Thittam
+// This proto file is documentation/contract for future code generation.
+// Run `buf generate` to produce Go stubs.
+//
+// Large files are never routed through the service — clients upload and
+// download directly via presigned URLs returned by InitiateUpload /
+// CreateVersion / GetDownloadURL. The client calls ConfirmUpload /
+// ConfirmVersion after a successful PUT to MinIO/S3.
+
+syntax = "proto3";
+
+package thittam.document.v1;
+
+option go_package = "github.com/wegofwd2020/thittam/gen/document/v1;documentv1";
+
+import "google/protobuf/timestamp.proto";
+
+service DocumentService {
+  // --- Upload lifecycle ---
+
+  // InitiateUpload reserves a Document record (SizeBytes=0) and returns a
+  // presigned PUT URL (1-hour TTL). The client PUTs file bytes directly to
+  // the URL, then calls ConfirmUpload.
+  rpc InitiateUpload(InitiateUploadRequest) returns (UploadURL);
+
+  // ConfirmUpload stats the uploaded object, updates the document's SizeBytes,
+  // creates the first DocumentVersion record, and publishes document.uploaded.
+  rpc ConfirmUpload(ConfirmUploadRequest) returns (Document);
+
+  // --- Document management ---
+  rpc GetDocument(GetDocumentRequest) returns (Document);
+  rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse);
+
+  // DeleteDocument soft-deletes the document. The object is retained in
+  // storage for 30 days before a background purge job removes it.
+  rpc DeleteDocument(DeleteDocumentRequest) returns (DeleteDocumentResponse);
+
+  // GetDownloadURL returns a 15-minute presigned GET URL for the current
+  // version's object. The URL window is extended for large files (see #28).
+  rpc GetDownloadURL(GetDownloadURLRequest) returns (DownloadURL);
+
+  // MoveDocument moves a document to a different folder within the same tenant.
+  rpc MoveDocument(MoveDocumentRequest) returns (Document);
+
+  // --- Versioning ---
+
+  // CreateVersion initiates a new version upload. Returns a presigned PUT URL;
+  // the client calls ConfirmVersion after uploading.
+  rpc CreateVersion(CreateVersionRequest) returns (UploadURL);
+
+  // ConfirmVersion records the new version and advances the document's
+  // current_version pointer.
+  rpc ConfirmVersion(ConfirmVersionRequest) returns (DocumentVersion);
+
+  rpc ListVersions(ListVersionsRequest) returns (ListVersionsResponse);
+
+  // RestoreVersion makes a previous version current. No objects are copied —
+  // the document's storage_key pointer is updated. Idempotent.
+  rpc RestoreVersion(RestoreVersionRequest) returns (Document);
+
+  // --- Folders ---
+  rpc CreateFolder(CreateFolderRequest) returns (Folder);
+  rpc ListFolders(ListFoldersRequest) returns (ListFoldersResponse);
+}
+
+// --- Core domain messages ---
+
+// Folder is a named container for organising documents.
+// Folders are hierarchical via the optional parent_id.
+message Folder {
+  string id = 1;
+  string tenant_id = 2;
+  string production_id = 3; // empty if tenant-level folder
+  string name = 4;
+  string parent_id = 5;     // empty if root folder
+  string created_by = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+// Document is the metadata record for an uploaded file.
+// size_bytes = 0 means the upload has been initiated but not yet confirmed.
+// deleted_at non-zero means the document is soft-deleted.
+message Document {
+  string id = 1;
+  string tenant_id = 2;
+  string production_id = 3; // empty if not production-scoped
+  string folder_id = 4;     // empty if in the root folder
+  string name = 5;
+  string mime_type = 6;
+  int64 size_bytes = 7;     // 0 until ConfirmUpload is called
+  string storage_key = 8;   // internal MinIO/S3 object key; opaque to callers
+  int32 current_version = 9;
+  string uploaded_by = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp deleted_at = 12; // zero value if not deleted
+}
+
+// DocumentVersion is one revision of a document's content.
+message DocumentVersion {
+  string id = 1;
+  string document_id = 2;
+  int32 version = 3;
+  string storage_key = 4;
+  int64 size_bytes = 5;
+  string uploaded_by = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+// UploadURL is returned by InitiateUpload and CreateVersion.
+// The caller PUTs file bytes directly to url, then confirms.
+message UploadURL {
+  string document_id = 1;
+  string url = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+// DownloadURL is a short-lived presigned GET URL.
+message DownloadURL {
+  string url = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+// --- Request/Response messages ---
+
+// Upload lifecycle
+message InitiateUploadRequest {
+  string tenant_id = 1;
+  string production_id = 2; // optional
+  string folder_id = 3;     // optional
+  string name = 4;
+  string mime_type = 5;
+  string uploaded_by = 6;
+}
+
+message ConfirmUploadRequest {
+  string tenant_id = 1;
+  string document_id = 2;
+}
+
+// Document management
+message GetDocumentRequest {
+  string tenant_id = 1;
+  string id = 2;
+}
+
+message ListDocumentsRequest {
+  string tenant_id = 1;
+  string production_id = 2; // optional filter
+  string folder_id = 3;     // optional filter
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+message ListDocumentsResponse {
+  repeated Document documents = 1;
+}
+
+message DeleteDocumentRequest {
+  string tenant_id = 1;
+  string id = 2;
+}
+
+message DeleteDocumentResponse {}
+
+message GetDownloadURLRequest {
+  string tenant_id = 1;
+  string id = 2;
+}
+
+message MoveDocumentRequest {
+  string tenant_id = 1;
+  string document_id = 2;
+  string folder_id = 3;
+}
+
+// Versioning
+message CreateVersionRequest {
+  string tenant_id = 1;
+  string document_id = 2;
+  string uploaded_by = 3;
+}
+
+message ConfirmVersionRequest {
+  string tenant_id = 1;
+  string document_id = 2;
+  int32 version = 3;
+  string uploaded_by = 4;
+}
+
+message ListVersionsRequest {
+  string tenant_id = 1;
+  string document_id = 2;
+}
+
+message ListVersionsResponse {
+  repeated DocumentVersion versions = 1; // ordered ascending by version number
+}
+
+message RestoreVersionRequest {
+  string tenant_id = 1;
+  string document_id = 2;
+  int32 version = 3;
+}
+
+// Folders
+message CreateFolderRequest {
+  string tenant_id = 1;
+  string production_id = 2; // optional
+  string name = 3;
+  string parent_id = 4;     // optional
+  string created_by = 5;
+}
+
+message ListFoldersRequest {
+  string tenant_id = 1;
+  string production_id = 2; // optional filter
+}
+
+message ListFoldersResponse {
+  repeated Folder folders = 1;
+}

@@ -1,0 +1,241 @@
+// Identity and Access Management Service — Thittam
+// This proto file is documentation/contract for future code generation.
+// Run `buf generate` to produce Go stubs.
+
+syntax = "proto3";
+
+package thittam.iam.v1;
+
+option go_package = "github.com/wegofwd2020/thittam/gen/iam/v1;iamv1";
+
+import "google/protobuf/timestamp.proto";
+
+service IAMService {
+  // --- Authentication ---
+  rpc Login(LoginRequest) returns (TokenPair);
+  rpc RefreshToken(RefreshTokenRequest) returns (TokenPair);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  rpc ValidateToken(ValidateTokenRequest) returns (Claims);
+
+  // --- Users ---
+  rpc CreateUser(CreateUserRequest) returns (User);
+  rpc GetUser(GetUserRequest) returns (User);
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  rpc UpdateUser(UpdateUserRequest) returns (User);
+  rpc DeactivateUser(DeactivateUserRequest) returns (DeactivateUserResponse);
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+
+  // --- Roles & Permissions ---
+  rpc AssignRole(AssignRoleRequest) returns (AssignRoleResponse);
+  rpc RevokeRole(RevokeRoleRequest) returns (RevokeRoleResponse);
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse);
+  rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse);
+
+  // --- Tenants ---
+  rpc CreateTenant(CreateTenantRequest) returns (Tenant);
+  rpc GetTenant(GetTenantRequest) returns (Tenant);
+  rpc SuspendTenant(SuspendTenantRequest) returns (Tenant);
+
+  // --- Invitations ---
+  rpc InviteUser(InviteUserRequest) returns (Invitation);
+  rpc AcceptInvitation(AcceptInvitationRequest) returns (TokenPair);
+}
+
+// --- Core domain messages ---
+
+message User {
+  string id = 1;
+  string tenant_id = 2;
+  string email = 3;
+  string display_name = 4;
+  string status = 5; // active|invited|deactivated
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message Tenant {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  string plan = 4;   // starter|professional|enterprise
+  string status = 5; // active|suspended|deactivated
+  bool is_demo = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message Role {
+  string id = 1;
+  string tenant_id = 2;
+  string name = 3;
+  repeated string permissions = 4;
+  bool is_system = 5;
+}
+
+message UserRole {
+  string user_id = 1;
+  string role_id = 2;
+  string assigned_by = 3;
+  google.protobuf.Timestamp assigned_at = 4;
+}
+
+message Invitation {
+  string id = 1;
+  string tenant_id = 2;
+  string email = 3;
+  string role_id = 4; // optional pre-assigned role; empty if none
+  string status = 5;  // pending|accepted|expired
+  string invited_by = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+// TokenPair carries the JWT access and refresh tokens returned on successful auth.
+message TokenPair {
+  string access_token = 1;
+  string refresh_token = 2;
+  string token_type = 3; // always "Bearer"
+  int32 expires_in = 4;  // seconds until access token expires
+  google.protobuf.Timestamp expires_at = 5;
+}
+
+// Claims is the decoded JWT payload, returned by ValidateToken.
+message Claims {
+  string subject = 1;      // user UUID
+  string tenant_id = 2;
+  string email = 3;
+  repeated string roles = 4;
+  repeated string permissions = 5;
+  string auth_method = 6;  // local|oidc
+  google.protobuf.Timestamp issued_at = 7;
+  google.protobuf.Timestamp expires_at = 8;
+}
+
+// --- Request/Response messages ---
+
+// Authentication
+message LoginRequest {
+  string tenant_id = 1;
+  string email = 2;
+  string password = 3;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message LogoutRequest {
+  string refresh_token = 1;
+}
+
+message LogoutResponse {}
+
+message ValidateTokenRequest {
+  string access_token = 1;
+}
+
+// Users
+message CreateUserRequest {
+  string tenant_id = 1;
+  string email = 2;
+  string display_name = 3;
+  string password = 4;
+}
+
+message GetUserRequest {
+  string tenant_id = 1;
+  string id = 2;
+}
+
+message ListUsersRequest {
+  string tenant_id = 1;
+  string status = 2; // optional filter: active|invited|deactivated
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message ListUsersResponse {
+  repeated User users = 1;
+}
+
+message UpdateUserRequest {
+  string tenant_id = 1;
+  string id = 2;
+  string display_name = 3;
+  string status = 4;
+}
+
+message DeactivateUserRequest {
+  string tenant_id = 1;
+  string id = 2;
+}
+
+message DeactivateUserResponse {}
+
+message ChangePasswordRequest {
+  string user_id = 1;
+  string old_password = 2;
+  string new_password = 3;
+}
+
+message ChangePasswordResponse {}
+
+// Roles & Permissions
+message AssignRoleRequest {
+  string tenant_id = 1;
+  string user_id = 2;
+  string role_id = 3;
+  string assigned_by = 4;
+}
+
+message AssignRoleResponse {}
+
+message RevokeRoleRequest {
+  string user_id = 1;
+  string role_id = 2;
+}
+
+message RevokeRoleResponse {}
+
+message ListRolesRequest {
+  string tenant_id = 1;
+}
+
+message ListRolesResponse {
+  repeated Role roles = 1;
+}
+
+message CheckPermissionRequest {
+  string user_id = 1;
+  string permission = 2;
+}
+
+message CheckPermissionResponse {
+  bool allowed = 1;
+}
+
+// Tenants
+message CreateTenantRequest {
+  string name = 1;
+  string plan = 2; // starter|professional|enterprise
+  bool is_demo = 3;
+}
+
+message GetTenantRequest {
+  string id = 1;
+}
+
+message SuspendTenantRequest {
+  string id = 1;
+}
+
+// Invitations
+message InviteUserRequest {
+  string tenant_id = 1;
+  string email = 2;
+  string role_id = 3; // optional; empty means no pre-assigned role
+  string invited_by = 4;
+}
+
+message AcceptInvitationRequest {
+  string token = 1;
+  string password = 2;
+}

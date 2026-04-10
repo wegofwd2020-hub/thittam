@@ -1,9 +1,17 @@
 package iam
 
-// Handler wraps the Service for gRPC/HTTP handler use.
-// When proto generation is set up, this will implement the generated
-// IAMServiceServer interface. For now it exposes typed methods that a
-// handler adapter will call.
+// Handler wraps the Service for gRPC use.
+// After running `buf generate`, embed iamv1.UnimplementedIAMServiceServer
+// and implement each RPC method by delegating to svc.
+//
+// Example (post codegen):
+//
+//	import iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
+//
+//	type Handler struct {
+//	    iamv1.UnimplementedIAMServiceServer
+//	    svc *Service
+//	}
 type Handler struct {
 	svc *Service
 }

@@ -1,0 +1,228 @@
+// General Ledger Service — Thittam
+// This proto file is documentation/contract for future code generation.
+// Run `buf generate` to produce Go stubs.
+//
+// All monetary amounts are serialised as strings with 2 decimal places
+// (e.g. "1500.00") to preserve precision — never float64. Rule #1.
+
+syntax = "proto3";
+
+package thittam.ledger.v1;
+
+option go_package = "github.com/wegofwd2020/thittam/gen/ledger/v1;ledgerv1";
+
+import "google/protobuf/timestamp.proto";
+
+service LedgerService {
+  // --- Chart of Accounts ---
+  rpc CreateAccount(CreateAccountRequest) returns (Account);
+  rpc GetAccount(GetAccountRequest) returns (Account);
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
+
+  // SeedChartOfAccounts creates the default accounts for a tenant from a
+  // vertical's chart-of-accounts definition. Idempotent: existing codes skipped.
+  // Called by the registration pipeline after tenant schema creation.
+  rpc SeedChartOfAccounts(SeedChartOfAccountsRequest) returns (SeedChartOfAccountsResponse);
+
+  // --- Accounting Periods ---
+  rpc OpenAccountingPeriod(OpenAccountingPeriodRequest) returns (OpenAccountingPeriodResponse);
+  rpc CloseAccountingPeriod(CloseAccountingPeriodRequest) returns (AccountingPeriod);
+
+  // --- Journal Entries ---
+  rpc CreateJournalEntry(CreateJournalEntryRequest) returns (JournalEntry);
+  rpc PostJournalEntry(PostJournalEntryRequest) returns (JournalEntry);
+  rpc GetJournalEntry(GetJournalEntryRequest) returns (JournalEntry);
+  rpc ListJournalEntries(ListJournalEntriesRequest) returns (ListJournalEntriesResponse);
+
+  // VoidJournalEntry marks a posted entry as void and automatically creates
+  // and posts a reversing entry. Returns the reversing entry.
+  rpc VoidJournalEntry(VoidJournalEntryRequest) returns (JournalEntry);
+
+  // --- Reports ---
+  rpc GetTrialBalance(GetTrialBalanceRequest) returns (GetTrialBalanceResponse);
+}
+
+// --- Core domain messages ---
+
+// Account is a node in the chart of accounts hierarchy.
+message Account {
+  string id = 1;
+  string tenant_id = 2;
+  string code = 3;
+  string name = 4;
+  string account_type = 5; // asset|liability|equity|revenue|expense
+  string parent_id = 6;    // empty if root account
+  bool is_active = 7;
+}
+
+// AccountingPeriod represents a calendar month. Posting to a closed period
+// is rejected.
+message AccountingPeriod {
+  string id = 1;
+  string tenant_id = 2;
+  int32 year = 3;
+  int32 month = 4;
+  string status = 5;    // open|closed
+  string closed_by = 6; // empty if not yet closed
+  google.protobuf.Timestamp closed_at = 7;
+}
+
+// JournalEntry is the header for a double-entry transaction.
+// Once posted it is immutable; corrections require a reversing entry.
+message JournalEntry {
+  string id = 1;
+  string tenant_id = 2;
+  string production_id = 3; // empty if not production-scoped
+  string period_id = 4;
+  string entry_number = 5;  // e.g. "JE-2024-00001" — allocated on creation
+  string reference = 6;     // optional external reference
+  string narration = 7;
+  string status = 8;        // draft|posted|void
+  repeated JournalLine lines = 9;
+  string posted_by = 10;    // empty until posted
+  google.protobuf.Timestamp posted_at = 11;
+  google.protobuf.Timestamp created_at = 12;
+}
+
+// JournalLine is one side of a double-entry transaction.
+// Exactly one of debit_amount or credit_amount is non-zero.
+// Amounts are decimal strings, e.g. "1500.00". Rule #1.
+message JournalLine {
+  string id = 1;
+  string journal_id = 2;
+  string account_id = 3;
+  string debit_amount = 4;  // "0.00" when this is a credit line
+  string credit_amount = 5; // "0.00" when this is a debit line
+  string currency = 6;
+  string description = 7;
+}
+
+// ChartOfAccountEntry is one account in a seed payload, sourced from the
+// vertical's chart-of-accounts definition.
+message ChartOfAccountEntry {
+  string code = 1;
+  string name = 2;
+  string account_type = 3; // asset|liability|equity|revenue|expense
+  string parent_code = 4;  // empty if root account
+}
+
+// TrialBalanceEntry is one row in the trial balance report.
+message TrialBalanceEntry {
+  string account_id = 1;
+  string code = 2;
+  string name = 3;
+  string account_type = 4;
+  string debit = 5;   // decimal string, e.g. "5000.00"
+  string credit = 6;  // decimal string
+  string balance = 7; // debit − credit; negative means credit balance
+}
+
+// --- Request/Response messages ---
+
+// Chart of Accounts
+message CreateAccountRequest {
+  string tenant_id = 1;
+  string code = 2;
+  string name = 3;
+  string account_type = 4; // asset|liability|equity|revenue|expense
+  string parent_id = 5;    // optional
+}
+
+message GetAccountRequest {
+  string tenant_id = 1;
+  string id = 2;
+}
+
+message ListAccountsRequest {
+  string tenant_id = 1;
+}
+
+message ListAccountsResponse {
+  repeated Account accounts = 1;
+}
+
+message SeedChartOfAccountsRequest {
+  string tenant_id = 1;
+  repeated ChartOfAccountEntry entries = 2;
+}
+
+message SeedChartOfAccountsResponse {
+  int32 created = 1; // number of accounts created (skipped = total - created)
+  int32 skipped = 2; // accounts that already existed (idempotent)
+}
+
+// Accounting Periods
+message OpenAccountingPeriodRequest {
+  string tenant_id = 1;
+  int32 year = 2;
+  int32 month = 3; // 1–12
+}
+
+message OpenAccountingPeriodResponse {
+  bool already_existed = 1; // true if the period was already open (idempotent)
+}
+
+message CloseAccountingPeriodRequest {
+  string tenant_id = 1;
+  string period_id = 2;
+  string closed_by = 3;
+}
+
+// Journal Entries
+message CreateJournalEntryRequest {
+  string tenant_id = 1;
+  string production_id = 2; // optional
+  string period_id = 3;
+  string reference = 4;     // optional
+  string narration = 5;
+  repeated JournalLineInput lines = 6;
+}
+
+// JournalLineInput carries the mutable fields for a new line.
+// The id and journal_id are assigned server-side.
+message JournalLineInput {
+  string account_id = 1;
+  string debit_amount = 2;  // decimal string; "0.00" for credit lines
+  string credit_amount = 3; // decimal string; "0.00" for debit lines
+  string currency = 4;
+  string description = 5;
+}
+
+message PostJournalEntryRequest {
+  string tenant_id = 1;
+  string id = 2;
+  string posted_by = 3;
+}
+
+message GetJournalEntryRequest {
+  string tenant_id = 1;
+  string id = 2;
+}
+
+message ListJournalEntriesRequest {
+  string tenant_id = 1;
+  string period_id = 2; // optional filter
+  string status = 3;    // optional filter: draft|posted|void
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+message ListJournalEntriesResponse {
+  repeated JournalEntry entries = 1;
+}
+
+message VoidJournalEntryRequest {
+  string tenant_id = 1;
+  string id = 2;
+  string voided_by = 3;
+}
+
+// Reports
+message GetTrialBalanceRequest {
+  string tenant_id = 1;
+  google.protobuf.Timestamp as_of = 2;
+}
+
+message GetTrialBalanceResponse {
+  repeated TrialBalanceEntry entries = 1;
+}

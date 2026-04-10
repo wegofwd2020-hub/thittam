@@ -1,0 +1,150 @@
+// Notifications Service — Thittam
+// This proto file is documentation/contract for future code generation.
+// Run `buf generate` to produce Go stubs.
+//
+// Primary delivery path is async via NATS JetStream events consumed by the
+// service. This gRPC interface is used for synchronous sends only (e.g. urgent
+// alerts, inline invitation emails). See Dispatch for multi-channel fan-out.
+
+syntax = "proto3";
+
+package thittam.notifications.v1;
+
+option go_package = "github.com/wegofwd2020/thittam/gen/notifications/v1;notificationsv1";
+
+import "google/protobuf/timestamp.proto";
+
+service NotificationsService {
+  // --- Synchronous send ---
+
+  // Send resolves the template for the event type and channel, renders it,
+  // dispatches via the channel provider, and writes a delivery log entry.
+  rpc Send(SendRequest) returns (Notification);
+
+  // Dispatch sends to every active channel registered for the event type.
+  // Used by NATS event consumers. Errors per channel are returned in the
+  // response — a failure on one channel does not abort others.
+  rpc Dispatch(DispatchRequest) returns (DispatchResponse);
+
+  // --- Templates ---
+  rpc CreateTemplate(CreateTemplateRequest) returns (Template);
+  rpc UpdateTemplate(UpdateTemplateRequest) returns (Template);
+  rpc GetTemplate(GetTemplateRequest) returns (Template);
+  rpc ListTemplates(ListTemplatesRequest) returns (ListTemplatesResponse);
+
+  // --- Delivery history ---
+  rpc GetNotification(GetNotificationRequest) returns (Notification);
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse);
+}
+
+// --- Core domain messages ---
+
+// Template is a per-tenant, per-channel message template.
+// BodyTemplate is a Go html/template string rendered with the send data at
+// delivery time.
+message Template {
+  string id = 1;
+  string tenant_id = 2;
+  string event_type = 3;    // e.g. "expense.approved", "user.invited"
+  string channel = 4;       // email|sms|in_app|push
+  string subject = 5;       // used by email channel; empty for sms/in_app/push
+  string body_template = 6; // Go html/template string
+  bool is_active = 7;
+}
+
+// Notification is a single delivery attempt recorded in the log.
+message Notification {
+  string id = 1;
+  string tenant_id = 2;
+  string recipient_id = 3;
+  string channel = 4;           // email|sms|in_app|push
+  string event_type = 5;
+  string subject = 6;           // empty for non-email channels
+  string status = 7;            // pending|sent|delivered|failed
+  int32 retry_count = 8;
+  string provider_msg_id = 9;   // external provider's message ID; empty until sent
+  string error_message = 10;    // non-empty only on failure
+  google.protobuf.Timestamp sent_at = 11;
+  google.protobuf.Timestamp delivered_at = 12;
+  google.protobuf.Timestamp created_at = 13;
+}
+
+// ChannelError records a delivery failure from one channel during a Dispatch.
+message ChannelError {
+  string channel = 1;
+  string error = 2;
+}
+
+// --- Request/Response messages ---
+
+// Synchronous send
+message SendRequest {
+  string tenant_id = 1;
+  string recipient_id = 2;       // user UUID
+  string recipient_contact = 3;  // email address or phone number
+  string channel = 4;            // email|sms|in_app|push
+  string event_type = 5;         // must match an active template row
+  map<string, string> data = 6;  // template variables, e.g. {"amount": "1500.00"}
+}
+
+message DispatchRequest {
+  string tenant_id = 1;
+  string recipient_id = 2;
+  string recipient_contact = 3;
+  string event_type = 4;
+  map<string, string> data = 5;
+}
+
+message DispatchResponse {
+  // channel_errors lists channels where delivery failed.
+  // An empty list means all active channels delivered successfully.
+  repeated ChannelError channel_errors = 1;
+}
+
+// Templates
+message CreateTemplateRequest {
+  string tenant_id = 1;
+  string event_type = 2;
+  string channel = 3;
+  string subject = 4;       // optional; used by email channel only
+  string body_template = 5;
+}
+
+message UpdateTemplateRequest {
+  string tenant_id = 1;
+  string id = 2;
+  string subject = 3;       // optional
+  string body_template = 4;
+  bool is_active = 5;
+}
+
+message GetTemplateRequest {
+  string tenant_id = 1;
+  string id = 2;
+}
+
+message ListTemplatesRequest {
+  string tenant_id = 1;
+}
+
+message ListTemplatesResponse {
+  repeated Template templates = 1;
+}
+
+// Delivery history
+message GetNotificationRequest {
+  string tenant_id = 1;
+  string id = 2;
+}
+
+message ListNotificationsRequest {
+  string tenant_id = 1;
+  string channel = 2; // optional filter
+  string status = 3;  // optional filter: pending|sent|delivered|failed
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+message ListNotificationsResponse {
+  repeated Notification notifications = 1;
+}
