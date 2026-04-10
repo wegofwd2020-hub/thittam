@@ -3,6 +3,7 @@ package expense
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
@@ -71,8 +72,10 @@ func (s *Service) ApproveExpense(ctx context.Context, tenantID, expenseID uuid.U
 		return fmt.Errorf("%w: %s exceeds dual approval threshold %s", ErrDualApprovalRequired, exp.Amount, vcfg.ApprovalWorkflow.DualApprovalAbove)
 	}
 
+	now := time.Now()
 	exp.Status = "approved"
 	exp.ApprovedBy = &approverID
+	exp.ApprovedAt = &now
 	return s.repo.UpdateExpense(ctx, exp)
 }
 

@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test & Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Run unit tests with coverage
+        run: go test ./... -short -race -coverprofile=coverage.out
+
+      - name: Check coverage thresholds
+        run: |
+          set -euo pipefail
+
+          check_coverage() {
+            local pkg="$1"
+            local threshold="$2"
+            local pct
+            pct=$(go tool cover -func=coverage.out \
+              | awk -v p="github.com/wegofwd2020/thittam/${pkg}/" \
+                '$0 ~ p {sum += $3; count++} END { if (count > 0) printf "%.1f", sum/count; else print "0" }' \
+              | tr -d '%')
+            # Use bc for float comparison
+            if ! echo "${pct} >= ${threshold}" | bc -l | grep -q '^1$'; then
+              echo "FAIL: ${pkg} coverage ${pct}% is below threshold ${threshold}%"
+              exit 1
+            fi
+            echo "PASS: ${pkg} ${pct}% >= ${threshold}%"
+          }
+
+          # Coverage thresholds per CLAUDE.md
+          # iam/general-ledger >=85%, budget/expense >=80%, others >=75%
+          go test ./services/iam/...           -short -coverprofile=cov_iam.out
+          go test ./services/ledger/...        -short -coverprofile=cov_ledger.out
+          go test ./services/budget/...        -short -coverprofile=cov_budget.out
+          go test ./services/expense/...       -short -coverprofile=cov_expense.out
+          go test ./services/document/...      -short -coverprofile=cov_document.out
+          go test ./services/inventory/...     -short -coverprofile=cov_inventory.out
+          go test ./services/reporting/...     -short -coverprofile=cov_reporting.out
+          go test ./services/project/...       -short -coverprofile=cov_project.out
+          go test ./services/notifications/... -short -coverprofile=cov_notifications.out
+
+          enforce() {
+            local covfile="$1"
+            local threshold="$2"
+            local label="$3"
+            local pct
+            pct=$(go tool cover -func="${covfile}" | grep "^total:" | awk '{print $3}' | tr -d '%')
+            if ! echo "${pct} >= ${threshold}" | bc -l | grep -q '^1$'; then
+              echo "FAIL: ${label} coverage ${pct}% is below threshold ${threshold}%"
+              exit 1
+            fi
+            echo "PASS: ${label} ${pct}% >= ${threshold}%"
+          }
+
+          enforce cov_iam.out           85 "services/iam"
+          enforce cov_ledger.out        85 "services/ledger"
+          enforce cov_budget.out        80 "services/budget"
+          enforce cov_expense.out       80 "services/expense"
+          enforce cov_document.out      75 "services/document"
+          enforce cov_inventory.out     75 "services/inventory"
+          enforce cov_reporting.out     75 "services/reporting"
+          enforce cov_project.out       75 "services/project"
+          enforce cov_notifications.out 75 "services/notifications"
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Build all services
+        run: go build ./cmd/...
+
+  validate-verticals:
+    name: Validate Vertical Configs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Validate all production vertical YAMLs
+        run: go test -run TestValidateAllProductionVerticals ./pkg/vertical/...
+
+  critical-e2e:
+    name: Critical-Path E2E
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Run critical-path E2E tests
+        # No Docker, no DB — all service deps are in-process mocks.
+        # Target: ≤5 minutes. These 5 tests run in <1 second.
+        run: go test ./e2e/critical_path/... -v -short -race -timeout 5m
