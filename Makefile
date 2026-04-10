@@ -2,7 +2,7 @@
         infra-up infra-down infra-up-full \
         nats-provision \
         db-init db-drop db-reset \
-        migrate-all migrate-down seed \
+        migrate-all migrate-down migrate-tenant migrate-all-tenants seed \
         run-all run-web \
         test test-race test-cover test-integration \
         validate-verticals coverage-check \
@@ -34,9 +34,11 @@ help:
 	@echo "    make db-reset       Fresh start: drop → init → migrate → seed"
 	@echo ""
 	@echo "  Migrations:"
-	@echo "    make migrate-all    Run all DB migrations (dependency order)"
-	@echo "    make migrate-down   Roll back all migrations"
-	@echo "    make seed           Load XYZ_CBA demo seed data"
+	@echo "    make migrate-all               Run all DB migrations (dependency order)"
+	@echo "    make migrate-down              Roll back all migrations"
+	@echo "    make migrate-tenant id=<uuid>  Migrate a single tenant schema"
+	@echo "    make migrate-all-tenants       Parallel migration runner for all tenants"
+	@echo "    make seed                      Load XYZ_CBA demo seed data"
 	@echo ""
 	@echo "  Run:"
 	@echo "    make run-all        Start all 9 backend services (requires tmuxinator)"
@@ -97,6 +99,33 @@ migrate-all:
 	migrate -path migrations/reporting     -database "$(DB_URL)&x-migrations-table=schema_migrations_reporting" up
 	migrate -path migrations/audit         -database "$(DB_URL)&x-migrations-table=schema_migrations_audit" up
 	@echo "==> All migrations complete."
+
+# migrate-tenant runs all service migrations for a single tenant schema.
+# Usage: make migrate-tenant id=<uuid>  e.g. make migrate-tenant id=a1b2c3d4-...
+# Useful when onboarding a new tenant or re-running a failed per-tenant migration.
+migrate-tenant:
+	@test -n "$(id)" || (echo "ERROR: id is required. Usage: make migrate-tenant id=<uuid>" && exit 1)
+	@echo "==> Migrating tenant schema: tenant_$(id)"
+	@for path in iam project budget expense ledger inventory document notifications reporting audit; do \
+		migrate \
+			-path "migrations/$$path" \
+			-database "$(DB_URL)&search_path=tenant_$(id),public&x-migrations-table=schema_migrations_$$path" \
+			up; \
+	done
+	@echo "==> Tenant $(id) migration complete."
+
+# migrate-all-tenants runs the parallel migration runner against every tenant.
+# Reads tenant IDs from the DB, runs up to 8 concurrent migrations per service.
+# Usage: make migrate-all-tenants [path=migrations/project] [parallelism=8]
+# On partial failure the runner prints failed IDs — re-run with migrate-tenant.
+MIGRATE_PATH        ?= migrations/project
+MIGRATE_PARALLELISM ?= 8
+migrate-all-tenants:
+	@echo "==> Running parallel tenant migrations: path=$(MIGRATE_PATH) workers=$(MIGRATE_PARALLELISM)"
+	go run ./cmd/migrate-all-tenants \
+		-db "$(DB_URL)" \
+		-path "$(MIGRATE_PATH)" \
+		-parallelism "$(MIGRATE_PARALLELISM)"
 
 migrate-down:
 	@echo "==> Rolling back migrations (reverse order)..."
