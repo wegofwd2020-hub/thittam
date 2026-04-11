@@ -6,8 +6,11 @@
 /reporting-analytics
 /thittam-cli
 /migrate-all-tenants
+/billing
 /document
+/general-ledger
 /iam
+/notifications
 
 # IDE
 .idea/
