@@ -1,0 +1,79 @@
+-- IAM service queries.
+-- tenants, users, roles, user_roles, invitations live in the shared (public) schema.
+-- platform_users is the internal admin user table.
+
+-- name: CreateTenant :one
+INSERT INTO tenants (id, name, slug, plan, status)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (slug) DO NOTHING
+RETURNING *;
+
+-- name: GetTenant :one
+SELECT * FROM tenants WHERE id = $1;
+
+-- name: GetTenantBySlug :one
+SELECT * FROM tenants WHERE slug = $1;
+
+-- name: UpdateTenantStatus :one
+UPDATE tenants SET status = $2 WHERE id = $1 RETURNING *;
+
+-- name: CreateUser :one
+INSERT INTO users (id, tenant_id, email, display_name, password_hash, status)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (tenant_id, email) DO NOTHING
+RETURNING *;
+
+-- name: GetUser :one
+SELECT * FROM users WHERE id = $1;
+
+-- name: GetUserByEmail :one
+SELECT * FROM users WHERE tenant_id = $1 AND email = $2;
+
+-- name: ListUsers :many
+SELECT * FROM users
+WHERE tenant_id = $1 AND ($2 = '' OR status = $2)
+ORDER BY display_name ASC
+LIMIT $3 OFFSET $4;
+
+-- name: UpdateUserStatus :one
+UPDATE users SET status = $2 WHERE id = $1 AND tenant_id = $3 RETURNING *;
+
+-- name: UpdateUserPasswordHash :exec
+UPDATE users SET password_hash = $2 WHERE id = $1;
+
+-- name: CreateRole :one
+INSERT INTO roles (id, tenant_id, name, permissions, is_system)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (tenant_id, name) DO NOTHING
+RETURNING *;
+
+-- name: ListRoles :many
+SELECT * FROM roles WHERE tenant_id = $1 ORDER BY name ASC;
+
+-- name: AssignRole :exec
+INSERT INTO user_roles (user_id, role_id, assigned_by)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id, role_id) DO NOTHING;
+
+-- name: RevokeRole :exec
+DELETE FROM user_roles WHERE user_id = $1 AND role_id = $2;
+
+-- name: ListUserRoles :many
+SELECT r.*
+FROM roles r
+JOIN user_roles ur ON ur.role_id = r.id
+WHERE ur.user_id = $1;
+
+-- name: CreateInvitation :one
+INSERT INTO invitations (id, tenant_id, email, invited_by, token, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (tenant_id, email) DO UPDATE
+    SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, accepted_at = NULL
+RETURNING *;
+
+-- name: GetInvitationByToken :one
+SELECT * FROM invitations
+WHERE token = $1 AND accepted_at IS NULL AND expires_at > now();
+
+-- name: AcceptInvitation :exec
+UPDATE invitations SET accepted_at = now() WHERE id = $1;

@@ -1,0 +1,15 @@
+version: v1
+name: buf.build/wegofwd2020-hub/thittam
+deps:
+  - buf.build/protocolbuffers/wellknowntypes
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - DEFAULT
+  except:
+    # Allow short enum value names that don't repeat the enum type name.
+    - ENUM_VALUE_PREFIX
+    # Allow request/response messages not to be named <RPC>Request/<RPC>Response.
+    - RPC_REQUEST_RESPONSE_UNIQUE

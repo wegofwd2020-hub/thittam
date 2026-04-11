@@ -1,0 +1,19 @@
+version: v1
+plugins:
+  # Generate Go protobuf message types.
+  # Output follows go_package option with the module prefix stripped.
+  - plugin: go
+    out: .
+    opt:
+      - paths=import
+      - module=github.com/wegofwd2020/thittam
+
+  # Generate gRPC service stubs (client + server interfaces).
+  # require_unimplemented_servers=true ensures new RPCs don't silently
+  # become no-ops — services must implement every method explicitly.
+  - plugin: go-grpc
+    out: .
+    opt:
+      - paths=import
+      - module=github.com/wegofwd2020/thittam
+      - require_unimplemented_servers=true

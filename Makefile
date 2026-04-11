@@ -6,6 +6,7 @@
         run-all run-web \
         test test-race test-cover test-integration \
         validate-verticals coverage-check \
+        generate generate-proto generate-sqlc \
         lint build clean
 
 # ── Database URL ───────────────────────────────────────────────────────────────
@@ -207,6 +208,16 @@ _cov-enforce:
 	   echo "FAIL: $(PKG) coverage $${PCT}% is below $(MIN)%"; \
 	   exit 1; \
 	 fi
+
+# ── Code generation ───────────────────────────────────────────────────────────
+
+generate: generate-proto generate-sqlc
+
+generate-proto:
+	buf generate proto
+
+generate-sqlc:
+	sqlc generate
 
 # ── Code quality ──────────────────────────────────────────────────────────────
 

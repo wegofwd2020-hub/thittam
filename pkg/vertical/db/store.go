@@ -2,11 +2,12 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 )
 
@@ -26,12 +27,16 @@ func NewStore(db DBTX) *Store {
 func (s *Store) GetVerticalConfigForTenant(ctx context.Context, tenantID uuid.UUID) ([]byte, error) {
 	data, err := s.q.GetVerticalConfigForTenant(ctx, tenantID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("tenant %s: %w", tenantID, vertical.ErrNotFound)
 		}
 		return nil, fmt.Errorf("query vertical config for tenant %s: %w", tenantID, err)
 	}
-	return data, nil
+	// pgx scans untyped jsonb expressions into []byte when scanning to interface{}.
+	if b, ok := data.([]byte); ok {
+		return b, nil
+	}
+	return json.Marshal(data)
 }
 
 // GetVerticalConfigWithDeepMerge returns the vertical config with deep-merge applied.
@@ -40,7 +45,7 @@ func (s *Store) GetVerticalConfigForTenant(ctx context.Context, tenantID uuid.UU
 func (s *Store) GetVerticalConfigWithDeepMerge(ctx context.Context, tenantID uuid.UUID) ([]byte, error) {
 	result, err := s.q.GetVerticalConfigAndOverride(ctx, tenantID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("tenant %s: %w", tenantID, vertical.ErrNotFound)
 		}
 		return nil, fmt.Errorf("query vertical config for tenant %s: %w", tenantID, err)

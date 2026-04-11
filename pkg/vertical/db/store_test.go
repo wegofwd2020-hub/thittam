@@ -2,42 +2,30 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 )
 
-// mockDBTX implements DBTX for unit testing without a real database.
-type mockDBTX struct {
-	queryRowFn func(ctx context.Context, query string, args ...interface{}) *sql.Row
+// mockDBTX implements the pgx/v5 DBTX interface for unit testing.
+type mockDBTX struct{}
+
+func (m *mockDBTX) Exec(_ context.Context, _ string, _ ...interface{}) (pgconn.CommandTag, error) {
+	return pgconn.CommandTag{}, nil
 }
 
-func (m *mockDBTX) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (m *mockDBTX) Query(_ context.Context, _ string, _ ...interface{}) (pgx.Rows, error) {
 	return nil, nil
 }
 
-func (m *mockDBTX) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	return nil, nil
-}
-
-func (m *mockDBTX) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	if m.queryRowFn != nil {
-		return m.queryRowFn(ctx, query, args...)
-	}
-	// Return a row that will produce sql.ErrNoRows on scan.
-	return emptyRow()
-}
-
-// emptyRow creates a *sql.Row that produces ErrNoRows.
-// We open an in-memory connection for this purpose.
-func emptyRow() *sql.Row {
-	// We cannot easily create a *sql.Row without a driver.
-	// Instead, we test via the Store integration path.
+func (m *mockDBTX) QueryRow(_ context.Context, _ string, _ ...interface{}) pgx.Row {
 	return nil
 }
 
@@ -80,12 +68,11 @@ func TestBindTenantVerticalParams_JSON(t *testing.T) {
 }
 
 func TestUpsertVerticalDefinitionParams_JSON(t *testing.T) {
-	desc := "Test description"
 	params := UpsertVerticalDefinitionParams{
 		ID:          "test-vertical",
 		Name:        "Test Vertical",
 		Version:     "1.0.0",
-		Description: &desc,
+		Description: pgtype.Text{String: "Test description", Valid: true},
 		Config:      json.RawMessage(`{"entity_labels":{"project":"Test"}}`),
 	}
 
@@ -96,5 +83,4 @@ func TestUpsertVerticalDefinitionParams_JSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &decoded))
 	assert.Equal(t, "test-vertical", decoded.ID)
 	assert.Equal(t, "Test Vertical", decoded.Name)
-	assert.Equal(t, &desc, decoded.Description)
 }

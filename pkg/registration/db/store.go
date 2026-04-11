@@ -2,25 +2,27 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/wegofwd2020/thittam/pkg/registration"
 	verticaldb "github.com/wegofwd2020/thittam/pkg/vertical/db"
 )
 
-// Store implements registration.TenantStore and registration.VerticalStore.
+// Store implements registration.TenantStore and registration.VerticalStore
+// using sqlc-generated queries over a pgx/v5 connection pool.
 type Store struct {
 	q  *Queries
 	vq *verticaldb.Queries
-	db *sql.DB
+	db *pgxpool.Pool
 }
 
-// NewStore creates a Store backed by the given database connection.
-// The vq parameter provides access to vertical_definitions queries.
-func NewStore(db *sql.DB, vq *verticaldb.Queries) *Store {
+// NewStore creates a Store backed by the given pgx connection pool.
+func NewStore(db *pgxpool.Pool, vq *verticaldb.Queries) *Store {
 	return &Store{
 		q:  New(db),
 		vq: vq,
@@ -31,7 +33,7 @@ func NewStore(db *sql.DB, vq *verticaldb.Queries) *Store {
 // --- TenantStore implementation ---
 
 func (s *Store) CreateTenant(ctx context.Context, name, slug, plan string) (uuid.UUID, error) {
-	t, err := s.q.CreateTenant(ctx, name, slug, plan)
+	t, err := s.q.CreateTenant(ctx, CreateTenantParams{Name: name, Slug: slug, Plan: plan})
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("create tenant: %w", err)
 	}
@@ -39,7 +41,12 @@ func (s *Store) CreateTenant(ctx context.Context, name, slug, plan string) (uuid
 }
 
 func (s *Store) CreateUser(ctx context.Context, tenantID uuid.UUID, email, displayName, passwordHash string) (uuid.UUID, error) {
-	u, err := s.q.CreateUser(ctx, tenantID, email, displayName, passwordHash)
+	u, err := s.q.CreateUser(ctx, CreateUserParams{
+		TenantID:     tenantID,
+		Email:        email,
+		DisplayName:  displayName,
+		PasswordHash: passwordHash,
+	})
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("create user: %w", err)
 	}
@@ -59,15 +66,15 @@ func (s *Store) UserExistsByEmail(ctx context.Context, email string) (bool, erro
 func (s *Store) GetVerticalDefinition(ctx context.Context, id string) (registration.VerticalDefinitionRow, error) {
 	vd, err := s.vq.GetVerticalDefinition(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return registration.VerticalDefinitionRow{}, registration.ErrVerticalNotFound
 		}
 		return registration.VerticalDefinitionRow{}, fmt.Errorf("get vertical %s: %w", id, err)
 	}
 
 	var desc string
-	if vd.Description != nil {
-		desc = *vd.Description
+	if vd.Description.Valid {
+		desc = vd.Description.String
 	}
 
 	return registration.VerticalDefinitionRow{
@@ -91,7 +98,7 @@ func (s *Store) BindTenantVertical(ctx context.Context, tenantID uuid.UUID, vert
 
 // --- Transaction support ---
 
-// TxStore wraps Queries for use within a transaction.
+// TxStore wraps Queries for use within a pgx transaction.
 type TxStore struct {
 	q  *Queries
 	vq *verticaldb.Queries
@@ -100,11 +107,11 @@ type TxStore struct {
 // InTx executes fn within a database transaction. The transaction is committed
 // if fn returns nil, rolled back otherwise.
 func (s *Store) InTx(ctx context.Context, fn func(tx TxStore) error) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 
 	txStore := TxStore{
 		q:  New(tx),
@@ -115,7 +122,7 @@ func (s *Store) InTx(ctx context.Context, fn func(tx TxStore) error) error {
 		return err
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit tx: %w", err)
 	}
 	return nil
@@ -124,7 +131,7 @@ func (s *Store) InTx(ctx context.Context, fn func(tx TxStore) error) error {
 // TxStore methods — mirror the Store methods but operate within the transaction.
 
 func (ts TxStore) CreateTenant(ctx context.Context, name, slug, plan string) (uuid.UUID, error) {
-	t, err := ts.q.CreateTenant(ctx, name, slug, plan)
+	t, err := ts.q.CreateTenant(ctx, CreateTenantParams{Name: name, Slug: slug, Plan: plan})
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("create tenant: %w", err)
 	}
@@ -132,7 +139,12 @@ func (ts TxStore) CreateTenant(ctx context.Context, name, slug, plan string) (uu
 }
 
 func (ts TxStore) CreateUser(ctx context.Context, tenantID uuid.UUID, email, displayName, passwordHash string) (uuid.UUID, error) {
-	u, err := ts.q.CreateUser(ctx, tenantID, email, displayName, passwordHash)
+	u, err := ts.q.CreateUser(ctx, CreateUserParams{
+		TenantID:     tenantID,
+		Email:        email,
+		DisplayName:  displayName,
+		PasswordHash: passwordHash,
+	})
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("create user: %w", err)
 	}

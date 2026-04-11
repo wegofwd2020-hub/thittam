@@ -1,5 +1,12 @@
 version: "2"
+
+# Common type overrides applied to every sql block.
+# Individual blocks re-declare these under their own overrides key.
+# (sqlc v2 does not support top-level global overrides, so they must be repeated.)
+
 sql:
+  # ── Shared packages ───────────────────────────────────────────────────────
+
   - engine: "postgresql"
     queries: "pkg/vertical/db/queries.sql"
     schema: "migrations/shared/"
@@ -17,6 +24,7 @@ sql:
             go_type: "encoding/json.RawMessage"
           - db_type: "timestamptz"
             go_type: "time.Time"
+
   - engine: "postgresql"
     queries: "pkg/registration/db/queries.sql"
     schema:
@@ -32,5 +40,190 @@ sql:
         overrides:
           - db_type: "uuid"
             go_type: "github.com/google/uuid.UUID"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  # ── Service packages ──────────────────────────────────────────────────────
+
+  - engine: "postgresql"
+    queries: "services/project/db/queries.sql"
+    schema: "migrations/project/"
+    gen:
+      go:
+        package: "db"
+        out: "services/project/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "numeric"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  - engine: "postgresql"
+    queries: "services/iam/db/queries.sql"
+    schema:
+      - "migrations/shared/"
+      - "migrations/iam/"
+    gen:
+      go:
+        package: "db"
+        out: "services/iam/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  - engine: "postgresql"
+    queries: "services/budget/db/queries.sql"
+    schema: "migrations/budget/"
+    gen:
+      go:
+        package: "db"
+        out: "services/budget/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "numeric"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  - engine: "postgresql"
+    queries: "services/expense/db/queries.sql"
+    schema: "migrations/expense/"
+    gen:
+      go:
+        package: "db"
+        out: "services/expense/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "numeric"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  - engine: "postgresql"
+    queries: "services/inventory/db/queries.sql"
+    schema: "migrations/inventory/"
+    gen:
+      go:
+        package: "db"
+        out: "services/inventory/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "numeric"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  - engine: "postgresql"
+    queries: "services/ledger/db/queries.sql"
+    schema: "migrations/ledger/"
+    gen:
+      go:
+        package: "db"
+        out: "services/ledger/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "numeric"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  - engine: "postgresql"
+    queries: "services/notifications/db/queries.sql"
+    schema: "migrations/notifications/"
+    gen:
+      go:
+        package: "db"
+        out: "services/notifications/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  - engine: "postgresql"
+    queries: "services/document/db/queries.sql"
+    schema: "migrations/document/"
+    gen:
+      go:
+        package: "db"
+        out: "services/document/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  - engine: "postgresql"
+    queries: "services/reporting/db/queries.sql"
+    schema:
+      - "migrations/shared/"
+      - "migrations/project/"
+      - "migrations/budget/"
+      - "migrations/expense/"
+      - "migrations/reporting/"
+    gen:
+      go:
+        package: "db"
+        out: "services/reporting/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "numeric"
+            go_type: "github.com/shopspring/decimal.Decimal"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  - engine: "postgresql"
+    queries: "services/billing/db/queries.sql"
+    schema:
+      - "migrations/iam/"
+      - "migrations/billing/"
+    gen:
+      go:
+        package: "db"
+        out: "services/billing/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "numeric"
+            go_type: "github.com/shopspring/decimal.Decimal"
           - db_type: "timestamptz"
             go_type: "time.Time"
