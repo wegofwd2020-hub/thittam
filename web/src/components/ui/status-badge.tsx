@@ -40,6 +40,10 @@ const STATUS_COLORS: Record<string, BadgeStyle> = {
   released: { bg: "bg-emerald-100", text: "text-emerald-700" },
   completed: { bg: "bg-emerald-100", text: "text-emerald-700" },
   paid: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  signed: { bg: "bg-emerald-100", text: "text-emerald-700" },
+
+  // Blue — awaiting action
+  pending_signature: { bg: "bg-blue-100", text: "text-blue-700" },
 
   // Slate — archived
   archived: { bg: "bg-slate-100", text: "text-slate-600" },

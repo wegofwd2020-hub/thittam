@@ -21,6 +21,7 @@ import {
   HardHat,
   DollarSign,
   CreditCard,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/context";
@@ -44,6 +45,7 @@ const iconMap: Record<string, LucideIcon> = {
   HardHat,
   DollarSign,
   CreditCard,
+  FileText,
 };
 
 interface SidebarProps {
@@ -107,6 +109,13 @@ function useSidebarMenu(): MenuSection[] {
           href: "/inventory",
           iconName: sidebarIcons.inventory ?? "Package",
           fallbackIcon: Package,
+        },
+        {
+          key: "documents",
+          label: "Documents",
+          href: "/documents",
+          iconName: "FileText",
+          fallbackIcon: FileText,
         },
       ],
     },
