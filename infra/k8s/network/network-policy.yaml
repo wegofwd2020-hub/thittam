@@ -1,0 +1,165 @@
+# Thittam — Kubernetes NetworkPolicy rules.
+#
+# Design principles:
+#   1. Default-deny all ingress to the thittam namespace.
+#   2. Allow same-namespace pod-to-pod traffic (services calling each other).
+#   3. Allow ingress from the `ingress` namespace (Kong API gateway → gRPC ports).
+#   4. Allow ingress from the `monitoring` namespace (Prometheus → metrics ports).
+#   5. Allow ingress from the `vault` namespace (IAM → Vault for T1 secrets).
+#   6. Egress is unrestricted — services make outbound calls (Vault, S3, SMTP).
+#      Add egress restrictions per-service if compliance requires it.
+#
+# Istio mTLS enforces service identity at L7. NetworkPolicy enforces
+# coarse-grained L3/L4 boundaries as a defence-in-depth measure (Rule #5 of
+# the architecture — network security zone separation).
+#
+# Apply:
+#   kubectl apply -f infra/k8s/network/network-policy.yaml
+---
+# ── Default deny all ingress to the thittam namespace ─────────────────────
+# Any pod without a matching NetworkPolicy allowance will be unreachable.
+# Policies below open specific ingress paths.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}   # applies to all pods in namespace
+  policyTypes:
+    - Ingress
+---
+# ── Allow intra-namespace traffic ─────────────────────────────────────────
+# Services call each other within the thittam namespace (e.g. budget-planning
+# → general-ledger, expense-tracking → notifications). Istio enforces mTLS
+# identity on top of this layer-3 allowance.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}   # any pod in the same namespace
+---
+# ── Allow Kong (API gateway) → all services on gRPC ports ─────────────────
+# Kong runs in the `ingress` namespace and proxies external REST traffic
+# (translated to gRPC) to each backend service.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kong-ingress
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}   # all pods in thittam namespace
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress
+      ports:
+        - protocol: TCP
+          port: 8080   # project-management
+        - protocol: TCP
+          port: 8081   # budget-planning
+        - protocol: TCP
+          port: 8082   # expense-tracking
+        - protocol: TCP
+          port: 8083   # general-ledger
+        - protocol: TCP
+          port: 8084   # inventory-management
+        - protocol: TCP
+          port: 8085   # reporting-analytics
+        - protocol: TCP
+          port: 8086   # iam
+        - protocol: TCP
+          port: 8087   # notifications
+        - protocol: TCP
+          port: 8088   # document
+        - protocol: TCP
+          port: 8089   # billing
+---
+# ── Allow Prometheus → all pods on metrics ports ──────────────────────────
+# Prometheus scrapes /metrics on the dedicated metrics port for each service.
+# The Prometheus deployment lives in the `monitoring` namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090   # project-management metrics
+        - protocol: TCP
+          port: 9091   # budget-planning metrics
+        - protocol: TCP
+          port: 9092   # expense-tracking metrics
+        - protocol: TCP
+          port: 9093   # general-ledger metrics
+        - protocol: TCP
+          port: 9094   # inventory-management metrics
+        - protocol: TCP
+          port: 9095   # reporting-analytics metrics
+        - protocol: TCP
+          port: 9096   # iam metrics
+        - protocol: TCP
+          port: 9097   # notifications metrics
+        - protocol: TCP
+          port: 9098   # document metrics
+        - protocol: TCP
+          port: 9099   # billing metrics
+---
+# ── IAM: allow ingress from all services (token validation hot path) ───────
+# Every service validates tokens by calling IAM on every request. IAM must
+# accept connections from all pods in the thittam namespace on port 8086.
+# The same-namespace policy above already covers this, but this explicit
+# policy documents the intent and makes IAM's role visible in audit tooling.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-iam-from-services
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: iam
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: thittam
+      ports:
+        - protocol: TCP
+          port: 8086

@@ -1,0 +1,93 @@
+# Thittam — shared non-secret configuration ConfigMap.
+#
+# This ConfigMap holds T3/T4 config values (Rule #2): service endpoints,
+# ports, log levels, timeouts, and feature flags. No secrets here.
+#
+# Secret values (DATABASE_URL password, API keys, JWT keys) are stored in
+# Kubernetes Secrets and mounted via secretKeyRef — NOT in this file.
+#
+# Expected Secrets (create before deploying services):
+#
+#   thittam-db
+#     url: postgres://thittam:<password>@postgres.thittam.svc.cluster.local:5432/thittam
+#
+#   thittam-redis           (if Redis requires auth)
+#     password: <redis-auth-password>
+#
+#   thittam-vault           (for IAM service T1 secret access)
+#     role_id:   <vault-approle-role-id>
+#     secret_id: <vault-approle-secret-id>
+#
+#   thittam-minio           (for document service)
+#     access_key: <minio-access-key>
+#     secret_key:  <minio-secret-key>
+#
+#   thittam-billing         (for billing service)
+#     razorpay_key_id:     <razorpay-key-id>
+#     razorpay_key_secret: <razorpay-key-secret>
+#
+# Apply:
+#   kubectl apply -f infra/k8s/config/configmap.yaml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: thittam-common
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: config
+data:
+  # ── Environment ──────────────────────────────────────────────────────────
+  ENV: production
+  LOG_LEVEL: info
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────
+  # DATABASE_URL (with password) comes from the `thittam-db` Secret.
+  # This entry carries only the host for health-check tooling.
+  DB_HOST: postgres.thittam.svc.cluster.local
+  DB_PORT: "5432"
+  DB_NAME: thittam
+
+  # ── Redis (L2 cache) ─────────────────────────────────────────────────────
+  # Redis endpoint — no password in OSS Redis without AUTH configured.
+  # If Redis AUTH is enabled, mount password from `thittam-redis` Secret.
+  REDIS_ADDR: redis.thittam.svc.cluster.local:6379
+  REDIS_CACHE_TTL_SECONDS: "300"   # 5-minute L2 TTL (Rule #3)
+
+  # ── NATS JetStream ───────────────────────────────────────────────────────
+  NATS_URL: nats://nats.thittam.svc.cluster.local:4222
+
+  # ── MinIO (object storage) ───────────────────────────────────────────────
+  # Credentials come from the `thittam-minio` Secret.
+  MINIO_ENDPOINT: minio.thittam.svc.cluster.local:9000
+  MINIO_USE_SSL: "false"
+  MINIO_BUCKET: thittam-documents
+
+  # ── HashiCorp Vault ──────────────────────────────────────────────────────
+  # VAULT_ROLE_ID and VAULT_SECRET_ID come from the `thittam-vault` Secret.
+  # T3 config: address and mount are not sensitive.
+  VAULT_ADDR: https://vault.thittam.svc.cluster.local:8200
+  VAULT_KV_MOUNT: secret
+
+  # ── IAM service address (called by all other services) ───────────────────
+  IAM_ADDR: iam.thittam.svc.cluster.local:8086
+
+  # ── Service-to-service gRPC addresses ───────────────────────────────────
+  PROJECT_MANAGEMENT_ADDR:  project-management.thittam.svc.cluster.local:8080
+  BUDGET_PLANNING_ADDR:     budget-planning.thittam.svc.cluster.local:8081
+  EXPENSE_TRACKING_ADDR:    expense-tracking.thittam.svc.cluster.local:8082
+  GENERAL_LEDGER_ADDR:      general-ledger.thittam.svc.cluster.local:8083
+  INVENTORY_MGMT_ADDR:      inventory-management.thittam.svc.cluster.local:8084
+  REPORTING_ANALYTICS_ADDR: reporting-analytics.thittam.svc.cluster.local:8085
+  NOTIFICATIONS_ADDR:       notifications.thittam.svc.cluster.local:8087
+  DOCUMENT_ADDR:            document.thittam.svc.cluster.local:8088
+  BILLING_ADDR:             billing.thittam.svc.cluster.local:8089
+
+  # ── gRPC dial settings ───────────────────────────────────────────────────
+  GRPC_DIAL_TIMEOUT_SECONDS: "10"
+  GRPC_KEEPALIVE_TIME_SECONDS: "30"
+
+  # ── Tenant isolation ────────────────────────────────────────────────────
+  # Header name that carries the tenant UUID on every request (Rule: CLAUDE.md).
+  TENANT_ID_HEADER: X-Tenant-ID

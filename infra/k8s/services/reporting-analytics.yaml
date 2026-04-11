@@ -1,0 +1,150 @@
+# reporting-analytics — Deployment, Service, HPA
+#
+# Cross-service reporting, dashboards, and aggregated analytics.
+# Read-only: subscribes to NATS FINANCIAL stream for projections.
+# Report queries are CPU and memory intensive (window functions, GROUP BY
+# across tenant schemas). Sized larger than standard services.
+#
+# gRPC port:    8085
+# Metrics port: 9095
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reporting-analytics
+  namespace: thittam
+  labels:
+    app: reporting-analytics
+    app.kubernetes.io/name: reporting-analytics
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: reporting-analytics
+  template:
+    metadata:
+      labels:
+        app: reporting-analytics
+        app.kubernetes.io/name: reporting-analytics
+        app.kubernetes.io/part-of: thittam
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9095"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: reporting-analytics
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: reporting-analytics
+          image: ghcr.io/wegofwd2020-hub/thittam/reporting-analytics:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 8085
+              protocol: TCP
+            - name: metrics
+              containerPort: 9095
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: thittam-db
+                  key: url
+          envFrom:
+            - configMapRef:
+                name: thittam-common
+          resources:
+            # Reports run complex aggregation queries — larger CPU and memory
+            # budget. Read replica URL should be used in production to offload
+            # analytics queries from the primary DB.
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 750m
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reporting-analytics
+  namespace: thittam
+  labels:
+    app: reporting-analytics
+    app.kubernetes.io/name: reporting-analytics
+    app.kubernetes.io/part-of: thittam
+spec:
+  selector:
+    app: reporting-analytics
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: 8085
+      targetPort: grpc
+      protocol: TCP
+    - name: metrics
+      port: 9095
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: reporting-analytics
+  namespace: thittam
+  labels:
+    app: reporting-analytics
+    app.kubernetes.io/part-of: thittam
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: reporting-analytics
+  # Higher max: report queries are CPU-intensive and benefit from horizontal scale.
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          # Lower threshold: reports spike CPU; scale out before query timeouts hit.
+          averageUtilization: 60
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+    scaleUp:
+      # Scale up quickly — a slow report response immediately impacts tenants.
+      stabilizationWindowSeconds: 30

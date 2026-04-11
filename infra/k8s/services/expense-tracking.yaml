@@ -1,0 +1,140 @@
+# expense-tracking — Deployment, Service, HPA
+#
+# Purchase orders, receipts, petty cash, and expense approval flows.
+# Publishes thittam.expense.* events to NATS FINANCIAL stream on approval.
+#
+# gRPC port:    8082
+# Metrics port: 9092
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: expense-tracking
+  namespace: thittam
+  labels:
+    app: expense-tracking
+    app.kubernetes.io/name: expense-tracking
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: expense-tracking
+  template:
+    metadata:
+      labels:
+        app: expense-tracking
+        app.kubernetes.io/name: expense-tracking
+        app.kubernetes.io/part-of: thittam
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9092"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: expense-tracking
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: expense-tracking
+          image: ghcr.io/wegofwd2020-hub/thittam/expense-tracking:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 8082
+              protocol: TCP
+            - name: metrics
+              containerPort: 9092
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: thittam-db
+                  key: url
+          envFrom:
+            - configMapRef:
+                name: thittam-common
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: expense-tracking
+  namespace: thittam
+  labels:
+    app: expense-tracking
+    app.kubernetes.io/name: expense-tracking
+    app.kubernetes.io/part-of: thittam
+spec:
+  selector:
+    app: expense-tracking
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: 8082
+      targetPort: grpc
+      protocol: TCP
+    - name: metrics
+      port: 9092
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: expense-tracking
+  namespace: thittam
+  labels:
+    app: expense-tracking
+    app.kubernetes.io/part-of: thittam
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: expense-tracking
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300

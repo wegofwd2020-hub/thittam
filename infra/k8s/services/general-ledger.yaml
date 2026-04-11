@@ -1,0 +1,151 @@
+# general-ledger — Deployment, Service, HPA
+#
+# Double-entry accounting, chart of accounts, journal entries, trial balance,
+# and period closing. Source of financial truth — every debit must have a
+# matching credit. Errors here are high-severity (tighter SLO, circuit breaker).
+#
+# Scaling caution: general-ledger performs multi-row financial transactions.
+# Scale conservatively (max 4) to avoid connection pool exhaustion on the DB.
+# If higher throughput is needed, tune pgBouncer connection pooling first.
+#
+# gRPC port:    8083
+# Metrics port: 9093
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: general-ledger
+  namespace: thittam
+  labels:
+    app: general-ledger
+    app.kubernetes.io/name: general-ledger
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: general-ledger
+  template:
+    metadata:
+      labels:
+        app: general-ledger
+        app.kubernetes.io/name: general-ledger
+        app.kubernetes.io/part-of: thittam
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9093"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: general-ledger
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: general-ledger
+          image: ghcr.io/wegofwd2020-hub/thittam/general-ledger:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 8083
+              protocol: TCP
+            - name: metrics
+              containerPort: 9093
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: thittam-db
+                  key: url
+          envFrom:
+            - configMapRef:
+                name: thittam-common
+          resources:
+            # Higher resources: financial transactions are CPU-bound (crypto,
+            # NUMERIC arithmetic) and hold more DB connections concurrently.
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: general-ledger
+  namespace: thittam
+  labels:
+    app: general-ledger
+    app.kubernetes.io/name: general-ledger
+    app.kubernetes.io/part-of: thittam
+spec:
+  selector:
+    app: general-ledger
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: 8083
+      targetPort: grpc
+      protocol: TCP
+    - name: metrics
+      port: 9093
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: general-ledger
+  namespace: thittam
+  labels:
+    app: general-ledger
+    app.kubernetes.io/part-of: thittam
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: general-ledger
+  # Conservative: DB connection pools become the bottleneck before CPU.
+  # Tune pgBouncer pool size before raising maxReplicas.
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65   # lower threshold — scale earlier
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600   # 10 min — longer for financial service
+    scaleUp:
+      stabilizationWindowSeconds: 60

@@ -1,0 +1,173 @@
+# iam — Deployment, Service, HPA
+#
+# Identity, authentication, RBAC, and multi-tenancy.
+# Called on EVERY request across all services — highest availability requirement.
+#
+# T1 secret handling (Rule #2):
+#   JWT signing keys are NEVER passed as env vars. The service reads
+#   VAULT_ROLE_ID + VAULT_SECRET_ID (T3, from Secret) to authenticate with
+#   Vault, then fetches the JWT private key via the VaultSource. The key bytes
+#   are held in memory and never serialised to disk or logs.
+#
+#   Local dev: set JWT_PRIVATE_KEY_PATH to a gitignored PEM file path instead.
+#
+# gRPC port:    8086
+# Metrics port: 9096
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iam
+  namespace: thittam
+  labels:
+    app: iam
+    app.kubernetes.io/name: iam
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: service
+spec:
+  replicas: 3   # Start at 3 — IAM is on the hot path for every request
+  selector:
+    matchLabels:
+      app: iam
+  template:
+    metadata:
+      labels:
+        app: iam
+        app.kubernetes.io/name: iam
+        app.kubernetes.io/part-of: thittam
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9096"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: iam
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: iam
+          image: ghcr.io/wegofwd2020-hub/thittam/iam:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 8086
+              protocol: TCP
+            - name: metrics
+              containerPort: 9096
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: thittam-db
+                  key: url
+            # Vault AppRole credentials (T3 — acceptable as env vars).
+            # These grant read-only access to the `iam/` Vault path.
+            - name: VAULT_ROLE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: thittam-vault
+                  key: role_id
+            - name: VAULT_SECRET_ID
+              valueFrom:
+                secretKeyRef:
+                  name: thittam-vault
+                  key: secret_id
+          envFrom:
+            - configMapRef:
+                name: thittam-common
+          resources:
+            # IAM is called on every gRPC request — higher CPU budget for
+            # JWT verification (ECDSA signature checks) and RBAC lookups.
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            # IAM waits for Vault connectivity before becoming ready.
+            # Longer initialDelaySeconds to allow Vault AppRole auth.
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iam
+  namespace: thittam
+  labels:
+    app: iam
+    app.kubernetes.io/name: iam
+    app.kubernetes.io/part-of: thittam
+spec:
+  selector:
+    app: iam
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: 8086
+      targetPort: grpc
+      protocol: TCP
+    - name: metrics
+      port: 9096
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: iam
+  namespace: thittam
+  labels:
+    app: iam
+    app.kubernetes.io/part-of: thittam
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: iam
+  # IAM is on the hot path — higher floor and ceiling than other services.
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          # Lower threshold: JWT verification is CPU-bound; scale before
+          # latency climbs. The SLO alert fires at 500 ms p99.
+          type: Utilization
+          averageUtilization: 60
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600   # 10 min — IAM must not flap
+    scaleUp:
+      stabilizationWindowSeconds: 0    # scale up immediately (no stabilisation)
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60   # add up to 2 pods per minute

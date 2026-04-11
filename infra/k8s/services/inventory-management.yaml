@@ -1,0 +1,140 @@
+# inventory-management — Deployment, Service, HPA
+#
+# Equipment, props, locations, and asset tracking.
+# Vertical-aware: asset categories and check-in/out workflows differ by industry.
+#
+# gRPC port:    8084
+# Metrics port: 9094
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-management
+  namespace: thittam
+  labels:
+    app: inventory-management
+    app.kubernetes.io/name: inventory-management
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inventory-management
+  template:
+    metadata:
+      labels:
+        app: inventory-management
+        app.kubernetes.io/name: inventory-management
+        app.kubernetes.io/part-of: thittam
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9094"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: inventory-management
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: inventory-management
+          image: ghcr.io/wegofwd2020-hub/thittam/inventory-management:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 8084
+              protocol: TCP
+            - name: metrics
+              containerPort: 9094
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: thittam-db
+                  key: url
+          envFrom:
+            - configMapRef:
+                name: thittam-common
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-management
+  namespace: thittam
+  labels:
+    app: inventory-management
+    app.kubernetes.io/name: inventory-management
+    app.kubernetes.io/part-of: thittam
+spec:
+  selector:
+    app: inventory-management
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: 8084
+      targetPort: grpc
+      protocol: TCP
+    - name: metrics
+      port: 9094
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: inventory-management
+  namespace: thittam
+  labels:
+    app: inventory-management
+    app.kubernetes.io/part-of: thittam
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: inventory-management
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300

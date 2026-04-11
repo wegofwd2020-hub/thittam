@@ -1,0 +1,65 @@
+# Thittam namespace, ResourceQuota, and LimitRange.
+#
+# All Thittam application services run in the `thittam` namespace.
+# Infrastructure (Redis, NATS, MinIO, Prometheus) may live in a separate
+# `thittam-infra` namespace or use managed cloud services — reference them
+# via ExternalName Services or direct DNS in that case.
+#
+# ResourceQuota prevents a runaway deployment from consuming all cluster
+# resources. Adjust limits based on cluster sizing.
+#
+# LimitRange sets per-container defaults so that any container without
+# explicit requests/limits still gets safe defaults.
+#
+# Apply:
+#   kubectl apply -f infra/k8s/namespace.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    # Required for Istio sidecar auto-injection.
+    istio-injection: enabled
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: thittam-quota
+  namespace: thittam
+spec:
+  hard:
+    # Compute: 10 services × avg 4 pods × 500m = 20 cores ceiling
+    requests.cpu: "20"
+    limits.cpu: "40"
+    # Memory: 10 services × avg 4 pods × 256Mi = 10Gi ceiling
+    requests.memory: 10Gi
+    limits.memory: 20Gi
+    # Object counts
+    pods: "100"
+    services: "30"
+    persistentvolumeclaims: "20"
+    secrets: "40"
+    configmaps: "20"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: thittam-limits
+  namespace: thittam
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 250m
+        memory: 256Mi
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      max:
+        cpu: "2"
+        memory: 2Gi
+      min:
+        cpu: 50m
+        memory: 64Mi

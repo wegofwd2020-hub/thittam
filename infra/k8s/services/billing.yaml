@@ -1,0 +1,158 @@
+# billing — Deployment, Service, HPA
+#
+# Subscription management, invoice generation, plan enforcement, and dunning.
+# Financial-critical: billing errors affect tenant access and revenue.
+# Tighter SLO and Istio circuit breaker (see destination-rules.yaml).
+#
+# Note: cmd/billing is not yet implemented. This manifest is ready to apply
+# once the service binary is built and pushed to the container registry.
+#
+# gRPC port:    8089
+# Metrics port: 9099
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billing
+  namespace: thittam
+  labels:
+    app: billing
+    app.kubernetes.io/name: billing
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: billing
+  template:
+    metadata:
+      labels:
+        app: billing
+        app.kubernetes.io/name: billing
+        app.kubernetes.io/part-of: thittam
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9099"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: billing
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: billing
+          image: ghcr.io/wegofwd2020-hub/thittam/billing:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 8089
+              protocol: TCP
+            - name: metrics
+              containerPort: 9099
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: thittam-db
+                  key: url
+            # Razorpay credentials (T2 — payment gateway)
+            - name: RAZORPAY_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: thittam-billing
+                  key: razorpay_key_id
+            - name: RAZORPAY_KEY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: thittam-billing
+                  key: razorpay_key_secret
+          envFrom:
+            - configMapRef:
+                name: thittam-common
+          resources:
+            # Billing is financial-critical — similar sizing to general-ledger.
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: billing
+  namespace: thittam
+  labels:
+    app: billing
+    app.kubernetes.io/name: billing
+    app.kubernetes.io/part-of: thittam
+spec:
+  selector:
+    app: billing
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: 8089
+      targetPort: grpc
+      protocol: TCP
+    - name: metrics
+      port: 9099
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: billing
+  namespace: thittam
+  labels:
+    app: billing
+    app.kubernetes.io/part-of: thittam
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: billing
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65   # scale earlier — billing errors have revenue impact
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600   # 10 min cool-down — billing must not flap
+    scaleUp:
+      stabilizationWindowSeconds: 60
