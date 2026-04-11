@@ -83,6 +83,11 @@ func (s *Service) GetInventoryCategories(ctx context.Context) []vertical.Invento
 	return vcfg.InventoryCategories
 }
 
+// GetCheckout retrieves a single checkout record by ID.
+func (s *Service) GetCheckout(ctx context.Context, id uuid.UUID) (*AssetCheckout, error) {
+	return s.repo.GetCheckout(ctx, id)
+}
+
 // ListCheckouts lists all checkouts for an asset.
 func (s *Service) ListCheckouts(ctx context.Context, assetID uuid.UUID) ([]AssetCheckout, error) {
 	return s.repo.ListCheckouts(ctx, assetID)

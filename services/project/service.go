@@ -97,6 +97,11 @@ func (s *Service) GetPhaseTypes(ctx context.Context) []vertical.PhaseType {
 	return vcfg.PhaseTypes
 }
 
+// UpdateProduction updates a production's mutable fields.
+func (s *Service) UpdateProduction(ctx context.Context, p *Production) error {
+	return s.repo.UpdateProduction(ctx, p)
+}
+
 // ArchiveProduction archives a production.
 func (s *Service) ArchiveProduction(ctx context.Context, tenantID, id uuid.UUID) error {
 	return s.repo.ArchiveProduction(ctx, tenantID, id)

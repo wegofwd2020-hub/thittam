@@ -78,6 +78,7 @@ func (m *inventoryMock) ListAssets(ctx context.Context, tid uuid.UUID, status st
 func (m *inventoryMock) UpdateAssetStatus(ctx context.Context, tid, id uuid.UUID, status string) error { return nil }
 func (m *inventoryMock) CheckOutAsset(ctx context.Context, c *inventory.AssetCheckout) error { return nil }
 func (m *inventoryMock) CheckInAsset(ctx context.Context, checkoutID uuid.UUID, conditionIn string) error { return nil }
+func (m *inventoryMock) GetCheckout(ctx context.Context, id uuid.UUID) (*inventory.AssetCheckout, error) { return &inventory.AssetCheckout{ID: id}, nil }
 func (m *inventoryMock) ListCheckouts(ctx context.Context, assetID uuid.UUID) ([]inventory.AssetCheckout, error) { return nil, nil }
 
 // --- reporting mock ---

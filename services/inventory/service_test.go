@@ -21,6 +21,7 @@ type mockRepo struct {
 	updateAssetStatusFn func(ctx context.Context, tenantID, id uuid.UUID, status string) error
 	checkOutAssetFn     func(ctx context.Context, c *AssetCheckout) error
 	checkInAssetFn      func(ctx context.Context, checkoutID uuid.UUID, conditionIn string) error
+	getCheckoutFn       func(ctx context.Context, id uuid.UUID) (*AssetCheckout, error)
 	listCheckoutsFn     func(ctx context.Context, assetID uuid.UUID) ([]AssetCheckout, error)
 }
 
@@ -59,6 +60,12 @@ func (m *mockRepo) CheckInAsset(ctx context.Context, checkoutID uuid.UUID, condi
 		return m.checkInAssetFn(ctx, checkoutID, conditionIn)
 	}
 	return nil
+}
+func (m *mockRepo) GetCheckout(ctx context.Context, id uuid.UUID) (*AssetCheckout, error) {
+	if m.getCheckoutFn != nil {
+		return m.getCheckoutFn(ctx, id)
+	}
+	return &AssetCheckout{ID: id}, nil
 }
 func (m *mockRepo) ListCheckouts(ctx context.Context, assetID uuid.UUID) ([]AssetCheckout, error) {
 	if m.listCheckoutsFn != nil {

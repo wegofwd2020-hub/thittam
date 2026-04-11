@@ -121,6 +121,19 @@ func (s *Service) CreatePettyCashAdvance(ctx context.Context, pc *PettyCashAdvan
 	return s.repo.CreatePettyCashAdvance(ctx, pc)
 }
 
+// GetPettyCashAdvance retrieves a petty cash advance by ID.
+func (s *Service) GetPettyCashAdvance(ctx context.Context, tenantID, id uuid.UUID) (*PettyCashAdvance, error) {
+	return s.repo.GetPettyCashAdvance(ctx, tenantID, id)
+}
+
+// ListPettyCashAdvances lists petty cash advances for a production.
+func (s *Service) ListPettyCashAdvances(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int) ([]PettyCashAdvance, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	return s.repo.ListPettyCashAdvances(ctx, tenantID, productionID, status, limit, offset)
+}
+
 // GetExpenseCategories returns the vertical's configured expense categories.
 func (s *Service) GetExpenseCategories(ctx context.Context) []vertical.ExpenseCategory {
 	vcfg := vertical.MustFromContext(ctx)

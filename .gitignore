@@ -1,11 +1,13 @@
-# Compiled binaries
-budget-planning
-expense-tracking
-inventory-management
-project-management
-reporting-analytics
-thittam-cli
-migrate-all-tenants
+# Compiled binaries (root-level only — anchored with / to avoid matching cmd/ dirs)
+/budget-planning
+/expense-tracking
+/inventory-management
+/project-management
+/reporting-analytics
+/thittam-cli
+/migrate-all-tenants
+/document
+/iam
 
 # IDE
 .idea/
