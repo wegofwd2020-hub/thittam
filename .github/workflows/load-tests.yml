@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       scenario:
-        description: "Scenario to run (expense-submissions|budget-approvals|ledger-throughput|report-under-load|full-suite)"
+        description: "Scenario to run (expense-submissions|budget-approvals|ledger-throughput|report-under-load|full-suite|chaos-ledger-503)"
         required: false
         default: "full-suite"
       base_url:
@@ -66,6 +66,22 @@ jobs:
             ./load-tests/scripts/verify-ledger-balance.sh
           else
             echo "SKIP: DB_URL not set — skipping ledger consistency check"
+          fi
+
+      - name: Verify no lost events (post-chaos)
+        if: always() && steps.scenario.outputs.name == 'chaos-ledger-503'
+        env:
+          DB_URL: ${{ secrets.LOAD_TEST_DB_URL }}
+          NATS_URL: ${{ secrets.LOAD_TEST_NATS_URL }}
+          TENANT_ID: ${{ secrets.LOAD_TEST_TENANT_ID }}
+        run: |
+          if [ -n "$NATS_URL" ] && [ -n "$DB_URL" ]; then
+            # Install nats CLI
+            curl -fsSL https://github.com/nats-io/natscli/releases/download/v0.1.5/nats-0.1.5-linux-amd64.zip \
+              -o nats.zip && unzip -q nats.zip && mv nats-0.1.5-linux-amd64/nats /usr/local/bin/nats
+            ./load-tests/scripts/verify-no-lost-events.sh
+          else
+            echo "SKIP: NATS_URL or DB_URL not set — skipping event loss check"
           fi
 
       - name: Upload k6 results
