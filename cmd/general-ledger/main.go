@@ -9,11 +9,16 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go"
 	ledgerv1 "github.com/wegofwd2020/thittam/gen/ledger/v1"
+	"github.com/wegofwd2020/thittam/pkg/events"
+	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/ledger"
 	ledgerdb "github.com/wegofwd2020/thittam/services/ledger/db"
@@ -34,11 +39,30 @@ func main() {
 		log.Fatalf("general-ledger: startup: ping database: %v", err)
 	}
 
+	// --- NATS JetStream ---
+	// Financial events (journal.posted) go to the FINANCIAL stream with DLQ
+	// protection (see pkg/jetstream/config.go and infra/nats/provision.sh).
+	natsURL := requireenv("NATS_URL")
+	nc, err := nats.Connect(natsURL,
+		nats.MaxReconnects(-1),
+		nats.ReconnectWait(2*time.Second),
+	)
+	if err != nil {
+		log.Fatalf("general-ledger: startup: connect to NATS: %v", err)
+	}
+	defer nc.Drain()
+
+	js, err := nc.JetStream()
+	if err != nil {
+		log.Fatalf("general-ledger: startup: create JetStream context: %v", err)
+	}
+	pub := jetstream.NewPublisher(js)
+
 	// --- Repository and service ---
 	// No Redis or vertical loader: the ledger is universal and does not
 	// look up per-tenant vertical config on the request path.
 	repo := ledgerdb.NewPostgres(pool)
-	svc := ledger.NewService(repo)
+	svc := ledger.NewService(repo, &ledgerPublisher{pub: pub})
 	handler := ledger.NewHandler(svc)
 
 	// --- gRPC server ---
@@ -73,4 +97,36 @@ func requireenv(key string) string {
 		log.Fatalf("general-ledger: startup: required environment variable %s is not set", key)
 	}
 	return v
+}
+
+// ledgerPublisher adapts *jetstream.Publisher to ledger.EventPublisher.
+type ledgerPublisher struct{ pub *jetstream.Publisher }
+
+func (p *ledgerPublisher) PublishJournalPosted(ctx context.Context, je *ledger.JournalEntry) error {
+	var prodID string
+	if je.ProductionID != nil {
+		prodID = je.ProductionID.String()
+	}
+	var postedAt time.Time
+	if je.PostedAt != nil {
+		postedAt = *je.PostedAt
+	}
+
+	// Compute totals from lines.
+	var totalDebit, totalCredit float64
+	for _, l := range je.Lines {
+		totalDebit += l.DebitAmount.InexactFloat64()
+		totalCredit += l.CreditAmount.InexactFloat64()
+	}
+
+	return p.pub.Publish(ctx, events.SubjectLedgerJournalPosted, je.TenantID, events.LedgerJournalPostedPayload{
+		JournalEntryID: je.ID.String(),
+		EntryNumber:    je.EntryNumber,
+		ProductionID:   prodID,
+		PeriodID:       je.PeriodID.String(),
+		TotalDebit:     fmt.Sprintf("%.2f", totalDebit),
+		TotalCredit:    fmt.Sprintf("%.2f", totalCredit),
+		Narration:      je.Narration,
+		PostedAt:       postedAt,
+	})
 }

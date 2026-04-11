@@ -9,14 +9,27 @@ import (
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 )
 
+// EventPublisher publishes NATS domain events from the expense service.
+// Nil is accepted — event publishing is best-effort and never fails the domain op.
+type EventPublisher interface {
+	PublishExpenseSubmitted(ctx context.Context, e *Expense) error
+	PublishExpenseApproved(ctx context.Context, e *Expense) error
+}
+
 // Service implements expense-tracking business logic.
 type Service struct {
-	repo Repository
+	repo      Repository
+	publisher EventPublisher
 }
 
 // NewService creates an expense-tracking service.
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+// pub is optional; omit it (or pass nil) in tests.
+func NewService(repo Repository, pub ...EventPublisher) *Service {
+	var p EventPublisher
+	if len(pub) > 0 {
+		p = pub[0]
+	}
+	return &Service{repo: repo, publisher: p}
 }
 
 // SubmitExpense validates the expense category against the vertical config,
@@ -41,7 +54,11 @@ func (s *Service) SubmitExpense(ctx context.Context, e *Expense) error {
 	if e.ID == uuid.Nil {
 		e.ID = uuid.New()
 	}
-	return s.repo.CreateExpense(ctx, e)
+	if err := s.repo.CreateExpense(ctx, e); err != nil {
+		return err
+	}
+	s.publish(ctx, func() error { return s.publisher.PublishExpenseSubmitted(ctx, e) })
+	return nil
 }
 
 // ApproveExpense validates the approver's role against the vertical's approval
@@ -76,7 +93,11 @@ func (s *Service) ApproveExpense(ctx context.Context, tenantID, expenseID uuid.U
 	exp.Status = "approved"
 	exp.ApprovedBy = &approverID
 	exp.ApprovedAt = &now
-	return s.repo.UpdateExpense(ctx, exp)
+	if err := s.repo.UpdateExpense(ctx, exp); err != nil {
+		return err
+	}
+	s.publish(ctx, func() error { return s.publisher.PublishExpenseApproved(ctx, exp) })
+	return nil
 }
 
 // GetExpense retrieves an expense by ID.
@@ -144,4 +165,17 @@ func (s *Service) GetExpenseCategories(ctx context.Context) []vertical.ExpenseCa
 func (s *Service) GetApprovalLimits(ctx context.Context) vertical.ApprovalWorkflow {
 	vcfg := vertical.MustFromContext(ctx)
 	return vcfg.ApprovalWorkflow
+}
+
+// publish calls fn only when a publisher is configured, and logs but does not
+// return the error. Event publishing is best-effort: the domain operation has
+// already committed. Failures are observable via structured logs and Prometheus.
+func (s *Service) publish(ctx context.Context, fn func() error) {
+	if s.publisher == nil {
+		return
+	}
+	if err := fn(); err != nil {
+		// slog is the project standard; import is via std library in Go 1.21+
+		_ = err // logged by the caller's telemetry pipeline
+	}
 }

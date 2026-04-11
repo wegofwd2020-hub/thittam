@@ -10,10 +10,14 @@ import (
 	"context"
 	"log"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 	expensev1 "github.com/wegofwd2020/thittam/gen/expense/v1"
+	"github.com/wegofwd2020/thittam/pkg/events"
+	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	verticaldb "github.com/wegofwd2020/thittam/pkg/vertical/db"
@@ -45,9 +49,26 @@ func main() {
 	vdb := verticaldb.NewStore(pool)
 	loader := vertical.NewLoader(rdb, vdb, nil)
 
+	// --- NATS JetStream ---
+	natsURL := requireenv("NATS_URL")
+	nc, err := nats.Connect(natsURL,
+		nats.MaxReconnects(-1),
+		nats.ReconnectWait(2*time.Second),
+	)
+	if err != nil {
+		log.Fatalf("expense-tracking: startup: connect to NATS: %v", err)
+	}
+	defer nc.Drain()
+
+	js, err := nc.JetStream()
+	if err != nil {
+		log.Fatalf("expense-tracking: startup: create JetStream context: %v", err)
+	}
+	pub := jetstream.NewPublisher(js)
+
 	// --- Repository and service ---
 	repo := expensedb.NewPostgres(pool)
-	svc := expense.NewService(repo)
+	svc := expense.NewService(repo, &expensePublisher{pub: pub})
 	handler := expense.NewHandler(svc)
 
 	// --- gRPC server ---
@@ -82,4 +103,36 @@ func requireenv(key string) string {
 		log.Fatalf("expense-tracking: startup: required environment variable %s is not set", key)
 	}
 	return v
+}
+
+// expensePublisher adapts *jetstream.Publisher to expense.EventPublisher.
+// Lives in cmd/ (composition root) to avoid import cycles between
+// pkg/jetstream and services/expense.
+type expensePublisher struct{ pub *jetstream.Publisher }
+
+func (p *expensePublisher) PublishExpenseSubmitted(ctx context.Context, e *expense.Expense) error {
+	return p.pub.Publish(ctx, events.SubjectExpenseSubmitted, e.TenantID, events.ExpenseSubmittedPayload{
+		ExpenseID:    e.ID,
+		ProductionID: e.ProductionID,
+		CategoryID:   e.CategoryID,
+		Amount:       e.Amount.StringFixed(2),
+		SubmittedBy:  e.SubmittedBy.String(),
+		SubmittedAt:  e.CreatedAt,
+		Description:  e.Description,
+	})
+}
+
+func (p *expensePublisher) PublishExpenseApproved(ctx context.Context, e *expense.Expense) error {
+	approvedAt := e.CreatedAt
+	if e.ApprovedAt != nil {
+		approvedAt = *e.ApprovedAt
+	}
+	return p.pub.Publish(ctx, events.SubjectExpenseApproved, e.TenantID, events.ExpenseApprovedPayload{
+		ExpenseID:    e.ID,
+		ProductionID: e.ProductionID,
+		CategoryID:   e.CategoryID,
+		Amount:       e.Amount.StringFixed(2),
+		ApprovedAt:   approvedAt,
+		Month:        approvedAt.Format("2006-01"),
+	})
 }

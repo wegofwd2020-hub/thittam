@@ -8,14 +8,27 @@ import (
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 )
 
+// EventPublisher publishes NATS domain events from the project service.
+// Nil is accepted — event publishing is best-effort and never fails the domain op.
+type EventPublisher interface {
+	PublishProductionCreated(ctx context.Context, p *Production) error
+	PublishCrewMemberAdded(ctx context.Context, c *CrewMember) error
+}
+
 // Service implements project-management business logic.
 type Service struct {
-	repo Repository
+	repo      Repository
+	publisher EventPublisher
 }
 
 // NewService creates a project-management service.
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+// pub is optional; omit it (or pass nil) in tests.
+func NewService(repo Repository, pub ...EventPublisher) *Service {
+	var p EventPublisher
+	if len(pub) > 0 {
+		p = pub[0]
+	}
+	return &Service{repo: repo, publisher: p}
 }
 
 // CreateProduction creates a new production for the tenant.
@@ -23,7 +36,11 @@ func (s *Service) CreateProduction(ctx context.Context, p *Production) error {
 	if p.ID == uuid.Nil {
 		p.ID = uuid.New()
 	}
-	return s.repo.CreateProduction(ctx, p)
+	if err := s.repo.CreateProduction(ctx, p); err != nil {
+		return err
+	}
+	s.publish(ctx, func() error { return s.publisher.PublishProductionCreated(ctx, p) })
+	return nil
 }
 
 // GetProduction retrieves a production by ID.
@@ -112,7 +129,11 @@ func (s *Service) AddCrewMember(ctx context.Context, c *CrewMember) error {
 	if c.ID == uuid.Nil {
 		c.ID = uuid.New()
 	}
-	return s.repo.AddCrewMember(ctx, c)
+	if err := s.repo.AddCrewMember(ctx, c); err != nil {
+		return err
+	}
+	s.publish(ctx, func() error { return s.publisher.PublishCrewMemberAdded(ctx, c) })
+	return nil
 }
 
 // ListCrewMembers lists crew for a production.
@@ -123,4 +144,12 @@ func (s *Service) ListCrewMembers(ctx context.Context, productionID uuid.UUID) (
 // RemoveCrewMember removes a crew member.
 func (s *Service) RemoveCrewMember(ctx context.Context, id uuid.UUID) error {
 	return s.repo.RemoveCrewMember(ctx, id)
+}
+
+// publish calls fn only when a publisher is configured; errors are best-effort.
+func (s *Service) publish(ctx context.Context, fn func() error) {
+	if s.publisher == nil {
+		return
+	}
+	_ = fn()
 }

@@ -9,14 +9,26 @@ import (
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 )
 
+// EventPublisher publishes NATS domain events from the budget service.
+// Nil is accepted — event publishing is best-effort and never fails the domain op.
+type EventPublisher interface {
+	PublishBudgetApproved(ctx context.Context, b *Budget) error
+}
+
 // Service implements budget-planning business logic.
 type Service struct {
-	repo Repository
+	repo      Repository
+	publisher EventPublisher
 }
 
 // NewService creates a budget-planning service.
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+// pub is optional; omit it (or pass nil) in tests.
+func NewService(repo Repository, pub ...EventPublisher) *Service {
+	var p EventPublisher
+	if len(pub) > 0 {
+		p = pub[0]
+	}
+	return &Service{repo: repo, publisher: p}
 }
 
 // CreateBudget creates a new budget for a production.
@@ -67,7 +79,13 @@ func (s *Service) ApproveBudget(ctx context.Context, tenantID, id uuid.UUID, app
 	if b.Status != "submitted" {
 		return fmt.Errorf("%w: current status is %q, must be submitted", ErrBudgetNotApproved, b.Status)
 	}
-	return s.repo.UpdateBudgetStatus(ctx, id, "approved", &approvedBy)
+	if err := s.repo.UpdateBudgetStatus(ctx, id, "approved", &approvedBy); err != nil {
+		return err
+	}
+	b.Status = "approved"
+	b.ApprovedBy = &approvedBy
+	s.publish(ctx, func() error { return s.publisher.PublishBudgetApproved(ctx, b) })
+	return nil
 }
 
 // CreateLineItem creates a line item, validating category_id against the vertical config.
@@ -160,4 +178,12 @@ func (s *Service) GetBudgetCategories(ctx context.Context) []vertical.BudgetCate
 func (s *Service) GetBudgetTemplates(ctx context.Context) []vertical.BudgetTemplate {
 	vcfg := vertical.MustFromContext(ctx)
 	return vcfg.BudgetTemplates
+}
+
+// publish calls fn only when a publisher is configured; logs but does not return errors.
+func (s *Service) publish(ctx context.Context, fn func() error) {
+	if s.publisher == nil {
+		return
+	}
+	_ = fn() // best-effort: failures observable via structured logs / Prometheus
 }

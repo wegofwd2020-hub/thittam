@@ -10,10 +10,14 @@ import (
 	"context"
 	"log"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 	budgetv1 "github.com/wegofwd2020/thittam/gen/budget/v1"
+	"github.com/wegofwd2020/thittam/pkg/events"
+	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	verticaldb "github.com/wegofwd2020/thittam/pkg/vertical/db"
@@ -45,9 +49,26 @@ func main() {
 	vdb := verticaldb.NewStore(pool)
 	loader := vertical.NewLoader(rdb, vdb, nil)
 
+	// --- NATS JetStream ---
+	natsURL := requireenv("NATS_URL")
+	nc, err := nats.Connect(natsURL,
+		nats.MaxReconnects(-1),
+		nats.ReconnectWait(2*time.Second),
+	)
+	if err != nil {
+		log.Fatalf("budget-planning: startup: connect to NATS: %v", err)
+	}
+	defer nc.Drain()
+
+	js, err := nc.JetStream()
+	if err != nil {
+		log.Fatalf("budget-planning: startup: create JetStream context: %v", err)
+	}
+	pub := jetstream.NewPublisher(js)
+
 	// --- Repository and service ---
 	repo := budgetdb.NewPostgres(pool)
-	svc := budget.NewService(repo)
+	svc := budget.NewService(repo, &budgetPublisher{pub: pub})
 	handler := budget.NewHandler(svc)
 
 	// --- gRPC server ---
@@ -82,4 +103,15 @@ func requireenv(key string) string {
 		log.Fatalf("budget-planning: startup: required environment variable %s is not set", key)
 	}
 	return v
+}
+
+// budgetPublisher adapts *jetstream.Publisher to budget.EventPublisher.
+type budgetPublisher struct{ pub *jetstream.Publisher }
+
+func (p *budgetPublisher) PublishBudgetApproved(ctx context.Context, b *budget.Budget) error {
+	return p.pub.Publish(ctx, events.SubjectBudgetApproved, b.TenantID, events.BudgetApprovedPayload{
+		BudgetID:      b.ID,
+		ProductionID:  b.ProductionID,
+		TotalBudgeted: b.TotalAmount.StringFixed(2),
+	})
 }

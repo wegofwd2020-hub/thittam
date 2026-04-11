@@ -10,10 +10,14 @@ import (
 	"context"
 	"log"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 	projectv1 "github.com/wegofwd2020/thittam/gen/project/v1"
+	"github.com/wegofwd2020/thittam/pkg/events"
+	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	verticaldb "github.com/wegofwd2020/thittam/pkg/vertical/db"
@@ -48,9 +52,26 @@ func main() {
 	vdb := verticaldb.NewStore(pool)
 	loader := vertical.NewLoader(rdb, vdb, nil) // nil → uses default logger
 
+	// --- NATS JetStream ---
+	natsURL := requireenv("NATS_URL")
+	nc, err := nats.Connect(natsURL,
+		nats.MaxReconnects(-1),
+		nats.ReconnectWait(2*time.Second),
+	)
+	if err != nil {
+		log.Fatalf("project-management: startup: connect to NATS: %v", err)
+	}
+	defer nc.Drain()
+
+	js, err := nc.JetStream()
+	if err != nil {
+		log.Fatalf("project-management: startup: create JetStream context: %v", err)
+	}
+	pub := jetstream.NewPublisher(js)
+
 	// --- Repository and service ---
 	repo := projectdb.NewPostgres(pool)
-	svc := project.NewService(repo)
+	svc := project.NewService(repo, &projectPublisher{pub: pub})
 	handler := project.NewHandler(svc)
 
 	// --- gRPC server ---
@@ -85,4 +106,25 @@ func requireenv(key string) string {
 		log.Fatalf("project-management: startup: required environment variable %s is not set", key)
 	}
 	return v
+}
+
+// projectPublisher adapts *jetstream.Publisher to project.EventPublisher.
+type projectPublisher struct{ pub *jetstream.Publisher }
+
+func (p *projectPublisher) PublishProductionCreated(ctx context.Context, prod *project.Production) error {
+	return p.pub.Publish(ctx, events.SubjectProjectCreated, prod.TenantID, events.ProjectCreatedPayload{
+		ProjectID: prod.ID,
+		Title:     prod.Title,
+		Status:    prod.Status,
+		StartDate: prod.StartDate,
+	})
+}
+
+func (p *projectPublisher) PublishCrewMemberAdded(ctx context.Context, c *project.CrewMember) error {
+	return p.pub.Publish(ctx, events.SubjectProjectMemberAssigned, c.TenantID, events.ProjectMemberAssignedPayload{
+		ProjectID: c.ProductionID,
+		// MemberCount requires a separate query; publish with 0 for now — consumers
+		// should treat this as a "member added" signal and re-query if needed.
+		MemberCount: 0,
+	})
 }

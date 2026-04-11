@@ -10,15 +10,27 @@ import (
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 )
 
+// EventPublisher publishes NATS domain events from the ledger service.
+// Nil is accepted — event publishing is best-effort and never fails the domain op.
+type EventPublisher interface {
+	PublishJournalPosted(ctx context.Context, je *JournalEntry) error
+}
+
 // Service implements general-ledger business logic.
 // It is a universal service — no vertical config is loaded per request.
 type Service struct {
-	repo Repository
+	repo      Repository
+	publisher EventPublisher
 }
 
 // NewService creates a general-ledger service.
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+// pub is optional; omit it (or pass nil) in tests.
+func NewService(repo Repository, pub ...EventPublisher) *Service {
+	var p EventPublisher
+	if len(pub) > 0 {
+		p = pub[0]
+	}
+	return &Service{repo: repo, publisher: p}
 }
 
 // --- Accounts ---
@@ -207,6 +219,7 @@ func (s *Service) PostJournalEntry(ctx context.Context, tenantID, id, postedBy u
 	je.Status = "posted"
 	je.PostedBy = &postedBy
 	je.PostedAt = &now
+	s.publish(ctx, func() error { return s.publisher.PublishJournalPosted(ctx, je) })
 	return je, nil
 }
 
@@ -329,4 +342,12 @@ func isAccountCodeExists(err error) bool {
 // OpenAccountingPeriod calls.
 func isPeriodAlreadyExists(err error) bool {
 	return err == ErrPeriodAlreadyExists
+}
+
+// publish calls fn only when a publisher is configured; errors are best-effort.
+func (s *Service) publish(ctx context.Context, fn func() error) {
+	if s.publisher == nil {
+		return
+	}
+	_ = fn()
 }
