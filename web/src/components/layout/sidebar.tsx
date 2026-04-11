@@ -22,6 +22,7 @@ import {
   DollarSign,
   CreditCard,
   FileText,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/context";
@@ -46,6 +47,7 @@ const iconMap: Record<string, LucideIcon> = {
   DollarSign,
   CreditCard,
   FileText,
+  Bell,
 };
 
 interface SidebarProps {
@@ -116,6 +118,13 @@ function useSidebarMenu(): MenuSection[] {
           href: "/documents",
           iconName: "FileText",
           fallbackIcon: FileText,
+        },
+        {
+          key: "notifications",
+          label: "Notifications",
+          href: "/notifications",
+          iconName: "Bell",
+          fallbackIcon: Bell,
         },
       ],
     },

@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { Menu, Bell, ChevronRight, User, Settings, LogOut } from "lucide-react";
+import { Menu, ChevronRight, User, Settings, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth/context";
+import { NotificationBell } from "@/components/layout/notification-bell";
 
 interface TopbarProps {
   onMenuToggle: () => void;
@@ -73,13 +74,7 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
       {/* Right side */}
       <div className="flex items-center gap-2">
         {/* Notification bell */}
-        <button
-          className="flex h-8 w-8 items-center justify-center rounded-md hover:opacity-80"
-          style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
-          aria-label="Notifications"
-        >
-          <Bell className="h-5 w-5" />
-        </button>
+        <NotificationBell />
 
         {/* User dropdown */}
         <div className="relative" ref={dropdownRef}>

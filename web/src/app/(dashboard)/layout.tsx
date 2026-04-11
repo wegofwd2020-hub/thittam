@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AuthProvider, useAuth } from "@/lib/auth/context";
 import { ProtectedRoute } from "@/lib/auth/protected-route";
 import { ThemeProvider } from "@/lib/themes/provider";
+import { NotificationProvider } from "@/lib/notifications/context";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 
@@ -14,6 +15,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeProvider verticalId={verticalId ?? "movie-production"}>
+    <NotificationProvider>
       <div className="flex h-screen overflow-hidden bg-[var(--thittam-background,#fff)]">
         {/* Mobile overlay */}
         {mobileMenuOpen && (
@@ -49,6 +51,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <main className="flex-1 overflow-y-auto p-6">{children}</main>
         </div>
       </div>
+    </NotificationProvider>
     </ThemeProvider>
   );
 }
