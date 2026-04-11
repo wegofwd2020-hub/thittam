@@ -1,0 +1,197 @@
+groups:
+  # ── Per-service gRPC SLO alerts ───────────────────────────────────────────
+  #
+  # All Thittam services use the grpc-ecosystem/go-grpc-prometheus interceptor,
+  # which exposes the standard gRPC metrics:
+  #
+  #   grpc_server_started_total{job, grpc_service, grpc_method}
+  #   grpc_server_handled_total{job, grpc_service, grpc_method, grpc_code}
+  #   grpc_server_handling_seconds_bucket{job, grpc_service, grpc_method, le}
+  #
+  # Alerts fire per-job so each service alert carries the `job` label,
+  # making it immediately clear which service is in violation.
+  #
+  # SLO targets (from load-tests/scenarios/budget-approvals.js and peers):
+  #   Error rate  ≤ 0.1% steady-state; alert threshold set conservatively at 1%
+  #   p99 latency ≤ 500 ms steady-state; 2 s is the hard degraded ceiling
+
+  - name: thittam_slo_error_rate
+    interval: 30s
+    rules:
+
+      # ── gRPC error rate: warning ──────────────────────────────────────────
+      # Fires when any single service's non-OK gRPC response fraction exceeds
+      # 1% over a 5-minute window. A warning gives the on-call time to
+      # investigate before the situation escalates to critical.
+      - alert: ThittamGRPCErrorRateHigh
+        expr: |
+          (
+            sum by (job) (
+              rate(grpc_server_handled_total{
+                job=~"project-management|budget-planning|expense-tracking|general-ledger|inventory-management|reporting-analytics|iam|notifications|document|billing",
+                grpc_code!="OK"
+              }[5m])
+            )
+            /
+            sum by (job) (
+              rate(grpc_server_handled_total{
+                job=~"project-management|budget-planning|expense-tracking|general-ledger|inventory-management|reporting-analytics|iam|notifications|document|billing"
+              }[5m])
+            )
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "{{ $labels.job }}: gRPC error rate {{ $value | humanizePercentage }} (> 1%)"
+          description: >
+            Service {{ $labels.job }} has a gRPC non-OK response rate of
+            {{ $value | humanizePercentage }} over the last 5 minutes.
+            Investigate service logs for upstream errors, dependency failures,
+            or validation regressions. Check /readyz for dependency health.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#high-grpc-error-rate"
+
+      # ── gRPC error rate: critical ─────────────────────────────────────────
+      # At 5%+ error rate the service is substantially degraded. Tenants will
+      # be experiencing failures. Page immediately.
+      - alert: ThittamGRPCErrorRateCritical
+        expr: |
+          (
+            sum by (job) (
+              rate(grpc_server_handled_total{
+                job=~"project-management|budget-planning|expense-tracking|general-ledger|inventory-management|reporting-analytics|iam|notifications|document|billing",
+                grpc_code!="OK"
+              }[5m])
+            )
+            /
+            sum by (job) (
+              rate(grpc_server_handled_total{
+                job=~"project-management|budget-planning|expense-tracking|general-ledger|inventory-management|reporting-analytics|iam|notifications|document|billing"
+              }[5m])
+            )
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "{{ $labels.job }}: gRPC error rate {{ $value | humanizePercentage }} (> 5%) — PAGE"
+          description: >
+            Service {{ $labels.job }} has a gRPC non-OK response rate of
+            {{ $value | humanizePercentage }} over the last 5 minutes.
+            This indicates a significant production incident. Tenants will be
+            experiencing failures for operations handled by this service.
+            Escalate immediately per the incident severity matrix (P1/P0).
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#high-grpc-error-rate"
+
+  - name: thittam_slo_latency
+    interval: 30s
+    rules:
+
+      # ── gRPC p99 latency: warning ─────────────────────────────────────────
+      # p99 above 500 ms is outside the steady-state SLO but not yet causing
+      # widespread tenant impact. Investigate slow queries, cache misses,
+      # or resource contention.
+      - alert: ThittamGRPCLatencyP99High
+        expr: |
+          histogram_quantile(0.99,
+            sum by (job, le) (
+              rate(grpc_server_handling_seconds_bucket{
+                job=~"project-management|budget-planning|expense-tracking|general-ledger|inventory-management|reporting-analytics|iam|notifications|document|billing"
+              }[5m])
+            )
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "{{ $labels.job }}: p99 latency {{ $value | humanizeDuration }} (> 500 ms)"
+          description: >
+            Service {{ $labels.job }} p99 gRPC response time is
+            {{ $value | humanizeDuration }} over the last 5 minutes.
+            Common causes: slow DB queries (check pg_stat_activity), Redis cache
+            misses, or a saturated connection pool.
+            Run `make logs svc={{ $labels.job }}` for recent log context.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#high-grpc-latency"
+
+      # ── gRPC p99 latency: critical ────────────────────────────────────────
+      # 2 s p99 means most complex operations (multi-step transactions,
+      # approval chains) are timing out from the client's perspective.
+      - alert: ThittamGRPCLatencyP99Critical
+        expr: |
+          histogram_quantile(0.99,
+            sum by (job, le) (
+              rate(grpc_server_handling_seconds_bucket{
+                job=~"project-management|budget-planning|expense-tracking|general-ledger|inventory-management|reporting-analytics|iam|notifications|document|billing"
+              }[5m])
+            )
+          ) > 2.0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "{{ $labels.job }}: p99 latency {{ $value | humanizeDuration }} (> 2 s) — PAGE"
+          description: >
+            Service {{ $labels.job }} p99 gRPC response time is
+            {{ $value | humanizeDuration }}. At this latency clients are likely
+            experiencing timeouts. Check for DB lock contention, a missing
+            index on a hot query, or a downstream service cascade.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#high-grpc-latency"
+
+  - name: thittam_slo_availability
+    interval: 30s
+    rules:
+
+      # ── Service scrape target down ────────────────────────────────────────
+      # Prometheus cannot reach the service's /metrics endpoint. Either the
+      # process crashed, the metrics port is not exposed, or the service
+      # failed its readiness probe and the pod was evicted.
+      - alert: ThittamServiceDown
+        expr: |
+          up{job=~"project-management|budget-planning|expense-tracking|general-ledger|inventory-management|reporting-analytics|iam|notifications|document|billing"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "{{ $labels.job }}: metrics endpoint unreachable — service may be down"
+          description: >
+            Prometheus cannot scrape {{ $labels.job }} (target: {{ $labels.instance }}).
+            The process may have crashed, the metrics port may be unreachable,
+            or the pod was evicted.
+            Check `kubectl get pods -n thittam -l app={{ $labels.job }}` and
+            `kubectl logs -n thittam -l app={{ $labels.job }} --tail=50`.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#service-down"
+
+      # ── IAM / general-ledger tighter SLO: error rate warning at 0.5% ─────
+      # These services are on the critical financial path. A lower warning
+      # threshold gives earlier visibility into auth or accounting anomalies.
+      - alert: ThittamFinancialServiceErrorRateElevated
+        expr: |
+          (
+            sum by (job) (
+              rate(grpc_server_handled_total{
+                job=~"iam|general-ledger",
+                grpc_code!="OK"
+              }[5m])
+            )
+            /
+            sum by (job) (
+              rate(grpc_server_handled_total{job=~"iam|general-ledger"}[5m])
+            )
+          ) > 0.005
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "{{ $labels.job }}: error rate {{ $value | humanizePercentage }} elevated (> 0.5%) — financial service"
+          description: >
+            {{ $labels.job }} is a financial-path service with a tighter SLO.
+            An error rate above 0.5% on IAM means authentication or RBAC checks
+            are failing; on general-ledger it means double-entry postings may
+            be incomplete. Investigate immediately.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#financial-service-errors"

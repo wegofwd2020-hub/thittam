@@ -1,0 +1,157 @@
+# Prometheus configuration for Thittam local development.
+#
+# Assumes Go services run on the HOST machine at their standard metrics ports
+# (9090-9098). Prometheus itself runs in docker-compose alongside middleware
+# (Redis, NATS, MinIO).
+#
+# host.docker.internal resolves to the host machine from inside Docker on
+# macOS and Windows. On Linux, docker-compose.infra.yml adds the equivalent
+# host entry via extra_hosts.
+#
+# Run:
+#   docker compose -f infra/local/docker-compose.infra.yml up -d
+# Open:
+#   http://localhost:9300  (Prometheus UI)
+
+global:
+  scrape_interval:     15s   # How often to scrape targets
+  evaluation_interval: 15s   # How often to evaluate alert rules
+  scrape_timeout:      10s
+
+  external_labels:
+    env:     local
+    project: thittam
+
+# Load all alert rule files from the alerts/ directory.
+# Covers both .yaml (new files) and .yml (legacy nats-dlq.yml).
+rule_files:
+  - "alerts/*.yaml"
+  - "alerts/*.yml"
+
+# Alertmanager is optional locally; configure in production.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []  # e.g. ["alertmanager:9093"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Scrape configurations
+# ─────────────────────────────────────────────────────────────────────────────
+
+scrape_configs:
+
+  # ── Prometheus self-monitoring ────────────────────────────────────────────
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9300"]
+
+  # ── Thittam Go services ───────────────────────────────────────────────────
+  # Each service exposes /metrics on a dedicated HTTP port (MetricsPort in
+  # cmd/<service>/main.go). The gRPC port carries application traffic;
+  # the metrics port carries Prometheus and health endpoints only.
+  #
+  # gRPC port → metrics port mapping:
+  #   8080 → 9090  project-management
+  #   8081 → 9091  budget-planning
+  #   8082 → 9092  expense-tracking
+  #   8083 → 9093  general-ledger
+  #   8084 → 9094  inventory-management
+  #   8085 → 9095  reporting-analytics
+  #   8086 → 9096  iam
+  #   8087 → 9097  notifications
+  #   8088 → 9098  document
+  #   TBD  → 9099  billing (cmd/billing not yet created)
+
+  - job_name: project-management
+    static_configs:
+      - targets: ["host.docker.internal:9090"]
+    relabel_configs:
+      - target_label: service
+        replacement: project-management
+
+  - job_name: budget-planning
+    static_configs:
+      - targets: ["host.docker.internal:9091"]
+    relabel_configs:
+      - target_label: service
+        replacement: budget-planning
+
+  - job_name: expense-tracking
+    static_configs:
+      - targets: ["host.docker.internal:9092"]
+    relabel_configs:
+      - target_label: service
+        replacement: expense-tracking
+
+  - job_name: general-ledger
+    static_configs:
+      - targets: ["host.docker.internal:9093"]
+    relabel_configs:
+      - target_label: service
+        replacement: general-ledger
+
+  - job_name: inventory-management
+    static_configs:
+      - targets: ["host.docker.internal:9094"]
+    relabel_configs:
+      - target_label: service
+        replacement: inventory-management
+
+  - job_name: reporting-analytics
+    static_configs:
+      - targets: ["host.docker.internal:9095"]
+    relabel_configs:
+      - target_label: service
+        replacement: reporting-analytics
+
+  - job_name: iam
+    static_configs:
+      - targets: ["host.docker.internal:9096"]
+    relabel_configs:
+      - target_label: service
+        replacement: iam
+
+  - job_name: notifications
+    static_configs:
+      - targets: ["host.docker.internal:9097"]
+    relabel_configs:
+      - target_label: service
+        replacement: notifications
+
+  - job_name: document
+    static_configs:
+      - targets: ["host.docker.internal:9098"]
+    relabel_configs:
+      - target_label: service
+        replacement: document
+
+  # billing: cmd/billing not yet created; add port 9099 when wired up.
+  # - job_name: billing
+  #   static_configs:
+  #     - targets: ["host.docker.internal:9099"]
+
+  # ── NATS JetStream ────────────────────────────────────────────────────────
+  # prometheus-nats-exporter scrapes the NATS monitoring endpoint (:8222)
+  # and exposes JetStream consumer and stream metrics.
+  # Run alongside docker-compose services:
+  #   docker run -p 7777:7777 natsio/prometheus-nats-exporter:latest \
+  #     -varz -jsz -port 7777 http://nats:8222
+  - job_name: nats
+    static_configs:
+      - targets: ["host.docker.internal:7777"]
+    relabel_configs:
+      - target_label: service
+        replacement: nats
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  # redis-exporter scrapes Redis INFO and exposes memory, keyspace, and
+  # connection metrics.
+  # Run alongside docker-compose services:
+  #   docker run -p 9121:9121 -e REDIS_ADDR=redis:6379 \
+  #     oliver006/redis_exporter:latest
+  - job_name: redis
+    static_configs:
+      - targets: ["host.docker.internal:9121"]
+    relabel_configs:
+      - target_label: service
+        replacement: redis

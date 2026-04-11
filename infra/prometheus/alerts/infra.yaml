@@ -1,0 +1,220 @@
+groups:
+  # ── Kubernetes pod health ─────────────────────────────────────────────────
+  #
+  # Pod restarts and OOMKills indicate process instability. A crash-looping
+  # service may appear healthy in Prometheus scrapes between restarts but is
+  # silently dropping requests and losing in-flight state.
+  #
+  # Standard kube-state-metrics metrics (job=kube-state-metrics):
+  #   kube_pod_container_status_restarts_total{namespace, pod, container}
+  #   kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}
+  #
+  # For local development this group is informational. In production the
+  # kube-state-metrics scrape job must be configured in prometheus.yml.
+
+  - name: thittam_k8s_pods
+    interval: 60s
+    rules:
+
+      # ── Pod restart storm ────────────────────────────────────────────────
+      # More than 3 restarts in 10 minutes suggests a crash loop. A single
+      # restart (e.g. rolling deploy) is acceptable. Sustained restarts mean
+      # the service is failing its startup or liveness probe repeatedly.
+      - alert: ThittamPodCrashLooping
+        expr: |
+          increase(
+            kube_pod_container_status_restarts_total{
+              namespace="thittam"
+            }[10m]
+          ) > 3
+        for: 0m
+        labels:
+          severity: critical
+          team: platform
+          component: k8s
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }}): {{ $value | printf \"%.0f\" }} restarts in 10 min"
+          description: >
+            Container {{ $labels.container }} in pod {{ $labels.pod }}
+            (namespace: {{ $labels.namespace }}) has restarted
+            {{ $value | printf "%.0f" }} times in the last 10 minutes.
+            This indicates a crash loop. Common causes: OOM kill, failed
+            dependency check in /readyz (DB or Vault unreachable), or a
+            panic in application startup code.
+            Check: `kubectl describe pod {{ $labels.pod }} -n {{ $labels.namespace }}`
+            and:   `kubectl logs {{ $labels.pod }} -n {{ $labels.namespace }} --previous`
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#pod-crash-loop"
+
+      # ── OOMKill ─────────────────────────────────────────────────────────
+      # Any OOMKill requires immediate attention — a container hitting its
+      # memory limit will lose all in-flight state, including any uncommitted
+      # work held in memory (e.g. active gRPC streams).
+      - alert: ThittamPodOOMKilled
+        expr: |
+          kube_pod_container_status_last_terminated_reason{
+            namespace="thittam",
+            reason="OOMKilled"
+          } == 1
+        for: 0m
+        labels:
+          severity: critical
+          team: platform
+          component: k8s
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.pod }} OOMKilled — memory limit exceeded"
+          description: >
+            Container {{ $labels.container }} in pod {{ $labels.pod }} was
+            killed by the OOM killer. The container exceeded its memory limit.
+            Increase the memory request/limit in the Deployment spec or
+            investigate a memory leak with a heap profile.
+            Check recent resource consumption:
+            `kubectl top pods -n {{ $labels.namespace }} --sort-by=memory`
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#oom-kill"
+
+  # ── Persistent volume capacity ────────────────────────────────────────────
+  #
+  # PVC usage over 80% should trigger pre-emptive expansion. Over 95% the
+  # service writing to the volume will start erroring with ENOSPC — for
+  # PostgreSQL or MinIO this means write failures and potential data loss.
+  #
+  # Metrics from kubelet via node-exporter or kube-state-metrics:
+  #   kubelet_volume_stats_used_bytes{namespace, persistentvolumeclaim}
+  #   kubelet_volume_stats_capacity_bytes{namespace, persistentvolumeclaim}
+
+  - name: thittam_pvc
+    interval: 60s
+    rules:
+
+      # ── PVC usage warning ────────────────────────────────────────────────
+      - alert: ThittamPVCUsageHigh
+        expr: |
+          (
+            kubelet_volume_stats_used_bytes{namespace="thittam"}
+            /
+            kubelet_volume_stats_capacity_bytes{namespace="thittam"}
+          ) > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+          component: storage
+        annotations:
+          summary: "PVC {{ $labels.persistentvolumeclaim }}: {{ $value | humanizePercentage }} full (> 80%)"
+          description: >
+            PersistentVolumeClaim {{ $labels.persistentvolumeclaim }}
+            (namespace: {{ $labels.namespace }}) is {{ $value | humanizePercentage }}
+            full. Plan capacity expansion before it reaches 95%, at which point
+            writes will begin failing.
+            Resize: `kubectl patch pvc {{ $labels.persistentvolumeclaim }} -n {{ $labels.namespace }}
+            -p '{"spec":{"resources":{"requests":{"storage":"<new-size>"}}}}'`
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#pvc-full"
+
+      # ── PVC usage critical ───────────────────────────────────────────────
+      # At 95% the volume is about to fill. For PostgreSQL this means
+      # transactions will begin failing with disk full errors, which is
+      # difficult to recover from online.
+      - alert: ThittamPVCUsageCritical
+        expr: |
+          (
+            kubelet_volume_stats_used_bytes{namespace="thittam"}
+            /
+            kubelet_volume_stats_capacity_bytes{namespace="thittam"}
+          ) > 0.95
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          component: storage
+        annotations:
+          summary: "PVC {{ $labels.persistentvolumeclaim }}: {{ $value | humanizePercentage }} full (> 95%) — PAGE"
+          description: >
+            PersistentVolumeClaim {{ $labels.persistentvolumeclaim }} is
+            {{ $value | humanizePercentage }} full. Writes will start failing
+            imminently. For PostgreSQL PVCs: new transactions will fail and the
+            database may need to be put in read-only mode to allow a resize.
+            Expand immediately.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#pvc-full"
+
+  # ── Redis memory ─────────────────────────────────────────────────────────
+  #
+  # Redis is the L2 cache for vertical configs, session tokens, and rate
+  # limiting state. When Redis memory approaches maxmemory the LRU eviction
+  # policy kicks in, silently evicting cache entries — increasing DB load.
+  # At 100% Redis starts returning OOM errors to clients.
+  #
+  # Metrics from redis-exporter (oliver006/redis_exporter):
+  #   redis_memory_used_bytes         — current RSS
+  #   redis_memory_max_bytes          — configured maxmemory (0 = no limit)
+  #   redis_evicted_keys_total        — cumulative evictions since restart
+
+  - name: thittam_redis
+    interval: 30s
+    rules:
+
+      # ── Redis memory warning ─────────────────────────────────────────────
+      - alert: RedisMemoryHigh
+        expr: |
+          (
+            redis_memory_used_bytes
+            /
+            redis_memory_max_bytes
+          ) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+          component: redis
+        annotations:
+          summary: "Redis memory {{ $value | humanizePercentage }} of maxmemory (> 85%)"
+          description: >
+            Redis is using {{ $value | humanizePercentage }} of its configured
+            maxmemory. The LRU eviction policy is likely active, evicting cache
+            entries. This increases DB load as cache misses route to PostgreSQL.
+            Consider increasing maxmemory in the Redis config or reducing TTLs
+            for lower-priority cache keys (e.g. reporting data vs. vertical configs).
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#redis-memory"
+
+      # ── Redis eviction rate ──────────────────────────────────────────────
+      # Non-zero evictions mean cache entries are being forcibly removed
+      # before their TTL expires. This is a correctness risk for the
+      # vertical config cache — a mid-request eviction could cause a
+      # config reload that changes service behaviour within a single
+      # tenant operation.
+      - alert: RedisEvictionsNonZero
+        expr: |
+          rate(redis_evicted_keys_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+          component: redis
+        annotations:
+          summary: "Redis evicting keys at {{ $value | printf \"%.1f\" }}/s — cache under memory pressure"
+          description: >
+            Redis is evicting {{ $value | printf "%.1f" }} key(s) per second.
+            Evictions happen when Redis hits maxmemory. The vertical config cache
+            (key prefix: vertical:config:*) and session tokens are at risk.
+            An evicted vertical config will be reloaded from PostgreSQL on the
+            next request, but an evicted session token will cause a 401.
+            Reduce maxmemory pressure or increase the Redis memory limit.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#redis-memory"
+
+      # ── Redis unreachable ────────────────────────────────────────────────
+      - alert: RedisDown
+        expr: |
+          up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          component: redis
+        annotations:
+          summary: "Redis exporter unreachable — cache metrics unavailable"
+          description: >
+            Prometheus cannot scrape the Redis exporter (job=redis).
+            Redis may be down. Without Redis the platform falls back to direct
+            DB reads (L3), which will significantly increase PostgreSQL load.
+            All services perform a Redis health check in /readyz — they will
+            report degraded but continue serving from DB.
+            Check: `docker compose -f infra/local/docker-compose.infra.yml ps redis`
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#redis-down"

@@ -1,0 +1,118 @@
+groups:
+  # ── Billing service business alerts ───────────────────────────────────────
+  #
+  # The billing service manages subscriptions, invoices, and plan enforcement.
+  # Failures here have direct revenue impact: tenants may be incorrectly
+  # billing, dunning cycles may silently break, or plan limits may not be
+  # enforced — allowing overuse without charge.
+  #
+  # Metrics exposed by the billing service (job=billing) via
+  # grpc-ecosystem/go-grpc-prometheus + custom Prometheus counters/gauges
+  # registered in cmd/billing/main.go:
+  #
+  #   grpc_server_handled_total{job="billing", grpc_code, grpc_method}
+  #   billing_dunning_attempts_total{outcome}   — "succeeded" | "failed" | "retrying"
+  #   billing_subscriptions_total{status}       — "active" | "suspended" | "cancelled"
+  #   billing_plan_limit_rejections_total{plan, resource}
+  #
+  # Note: billing metrics port is 9099 (TBD — cmd/billing not yet created).
+  # These alerts will become active once the billing service is wired up.
+
+  - name: thittam_billing
+    interval: 60s
+    rules:
+
+      # ── Dunning failure spike ────────────────────────────────────────────
+      # A dunning failure means an automated payment retry attempt failed.
+      # One or two per day is normal (insufficient funds, expired cards).
+      # A spike suggests a payment gateway outage or a systematic card issue
+      # across a batch of tenants.
+      - alert: BillingDunningFailureSpike
+        expr: |
+          rate(billing_dunning_attempts_total{outcome="failed"}[15m]) * 60 > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+          component: billing
+        annotations:
+          summary: "Billing dunning failures: {{ $value | printf \"%.1f\" }}/min (> 5/min) — check payment gateway"
+          description: >
+            The billing service is experiencing more than 5 dunning failures
+            per minute over the last 15 minutes.
+            This may indicate a payment gateway outage (Razorpay/Stripe),
+            a batch of expired cards from a recent card-update cycle,
+            or a misconfiguration in the retry schedule.
+            Check the billing service logs and payment gateway status page.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#billing-dunning-failures"
+
+      # ── Suspended subscriptions increase ────────────────────────────────
+      # A sudden increase in suspended subscriptions (failed payment, plan
+      # expiry) across multiple tenants is unusual and worth investigating
+      # before tenants start raising support tickets.
+      - alert: BillingSuspendedSubscriptionsHigh
+        expr: |
+          billing_subscriptions_total{status="suspended"} > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+          component: billing
+        annotations:
+          summary: "{{ $value }} subscriptions suspended — investigate dunning health"
+          description: >
+            There are {{ $value }} subscriptions in suspended state.
+            Suspended tenants cannot access the platform. If the count has
+            grown recently it may indicate a bulk payment failure.
+            Verify against the dunning failure rate alert. If both are firing
+            simultaneously, the payment gateway is likely degraded.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#billing-suspensions"
+
+      # ── Plan limit rejection rate ────────────────────────────────────────
+      # Sustained plan limit rejections mean tenants are hitting their
+      # resource ceilings. This is expected near month-end but a persistent
+      # spike may indicate a misconfigured plan or a tenant who should be
+      # upsold to a higher tier.
+      - alert: BillingPlanLimitRejectionsHigh
+        expr: |
+          rate(billing_plan_limit_rejections_total[5m]) * 60 > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+          component: billing
+        annotations:
+          summary: "Plan limit rejections: {{ $value | printf \"%.0f\" }}/min (> 10/min) for plan={{ $labels.plan }}, resource={{ $labels.resource }}"
+          description: >
+            The billing service is rejecting more than 10 requests per minute
+            for plan={{ $labels.plan }}, resource={{ $labels.resource }}.
+            If this is a single tenant, consider reaching out to offer an upgrade.
+            If it affects multiple tenants on the same plan, the plan limits
+            may be misconfigured (see pkg/billing/plans.go).
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#billing-plan-limits"
+
+      # ── Billing service gRPC errors ──────────────────────────────────────
+      # Tighter threshold than the global SLO because billing errors have
+      # direct revenue impact. 2% error rate on billing warrants immediate
+      # investigation even if other services are healthy.
+      - alert: BillingServiceErrorRateElevated
+        expr: |
+          (
+            sum(rate(grpc_server_handled_total{job="billing", grpc_code!="OK"}[5m]))
+            /
+            sum(rate(grpc_server_handled_total{job="billing"}[5m]))
+          ) > 0.02
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+          component: billing
+        annotations:
+          summary: "Billing service gRPC error rate {{ $value | humanizePercentage }} (> 2%)"
+          description: >
+            The billing service has a gRPC non-OK response rate of
+            {{ $value | humanizePercentage }} over the last 5 minutes.
+            Billing errors may affect subscription management, invoice generation,
+            or plan enforcement. Investigate immediately — revenue and tenant
+            access may be at risk.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#billing-errors"

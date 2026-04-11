@@ -1,0 +1,97 @@
+groups:
+  # ── NATS JetStream consumer health ────────────────────────────────────────
+  #
+  # Complements nats-dlq.yml which covers dead-letter queue depth and
+  # redelivery spikes on the FINANCIAL stream.
+  #
+  # This file covers consumer lag — messages published to a stream but not
+  # yet acknowledged by any consumer. Persistent lag means downstream services
+  # are falling behind and the system is not processing events in real time.
+  #
+  # Metrics exposed by prometheus-nats-exporter (natsio/prometheus-nats-exporter):
+  #   nats_consumer_num_pending{stream, consumer}  — unacked messages in the consumer
+  #   nats_stream_msgs{stream}                     — total messages in the stream
+  #   nats_consumer_num_redelivered{stream, consumer} — cumulative redeliveries
+  #
+  # Streams and their consumers (see pkg/nats/streams.go):
+  #   FINANCIAL   → financial-projector (reporting-analytics), audit-writer (iam)
+  #   PRODUCTION  → production-notifier (notifications), inventory-sync (inventory-mgmt)
+  #   SYSTEM      → system-notifier (notifications)
+
+  - name: nats_consumer_lag
+    interval: 60s
+    rules:
+
+      # ── Consumer lag: warning ────────────────────────────────────────────
+      # More than 1,000 pending messages sustained for 5 minutes means a
+      # consumer is falling behind. At a typical 500 msg/min throughput this
+      # represents ~2 minutes of backlog — still recoverable, but on-call
+      # should investigate before it grows.
+      - alert: NATSConsumerLagHigh
+        expr: |
+          nats_consumer_num_pending{
+            stream=~"FINANCIAL|PRODUCTION|SYSTEM"
+          } > 1000
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+          component: nats
+        annotations:
+          summary: "NATS {{ $labels.stream }}/{{ $labels.consumer }}: {{ $value }} messages pending (> 1,000)"
+          description: >
+            Consumer {{ $labels.consumer }} on stream {{ $labels.stream }} has
+            {{ $value }} unacknowledged messages and is falling behind.
+            Common causes: the downstream service is slow (check CPU/memory),
+            DB write latency has spiked, or the consumer is stuck waiting on
+            an upstream dependency.
+            Check `kubectl logs -n thittam -l app=<consumer-service> --tail=100`.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#nats-consumer-lag"
+
+      # ── Consumer lag: critical ───────────────────────────────────────────
+      # 10,000 pending messages means the consumer is severely behind.
+      # For the FINANCIAL stream this implies ledger projections and audit
+      # logs are significantly out of date. Page immediately.
+      - alert: NATSConsumerLagCritical
+        expr: |
+          nats_consumer_num_pending{
+            stream=~"FINANCIAL|PRODUCTION|SYSTEM"
+          } > 10000
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+          component: nats
+        annotations:
+          summary: "NATS {{ $labels.stream }}/{{ $labels.consumer }}: {{ $value }} messages pending (> 10,000) — PAGE"
+          description: >
+            Consumer {{ $labels.consumer }} on stream {{ $labels.stream }}
+            has a critical backlog of {{ $value }} unacknowledged messages.
+            For FINANCIAL stream: ledger projections (reporting-analytics) and
+            audit logs (iam) are far behind real-time state. Tenant reports
+            and dashboards may be stale or incorrect.
+            Escalate as P1. Consider pausing writes if the lag is not
+            recovering to prevent unbounded queue growth.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#nats-consumer-lag"
+
+      # ── NATS server unreachable ──────────────────────────────────────────
+      # If Prometheus cannot scrape the NATS exporter the JetStream state
+      # is invisible. This alert catches exporter or NATS server outages.
+      - alert: NATSExporterDown
+        expr: |
+          up{job="nats"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          component: nats
+        annotations:
+          summary: "NATS exporter unreachable — JetStream metrics unavailable"
+          description: >
+            Prometheus cannot scrape the NATS exporter (job=nats).
+            This may mean: the prometheus-nats-exporter container is down,
+            NATS itself has crashed, or the monitoring port (8222) is
+            unreachable.
+            Without NATS metrics, DLQ and consumer lag alerts are also blind.
+            Check `docker compose -f infra/local/docker-compose.infra.yml ps nats`.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#nats-down"
