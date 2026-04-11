@@ -36,7 +36,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
+	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/pkg/secrets"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/iam"
@@ -91,19 +93,32 @@ func main() {
 		}
 	}
 
-	// jwtPrivateKey bytes are held in memory only. They are passed to the JWT
-	// issuer once pkg/auth/jwt is implemented. Never stored in an env var, log,
-	// or written back to a file.
-	_ = jwtPrivateKey // TODO: pass to jwt.NewIssuer(jwtPrivateKey, redisClient)
+	// jwtPrivateKey bytes are held in memory only. Never stored in an env var,
+	// log, or written back to a file.
+
+	// --- Redis ---
+	redisURL := requireenv("REDIS_URL")
+	rdb := redis.NewClient(&redis.Options{Addr: redisURL})
+	defer rdb.Close()
+
+	// --- JWT issuer (T1 secret consumed here, bytes not retained) ---
+	tokenIssuer, err := auth.NewJWTIssuer(jwtPrivateKey, rdb, auth.JWTConfig{})
+	if err != nil {
+		log.Fatalf("iam: startup: create JWT issuer: %v", err)
+	}
+
+	// --- Auth stack ---
+	hasher := auth.NewBcryptHasher()
+	verifier := auth.NewBcryptVerifier()
+	localProvider := auth.NewLocalProvider(repo, repo, verifier)
+
+	// TODO: wire OIDCProvider + OIDCConfigStore for tenants using OIDC auth.
+	// For now all tenants use local auth. resolver.Authenticate falls back to
+	// localProvider when no authorization code is present in the request.
+	resolver := auth.NewResolver(localProvider, nil, nil)
 
 	// --- Build service ---
-	//
-	// TODO: replace nil stubs with real implementations:
-	//   tokenIssuer  → jwt.NewIssuer(jwtPrivateKey, redis.NewClient(...))
-	//   hasher       → bcrypt.NewHasher()
-	//   verifier     → bcrypt.NewVerifier()
-	//   authenticator → auth.NewResolver(localProvider, oidcProvider, oidcConfigStore)
-	svc := iam.NewService(repo, nil, nil, nil, nil)
+	svc := iam.NewService(repo, resolver, tokenIssuer, hasher, verifier)
 	handler := iam.NewHandler(svc)
 
 	// --- gRPC server ---
