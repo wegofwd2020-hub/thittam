@@ -865,7 +865,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Support note */}
+            {/* Billing link */}
             <div
               className="mt-6 rounded-lg px-4 py-3 text-xs font-body"
               style={{
@@ -873,8 +873,15 @@ export default function SettingsPage() {
                 color: "var(--thittam-muted-foreground, #64748b)",
               }}
             >
-              To change your plan or vertical configuration, please contact
-              support at{" "}
+              To manage your subscription, view invoices, or update payment methods, go to{" "}
+              <a
+                href="/billing"
+                className="font-medium underline"
+                style={{ color: "var(--thittam-primary, #3b82f6)" }}
+              >
+                Billing
+              </a>
+              . To change your vertical configuration, contact{" "}
               <a
                 href="mailto:support@thittam.io"
                 className="font-medium underline"

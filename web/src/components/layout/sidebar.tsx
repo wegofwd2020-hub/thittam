@@ -20,6 +20,7 @@ import {
   Warehouse,
   HardHat,
   DollarSign,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/context";
@@ -42,6 +43,7 @@ const iconMap: Record<string, LucideIcon> = {
   Warehouse,
   HardHat,
   DollarSign,
+  CreditCard,
 };
 
 interface SidebarProps {
@@ -130,6 +132,14 @@ function useSidebarMenu(): MenuSection[] {
     {
       title: "Admin",
       items: [
+        {
+          key: "billing",
+          label: "Billing",
+          href: "/billing",
+          iconName: "CreditCard",
+          fallbackIcon: CreditCard,
+          roles: ["admin", "owner"],
+        },
         {
           key: "settings",
           label: "Settings",

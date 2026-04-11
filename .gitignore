@@ -5,6 +5,7 @@ inventory-management
 project-management
 reporting-analytics
 thittam-cli
+migrate-all-tenants
 
 # IDE
 .idea/

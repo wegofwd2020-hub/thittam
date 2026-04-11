@@ -14,6 +14,7 @@ import {
   HardHat,
   DollarSign,
   FileText,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react";
 
@@ -44,6 +45,7 @@ const iconMap: Record<string, LucideIcon> = {
   HardHat,
   DollarSign,
   FileText,
+  CreditCard,
 };
 
 export function PageHeader({ title, description, actions, icon }: PageHeaderProps) {
