@@ -18,8 +18,15 @@
 //
 // Local development:
 //  1. Set VAULT_ADDR="" to select the FileSource path.
-//  2. JWT_PRIVATE_KEY_PATH points to a gitignored PEM file.
+//  2. IAM_KEY_DIR points to a directory with gitignored PEM files.
 //  3. FileSource reads the bytes — still never an env var containing the key.
+//
+// # Pending TODOs before production:
+//
+//   - Implement pkg/auth/bcrypt — BcryptHasher and BcryptVerifier
+//   - Implement pkg/auth/jwt — JWTIssuer backed by Redis for refresh token storage
+//   - Wire OIDCProvider and OIDCConfigStore for tenants with OIDC auth
+//   - Pass jwtPrivateKey bytes to jwt.NewIssuer (not stored in env/log/file)
 package main
 
 import (
@@ -28,100 +35,107 @@ import (
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
 	"github.com/wegofwd2020/thittam/pkg/secrets"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/iam"
+	iamdb "github.com/wegofwd2020/thittam/services/iam/db"
 )
 
 func main() {
 	ctx := context.Background()
 
+	// --- Database ---
+	dbURL := requireenv("DATABASE_URL")
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		log.Fatalf("iam: startup: connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.Ping(ctx); err != nil {
+		log.Fatalf("iam: startup: ping database: %v", err)
+	}
+
+	repo := iamdb.NewPostgres(pool)
+
 	// --- Select secret source based on environment ---
 	//
 	// VAULT_ADDR present → production: load T1 secrets from Vault.
 	// VAULT_ADDR absent  → local dev: load T1 secrets from key files.
-	var src secrets.Source
 	vaultAddr := os.Getenv("VAULT_ADDR")
+
+	var jwtPrivateKey []byte
 	if vaultAddr != "" {
-		// Production path: AppRole credentials are T3 config — acceptable as
-		// env vars. They grant read-only access to a scoped set of secret paths.
 		vaultSrc := secrets.NewVaultSource(secrets.VaultConfig{
 			Address:  vaultAddr,
 			Mount:    getenv("VAULT_KV_MOUNT", "secret"),
 			RoleID:   requireenv("VAULT_ROLE_ID"),
 			SecretID: requireenv("VAULT_SECRET_ID"),
 		})
-		src = vaultSrc
-
-		// Register Vault connectivity as a /readyz dependency. The service will
-		// return HTTP 503 until Vault is reachable and the token is obtained.
-		// This prevents traffic from reaching the service before T1 secrets are loaded.
-		srv := server.New(server.Config{
-			Name:        "iam",
-			Port:        8086,
-			MetricsPort: 9096,
-		}, nil)
-		srv.Health().RegisterChecker("vault", vaultSrc)
-
-		// Block startup until Vault is reachable. Retry for up to 30 seconds
-		// to handle transient network delays during pod scheduling.
 		if err := waitForVault(ctx, vaultSrc, 30*time.Second); err != nil {
 			log.Fatalf("iam: startup: %v", err)
 		}
-
-		// Load T1 secrets. Fail fast if unavailable — do not start without them.
-		jwtPrivateKey, err := src.GetSecret(ctx, "iam/jwt-private-key")
+		jwtPrivateKey, err = vaultSrc.GetSecret(ctx, "iam/jwt-private-key")
 		if err != nil {
 			log.Fatalf("iam: startup: load JWT private key from Vault: %v", err)
 		}
-		// jwtPrivateKey bytes are passed directly to the JWT issuer.
-		// They are never stored in an env var, written to a log, or persisted.
-		_ = jwtPrivateKey // TODO: pass to jwt.NewIssuer(jwtPrivateKey, redisClient)
-
-		// Wire remaining dependencies from T3/T4 env vars (safe):
-		//   DATABASE_URL    → postgres.NewPool(os.Getenv("DATABASE_URL"))
-		//   REDIS_URL       → redis.NewClient(os.Getenv("REDIS_URL"))
-		_ = iam.NewHandler(iam.NewService(nil, nil, nil, nil, nil))
-
-		// Register gRPC service here when proto generation is set up:
-		// iampb.RegisterIAMServiceServer(srv.GRPCServer(), handler)
-
-		log.Printf("iam service ready on :8086")
-		if err := srv.Run(); err != nil {
-			log.Fatalf("iam: %v", err)
-		}
-
 	} else {
-		// Local development path: key files are gitignored and loaded via FileSource.
-		// The env var carries only a *directory path*, not the secret itself.
 		keyDir := getenv("IAM_KEY_DIR", "./keys")
-		src = secrets.NewFileSource(keyDir)
-
-		jwtPrivateKey, err := src.GetSecret(ctx, "jwt_private.pem")
+		fileSrc := secrets.NewFileSource(keyDir)
+		jwtPrivateKey, err = fileSrc.GetSecret(ctx, "jwt_private.pem")
 		if err != nil {
 			log.Fatalf("iam: startup: load JWT private key from %s: %v\n"+
 				"  Run: openssl genrsa -out keys/jwt_private.pem 2048", keyDir, err)
 		}
-		_ = jwtPrivateKey // TODO: pass to jwt.NewIssuer(jwtPrivateKey, redisClient)
+	}
 
-		srv := server.New(server.Config{
-			Name:        "iam",
-			Port:        8086,
-			MetricsPort: 9096,
-		}, nil)
+	// jwtPrivateKey bytes are held in memory only. They are passed to the JWT
+	// issuer once pkg/auth/jwt is implemented. Never stored in an env var, log,
+	// or written back to a file.
+	_ = jwtPrivateKey // TODO: pass to jwt.NewIssuer(jwtPrivateKey, redisClient)
 
-		_ = iam.NewHandler(iam.NewService(nil, nil, nil, nil, nil))
+	// --- Build service ---
+	//
+	// TODO: replace nil stubs with real implementations:
+	//   tokenIssuer  → jwt.NewIssuer(jwtPrivateKey, redis.NewClient(...))
+	//   hasher       → bcrypt.NewHasher()
+	//   verifier     → bcrypt.NewVerifier()
+	//   authenticator → auth.NewResolver(localProvider, oidcProvider, oidcConfigStore)
+	svc := iam.NewService(repo, nil, nil, nil, nil)
+	handler := iam.NewHandler(svc)
 
+	// --- gRPC server ---
+	srv := server.New(server.Config{
+		Name:        "iam",
+		Port:        8086,
+		MetricsPort: 9096,
+	}, nil)
+
+	iamv1.RegisterIAMServiceServer(srv.GRPCServer(), handler)
+
+	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
+
+	if vaultAddr != "" {
+		log.Printf("iam service ready on :8086")
+	} else {
 		log.Printf("iam service ready on :8086 (local dev — no Vault)")
-		if err := srv.Run(); err != nil {
-			log.Fatalf("iam: %v", err)
-		}
+	}
+
+	if err := srv.Run(); err != nil {
+		log.Fatalf("iam: %v", err)
 	}
 }
 
+// dbChecker implements observability.HealthChecker for the PostgreSQL pool.
+type dbChecker struct{ pool *pgxpool.Pool }
+
+func (c *dbChecker) CheckHealth(ctx context.Context) error {
+	return c.pool.Ping(ctx)
+}
+
 // waitForVault blocks until CheckHealth succeeds or the deadline is exceeded.
-// This ensures the service does not start accepting traffic before T1 secrets
-// are loaded.
 func waitForVault(ctx context.Context, src *secrets.VaultSource, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
@@ -129,7 +143,7 @@ func waitForVault(ctx context.Context, src *secrets.VaultSource, timeout time.Du
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return src.CheckHealth(ctx) // return the actual error
+			return src.CheckHealth(ctx)
 		}
 		log.Printf("iam: waiting for Vault (%s remaining)...", time.Until(deadline).Round(time.Second))
 		time.Sleep(2 * time.Second)
@@ -137,7 +151,6 @@ func waitForVault(ctx context.Context, src *secrets.VaultSource, timeout time.Du
 }
 
 // requireenv returns the value of an env var or fatals if it is empty.
-// Used only for T3 config that is required for startup — never for T1 secrets.
 func requireenv(key string) string {
 	v := os.Getenv(key)
 	if v == "" {

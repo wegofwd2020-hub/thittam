@@ -1,22 +1,422 @@
 package iam
 
-// Handler wraps the Service for gRPC use.
-// After running `buf generate`, embed iamv1.UnimplementedIAMServiceServer
-// and implement each RPC method by delegating to svc.
-//
-// Example (post codegen):
-//
-//	import iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
-//
-//	type Handler struct {
-//	    iamv1.UnimplementedIAMServiceServer
-//	    svc *Service
-//	}
+import (
+	"context"
+	"errors"
+
+	"github.com/google/uuid"
+	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
+	"github.com/wegofwd2020/thittam/pkg/auth"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+// Handler implements iamv1.IAMServiceServer by delegating to Service.
 type Handler struct {
+	iamv1.UnimplementedIAMServiceServer
 	svc *Service
 }
 
-// NewHandler creates an IAM handler.
+// NewHandler creates an IAM gRPC handler.
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
+}
+
+// Compile-time check.
+var _ iamv1.IAMServiceServer = (*Handler)(nil)
+
+// --- Authentication ---
+
+func (h *Handler) Login(ctx context.Context, req *iamv1.LoginRequest) (*iamv1.TokenPair, error) {
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	pair, err := h.svc.Login(ctx, tenantID, req.GetEmail(), req.GetPassword())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return tokenPairToProto(pair), nil
+}
+
+func (h *Handler) RefreshToken(ctx context.Context, req *iamv1.RefreshTokenRequest) (*iamv1.TokenPair, error) {
+	pair, err := h.svc.RefreshToken(ctx, req.GetRefreshToken())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return tokenPairToProto(pair), nil
+}
+
+func (h *Handler) Logout(ctx context.Context, req *iamv1.LogoutRequest) (*iamv1.LogoutResponse, error) {
+	if err := h.svc.Logout(ctx, req.GetRefreshToken()); err != nil {
+		return nil, grpcError(err)
+	}
+	return &iamv1.LogoutResponse{}, nil
+}
+
+func (h *Handler) ValidateToken(ctx context.Context, req *iamv1.ValidateTokenRequest) (*iamv1.Claims, error) {
+	claims, err := h.svc.tokens.Validate(ctx, req.GetAccessToken())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return claimsToProto(claims), nil
+}
+
+// --- Users ---
+
+func (h *Handler) CreateUser(ctx context.Context, req *iamv1.CreateUserRequest) (*iamv1.User, error) {
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	user := &User{
+		TenantID:    tenantID,
+		Email:       req.GetEmail(),
+		DisplayName: req.GetDisplayName(),
+	}
+	created, err := h.svc.CreateUser(ctx, user, req.GetPassword())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return userToProto(created), nil
+}
+
+func (h *Handler) GetUser(ctx context.Context, req *iamv1.GetUserRequest) (*iamv1.User, error) {
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid id")
+	}
+	user, err := h.svc.GetUser(ctx, tenantID, id)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return userToProto(user), nil
+}
+
+func (h *Handler) ListUsers(ctx context.Context, req *iamv1.ListUsersRequest) (*iamv1.ListUsersResponse, error) {
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	users, err := h.svc.ListUsers(ctx, tenantID, req.GetStatus(), int(req.GetLimit()), int(req.GetOffset()))
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	out := make([]*iamv1.User, len(users))
+	for i := range users {
+		out[i] = userToProto(&users[i])
+	}
+	return &iamv1.ListUsersResponse{Users: out}, nil
+}
+
+func (h *Handler) UpdateUser(ctx context.Context, req *iamv1.UpdateUserRequest) (*iamv1.User, error) {
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid id")
+	}
+	user := &User{
+		ID:          id,
+		TenantID:    tenantID,
+		DisplayName: req.GetDisplayName(),
+		Status:      req.GetStatus(),
+	}
+	updated, err := h.svc.UpdateUser(ctx, user)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return userToProto(updated), nil
+}
+
+func (h *Handler) DeactivateUser(ctx context.Context, req *iamv1.DeactivateUserRequest) (*iamv1.DeactivateUserResponse, error) {
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid id")
+	}
+	if err := h.svc.DeactivateUser(ctx, tenantID, id); err != nil {
+		return nil, grpcError(err)
+	}
+	return &iamv1.DeactivateUserResponse{}, nil
+}
+
+func (h *Handler) ChangePassword(ctx context.Context, req *iamv1.ChangePasswordRequest) (*iamv1.ChangePasswordResponse, error) {
+	userID, err := uuid.Parse(req.GetUserId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
+	}
+	if err := h.svc.ChangePassword(ctx, userID, req.GetOldPassword(), req.GetNewPassword()); err != nil {
+		return nil, grpcError(err)
+	}
+	return &iamv1.ChangePasswordResponse{}, nil
+}
+
+// --- Roles & Permissions ---
+
+func (h *Handler) AssignRole(ctx context.Context, req *iamv1.AssignRoleRequest) (*iamv1.AssignRoleResponse, error) {
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	userID, err := uuid.Parse(req.GetUserId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
+	}
+	roleID, err := uuid.Parse(req.GetRoleId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid role_id")
+	}
+	assignedBy, err := uuid.Parse(req.GetAssignedBy())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid assigned_by")
+	}
+	if err := h.svc.AssignRole(ctx, tenantID, userID, roleID, assignedBy); err != nil {
+		return nil, grpcError(err)
+	}
+	return &iamv1.AssignRoleResponse{}, nil
+}
+
+func (h *Handler) RevokeRole(ctx context.Context, req *iamv1.RevokeRoleRequest) (*iamv1.RevokeRoleResponse, error) {
+	userID, err := uuid.Parse(req.GetUserId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
+	}
+	roleID, err := uuid.Parse(req.GetRoleId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid role_id")
+	}
+	if err := h.svc.RevokeRole(ctx, userID, roleID); err != nil {
+		return nil, grpcError(err)
+	}
+	return &iamv1.RevokeRoleResponse{}, nil
+}
+
+func (h *Handler) ListRoles(ctx context.Context, req *iamv1.ListRolesRequest) (*iamv1.ListRolesResponse, error) {
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	roles, err := h.svc.ListRoles(ctx, tenantID)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	out := make([]*iamv1.Role, len(roles))
+	for i := range roles {
+		out[i] = roleToProto(&roles[i])
+	}
+	return &iamv1.ListRolesResponse{Roles: out}, nil
+}
+
+func (h *Handler) CheckPermission(ctx context.Context, req *iamv1.CheckPermissionRequest) (*iamv1.CheckPermissionResponse, error) {
+	userID, err := uuid.Parse(req.GetUserId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
+	}
+	allowed, err := h.svc.CheckPermission(ctx, userID, req.GetPermission())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return &iamv1.CheckPermissionResponse{Allowed: allowed}, nil
+}
+
+// --- Tenants ---
+
+func (h *Handler) CreateTenant(ctx context.Context, req *iamv1.CreateTenantRequest) (*iamv1.Tenant, error) {
+	tenant := &Tenant{
+		Name:   req.GetName(),
+		Plan:   req.GetPlan(),
+		IsDemo: req.GetIsDemo(),
+	}
+	created, err := h.svc.CreateTenant(ctx, tenant)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return tenantToProto(created), nil
+}
+
+func (h *Handler) GetTenant(ctx context.Context, req *iamv1.GetTenantRequest) (*iamv1.Tenant, error) {
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid id")
+	}
+	tenant, err := h.svc.GetTenant(ctx, id)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return tenantToProto(tenant), nil
+}
+
+func (h *Handler) SuspendTenant(ctx context.Context, req *iamv1.SuspendTenantRequest) (*iamv1.Tenant, error) {
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid id")
+	}
+	tenant, err := h.svc.SuspendTenant(ctx, id)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return tenantToProto(tenant), nil
+}
+
+// --- Invitations ---
+
+func (h *Handler) InviteUser(ctx context.Context, req *iamv1.InviteUserRequest) (*iamv1.Invitation, error) {
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	invitedBy, err := uuid.Parse(req.GetInvitedBy())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid invited_by")
+	}
+	inv := &Invitation{
+		TenantID:  tenantID,
+		Email:     req.GetEmail(),
+		InvitedBy: invitedBy,
+	}
+	if roleIDStr := req.GetRoleId(); roleIDStr != "" {
+		roleID, err := uuid.Parse(roleIDStr)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid role_id")
+		}
+		inv.RoleID = &roleID
+	}
+	created, err := h.svc.InviteUser(ctx, inv)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return invitationToProto(created), nil
+}
+
+func (h *Handler) AcceptInvitation(ctx context.Context, req *iamv1.AcceptInvitationRequest) (*iamv1.TokenPair, error) {
+	pair, err := h.svc.AcceptInvitation(ctx, req.GetToken(), req.GetPassword())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return tokenPairToProto(pair), nil
+}
+
+// --- Mapping helpers ---
+
+func userToProto(u *User) *iamv1.User {
+	return &iamv1.User{
+		Id:          u.ID.String(),
+		TenantId:    u.TenantID.String(),
+		Email:       u.Email,
+		DisplayName: u.DisplayName,
+		Status:      u.Status,
+		CreatedAt:   timestamppb.New(u.CreatedAt),
+	}
+}
+
+func tenantToProto(t *Tenant) *iamv1.Tenant {
+	return &iamv1.Tenant{
+		Id:        t.ID.String(),
+		Name:      t.Name,
+		Slug:      t.Slug,
+		Plan:      t.Plan,
+		Status:    t.Status,
+		IsDemo:    t.IsDemo,
+		CreatedAt: timestamppb.New(t.CreatedAt),
+	}
+}
+
+func roleToProto(r *Role) *iamv1.Role {
+	return &iamv1.Role{
+		Id:          r.ID.String(),
+		TenantId:    r.TenantID.String(),
+		Name:        r.Name,
+		Permissions: r.Permissions,
+		IsSystem:    r.IsSystem,
+	}
+}
+
+func invitationToProto(inv *Invitation) *iamv1.Invitation {
+	pb := &iamv1.Invitation{
+		Id:        inv.ID.String(),
+		TenantId:  inv.TenantID.String(),
+		Email:     inv.Email,
+		Status:    inv.Status,
+		InvitedBy: inv.InvitedBy.String(),
+		ExpiresAt: timestamppb.New(inv.ExpiresAt),
+		CreatedAt: timestamppb.New(inv.CreatedAt),
+	}
+	if inv.RoleID != nil {
+		pb.RoleId = inv.RoleID.String()
+	}
+	return pb
+}
+
+func tokenPairToProto(p *auth.TokenPair) *iamv1.TokenPair {
+	return &iamv1.TokenPair{
+		AccessToken:  p.AccessToken,
+		RefreshToken: p.RefreshToken,
+		TokenType:    p.TokenType,
+		ExpiresIn:    int32(p.ExpiresIn),
+		ExpiresAt:    timestamppb.New(p.ExpiresAt),
+	}
+}
+
+func claimsToProto(c *auth.Claims) *iamv1.Claims {
+	return &iamv1.Claims{
+		Subject:     c.Subject.String(),
+		TenantId:    c.TenantID.String(),
+		Email:       c.Email,
+		Roles:       c.Roles,
+		Permissions: c.Permissions,
+		AuthMethod:  string(c.AuthMethod),
+		IssuedAt:    timestamppb.New(c.IssuedAt),
+		ExpiresAt:   timestamppb.New(c.ExpiresAt),
+	}
+}
+
+// grpcError maps IAM and auth domain errors to gRPC status codes.
+// Internal errors are intentionally opaque — callers receive "internal error",
+// not the underlying message, to prevent information leakage.
+func grpcError(err error) error {
+	switch {
+	case errors.Is(err, ErrUserNotFound),
+		errors.Is(err, ErrTenantNotFound),
+		errors.Is(err, ErrRoleNotFound),
+		errors.Is(err, ErrInvitationNotFound):
+		return status.Error(codes.NotFound, err.Error())
+
+	case errors.Is(err, ErrUserAlreadyExists),
+		errors.Is(err, ErrTenantSlugTaken):
+		return status.Error(codes.AlreadyExists, err.Error())
+
+	case errors.Is(err, ErrInvitationExpired),
+		errors.Is(err, ErrInvitationAccepted):
+		return status.Error(codes.FailedPrecondition, err.Error())
+
+	case errors.Is(err, ErrInvalidPlan):
+		return status.Error(codes.InvalidArgument, err.Error())
+
+	case errors.Is(err, auth.ErrInvalidCredentials),
+		errors.Is(err, auth.ErrTokenExpired),
+		errors.Is(err, auth.ErrTokenInvalid),
+		errors.Is(err, auth.ErrRefreshTokenNotFound):
+		return status.Error(codes.Unauthenticated, err.Error())
+
+	case errors.Is(err, auth.ErrTenantSuspended),
+		errors.Is(err, auth.ErrAccountDeactivated):
+		return status.Error(codes.PermissionDenied, err.Error())
+
+	case errors.Is(err, auth.ErrAccountInvited):
+		return status.Error(codes.FailedPrecondition, err.Error())
+
+	default:
+		return status.Error(codes.Internal, "internal error")
+	}
 }
