@@ -39,8 +39,10 @@ const (
 	ActionPeriodOpened   Action = "period_opened"
 	ActionPeriodClosed   Action = "period_closed"
 	ActionOverBudget     Action = "over_budget_flagged"
-	ActionImpersonated   Action = "impersonated"
-	ActionConfigChanged  Action = "config_changed"
+	ActionImpersonated        Action = "impersonated"         // deprecated: use ActionImpersonationStarted
+	ActionImpersonationStarted Action = "impersonation_started"
+	ActionImpersonationEnded   Action = "impersonation_ended"
+	ActionConfigChanged        Action = "config_changed"
 )
 
 // ResourceType identifies the entity being acted upon.
@@ -60,7 +62,8 @@ const (
 	ResourceVertical        ResourceType = "vertical"
 	ResourceRole            ResourceType = "role"
 	ResourceLogin           ResourceType = "login"
-	ResourcePlatformUser    ResourceType = "platform_user"
+	ResourcePlatformUser        ResourceType = "platform_user"
+	ResourceImpersonationSession ResourceType = "impersonation_session"
 )
 
 // Event represents a single audit log entry.

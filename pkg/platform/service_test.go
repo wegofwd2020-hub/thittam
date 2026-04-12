@@ -3,11 +3,14 @@ package platform
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/wegofwd2020/thittam/pkg/audit"
 )
 
 // --- Mocks ---
@@ -32,10 +35,56 @@ func (m *mockUserStore) ListUsers(ctx context.Context) ([]PlatformUser, error)  
 func (m *mockUserStore) DeactivateUser(ctx context.Context, id uuid.UUID) error        { return nil }
 func (m *mockUserStore) UpdateLastLogin(ctx context.Context, id uuid.UUID) error       { return nil }
 
-type mockImpersonationStore struct{}
+type mockImpersonationStore struct {
+	mu       sync.Mutex
+	sessions map[uuid.UUID]ActiveImpersonationSession // sessionID → session
+	revoked  map[uuid.UUID]RevocationReason
+}
 
-func (m *mockImpersonationStore) LogImpersonation(ctx context.Context, req ImpersonationRequest, expiresAt interface{}) (uuid.UUID, error) {
-	return uuid.New(), nil
+func newMockImpersonationStore() *mockImpersonationStore {
+	return &mockImpersonationStore{
+		sessions: make(map[uuid.UUID]ActiveImpersonationSession),
+		revoked:  make(map[uuid.UUID]RevocationReason),
+	}
+}
+
+func (m *mockImpersonationStore) LogImpersonation(ctx context.Context, req ImpersonationRequest, expiresAt time.Time) (uuid.UUID, error) {
+	id := uuid.New()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sessions[id] = ActiveImpersonationSession{
+		ID:             id,
+		PlatformUserID: req.PlatformUserID,
+		TenantID:       req.TenantID,
+		TargetUserID:   req.UserID,
+		Reason:         req.Reason,
+		StartedAt:      time.Now().UTC(),
+		ExpiresAt:      expiresAt,
+	}
+	return id, nil
+}
+
+func (m *mockImpersonationStore) RevokeSession(ctx context.Context, sessionID uuid.UUID, reason RevocationReason) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.sessions[sessionID]; !ok {
+		return ErrSessionNotFound
+	}
+	m.revoked[sessionID] = reason
+	delete(m.sessions, sessionID)
+	return nil
+}
+
+func (m *mockImpersonationStore) GetActiveSessionsForUser(ctx context.Context, targetUserID uuid.UUID) ([]ActiveImpersonationSession, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []ActiveImpersonationSession
+	for _, s := range m.sessions {
+		if s.TargetUserID == targetUserID {
+			out = append(out, s)
+		}
+	}
+	return out, nil
 }
 
 type mockTenantManager struct{}
@@ -60,6 +109,47 @@ func (mockLogger) Info(msg string, kv ...interface{})  {}
 func (mockLogger) Warn(msg string, kv ...interface{})  {}
 func (mockLogger) Error(msg string, kv ...interface{}) {}
 
+// mockAuditSink captures LogAction calls for assertions.
+type mockAuditSink struct {
+	mu     sync.Mutex
+	events []auditEvent
+}
+
+type auditEvent struct {
+	action       audit.Action
+	resourceType audit.ResourceType
+	resourceID   uuid.UUID
+	metadata     map[string]interface{}
+}
+
+func (m *mockAuditSink) LogAction(
+	_ uuid.UUID, _ uuid.UUID, _ string,
+	action audit.Action,
+	resourceType audit.ResourceType,
+	resourceID uuid.UUID,
+	_, _ interface{},
+	metadata map[string]interface{},
+) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = append(m.events, auditEvent{
+		action:       action,
+		resourceType: resourceType,
+		resourceID:   resourceID,
+		metadata:     metadata,
+	})
+}
+
+func (m *mockAuditSink) actions() []audit.Action {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]audit.Action, len(m.events))
+	for i, e := range m.events {
+		out[i] = e.action
+	}
+	return out
+}
+
 // --- Helpers ---
 
 var (
@@ -83,12 +173,28 @@ func newTestService(opts ...func(*Service)) *Service {
 	s := NewService(
 		&mockUserStore{},
 		&mockTenantManager{},
-		&mockImpersonationStore{},
+		newMockImpersonationStore(),
 		&mockVerticalManager{},
 		mockLogger{},
 	)
 	for _, fn := range opts {
 		fn(s)
+	}
+	return s
+}
+
+// newTestServiceWithStore returns a Service wired to a specific mock store
+// so tests can inspect what was logged/revoked.
+func newTestServiceWithStore(store *mockImpersonationStore, sink *mockAuditSink) *Service {
+	s := NewService(
+		&mockUserStore{},
+		&mockTenantManager{},
+		store,
+		&mockVerticalManager{},
+		mockLogger{},
+	)
+	if sink != nil {
+		s.WithAuditSink(sink)
 	}
 	return s
 }
@@ -228,4 +334,202 @@ func TestSeedPlatformOwner(t *testing.T) {
 	id, err := s.SeedPlatformOwner(context.Background(), "cto@wegofwd2020.com", "CTO", "$2a$12$hash")
 	require.NoError(t, err)
 	assert.NotEqual(t, uuid.Nil, id)
+}
+
+// --- Session duration ---
+
+func TestImpersonate_SessionDuration(t *testing.T) {
+	t.Parallel()
+	store := newMockImpersonationStore()
+	s := newTestServiceWithStore(store, nil)
+
+	before := time.Now().UTC()
+	session, err := s.Impersonate(context.Background(), ImpersonationRequest{
+		PlatformUserID: testPlatformUserID,
+		TenantID:       testTenantID,
+		UserID:         testImpersonateID,
+		Reason:         "Support ticket #99",
+	})
+	require.NoError(t, err)
+
+	// ExpiresAt must be within MaxImpersonationDuration from now.
+	assert.WithinDuration(t, before.Add(MaxImpersonationDuration), session.ExpiresAt, 2*time.Second)
+	// StartedAt must be recent.
+	assert.WithinDuration(t, before, session.StartedAt, 2*time.Second)
+}
+
+// --- EndImpersonation ---
+
+func TestEndImpersonation_HappyPath(t *testing.T) {
+	t.Parallel()
+	store := newMockImpersonationStore()
+	sink := &mockAuditSink{}
+	s := newTestServiceWithStore(store, sink)
+
+	session, err := s.Impersonate(context.Background(), ImpersonationRequest{
+		PlatformUserID: testPlatformUserID,
+		TenantID:       testTenantID,
+		UserID:         testImpersonateID,
+		Reason:         "Support ticket #99",
+	})
+	require.NoError(t, err)
+
+	err = s.EndImpersonation(context.Background(), testPlatformUserID, session.ID)
+	require.NoError(t, err)
+
+	// Session must be revoked with reason=manual.
+	reason, ok := store.revoked[session.ID]
+	require.True(t, ok, "session should be in revoked map")
+	assert.Equal(t, RevocationManual, reason)
+}
+
+func TestEndImpersonation_SessionNotFound(t *testing.T) {
+	t.Parallel()
+	s := newTestService()
+
+	err := s.EndImpersonation(context.Background(), testPlatformUserID, uuid.New())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrSessionNotFound)
+}
+
+// --- Revocation triggers ---
+
+func TestRevokeOnPasswordChange_RevokesActiveSessions(t *testing.T) {
+	t.Parallel()
+	store := newMockImpersonationStore()
+	sink := &mockAuditSink{}
+	s := newTestServiceWithStore(store, sink)
+
+	// Start two sessions targeting the same user.
+	sess1, err := s.Impersonate(context.Background(), ImpersonationRequest{
+		PlatformUserID: testPlatformUserID, TenantID: testTenantID,
+		UserID: testImpersonateID, Reason: "Ticket A",
+	})
+	require.NoError(t, err)
+	sess2, err := s.Impersonate(context.Background(), ImpersonationRequest{
+		PlatformUserID: testPlatformUserID, TenantID: testTenantID,
+		UserID: testImpersonateID, Reason: "Ticket B",
+	})
+	require.NoError(t, err)
+
+	err = s.RevokeOnPasswordChange(context.Background(), testImpersonateID)
+	require.NoError(t, err)
+
+	// Both sessions should be revoked with the correct reason.
+	assert.Equal(t, RevocationPasswordChange, store.revoked[sess1.ID])
+	assert.Equal(t, RevocationPasswordChange, store.revoked[sess2.ID])
+}
+
+func TestRevokeOnDeactivation_RevokesActiveSessions(t *testing.T) {
+	t.Parallel()
+	store := newMockImpersonationStore()
+	s := newTestServiceWithStore(store, nil)
+
+	session, err := s.Impersonate(context.Background(), ImpersonationRequest{
+		PlatformUserID: testPlatformUserID, TenantID: testTenantID,
+		UserID: testImpersonateID, Reason: "Ticket C",
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, s.RevokeOnDeactivation(context.Background(), testImpersonateID))
+	assert.Equal(t, RevocationDeactivated, store.revoked[session.ID])
+}
+
+func TestRevokeOnMFAChange_RevokesActiveSessions(t *testing.T) {
+	t.Parallel()
+	store := newMockImpersonationStore()
+	s := newTestServiceWithStore(store, nil)
+
+	session, err := s.Impersonate(context.Background(), ImpersonationRequest{
+		PlatformUserID: testPlatformUserID, TenantID: testTenantID,
+		UserID: testImpersonateID, Reason: "Ticket D",
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, s.RevokeOnMFAChange(context.Background(), testImpersonateID))
+	assert.Equal(t, RevocationMFAChange, store.revoked[session.ID])
+}
+
+func TestRevokeOnPasswordChange_NoActiveSessions(t *testing.T) {
+	t.Parallel()
+	s := newTestService()
+	// No sessions for this user — should be a no-op.
+	err := s.RevokeOnPasswordChange(context.Background(), uuid.New())
+	assert.NoError(t, err)
+}
+
+// --- Audit trail ---
+
+func TestImpersonate_EmitsAuditEvent(t *testing.T) {
+	t.Parallel()
+	store := newMockImpersonationStore()
+	sink := &mockAuditSink{}
+	s := newTestServiceWithStore(store, sink)
+
+	_, err := s.Impersonate(context.Background(), ImpersonationRequest{
+		PlatformUserID: testPlatformUserID, TenantID: testTenantID,
+		UserID: testImpersonateID, Reason: "Support ticket #100",
+	})
+	require.NoError(t, err)
+
+	actions := sink.actions()
+	require.Len(t, actions, 1)
+	assert.Equal(t, audit.ActionImpersonationStarted, actions[0])
+}
+
+func TestEndImpersonation_EmitsAuditEvent(t *testing.T) {
+	t.Parallel()
+	store := newMockImpersonationStore()
+	sink := &mockAuditSink{}
+	s := newTestServiceWithStore(store, sink)
+
+	session, err := s.Impersonate(context.Background(), ImpersonationRequest{
+		PlatformUserID: testPlatformUserID, TenantID: testTenantID,
+		UserID: testImpersonateID, Reason: "Support ticket #101",
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, s.EndImpersonation(context.Background(), testPlatformUserID, session.ID))
+
+	actions := sink.actions()
+	require.Len(t, actions, 2)
+	assert.Equal(t, audit.ActionImpersonationStarted, actions[0])
+	assert.Equal(t, audit.ActionImpersonationEnded, actions[1])
+}
+
+// --- Blocked actions ---
+
+func TestIsActionBlocked(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		action  string
+		blocked bool
+	}{
+		{"ChangePassword", true},
+		{"UpdateMFA", true},
+		{"DisableMFA", true},
+		{"EnableMFA", true},
+		{"RevokeAllTokens", true},
+		{"CreateSubscription", true},
+		{"UpgradeSubscription", true},
+		{"CancelSubscription", true},
+		{"AddPaymentMethod", true},
+		{"RemovePaymentMethod", true},
+		{"AssignRole", true},
+		{"RevokeRole", true},
+		// These must not be blocked.
+		{"GetUser", false},
+		{"ListExpenses", false},
+		{"CreateProduction", false},
+		{"ApproveExpense", false},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.action, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.blocked, IsActionBlocked(tc.action))
+		})
+	}
 }

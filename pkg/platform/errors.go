@@ -20,4 +20,14 @@ var (
 
 	// ErrPlatformUserNotFound is returned when the platform user doesn't exist.
 	ErrPlatformUserNotFound = errors.New("platform: user not found")
+
+	// ErrSessionNotFound is returned when no active impersonation session matches the ID.
+	ErrSessionNotFound = errors.New("platform: impersonation session not found")
+
+	// ErrSessionExpired is returned when the session has exceeded MaxImpersonationDuration.
+	ErrSessionExpired = errors.New("platform: impersonation session expired")
+
+	// ErrActionBlockedDuringImpersonation is returned when a caller attempts a
+	// blocked action while operating under an impersonation token.
+	ErrActionBlockedDuringImpersonation = errors.New("platform: action is not permitted during an impersonation session")
 )
