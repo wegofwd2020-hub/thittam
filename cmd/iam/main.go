@@ -23,7 +23,6 @@
 //
 // # Pending TODOs before production:
 //
-//   - Implement pkg/auth/bcrypt — BcryptHasher and BcryptVerifier
 //   - Implement pkg/auth/jwt — JWTIssuer backed by Redis for refresh token storage
 //   - Wire OIDCProvider and OIDCConfigStore for tenants with OIDC auth
 //   - Pass jwtPrivateKey bytes to jwt.NewIssuer (not stored in env/log/file)
@@ -108,8 +107,11 @@ func main() {
 	}
 
 	// --- Auth stack ---
-	hasher := auth.NewBcryptHasher()
-	verifier := auth.NewBcryptVerifier()
+	// New passwords are hashed with argon2id (OWASP-minimum params).
+	// Existing bcrypt hashes remain valid and are silently upgraded to argon2id
+	// on the user's next successful login via Service.rehashIfNeeded.
+	hasher := auth.NewArgon2idHasher()
+	verifier := auth.NewDualVerifier()
 	localProvider := auth.NewLocalProvider(repo, repo, verifier)
 
 	// TODO: wire OIDCProvider + OIDCConfigStore for tenants using OIDC auth.

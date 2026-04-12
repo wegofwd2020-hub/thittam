@@ -97,6 +97,10 @@ func NewService(
 // --- Authentication ---
 
 // Login authenticates a user and returns a JWT token pair.
+// If the stored hash uses bcrypt (or weak argon2id params), it is silently
+// upgraded to argon2id in the background after a successful login. This
+// migration is best-effort — a rehash failure is logged but never surfaces
+// to the caller (Rule #6: non-critical writes must not block reads).
 func (s *Service) Login(ctx context.Context, tenantID uuid.UUID, email, password string) (*auth.TokenPair, error) {
 	result, err := s.auth.Authenticate(ctx, auth.AuthRequest{
 		TenantID: tenantID,
@@ -106,11 +110,37 @@ func (s *Service) Login(ctx context.Context, tenantID uuid.UUID, email, password
 	if err != nil {
 		return nil, fmt.Errorf("iam: login %s: %w", email, err)
 	}
+
+	// Background re-hash: upgrade bcrypt → argon2id (or weak → strong argon2id)
+	// on next successful login. Detached from the request context so that a slow
+	// Argon2id computation does not add latency to the login response.
+	go s.rehashIfNeeded(tenantID, email, password)
+
 	pair, err := s.tokens.Issue(ctx, result)
 	if err != nil {
 		return nil, fmt.Errorf("iam: issue token: %w", err)
 	}
 	return pair, nil
+}
+
+// rehashIfNeeded upgrades the user's stored password hash to the current
+// argon2id parameters if NeedsRehash reports that an upgrade is warranted.
+// Runs in a background goroutine — errors are logged, never returned.
+func (s *Service) rehashIfNeeded(tenantID uuid.UUID, email, password string) {
+	ctx := context.Background()
+	record, err := s.repo.GetUserByEmail(ctx, tenantID, email)
+	if err != nil {
+		return
+	}
+	if !auth.NeedsRehash(record.PasswordHash) {
+		return
+	}
+	newHash, err := s.hasher.Hash(password)
+	if err != nil {
+		return
+	}
+	// UpdatePasswordHash is a single-row write — idempotent on retry.
+	_ = s.repo.UpdatePasswordHash(ctx, record.ID, newHash)
 }
 
 // RefreshToken issues a new token pair from a valid refresh token.

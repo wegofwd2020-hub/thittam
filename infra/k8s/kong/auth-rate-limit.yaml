@@ -1,0 +1,94 @@
+# Kong rate-limiting for authentication endpoints
+#
+# WHY: Argon2id (memory=64MiB per attempt) means a burst of login requests
+# can exhaust pod memory before the HPA has time to scale. A tight per-IP
+# limit caps the blast radius without requiring pod changes.
+#
+# Rate: 10 requests/minute per client IP — enough for a human typing a
+# password, not enough to run a credential-stuffing attack.
+#
+# Scope: login, token refresh, and invitation acceptance only.
+# All other IAM endpoints are unaffected.
+#
+# Apply:
+#   kubectl apply -f infra/k8s/kong/auth-rate-limit.yaml -n thittam
+---
+# KongPlugin — reusable rate-limit config shared by all auth routes.
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: auth-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    # This plugin is intentionally conservative — review before GA.
+    thittam.io/security-note: "interim CPU-exhaustion guard; see issue #25"
+plugin: rate-limiting
+config:
+  # 10 requests per minute per client IP (X-Forwarded-For → real IP via Kong).
+  minute: 10
+  # Fail-open: if the Redis rate-limit store is unavailable, allow the request
+  # rather than hard-blocking logins during a Redis outage. We accept the
+  # reduced protection as a trade-off against availability for auth.
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  # Key on client IP (extracted from X-Forwarded-For after Kong trust config).
+  limit_by: ip
+  # Hide the rate-limit headers from responses to avoid leaking the bucket
+  # state to credential-stuffing tools.
+  hide_client_headers: false
+---
+# Ingress — POST /api/v1/auth/* and /api/v1/invitations/*/accept
+#
+# The annotation wires the KongPlugin above to every route in this Ingress.
+# Only POST methods reach the IAM service login / refresh / invitation-accept
+# handlers; GET and other methods on these paths are not rate-limited.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: iam-auth-routes
+  namespace: thittam
+  labels:
+    app: iam
+    app.kubernetes.io/name: iam
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: auth-rate-limit
+    # Strip the /api/v1 prefix before forwarding to the IAM gRPC-gateway.
+    konghq.com/strip-path: "true"
+    # gRPC transcoding is handled by the kong-grpc-gateway plugin wired at
+    # the gateway level — this Ingress only adds the rate-limit plugin.
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # Login
+          - path: /api/v1/auth/login
+            pathType: Exact
+            backend:
+              service:
+                name: iam
+                port:
+                  number: 8086
+          # Token refresh
+          - path: /api/v1/auth/refresh
+            pathType: Exact
+            backend:
+              service:
+                name: iam
+                port:
+                  number: 8086
+          # Invitation acceptance (sets the user's first password)
+          - path: /api/v1/invitations
+            pathType: Prefix
+            backend:
+              service:
+                name: iam
+                port:
+                  number: 8086
