@@ -140,3 +140,38 @@ jobs:
         # No Docker, no DB — all service deps are in-process mocks.
         # Target: ≤5 minutes. These 5 tests run in <1 second.
         run: go test ./e2e/critical_path/... -v -short -race -timeout 5m
+
+  doc-drift:
+    name: Documentation Drift Check
+    runs-on: ubuntu-latest
+    # Run when Go source files change (someone may rename/remove an identifier)
+    # or when triggered manually. The docs repo runs the same check on its own
+    # PRs via thittam_docs/.github/workflows/ci.yml.
+
+    steps:
+      - name: Checkout application repo
+        uses: actions/checkout@v4
+        with:
+          path: app
+
+      - name: Checkout docs repo
+        uses: actions/checkout@v4
+        with:
+          repository: wegofwd2020-hub/thittam_docs
+          # Read-only access — no token needed for a public repo.
+          # For a private repo, set a PAT in secrets.DOCS_REPO_TOKEN.
+          token: ${{ secrets.DOCS_REPO_TOKEN || github.token }}
+          path: docs
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+          cache-dependency-path: app/go.sum
+
+      - name: Check documentation drift (Rule #16)
+        working-directory: app
+        run: |
+          go run ./tools/check-doc-drift \
+            --docs ../docs \
+            --app  .

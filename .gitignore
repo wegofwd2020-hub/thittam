@@ -11,6 +11,7 @@
 /general-ledger
 /iam
 /notifications
+/check-doc-drift
 
 # IDE
 .idea/
