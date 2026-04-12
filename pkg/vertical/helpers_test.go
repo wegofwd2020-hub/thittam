@@ -177,6 +177,31 @@ func TestFindBudgetTemplate(t *testing.T) {
 	assert.Nil(t, cfg.FindBudgetTemplate("nonexistent"))
 }
 
+func TestFindInventoryCategory(t *testing.T) {
+	cfg := &Config{
+		InventoryCategories: []InventoryCategory{
+			{ID: "camera", Label: "Camera Equipment", IsTrackable: true},
+			{ID: "props", Label: "Props", IsTrackable: false},
+		},
+	}
+
+	got := cfg.FindInventoryCategory("camera")
+	assert.NotNil(t, got)
+	assert.Equal(t, "Camera Equipment", got.Label)
+	assert.True(t, got.IsTrackable)
+
+	got = cfg.FindInventoryCategory("props")
+	assert.NotNil(t, got)
+	assert.Equal(t, "Props", got.Label)
+
+	assert.Nil(t, cfg.FindInventoryCategory("nonexistent"))
+}
+
+func TestFindInventoryCategory_EmptySlice(t *testing.T) {
+	cfg := &Config{}
+	assert.Nil(t, cfg.FindInventoryCategory("anything"))
+}
+
 func TestFindReportDefinition(t *testing.T) {
 	cfg := testConfig()
 

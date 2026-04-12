@@ -773,3 +773,105 @@ func TestPlanLimitsByName_StarterIsRestrictive(t *testing.T) {
 	assert.Equal(t, 10, limits.MaxUsers)
 	assert.Equal(t, 5, limits.MaxStorageGB)
 }
+
+// --- Tests: MarkInvoiceOverdue ---
+
+func TestMarkInvoiceOverdue_SetsStatus(t *testing.T) {
+	t.Parallel()
+	inv := &Invoice{ID: fixedInvID, TenantID: fixedTenantID, Status: "pending"}
+	svc := NewService(&mockRepo{
+		getInvoiceFn: func(_ context.Context, _, _ uuid.UUID) (*Invoice, error) {
+			return inv, nil
+		},
+	})
+
+	got, err := svc.MarkInvoiceOverdue(context.Background(), fixedTenantID, fixedInvID)
+	require.NoError(t, err)
+	assert.Equal(t, "overdue", got.Status)
+}
+
+func TestMarkInvoiceOverdue_RepoError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		getInvoiceFn: func(_ context.Context, _, _ uuid.UUID) (*Invoice, error) {
+			return nil, ErrInvoiceNotFound
+		},
+	})
+
+	_, err := svc.MarkInvoiceOverdue(context.Background(), fixedTenantID, fixedInvID)
+	require.Error(t, err)
+}
+
+// --- Tests: ListDunningAttempts ---
+
+func TestListDunningAttempts_ReturnsAttempts(t *testing.T) {
+	t.Parallel()
+	want := []DunningAttempt{
+		{ID: uuid.MustParse("a1000000-0000-0000-0000-000000000010"), InvoiceID: fixedInvID, AttemptNumber: 1, Result: "card_declined"},
+		{ID: uuid.MustParse("a1000000-0000-0000-0000-000000000011"), InvoiceID: fixedInvID, AttemptNumber: 2, Result: "card_declined"},
+	}
+	svc := NewService(&mockRepo{
+		listDunningAttemptsFn: func(_ context.Context, _ uuid.UUID) ([]DunningAttempt, error) {
+			return want, nil
+		},
+	})
+
+	got, err := svc.ListDunningAttempts(context.Background(), fixedInvID)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestListDunningAttempts_Empty(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{})
+
+	got, err := svc.ListDunningAttempts(context.Background(), fixedInvID)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+// --- Tests: ListPaymentMethods cap ---
+
+func TestListPaymentMethods_CappedAt20(t *testing.T) {
+	t.Parallel()
+	methods := make([]PaymentMethod, 25)
+	for i := range methods {
+		methods[i] = PaymentMethod{ID: uuid.New(), TenantID: fixedTenantID}
+	}
+	svc := NewService(&mockRepo{
+		listPaymentMethodsFn: func(_ context.Context, _ uuid.UUID) ([]PaymentMethod, error) {
+			return methods, nil
+		},
+	})
+
+	got, err := svc.ListPaymentMethods(context.Background(), fixedTenantID)
+	require.NoError(t, err)
+	assert.Len(t, got, 20, "must be capped at 20")
+}
+
+// --- Tests: SetDefaultPaymentMethod ---
+
+func TestSetDefaultPaymentMethod_ClearsOthersAndSetsDefault(t *testing.T) {
+	t.Parallel()
+	cleared := false
+	updated := false
+	svc := NewService(&mockRepo{
+		getPaymentMethodFn: func(_ context.Context, id uuid.UUID) (*PaymentMethod, error) {
+			return &PaymentMethod{ID: id, TenantID: fixedTenantID}, nil
+		},
+		clearDefaultPaymentMethodsFn: func(_ context.Context, _ uuid.UUID) error {
+			cleared = true
+			return nil
+		},
+		updatePaymentMethodFn: func(_ context.Context, pm *PaymentMethod) error {
+			updated = true
+			assert.True(t, pm.IsDefault)
+			return nil
+		},
+	})
+
+	err := svc.SetDefaultPaymentMethod(context.Background(), fixedTenantID, fixedPMID)
+	require.NoError(t, err)
+	assert.True(t, cleared, "must clear existing defaults")
+	assert.True(t, updated, "must mark new default")
+}

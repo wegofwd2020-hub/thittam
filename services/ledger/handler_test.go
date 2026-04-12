@@ -98,7 +98,7 @@ func TestHandler_ListAccounts_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listAccountsFn: func(_ context.Context, _ uuid.UUID) ([]Account, error) {
+		listAccountsFn: func(_ context.Context, _ uuid.UUID, _, _ int) ([]Account, error) {
 			return []Account{{ID: uuid.New(), TenantID: tenantID, Code: "5100", AccountType: "expense", IsActive: true}}, nil
 		},
 	}))

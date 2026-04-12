@@ -1,0 +1,128 @@
+# Kong rate-limiting for budget-planning write endpoints
+#
+# WHY: Budget approval triggers a BudgetApproved NATS event consumed by
+# general-ledger and notifications. A burst of ApproveExpense / ApproveBudget
+# calls can create duplicate JournalEntry candidates before the idempotency
+# key check catches them, increasing DB write contention on the ledger schema.
+# CreateLineItem also recalculates budget totals on every call — unbounded
+# bursts degrade write performance for all tenants sharing the same DB node.
+#
+# Two plugins with different limits:
+#   budget-write-rate-limit  — 30 req/min per user (financial writes — stricter)
+#   budget-approve-rate-limit — 10 req/min per user (approval is a one-shot op)
+#
+# Apply:
+#   kubectl apply -f infra/k8s/kong/budget-rate-limit.yaml -n thittam
+---
+# General financial write plugin
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: budget-write-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "guards against budget-total recalc storm and NATS flood"
+plugin: rate-limiting
+config:
+  minute: 30
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Approval plugin — tighter limit for one-shot approval operations
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: budget-approve-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "prevents duplicate BudgetApproved events from rapid re-approval"
+plugin: rate-limiting
+config:
+  minute: 10
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Ingress — budget and line-item write paths
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: budget-write-routes
+  namespace: thittam
+  labels:
+    app: budget-planning
+    app.kubernetes.io/name: budget-planning
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: budget-write-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # CreateBudget
+          - path: /api/v1/budgets
+            pathType: Exact
+            backend:
+              service:
+                name: budget-planning
+                port:
+                  number: 8081
+          # CreateLineItem / UpdateLineItemActuals / LockLineItem
+          - path: /api/v1/line-items
+            pathType: Prefix
+            backend:
+              service:
+                name: budget-planning
+                port:
+                  number: 8081
+---
+# Ingress — budget approval (tighter limit)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: budget-approve-routes
+  namespace: thittam
+  labels:
+    app: budget-planning
+    app.kubernetes.io/name: budget-planning
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: budget-approve-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # ApproveBudget / SubmitBudget — triggers BudgetApproved NATS event
+          - path: /api/v1/budgets/approve
+            pathType: Prefix
+            backend:
+              service:
+                name: budget-planning
+                port:
+                  number: 8081
+          - path: /api/v1/budgets/submit
+            pathType: Prefix
+            backend:
+              service:
+                name: budget-planning
+                port:
+                  number: 8081

@@ -60,7 +60,7 @@ if stream_exists FINANCIAL; then
   echo "  [skip] FINANCIAL stream already exists"
 else
   $NATS --server "${NATS_URL}" stream add FINANCIAL \
-    --subjects "thittam.budget.>,thittam.expense.>,thittam.ledger.>" \
+    --subjects "thittam.budget.>,thittam.expense.>,thittam.ledger.>,thittam.billing.>" \
     --retention limits \
     --storage file \
     --replicas 1 \
@@ -110,7 +110,7 @@ else
     --ack-wait 30s \
     --max-deliver 5 \
     --backoff "5s,30s,5m,30m" \
-    --filter "thittam.budget.>,thittam.expense.>,thittam.ledger.>" \
+    --filter "thittam.budget.>,thittam.expense.>,thittam.ledger.>,thittam.billing.>" \
     --description "Reporting-analytics financial projection consumer"
   echo "  [ok] FINANCIAL/reporting-financial consumer created"
 fi
@@ -125,9 +125,28 @@ else
     --ack-wait 30s \
     --max-deliver 5 \
     --backoff "5s,30s,5m,30m" \
-    --filter "thittam.budget.>,thittam.expense.>,thittam.ledger.>" \
+    --filter "thittam.budget.>,thittam.expense.>,thittam.ledger.>,thittam.billing.>" \
     --description "Notifications service financial event consumer"
   echo "  [ok] FINANCIAL/notifications-financial consumer created"
+fi
+
+# notifications-events: non-financial domain events (project, document).
+# Financial events are intentionally excluded — they are already handled by
+# notifications-financial on the FINANCIAL stream, which provides DLQ protection
+# and 7-day retention. Duplicating them here would cause double notifications.
+if consumer_exists EVENTS notifications-events; then
+  echo "  [skip] EVENTS/notifications-events consumer already exists"
+else
+  $NATS --server "${NATS_URL}" consumer add EVENTS notifications-events \
+    --pull \
+    --deliver all \
+    --ack explicit \
+    --ack-wait 30s \
+    --max-deliver 5 \
+    --backoff "5s,30s,5m,30m" \
+    --filter "thittam.project.>,thittam.document.>" \
+    --description "Notifications service non-financial event consumer (project, document)"
+  echo "  [ok] EVENTS/notifications-events consumer created"
 fi
 
 echo ""
@@ -136,3 +155,4 @@ echo ""
 echo "Verify with:"
 echo "  nats --server ${NATS_URL} stream ls"
 echo "  nats --server ${NATS_URL} consumer ls FINANCIAL"
+echo "  nats --server ${NATS_URL} consumer ls EVENTS"

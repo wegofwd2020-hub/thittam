@@ -16,6 +16,7 @@ const createBudget = `-- name: CreateBudget :one
 
 INSERT INTO budgets (id, production_id, tenant_id, label, status, currency, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, production_id, tenant_id, label, status, currency, total_amount, submitted_by, approved_by, submitted_at, approved_at, created_by, created_at, updated_at
 `
 
@@ -63,6 +64,7 @@ func (q *Queries) CreateBudget(ctx context.Context, arg CreateBudgetParams) (Bud
 const createLineItem = `-- name: CreateLineItem :one
 INSERT INTO budget_line_items (id, budget_id, tenant_id, category_id, description, account_code, budgeted_amount)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, budget_id, tenant_id, category_id, description, account_code, budgeted_amount, actual_amount, committed_amount, is_locked, created_at, updated_at
 `
 
@@ -214,11 +216,17 @@ func (q *Queries) ListBudgets(ctx context.Context, arg ListBudgetsParams) ([]Bud
 }
 
 const listLineItems = `-- name: ListLineItems :many
-SELECT id, budget_id, tenant_id, category_id, description, account_code, budgeted_amount, actual_amount, committed_amount, is_locked, created_at, updated_at FROM budget_line_items WHERE budget_id = $1 ORDER BY category_id, created_at ASC
+SELECT id, budget_id, tenant_id, category_id, description, account_code, budgeted_amount, actual_amount, committed_amount, is_locked, created_at, updated_at FROM budget_line_items WHERE budget_id = $1 ORDER BY category_id, created_at ASC LIMIT $2 OFFSET $3
 `
 
-func (q *Queries) ListLineItems(ctx context.Context, budgetID uuid.UUID) ([]BudgetLineItem, error) {
-	rows, err := q.db.Query(ctx, listLineItems, budgetID)
+type ListLineItemsParams struct {
+	BudgetID uuid.UUID `json:"budget_id"`
+	Limit    int32     `json:"limit"`
+	Offset   int32     `json:"offset"`
+}
+
+func (q *Queries) ListLineItems(ctx context.Context, arg ListLineItemsParams) ([]BudgetLineItem, error) {
+	rows, err := q.db.Query(ctx, listLineItems, arg.BudgetID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

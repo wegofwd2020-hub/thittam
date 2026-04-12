@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	jwtlib "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -291,6 +292,67 @@ func TestNewJWTIssuer_InvalidPEMError(t *testing.T) {
 	t.Cleanup(func() { _ = rdb.Close() })
 
 	_, err = NewJWTIssuer([]byte("not-a-pem-block"), rdb, JWTConfig{})
+	assert.Error(t, err)
+}
+
+func TestJWTIssuer_Validate_WrongSigningMethod_ReturnsInvalid(t *testing.T) {
+	t.Parallel()
+	issuer, _ := testIssuer(t)
+
+	// Create an HMAC-signed token — Validate's key function rejects non-RSA algorithms.
+	hmacClaims := jwtlib.MapClaims{
+		"sub": fixtureUserID.String(),
+		"exp": time.Now().Add(time.Hour).Unix(),
+	}
+	hmacToken := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, hmacClaims)
+	tokenStr, err := hmacToken.SignedString([]byte("hmac-secret"))
+	require.NoError(t, err)
+
+	_, err = issuer.Validate(context.Background(), tokenStr)
+	assert.ErrorIs(t, err, ErrTokenInvalid)
+}
+
+func TestJWTIssuer_Issue_RedisSetError_ReturnsError(t *testing.T) {
+	t.Parallel()
+	issuer, mr := testIssuer(t)
+	mr.Close() // close before Issue so Redis Set fails
+
+	_, err := issuer.Issue(context.Background(), fixtureAuthResult())
+	assert.Error(t, err, "Issue must fail when Redis Set returns an error")
+}
+
+func TestJWTIssuer_Refresh_RedisPipelineError_ReturnsError(t *testing.T) {
+	t.Parallel()
+	issuer, mr := testIssuer(t)
+	ctx := context.Background()
+
+	// Issue a valid pair first so the token exists in Redis.
+	pair, err := issuer.Issue(ctx, fixtureAuthResult())
+	require.NoError(t, err)
+
+	// Close miniredis so the Pipelined GET+DEL fails with a connection error.
+	mr.Close()
+
+	_, err = issuer.Refresh(ctx, pair.RefreshToken)
+	assert.Error(t, err)
+	// Must NOT be ErrRefreshTokenNotFound — the token existed; this is an infrastructure error.
+	assert.NotErrorIs(t, err, ErrRefreshTokenNotFound)
+}
+
+func TestNewJWTIssuer_UnsupportedPEMType_ReturnsError(t *testing.T) {
+	t.Parallel()
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	// "EC PRIVATE KEY" is not handled — must hit the default case and return an error.
+	ecPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: []byte("fake-ec-key-bytes"),
+	})
+	_, err = NewJWTIssuer(ecPEM, rdb, JWTConfig{})
 	assert.Error(t, err)
 }
 

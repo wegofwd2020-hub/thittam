@@ -21,7 +21,7 @@ type mockRepo struct {
 	updateBudgetStatusFn    func(ctx context.Context, id uuid.UUID, status string, approvedBy *uuid.UUID) error
 	createLineItemFn        func(ctx context.Context, li *BudgetLineItem) error
 	getLineItemFn           func(ctx context.Context, id uuid.UUID) (*BudgetLineItem, error)
-	listLineItemsFn         func(ctx context.Context, budgetID uuid.UUID) ([]BudgetLineItem, error)
+	listLineItemsFn         func(ctx context.Context, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error)
 	updateLineItemActualsFn func(ctx context.Context, id uuid.UUID, actual, committed decimal.Decimal) error
 	checkLineAvailabilityFn func(ctx context.Context, id uuid.UUID) (decimal.Decimal, error)
 }
@@ -62,9 +62,9 @@ func (m *mockRepo) GetLineItem(ctx context.Context, id uuid.UUID) (*BudgetLineIt
 	}
 	return &BudgetLineItem{ID: id, CategoryID: "above_the_line"}, nil
 }
-func (m *mockRepo) ListLineItems(ctx context.Context, budgetID uuid.UUID) ([]BudgetLineItem, error) {
+func (m *mockRepo) ListLineItems(ctx context.Context, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error) {
 	if m.listLineItemsFn != nil {
-		return m.listLineItemsFn(ctx, budgetID)
+		return m.listLineItemsFn(ctx, budgetID, limit, offset)
 	}
 	return nil, nil
 }
@@ -410,7 +410,7 @@ func TestListLineItems_Success(t *testing.T) {
 	t.Parallel()
 	budgetID := uuid.New()
 	svc := NewService(&mockRepo{
-		listLineItemsFn: func(_ context.Context, bid uuid.UUID) ([]BudgetLineItem, error) {
+		listLineItemsFn: func(_ context.Context, bid uuid.UUID, _, _ int) ([]BudgetLineItem, error) {
 			return []BudgetLineItem{
 				{ID: uuid.New(), BudgetID: bid, CategoryID: "above_the_line"},
 				{ID: uuid.New(), BudgetID: bid, CategoryID: "below_the_line"},
@@ -418,7 +418,7 @@ func TestListLineItems_Success(t *testing.T) {
 		},
 	})
 
-	items, err := svc.ListLineItems(context.Background(), budgetID)
+	items, err := svc.ListLineItems(context.Background(), budgetID, 100, 0)
 	require.NoError(t, err)
 	assert.Len(t, items, 2)
 }

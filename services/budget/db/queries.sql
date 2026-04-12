@@ -3,6 +3,7 @@
 -- name: CreateBudget :one
 INSERT INTO budgets (id, production_id, tenant_id, label, status, currency, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: GetBudget :one
@@ -34,13 +35,14 @@ WHERE id = $1;
 -- name: CreateLineItem :one
 INSERT INTO budget_line_items (id, budget_id, tenant_id, category_id, description, account_code, budgeted_amount)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: GetLineItem :one
 SELECT * FROM budget_line_items WHERE id = $1;
 
 -- name: ListLineItems :many
-SELECT * FROM budget_line_items WHERE budget_id = $1 ORDER BY category_id, created_at ASC;
+SELECT * FROM budget_line_items WHERE budget_id = $1 ORDER BY category_id, created_at ASC LIMIT $2 OFFSET $3;
 
 -- name: UpdateLineItemAmounts :one
 UPDATE budget_line_items

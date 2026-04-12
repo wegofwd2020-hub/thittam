@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -95,4 +96,38 @@ func TestHealthCheckerFunc(t *testing.T) {
 	err := checker.CheckHealth(context.Background())
 	require.NoError(t, err)
 	assert.True(t, called)
+}
+
+// ─── Start / Stop lifecycle ───────────────────────────────────────────────────
+
+func TestHealthServer_Start_Stop_Lifecycle(t *testing.T) {
+	t.Parallel()
+	// Port 0 → OS assigns any available ephemeral port.
+	hs := NewHealthServer("lifecycle-test", 0)
+
+	require.NoError(t, hs.Start())
+
+	// Give the goroutine time to bind and start listening.
+	time.Sleep(20 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	require.NoError(t, hs.Stop(ctx))
+}
+
+func TestHealthServer_Stop_Unstarted_IsNoop(t *testing.T) {
+	t.Parallel()
+	hs := NewHealthServer("unstarted-test", 0)
+	// httpServer is nil — Stop must return nil without panicking.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	require.NoError(t, hs.Stop(ctx))
+}
+
+func TestHealthServer_Stop_NilReceiver_IsNoop(t *testing.T) {
+	t.Parallel()
+	var hs *HealthServer
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	require.NoError(t, hs.Stop(ctx))
 }

@@ -46,6 +46,7 @@ func (q *Queries) CheckinAsset(ctx context.Context, arg CheckinAssetParams) (Ass
 const checkoutAsset = `-- name: CheckoutAsset :one
 INSERT INTO asset_checkouts (id, asset_id, production_id, tenant_id, checked_out_to, expected_return, condition_out)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in
 `
 
@@ -89,6 +90,7 @@ const createAsset = `-- name: CreateAsset :one
 
 INSERT INTO assets (id, tenant_id, asset_code, name, category_id, description, ownership_type, status, purchase_date, purchase_cost, serial_number)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, tenant_id, asset_code, name, category_id, description, ownership_type, status, purchase_date, purchase_cost, serial_number, created_at, updated_at
 `
 

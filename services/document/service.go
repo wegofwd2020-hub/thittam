@@ -183,7 +183,7 @@ func (s *Service) ConfirmUpload(ctx context.Context, tenantID, documentID uuid.U
 	}
 
 	// Best-effort event publish — do not fail the confirm on event errors.
-	_ = s.publisher.PublishDocumentUploaded(ctx, tenantID, documentID)
+	s.publish(ctx, func() error { return s.publisher.PublishDocumentUploaded(ctx, tenantID, documentID) })
 
 	return doc, nil
 }
@@ -233,7 +233,7 @@ func (s *Service) DeleteDocument(ctx context.Context, tenantID, id uuid.UUID) er
 		return fmt.Errorf("document: soft delete %s: %w", id, err)
 	}
 
-	_ = s.publisher.PublishDocumentDeleted(ctx, tenantID, id)
+	s.publish(ctx, func() error { return s.publisher.PublishDocumentDeleted(ctx, tenantID, id) })
 	return nil
 }
 
@@ -367,13 +367,16 @@ func (s *Service) ConfirmVersion(ctx context.Context, tenantID, documentID uuid.
 	return dv, nil
 }
 
-// ListVersions returns all versions for a document in ascending order.
-func (s *Service) ListVersions(ctx context.Context, tenantID, documentID uuid.UUID) ([]DocumentVersion, error) {
+// ListVersions returns versions for a document in ascending order, capped at 200 per page.
+func (s *Service) ListVersions(ctx context.Context, tenantID, documentID uuid.UUID, limit, offset int) ([]DocumentVersion, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
 	// Verify document exists and belongs to tenant.
 	if _, err := s.GetDocument(ctx, tenantID, documentID); err != nil {
 		return nil, err
 	}
-	versions, err := s.repo.ListVersions(ctx, documentID)
+	versions, err := s.repo.ListVersions(ctx, documentID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("document: list versions: %w", err)
 	}
@@ -419,9 +422,12 @@ func (s *Service) CreateFolder(ctx context.Context, folder *Folder) (*Folder, er
 	return folder, nil
 }
 
-// ListFolders returns all folders for a tenant with an optional production filter.
-func (s *Service) ListFolders(ctx context.Context, tenantID uuid.UUID, productionID *uuid.UUID) ([]Folder, error) {
-	folders, err := s.repo.ListFolders(ctx, tenantID, productionID)
+// ListFolders returns folders for a tenant with an optional production filter, capped at 500 per page.
+func (s *Service) ListFolders(ctx context.Context, tenantID uuid.UUID, productionID *uuid.UUID, limit, offset int) ([]Folder, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	folders, err := s.repo.ListFolders(ctx, tenantID, productionID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("document: list folders: %w", err)
 	}
@@ -429,6 +435,15 @@ func (s *Service) ListFolders(ctx context.Context, tenantID uuid.UUID, productio
 }
 
 // --- Helpers ---
+
+// publish calls fn only when a publisher is configured; errors are best-effort.
+// This guards against a nil publisher when NATS is not yet wired (pre-production).
+func (s *Service) publish(ctx context.Context, fn func() error) {
+	if s.publisher == nil {
+		return
+	}
+	_ = fn()
+}
 
 // storageKey builds the canonical object key for a document version.
 // Pattern: {tenantID}/{productionID|shared}/{documentID}/v{version}/{filename}

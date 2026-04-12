@@ -14,6 +14,7 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	// "github.com/nats-io/nats.go"  // uncomment when NATS publisher is wired
 	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/document"
@@ -52,8 +53,22 @@ func main() {
 
 	// --- Event publisher ---
 	// NATS JetStream publisher for document.* events (uploaded, deleted, etc.).
-	// publisher = nats.NewPublisher(natsConn)
+	// When enabling, uncomment ALL of the following block together and add the
+	// nats import above. Also uncomment the natsChecker registration below.
+	//
+	// natsURL := requireenv("NATS_URL")
+	// nc, err := nats.Connect(natsURL)
+	// if err != nil {
+	//     log.Fatalf("document: startup: connect to NATS: %v", err)
+	// }
+	// defer nc.Drain()
+	// js, err := nc.JetStream()
+	// if err != nil {
+	//     log.Fatalf("document: startup: JetStream context: %v", err)
+	// }
+	// publisher = natspublisher.New(js)
 	var publisher document.EventPublisher
+	// var nc *nats.Conn // set above when NATS is enabled
 
 	// --- Repository, service, and handler ---
 	repo := documentdb.NewPostgres(pool)
@@ -71,6 +86,8 @@ func main() {
 	documentv1.RegisterDocumentServiceServer(srv.GRPCServer(), handler)
 
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
+	// Uncomment when NATS publisher is wired (see event publisher block above):
+	// srv.RegisterHealthChecker("nats", &natsChecker{nc: nc})
 
 	log.Printf("document service ready on :8088")
 	if err := srv.Run(); err != nil {
@@ -84,6 +101,17 @@ type dbChecker struct{ pool *pgxpool.Pool }
 func (c *dbChecker) CheckHealth(ctx context.Context) error {
 	return c.pool.Ping(ctx)
 }
+
+// natsChecker implements observability.HealthChecker for the NATS connection.
+// Uncomment the registration in main() when the NATS publisher is enabled.
+//
+// type natsChecker struct{ nc *nats.Conn }
+// func (c *natsChecker) CheckHealth(_ context.Context) error {
+//     if !c.nc.IsConnected() {
+//         return errors.New("nats: not connected")
+//     }
+//     return nil
+// }
 
 // requireenv returns the value of an env var or fatals if it is empty.
 func requireenv(key string) string {

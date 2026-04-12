@@ -16,6 +16,7 @@ import (
 const createInvoice = `-- name: CreateInvoice :one
 INSERT INTO invoices (id, tenant_id, subscription_id, invoice_number, amount, tax_amount, currency, status, due_date, period_start, period_end)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, tenant_id, subscription_id, invoice_number, amount, tax_amount, currency, status, due_date, period_start, period_end, paid_at, created_at
 `
 
@@ -230,6 +231,7 @@ func (q *Queries) ListInvoices(ctx context.Context, arg ListInvoicesParams) ([]I
 const recordDunningAttempt = `-- name: RecordDunningAttempt :one
 INSERT INTO dunning_attempts (id, invoice_id, attempt_number, outcome, gateway_response)
 VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, invoice_id, attempt_number, outcome, gateway_response, attempted_at
 `
 

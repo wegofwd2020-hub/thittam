@@ -23,8 +23,10 @@ func NewPostgres(db *pgxpool.Pool) *Postgres {
 	return &Postgres{q: New(db), db: db}
 }
 
-// Compile-time interface check.
-var _ reporting.Repository = (*Postgres)(nil)
+// Compile-time interface checks.
+var _ reporting.Repository        = (*Postgres)(nil)
+var _ reporting.ProjectionWriter  = (*Postgres)(nil)
+var _ reporting.WatermarkStore    = (*Postgres)(nil)
 
 // --- Expense Facts ---
 
@@ -530,6 +532,159 @@ func (p *Postgres) GetComplianceStatus(ctx context.Context, tenantID uuid.UUID) 
 		AuditFlags:       auditFlags,
 		RecentViolations: items,
 	}, nil
+}
+
+// ── ProjectionWriter ──────────────────────────────────────────────────────────
+
+func (p *Postgres) UpsertExpenseFact(ctx context.Context, f reporting.ExpenseFact) error {
+	const sql = `
+		INSERT INTO expense_facts
+			(expense_id, production_id, tenant_id, budget_line_id, category_id, amount, approved_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (expense_id) DO UPDATE SET
+			amount      = EXCLUDED.amount,
+			approved_at = EXCLUDED.approved_at`
+
+	var budgetLineID pgtype.UUID
+	if f.BudgetLineID != nil {
+		budgetLineID = pgtype.UUID{Bytes: *f.BudgetLineID, Valid: true}
+	}
+	var approvedAt pgtype.Timestamptz
+	if f.ApprovedAt != nil {
+		approvedAt = pgtype.Timestamptz{Time: *f.ApprovedAt, Valid: true}
+	}
+	_, err := p.db.Exec(ctx, sql,
+		f.ExpenseID, f.ProductionID, f.TenantID,
+		budgetLineID, f.CategoryID, f.Amount.String(), approvedAt,
+	)
+	return err
+}
+
+func (p *Postgres) IncrementMonthlySpend(ctx context.Context, tenantID uuid.UUID, month string, actualDelta decimal.Decimal) error {
+	const sql = `
+		INSERT INTO monthly_spend (tenant_id, month, actual, budget, updated_at)
+		VALUES ($1, $2, $3, 0, NOW())
+		ON CONFLICT (tenant_id, month) DO UPDATE SET
+			actual     = monthly_spend.actual + EXCLUDED.actual,
+			updated_at = NOW()`
+	_, err := p.db.Exec(ctx, sql, tenantID, month, actualDelta.String())
+	return err
+}
+
+func (p *Postgres) IncrementCategorySpend(ctx context.Context, tenantID uuid.UUID, categoryID, categoryName string, actualDelta decimal.Decimal) error {
+	const sql = `
+		INSERT INTO category_spend (tenant_id, category_id, category_name, budgeted, actual, updated_at)
+		VALUES ($1, $2, $3, 0, $4, NOW())
+		ON CONFLICT (tenant_id, category_id) DO UPDATE SET
+			category_name = EXCLUDED.category_name,
+			actual        = category_spend.actual + EXCLUDED.actual,
+			updated_at    = NOW()`
+	_, err := p.db.Exec(ctx, sql, tenantID, categoryID, categoryName, actualDelta.String())
+	return err
+}
+
+func (p *Postgres) UpsertPendingApproval(ctx context.Context, item reporting.PendingApprovalRow) error {
+	const sql = `
+		INSERT INTO pending_approvals
+			(id, tenant_id, item_type, description, amount, submitted_by, submitted_at, project_title)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (id) DO UPDATE SET
+			description   = EXCLUDED.description,
+			amount        = EXCLUDED.amount,
+			project_title = EXCLUDED.project_title`
+	_, err := p.db.Exec(ctx, sql,
+		item.ID, item.TenantID, item.ItemType, item.Description,
+		item.Amount.String(), item.SubmittedBy, item.SubmittedAt, item.ProjectTitle,
+	)
+	return err
+}
+
+func (p *Postgres) DeletePendingApproval(ctx context.Context, tenantID, expenseID uuid.UUID) error {
+	const sql = `DELETE FROM pending_approvals WHERE tenant_id = $1 AND id = $2`
+	_, err := p.db.Exec(ctx, sql, tenantID, expenseID)
+	return err
+}
+
+func (p *Postgres) UpsertBudgetFact(ctx context.Context, f reporting.BudgetFact) error {
+	const sql = `
+		INSERT INTO budget_facts
+			(budget_id, production_id, tenant_id, total_budgeted, total_actual, total_committed)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (budget_id) DO UPDATE SET
+			total_budgeted  = EXCLUDED.total_budgeted,
+			total_actual    = EXCLUDED.total_actual,
+			total_committed = EXCLUDED.total_committed`
+	_, err := p.db.Exec(ctx, sql,
+		f.BudgetID, f.ProductionID, f.TenantID,
+		f.TotalBudgeted.String(), f.TotalActual.String(), f.TotalCommitted.String(),
+	)
+	return err
+}
+
+func (p *Postgres) UpsertPortfolioSnapshot(ctx context.Context, s reporting.PortfolioSnapshotRow) error {
+	const sql = `
+		INSERT INTO portfolio_snapshots
+			(tenant_id, project_id, title, status, current_phase, start_date, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+		ON CONFLICT (tenant_id, project_id) DO UPDATE SET
+			title         = EXCLUDED.title,
+			status        = EXCLUDED.status,
+			current_phase = EXCLUDED.current_phase,
+			updated_at    = NOW()`
+
+	var currentPhase pgtype.Text
+	if s.CurrentPhase != "" {
+		currentPhase = pgtype.Text{String: s.CurrentPhase, Valid: true}
+	}
+	var startDate pgtype.Date
+	if s.StartDate != nil {
+		t, err := time.Parse(time.DateOnly, *s.StartDate)
+		if err == nil {
+			startDate = pgtype.Date{Time: t, Valid: true}
+		}
+	}
+	_, err := p.db.Exec(ctx, sql,
+		s.TenantID, s.ProjectID, s.Title, s.Status, currentPhase, startDate,
+	)
+	return err
+}
+
+func (p *Postgres) UpsertTeamAssignment(ctx context.Context, tenantID, projectID uuid.UUID, projectTitle string, memberCount int) error {
+	const sql = `
+		INSERT INTO team_assignments (tenant_id, project_id, project_title, member_count, updated_at)
+		VALUES ($1, $2, $3, $4, NOW())
+		ON CONFLICT (tenant_id, project_id) DO UPDATE SET
+			project_title = EXCLUDED.project_title,
+			member_count  = EXCLUDED.member_count,
+			updated_at    = NOW()`
+	_, err := p.db.Exec(ctx, sql, tenantID, projectID, projectTitle, memberCount)
+	return err
+}
+
+// ── WatermarkStore ────────────────────────────────────────────────────────────
+
+func (p *Postgres) RecordWatermark(ctx context.Context, subject string, eventTime time.Time) error {
+	const sql = `
+		INSERT INTO projection_watermarks (subject, last_event_at, updated_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (subject) DO UPDATE SET
+			last_event_at = EXCLUDED.last_event_at,
+			updated_at    = NOW()
+		WHERE projection_watermarks.last_event_at < EXCLUDED.last_event_at`
+	_, err := p.db.Exec(ctx, sql, subject, eventTime)
+	return err
+}
+
+func (p *Postgres) OldestWatermark(ctx context.Context) (time.Time, error) {
+	const sql = `SELECT COALESCE(MIN(last_event_at), '0001-01-01'::timestamptz) FROM projection_watermarks`
+	var t time.Time
+	if err := p.db.QueryRow(ctx, sql).Scan(&t); err != nil {
+		return time.Time{}, fmt.Errorf("reporting: oldest watermark: %w", err)
+	}
+	if t.Year() == 1 {
+		return time.Time{}, nil // no watermarks — return zero time
+	}
+	return t, nil
 }
 
 // --- helpers ---

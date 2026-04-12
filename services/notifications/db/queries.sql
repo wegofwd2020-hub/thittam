@@ -21,6 +21,7 @@ ORDER BY event_type, channel;
 -- name: CreateNotificationLog :one
 INSERT INTO notification_log (id, tenant_id, recipient_id, channel, event_type, subject, status)
 VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: UpdateNotificationLogSent :exec

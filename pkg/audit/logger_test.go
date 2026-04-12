@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -283,4 +284,78 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, 1000, cfg.BufferSize)
 	assert.Equal(t, 5*time.Second, cfg.FlushInterval)
 	assert.Equal(t, 100, cfg.BatchSize)
+}
+
+// ─── NewLogger zero-value config / nil logger ─────────────────────────────────
+
+func TestNewLogger_ZeroConfig_SubstitutesDefaults(t *testing.T) {
+	t.Parallel()
+	store := &mockStore{}
+
+	// LoggerConfig{} has zero values for all fields — NewLogger must apply defaults.
+	logger := NewLogger(store, LoggerConfig{}, silentLogger{})
+	require.NotNil(t, logger)
+
+	// Log an event and close to verify the logger is functional with default config.
+	logger.Log(testEvent())
+	require.NoError(t, logger.Close(context.Background()))
+	assert.Equal(t, 1, store.count())
+}
+
+func TestNewLogger_NilLogger_UsesDefaultServiceLogger(t *testing.T) {
+	t.Parallel()
+	store := &mockStore{}
+
+	// nil svcLog → defaultServiceLogger{} is used internally.
+	// Trigger a buffer-full drop to exercise defaultServiceLogger.Warn.
+	logger := NewLogger(store, LoggerConfig{
+		BufferSize:    1,
+		FlushInterval: 10 * time.Second,
+		BatchSize:     100,
+	}, nil) // nil → defaultServiceLogger{}
+
+	// Flood the tiny buffer so at least one Warn is emitted.
+	for i := 0; i < 5; i++ {
+		logger.Log(testEvent())
+	}
+
+	require.NoError(t, logger.Close(context.Background()))
+}
+
+// ─── flushBatch store error ───────────────────────────────────────────────────
+
+func TestFlushBatch_StoreError_DoesNotPanic(t *testing.T) {
+	t.Parallel()
+	store := &mockStore{
+		insertBatchFn: func(_ context.Context, _ []Event) error {
+			return errors.New("postgres: connection reset")
+		},
+	}
+
+	// Use nil svcLog so defaultServiceLogger.Error is exercised on flush failure.
+	logger := NewLogger(store, LoggerConfig{
+		BufferSize:    100,
+		FlushInterval: 50 * time.Millisecond,
+		BatchSize:     5,
+	}, nil)
+
+	for i := 0; i < 5; i++ {
+		logger.Log(testEvent())
+	}
+
+	// Wait for the flush to attempt and log the error — must not panic.
+	time.Sleep(200 * time.Millisecond)
+	require.NoError(t, logger.Close(context.Background()))
+}
+
+// ─── defaultServiceLogger methods ────────────────────────────────────────────
+
+func TestDefaultServiceLogger_Methods(t *testing.T) {
+	t.Parallel()
+	l := defaultServiceLogger{}
+
+	// These delegate to log.Printf — they must not panic.
+	l.Info("info message", "key", "value")
+	l.Warn("warn message", "key", "value")
+	l.Error("error message", "key", "value")
 }

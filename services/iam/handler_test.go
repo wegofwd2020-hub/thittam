@@ -2,17 +2,30 @@ package iam
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
 	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// platformAdminCtx returns a context with a synthetic platform_admin caller,
+// as if the UnaryCallerInterceptor had already run and Kong had injected the headers.
+func platformAdminCtx() context.Context {
+	return interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
+		UserID: uuid.MustParse("a0000000-0000-0000-0000-000000000001"),
+		Email:  "admin@platform.internal",
+		Role:   interceptor.RolePlatformAdmin,
+		IP:     "127.0.0.1",
+	})
+}
 
 func newHandler() *Handler {
 	return NewHandler(newTestService(&mockRepo{}))
@@ -187,7 +200,7 @@ func TestHandler_UpdateUser_InvalidID(t *testing.T) {
 
 func TestHandler_DeactivateUser_Success(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().DeactivateUser(context.Background(), &iamv1.DeactivateUserRequest{
+	resp, err := newHandler().DeactivateUser(platformAdminCtx(), &iamv1.DeactivateUserRequest{
 		TenantId: uuid.New().String(),
 		Id:       uuid.New().String(),
 	})
@@ -195,15 +208,25 @@ func TestHandler_DeactivateUser_Success(t *testing.T) {
 	assert.NotNil(t, resp)
 }
 
+func TestHandler_DeactivateUser_PermissionDenied(t *testing.T) {
+	t.Parallel()
+	// Calling without a platform_admin caller context must be rejected.
+	_, err := newHandler().DeactivateUser(context.Background(), &iamv1.DeactivateUserRequest{
+		TenantId: uuid.New().String(),
+		Id:       uuid.New().String(),
+	})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
 func TestHandler_DeactivateUser_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().DeactivateUser(context.Background(), &iamv1.DeactivateUserRequest{TenantId: "bad", Id: uuid.New().String()})
+	_, err := newHandler().DeactivateUser(platformAdminCtx(), &iamv1.DeactivateUserRequest{TenantId: "bad", Id: uuid.New().String()})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_DeactivateUser_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().DeactivateUser(context.Background(), &iamv1.DeactivateUserRequest{TenantId: uuid.New().String(), Id: "bad"})
+	_, err := newHandler().DeactivateUser(platformAdminCtx(), &iamv1.DeactivateUserRequest{TenantId: uuid.New().String(), Id: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -377,14 +400,21 @@ func TestHandler_SuspendTenant_Success(t *testing.T) {
 		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string) error { return nil },
 	}))
 
-	resp, err := h.SuspendTenant(context.Background(), &iamv1.SuspendTenantRequest{Id: tenantID.String()})
+	resp, err := h.SuspendTenant(platformAdminCtx(), &iamv1.SuspendTenantRequest{Id: tenantID.String()})
 	require.NoError(t, err)
 	assert.Equal(t, tenantID.String(), resp.GetId())
 }
 
+func TestHandler_SuspendTenant_PermissionDenied(t *testing.T) {
+	t.Parallel()
+	// Calling without a platform_admin caller context must be rejected.
+	_, err := newHandler().SuspendTenant(context.Background(), &iamv1.SuspendTenantRequest{Id: uuid.New().String()})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
 func TestHandler_SuspendTenant_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().SuspendTenant(context.Background(), &iamv1.SuspendTenantRequest{Id: "bad"})
+	_, err := newHandler().SuspendTenant(platformAdminCtx(), &iamv1.SuspendTenantRequest{Id: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -451,6 +481,103 @@ func TestHandler_AcceptInvitation_Success(t *testing.T) {
 	assert.Equal(t, "access", resp.GetAccessToken())
 }
 
+// --- StartImpersonation ---
+
+func TestHandler_StartImpersonation_Success(t *testing.T) {
+	t.Parallel()
+	resp, err := newHandler().StartImpersonation(platformAdminCtx(), &iamv1.StartImpersonationRequest{
+		PlatformUserId:   uuid.New().String(),
+		TenantId:         uuid.New().String(),
+		ImpersonatedUser: uuid.New().String(),
+		Reason:           "support ticket #99",
+		DurationSeconds:  1800,
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp.GetId())
+}
+
+func TestHandler_StartImpersonation_PermissionDenied(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().StartImpersonation(context.Background(), &iamv1.StartImpersonationRequest{
+		PlatformUserId:   uuid.New().String(),
+		TenantId:         uuid.New().String(),
+		ImpersonatedUser: uuid.New().String(),
+		Reason:           "test",
+	})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_StartImpersonation_MissingReason(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().StartImpersonation(platformAdminCtx(), &iamv1.StartImpersonationRequest{
+		PlatformUserId:   uuid.New().String(),
+		TenantId:         uuid.New().String(),
+		ImpersonatedUser: uuid.New().String(),
+		Reason:           "", // empty
+	})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// --- EndImpersonation ---
+
+func TestHandler_EndImpersonation_Success(t *testing.T) {
+	t.Parallel()
+	resp, err := newHandler().EndImpersonation(platformAdminCtx(), &iamv1.EndImpersonationRequest{
+		SessionId: uuid.New().String(),
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+
+func TestHandler_EndImpersonation_PermissionDenied(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().EndImpersonation(context.Background(), &iamv1.EndImpersonationRequest{
+		SessionId: uuid.New().String(),
+	})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_EndImpersonation_NotFound(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(newTestService(&mockRepo{
+		endImpersonationSessionFn: func(_ context.Context, _ uuid.UUID) error {
+			return ErrImpersonationNotFound
+		},
+	}))
+	_, err := h.EndImpersonation(platformAdminCtx(), &iamv1.EndImpersonationRequest{
+		SessionId: uuid.New().String(),
+	})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+func TestHandler_EndImpersonation_AlreadyEnded(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(newTestService(&mockRepo{
+		endImpersonationSessionFn: func(_ context.Context, _ uuid.UUID) error {
+			return ErrImpersonationAlreadyEnded
+		},
+	}))
+	_, err := h.EndImpersonation(platformAdminCtx(), &iamv1.EndImpersonationRequest{
+		SessionId: uuid.New().String(),
+	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
+// --- SetOIDCConfig ---
+
+func TestHandler_SetOIDCConfig_PermissionDenied(t *testing.T) {
+	t.Parallel()
+	// Calling without a platform_admin caller context must be rejected before
+	// any field validation or service logic runs.
+	_, err := newHandler().SetOIDCConfig(context.Background(), &iamv1.SetOIDCConfigRequest{
+		TenantId:     uuid.New().String(),
+		IssuerUrl:    "https://accounts.google.com",
+		ClientId:     "client-id",
+		ClientSecret: "secret",
+	})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
 // --- grpcErr ---
 
 func TestGrpcErr_AllCodes(t *testing.T) {
@@ -479,4 +606,46 @@ func TestGrpcErr_AllCodes(t *testing.T) {
 	for _, tc := range cases {
 		assert.Equal(t, tc.wantCode, status.Code(grpcError(tc.err)))
 	}
+}
+
+func TestHandler_SetOIDCConfig_Success(t *testing.T) {
+	t.Parallel()
+	// Platform admin caller with a valid OIDC encryption key configured.
+	svc := newTestService(&mockRepo{
+		upsertOIDCConfigFn: func(_ context.Context, _ OIDCConfigParams) error {
+			return nil
+		},
+	})
+	svc.WithOIDCEncryptionKey(oidcTestKey)
+	h := NewHandler(svc)
+
+	resp, err := h.SetOIDCConfig(platformAdminCtx(), &iamv1.SetOIDCConfigRequest{
+		TenantId:     fixedTenantID.String(),
+		IssuerUrl:    "https://accounts.google.com",
+		ClientId:     "my-client-id",
+		ClientSecret: "plaintext-secret",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+
+func TestHandler_SetOIDCConfig_ServiceError_ReturnsInternalError(t *testing.T) {
+	t.Parallel()
+	// Service returns a generic error after encryption — handler must map to Internal.
+	svc := newTestService(&mockRepo{
+		upsertOIDCConfigFn: func(_ context.Context, _ OIDCConfigParams) error {
+			return fmt.Errorf("db unavailable")
+		},
+	})
+	svc.WithOIDCEncryptionKey(oidcTestKey)
+	h := NewHandler(svc)
+
+	_, err := h.SetOIDCConfig(platformAdminCtx(), &iamv1.SetOIDCConfigRequest{
+		TenantId:     fixedTenantID.String(),
+		IssuerUrl:    "https://accounts.google.com",
+		ClientId:     "my-client-id",
+		ClientSecret: "plaintext-secret",
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
 }

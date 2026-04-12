@@ -189,7 +189,9 @@ func (h *Handler) ListPhases(ctx context.Context, req *projectv1.ListPhasesReque
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")
 	}
 
-	phases, err := h.svc.repo.ListPhases(ctx, productionID)
+	// Proto does not carry limit/offset yet — apply a server-side cap.
+	const defaultLimit = 50 // productions rarely have more than 50 phases
+	phases, err := h.svc.repo.ListPhases(ctx, productionID, defaultLimit, 0)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -251,7 +253,9 @@ func (h *Handler) AddCrewMember(ctx context.Context, req *projectv1.AddCrewMembe
 	}
 
 	// Fetch the persisted crew member to return accurate DB-assigned fields.
-	members, err := h.svc.ListCrewMembers(ctx, productionID)
+	// Use a generous limit — we only need to find the one just inserted.
+	const addLookupLimit = 200
+	members, err := h.svc.ListCrewMembers(ctx, productionID, addLookupLimit, 0)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -269,7 +273,10 @@ func (h *Handler) ListCrewMembers(ctx context.Context, req *projectv1.ListCrewMe
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")
 	}
 
-	members, err := h.svc.ListCrewMembers(ctx, productionID)
+	// Proto does not carry limit/offset yet; apply a server-side default.
+	// Update the proto and pass through req fields when pagination is added.
+	const defaultLimit = 50
+	members, err := h.svc.ListCrewMembers(ctx, productionID, defaultLimit, 0)
 	if err != nil {
 		return nil, grpcErr(err)
 	}

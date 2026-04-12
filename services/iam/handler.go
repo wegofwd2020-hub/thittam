@@ -3,10 +3,12 @@ package iam
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
 	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -137,6 +139,9 @@ func (h *Handler) UpdateUser(ctx context.Context, req *iamv1.UpdateUserRequest) 
 }
 
 func (h *Handler) DeactivateUser(ctx context.Context, req *iamv1.DeactivateUserRequest) (*iamv1.DeactivateUserResponse, error) {
+	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
+		return nil, err
+	}
 	tenantID, err := uuid.Parse(req.GetTenantId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
@@ -258,6 +263,9 @@ func (h *Handler) GetTenant(ctx context.Context, req *iamv1.GetTenantRequest) (*
 }
 
 func (h *Handler) SuspendTenant(ctx context.Context, req *iamv1.SuspendTenantRequest) (*iamv1.Tenant, error) {
+	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
+		return nil, err
+	}
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
@@ -305,6 +313,83 @@ func (h *Handler) AcceptInvitation(ctx context.Context, req *iamv1.AcceptInvitat
 		return nil, grpcError(err)
 	}
 	return tokenPairToProto(pair), nil
+}
+
+// --- Impersonation ---
+
+func (h *Handler) StartImpersonation(ctx context.Context, req *iamv1.StartImpersonationRequest) (*iamv1.ImpersonationSession, error) {
+	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
+		return nil, err
+	}
+	platformUserID, err := uuid.Parse(req.GetPlatformUserId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid platform_user_id")
+	}
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	impersonatedUser, err := uuid.Parse(req.GetImpersonatedUser())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid impersonated_user")
+	}
+	if req.GetReason() == "" {
+		return nil, status.Error(codes.InvalidArgument, "reason is required")
+	}
+
+	dur := time.Duration(req.GetDurationSeconds()) * time.Second
+
+	session, err := h.svc.StartImpersonation(ctx, StartImpersonationParams{
+		PlatformUserID:   platformUserID,
+		TenantID:         tenantID,
+		ImpersonatedUser: impersonatedUser,
+		Reason:           req.GetReason(),
+		Duration:         dur,
+		IPAddress:        req.GetIpAddress(),
+	})
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return impersonationSessionToProto(session), nil
+}
+
+func (h *Handler) EndImpersonation(ctx context.Context, req *iamv1.EndImpersonationRequest) (*iamv1.EndImpersonationResponse, error) {
+	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
+		return nil, err
+	}
+	sessionID, err := uuid.Parse(req.GetSessionId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid session_id")
+	}
+	caller, _ := interceptor.CallerFromContext(ctx)
+	if err := h.svc.EndImpersonation(ctx, sessionID, caller.UserID); err != nil {
+		return nil, grpcError(err)
+	}
+	return &iamv1.EndImpersonationResponse{}, nil
+}
+
+// --- OIDC configuration ---
+
+func (h *Handler) SetOIDCConfig(ctx context.Context, req *iamv1.SetOIDCConfigRequest) (*iamv1.SetOIDCConfigResponse, error) {
+	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
+		return nil, err
+	}
+	params := OIDCConfigParams{
+		TenantID:         req.GetTenantId(),
+		IssuerURL:        req.GetIssuerUrl(),
+		ClientID:         req.GetClientId(),
+		ClientSecretEnc:  req.GetClientSecret(), // plaintext; service encrypts
+		Scopes:           req.GetScopes(),
+		EmailClaim:       req.GetEmailClaim(),
+		DisplayNameClaim: req.GetDisplayNameClaim(),
+		GroupsClaim:      req.GetGroupsClaim(),
+		AutoProvision:    req.GetAutoProvision(),
+		DefaultRole:      req.GetDefaultRole(),
+	}
+	if err := h.svc.SetOIDCConfig(ctx, params); err != nil {
+		return nil, grpcError(err)
+	}
+	return &iamv1.SetOIDCConfigResponse{}, nil
 }
 
 // --- Mapping helpers ---
@@ -358,6 +443,23 @@ func invitationToProto(inv *Invitation) *iamv1.Invitation {
 	return pb
 }
 
+func impersonationSessionToProto(s *ImpersonationSession) *iamv1.ImpersonationSession {
+	pb := &iamv1.ImpersonationSession{
+		Id:               s.ID.String(),
+		PlatformUserId:   s.PlatformUserID.String(),
+		TenantId:         s.TenantID.String(),
+		ImpersonatedUser: s.ImpersonatedUser.String(),
+		Reason:           s.Reason,
+		StartedAt:        timestamppb.New(s.StartedAt),
+		ExpiresAt:        timestamppb.New(s.ExpiresAt),
+		IpAddress:        s.IPAddress,
+	}
+	if s.EndedAt != nil {
+		pb.EndedAt = timestamppb.New(*s.EndedAt)
+	}
+	return pb
+}
+
 func tokenPairToProto(p *auth.TokenPair) *iamv1.TokenPair {
 	return &iamv1.TokenPair{
 		AccessToken:  p.AccessToken,
@@ -389,8 +491,12 @@ func grpcError(err error) error {
 	case errors.Is(err, ErrUserNotFound),
 		errors.Is(err, ErrTenantNotFound),
 		errors.Is(err, ErrRoleNotFound),
-		errors.Is(err, ErrInvitationNotFound):
+		errors.Is(err, ErrInvitationNotFound),
+		errors.Is(err, ErrImpersonationNotFound):
 		return status.Error(codes.NotFound, err.Error())
+
+	case errors.Is(err, ErrImpersonationAlreadyEnded):
+		return status.Error(codes.FailedPrecondition, err.Error())
 
 	case errors.Is(err, ErrUserAlreadyExists),
 		errors.Is(err, ErrTenantSlugTaken):

@@ -164,6 +164,21 @@ func TestCacheMetrics(t *testing.T) {
 	assert.NotNil(t, miss)
 }
 
+func TestNewMetrics_ReturnsPopulatedStruct(t *testing.T) {
+	// Not parallel — promauto registers with the global Prometheus registry.
+	// Use a unique subsystem name to avoid duplicate registration panics.
+	m := NewMetrics("newmetrics_cover_test")
+
+	assert.NotNil(t, m.RequestDuration)
+	assert.NotNil(t, m.RequestCounter)
+	assert.NotNil(t, m.ActiveRequests)
+	assert.NotNil(t, m.TenantRequests)
+	assert.NotNil(t, m.CacheOperations)
+	assert.NotNil(t, m.DBActiveConns)
+	assert.NotNil(t, m.DBIdleConns)
+	assert.NotNil(t, m.RedisConnected)
+}
+
 func TestGrpcCode(t *testing.T) {
 	assert.Equal(t, "OK", grpcCode(nil))
 	assert.Equal(t, "NotFound", grpcCode(status.Error(codes.NotFound, "not found")))

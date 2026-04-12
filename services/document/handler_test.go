@@ -383,7 +383,7 @@ func TestHandler_ListVersions_Success(t *testing.T) {
 	t.Parallel()
 	docID := uuid.New()
 	h := NewHandler(newTestService(&mockRepo{
-		listVersionsFn: func(_ context.Context, id uuid.UUID) ([]DocumentVersion, error) {
+		listVersionsFn: func(_ context.Context, id uuid.UUID, _, _ int) ([]DocumentVersion, error) {
 			return []DocumentVersion{{ID: uuid.New(), DocumentID: id, Version: 1}}, nil
 		},
 	}))
@@ -507,7 +507,7 @@ func TestHandler_ListFolders_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	h := NewHandler(newTestService(&mockRepo{
-		listFoldersFn: func(_ context.Context, _ uuid.UUID, _ *uuid.UUID) ([]Folder, error) {
+		listFoldersFn: func(_ context.Context, _ uuid.UUID, _ *uuid.UUID, _, _ int) ([]Folder, error) {
 			return []Folder{{ID: uuid.New(), TenantID: tenantID, Name: "Scripts"}}, nil
 		},
 	}))

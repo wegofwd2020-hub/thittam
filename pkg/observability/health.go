@@ -37,6 +37,7 @@ type HealthServer struct {
 	port        int
 	mu          sync.RWMutex
 	checkers    map[string]HealthChecker
+	httpServer  *http.Server // retained so Stop can call Shutdown
 }
 
 // NewHealthServer creates a health/metrics HTTP server.
@@ -62,15 +63,26 @@ func (h *HealthServer) Start() error {
 	mux.HandleFunc("/readyz", h.handleReadyz)
 	mux.Handle("/metrics", promhttp.Handler())
 
-	server := &http.Server{
+	h.httpServer = &http.Server{
 		Addr:         fmt.Sprintf(":%d", h.port),
 		Handler:      mux,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 5 * time.Second,
 	}
 
-	go server.ListenAndServe()
+	go h.httpServer.ListenAndServe() //nolint:errcheck // ErrServerClosed is expected on Stop
 	return nil
+}
+
+// Stop gracefully shuts down the health/metrics HTTP server. Should be called
+// during service shutdown before the gRPC server drains, so that Kubernetes
+// stops routing traffic to this pod before in-flight RPCs are drained.
+// A nil or unstarted HealthServer is a no-op.
+func (h *HealthServer) Stop(ctx context.Context) error {
+	if h == nil || h.httpServer == nil {
+		return nil
+	}
+	return h.httpServer.Shutdown(ctx)
 }
 
 // handleHealthz is a simple liveness check — always returns 200 if the process is running.

@@ -290,9 +290,18 @@ func (s *Service) RemovePaymentMethod(ctx context.Context, id uuid.UUID) error {
 	return s.repo.DeletePaymentMethod(ctx, id)
 }
 
-// ListPaymentMethods returns all payment methods for a tenant.
+// ListPaymentMethods returns payment methods for a tenant, capped at 20.
+// A tenant realistically holds ≤5 saved cards; 20 is a generous safety ceiling.
 func (s *Service) ListPaymentMethods(ctx context.Context, tenantID uuid.UUID) ([]PaymentMethod, error) {
-	return s.repo.ListPaymentMethods(ctx, tenantID)
+	methods, err := s.repo.ListPaymentMethods(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	const maxPaymentMethods = 20
+	if len(methods) > maxPaymentMethods {
+		methods = methods[:maxPaymentMethods]
+	}
+	return methods, nil
 }
 
 // SetDefaultPaymentMethod designates one payment method as the default for

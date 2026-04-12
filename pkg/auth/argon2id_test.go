@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 
@@ -185,5 +186,46 @@ func TestDecodeArgon2id_InvalidFormat(t *testing.T) {
 	t.Parallel()
 
 	_, _, _, err := decodeArgon2id("$argon2id$not-valid")
+	assert.Error(t, err)
+}
+
+func TestDecodeArgon2id_BadVersionFormat(t *testing.T) {
+	t.Parallel()
+
+	// "v=xyz" cannot be scanned as an integer — Sscanf returns error.
+	_, _, _, err := decodeArgon2id("$argon2id$v=xyz$m=65536,t=2,p=4$c2FsdA$aGFzaA")
+	assert.Error(t, err)
+}
+
+func TestDecodeArgon2id_UnsupportedVersion(t *testing.T) {
+	t.Parallel()
+
+	// Version 0 != argon2.Version (19) — must be rejected.
+	_, _, _, err := decodeArgon2id("$argon2id$v=0$m=65536,t=2,p=4$c2FsdA$aGFzaA")
+	assert.Error(t, err)
+}
+
+func TestDecodeArgon2id_BadParamsFormat(t *testing.T) {
+	t.Parallel()
+
+	// Params field is not in m=N,t=N,p=N format — Sscanf fails.
+	_, _, _, err := decodeArgon2id("$argon2id$v=19$not-valid-params$c2FsdA$aGFzaA")
+	assert.Error(t, err)
+}
+
+func TestDecodeArgon2id_BadSaltBase64(t *testing.T) {
+	t.Parallel()
+
+	// "!!!" is not valid base64url — DecodeString must fail.
+	_, _, _, err := decodeArgon2id("$argon2id$v=19$m=65536,t=2,p=4$!!!$aGFzaA")
+	assert.Error(t, err)
+}
+
+func TestDecodeArgon2id_BadHashBase64(t *testing.T) {
+	t.Parallel()
+
+	// Salt is valid but hash field contains invalid base64.
+	validSalt := base64.RawStdEncoding.EncodeToString([]byte("0123456789012345"))
+	_, _, _, err := decodeArgon2id("$argon2id$v=19$m=65536,t=2,p=4$" + validSalt + "$!!!")
 	assert.Error(t, err)
 }

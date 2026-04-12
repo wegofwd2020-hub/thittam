@@ -13,7 +13,8 @@ SELECT * FROM folders
 WHERE tenant_id = $1
   AND ($2::uuid IS NULL OR production_id = $2)
   AND ($3::uuid IS NULL OR parent_id = $3)
-ORDER BY name ASC;
+ORDER BY name ASC
+LIMIT $4 OFFSET $5;
 
 -- name: CreateDocument :one
 INSERT INTO documents (id, tenant_id, production_id, folder_id, name, mime_type, size_bytes, storage_key, uploaded_by)
@@ -49,7 +50,8 @@ RETURNING *;
 -- name: ListDocumentVersions :many
 SELECT * FROM document_versions
 WHERE document_id = $1
-ORDER BY version ASC;
+ORDER BY version ASC
+LIMIT $2 OFFSET $3;
 
 -- name: GetDocumentVersion :one
 SELECT * FROM document_versions WHERE document_id = $1 AND version = $2;

@@ -140,3 +140,78 @@ func TestAckWait_MatchesProjectionLagSLA(t *testing.T) {
 	assert.Equal(t, 30*time.Second, jetstream.AckWait,
 		"AckWait must equal ProjectionLagSLA (30 s)")
 }
+
+func TestEventsConsumers_NotificationsEventsIsDefined(t *testing.T) {
+	t.Parallel()
+	consumers := jetstream.EventsConsumers()
+	require.NotEmpty(t, consumers, "EventsConsumers must return at least one consumer")
+
+	var notifEvents *jetstream.ConsumerConfig
+	for i := range consumers {
+		if consumers[i].DurableName == jetstream.ConsumerNotificationsEvents {
+			copy := consumers[i]
+			notifEvents = &copy
+			break
+		}
+	}
+	require.NotNil(t, notifEvents, "ConsumerNotificationsEvents must be defined in EventsConsumers")
+	assert.Equal(t, jetstream.StreamEvents, notifEvents.StreamName)
+	assert.Equal(t, jetstream.MaxDeliverAttempts, notifEvents.MaxDeliver)
+	assert.Equal(t, jetstream.AckWait, notifEvents.AckWait)
+	assert.NotEmpty(t, notifEvents.BackOff)
+}
+
+func TestEventsConsumers_FilterSubjectsAreNonFinancial(t *testing.T) {
+	t.Parallel()
+	for _, c := range jetstream.EventsConsumers() {
+		for _, sub := range c.FilterSubjects {
+			isFinancial := strings.HasPrefix(sub, "thittam.budget.") ||
+				strings.HasPrefix(sub, "thittam.expense.") ||
+				strings.HasPrefix(sub, "thittam.ledger.") ||
+				strings.HasPrefix(sub, "thittam.billing.")
+			assert.False(t, isFinancial,
+				"events consumer %s must not filter financial subjects (handled by notifications-financial): %s",
+				c.DurableName, sub)
+		}
+	}
+}
+
+func TestAllConsumers_IncludesBothFinancialAndEvents(t *testing.T) {
+	t.Parallel()
+	all := jetstream.AllConsumers()
+	require.NotEmpty(t, all)
+
+	names := make(map[string]bool)
+	for _, c := range all {
+		names[c.DurableName] = true
+	}
+	assert.True(t, names[jetstream.ConsumerReportingFinancial],
+		"AllConsumers must include reporting-financial")
+	assert.True(t, names[jetstream.ConsumerNotificationsFinancial],
+		"AllConsumers must include notifications-financial")
+	assert.True(t, names[jetstream.ConsumerNotificationsEvents],
+		"AllConsumers must include notifications-events")
+}
+
+func TestAllConsumers_NamesAreUnique(t *testing.T) {
+	t.Parallel()
+	seen := make(map[string]bool)
+	for _, c := range jetstream.AllConsumers() {
+		key := c.StreamName + "/" + c.DurableName
+		require.False(t, seen[key], "duplicate consumer: %s", key)
+		seen[key] = true
+	}
+}
+
+func TestFinancialSubjects_IncludesBilling(t *testing.T) {
+	t.Parallel()
+	hasBilling := false
+	for _, sub := range jetstream.FinancialSubjects {
+		if strings.HasPrefix(sub, "thittam.billing.") {
+			hasBilling = true
+			break
+		}
+	}
+	assert.True(t, hasBilling,
+		"FinancialSubjects must include thittam.billing.> so billing events get DLQ protection and 7-day retention")
+}

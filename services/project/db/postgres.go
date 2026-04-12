@@ -142,8 +142,12 @@ func (p *Postgres) GetPhase(ctx context.Context, id uuid.UUID) (*project.Phase, 
 	return phaseFromDB(row), nil
 }
 
-func (p *Postgres) ListPhases(ctx context.Context, productionID uuid.UUID) ([]project.Phase, error) {
-	rows, err := p.q.ListPhases(ctx, productionID)
+func (p *Postgres) ListPhases(ctx context.Context, productionID uuid.UUID, limit, offset int) ([]project.Phase, error) {
+	rows, err := p.q.ListPhases(ctx, ListPhasesParams{
+		ProductionID: productionID,
+		Limit:        int32(limit),
+		Offset:       int32(offset),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("project: list phases: %w", err)
 	}
@@ -191,8 +195,12 @@ func (p *Postgres) AddCrewMember(ctx context.Context, c *project.CrewMember) err
 	return nil
 }
 
-func (p *Postgres) ListCrewMembers(ctx context.Context, productionID uuid.UUID) ([]project.CrewMember, error) {
-	rows, err := p.q.ListCrewMembers(ctx, productionID)
+func (p *Postgres) ListCrewMembers(ctx context.Context, productionID uuid.UUID, limit, offset int) ([]project.CrewMember, error) {
+	rows, err := p.q.ListCrewMembers(ctx, ListCrewMembersParams{
+		ProductionID: productionID,
+		Limit:        int32(limit),
+		Offset:       int32(offset),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("project: list crew members: %w", err)
 	}

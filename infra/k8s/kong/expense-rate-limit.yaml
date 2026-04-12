@@ -1,0 +1,120 @@
+# Kong rate-limiting for expense-tracking write endpoints
+#
+# WHY: ExpenseSubmitted and ExpenseApproved NATS events feed the general-ledger
+# (journal entry creation) and reporting-analytics (expense fact projection).
+# A burst of SubmitExpense calls can saturate the FINANCIAL JetStream consumer
+# backlog before the ledger service processes them, and can also create a spike
+# of PostgreSQL writes on the expense and ledger tenant schemas.
+#
+# Two plugins:
+#   expense-submit-rate-limit  — 30 req/min per user (one receipt per 2s is
+#                                generous for mobile-app photo capture workflows)
+#   expense-approve-rate-limit — 15 req/min per user (approval is a deliberate
+#                                action; tight limit discourages bulk-approve scripts
+#                                that bypass review)
+#
+# Apply:
+#   kubectl apply -f infra/k8s/kong/expense-rate-limit.yaml -n thittam
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: expense-submit-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "guards against FINANCIAL JetStream consumer backlog overflow"
+plugin: rate-limiting
+config:
+  minute: 30
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: expense-approve-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "prevents bulk-approve scripts bypassing per-expense review"
+plugin: rate-limiting
+config:
+  minute: 15
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Ingress — expense submission and creation
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: expense-submit-routes
+  namespace: thittam
+  labels:
+    app: expense-tracking
+    app.kubernetes.io/name: expense-tracking
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: expense-submit-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # CreateExpense / SubmitExpense — triggers ExpenseSubmitted NATS event
+          - path: /api/v1/expenses
+            pathType: Exact
+            backend:
+              service:
+                name: expense-tracking
+                port:
+                  number: 8082
+          - path: /api/v1/expenses/submit
+            pathType: Prefix
+            backend:
+              service:
+                name: expense-tracking
+                port:
+                  number: 8082
+---
+# Ingress — expense approval (tighter limit)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: expense-approve-routes
+  namespace: thittam
+  labels:
+    app: expense-tracking
+    app.kubernetes.io/name: expense-tracking
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: expense-approve-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # ApproveExpense — triggers ExpenseApproved NATS event → journal entry
+          - path: /api/v1/expenses/approve
+            pathType: Prefix
+            backend:
+              service:
+                name: expense-tracking
+                port:
+                  number: 8082

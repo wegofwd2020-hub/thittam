@@ -1,0 +1,95 @@
+# Kong rate-limiting for reporting and bulk-export endpoints
+#
+# WHY: Reporting RPCs (GetExpenseFacts, GetBudgetFacts, GetDashboardSummary)
+# perform full-table scans across projection tables and can return megabytes of
+# data. Without a rate limit a single API consumer can saturate the reporting
+# pod's CPU and memory, degrading query latency for all tenants on the same
+# cluster node.
+#
+# Rate: 5 requests/minute per authenticated user (keyed on Consumer, i.e. the
+# JWT subject injected by Kong's JWT plugin). This is generous for dashboard
+# loads but prevents continuous polling or script-driven bulk pulls that should
+# use the async export path instead.
+#
+# Scope: only the data-intensive read endpoints. GetReportDefinition and
+# ListReportDefinitions are cheap metadata reads and are not rate-limited.
+#
+# Apply:
+#   kubectl apply -f infra/k8s/kong/reporting-rate-limit.yaml -n thittam
+---
+# KongPlugin — reusable rate-limit config for reporting data endpoints.
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: reporting-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "guards against large-result polling; see task #14"
+plugin: rate-limiting
+config:
+  # 5 requests per minute per authenticated user.
+  # Keying on consumer (JWT subject) rather than IP so that load-balanced
+  # clients behind a NAT share separate buckets.
+  minute: 5
+  # Fail-open: if Redis is unavailable, allow the request rather than hard-
+  # blocking dashboard loads. Reporting reads are not security-critical.
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  # Key on the authenticated consumer (JWT sub) so each user has their own
+  # bucket rather than sharing one with all users on the same IP.
+  limit_by: consumer
+  # Expose rate-limit headers so API clients can implement backoff.
+  hide_client_headers: false
+---
+# Ingress — data-intensive reporting API endpoints
+#
+# Kong HTTP/gRPC-gateway transcodes these REST paths to gRPC RPCs on the
+# reporting-analytics service. Only the four data-fetch endpoints are listed;
+# the lightweight definition endpoints are omitted intentionally.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: reporting-bulk-routes
+  namespace: thittam
+  labels:
+    app: reporting-analytics
+    app.kubernetes.io/name: reporting-analytics
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: reporting-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # Expense projection scan — potentially large (all expenses for a production)
+          - path: /api/v1/reporting/expenses
+            pathType: Prefix
+            backend:
+              service:
+                name: reporting-analytics
+                port:
+                  number: 8085
+          # Budget projection scan
+          - path: /api/v1/reporting/budgets
+            pathType: Prefix
+            backend:
+              service:
+                name: reporting-analytics
+                port:
+                  number: 8085
+          # Dashboard summary — aggregates multiple projection tables
+          - path: /api/v1/reporting/dashboard
+            pathType: Exact
+            backend:
+              service:
+                name: reporting-analytics
+                port:
+                  number: 8085

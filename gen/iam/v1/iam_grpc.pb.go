@@ -23,25 +23,28 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	IAMService_Login_FullMethodName            = "/thittam.iam.v1.IAMService/Login"
-	IAMService_RefreshToken_FullMethodName     = "/thittam.iam.v1.IAMService/RefreshToken"
-	IAMService_Logout_FullMethodName           = "/thittam.iam.v1.IAMService/Logout"
-	IAMService_ValidateToken_FullMethodName    = "/thittam.iam.v1.IAMService/ValidateToken"
-	IAMService_CreateUser_FullMethodName       = "/thittam.iam.v1.IAMService/CreateUser"
-	IAMService_GetUser_FullMethodName          = "/thittam.iam.v1.IAMService/GetUser"
-	IAMService_ListUsers_FullMethodName        = "/thittam.iam.v1.IAMService/ListUsers"
-	IAMService_UpdateUser_FullMethodName       = "/thittam.iam.v1.IAMService/UpdateUser"
-	IAMService_DeactivateUser_FullMethodName   = "/thittam.iam.v1.IAMService/DeactivateUser"
-	IAMService_ChangePassword_FullMethodName   = "/thittam.iam.v1.IAMService/ChangePassword"
-	IAMService_AssignRole_FullMethodName       = "/thittam.iam.v1.IAMService/AssignRole"
-	IAMService_RevokeRole_FullMethodName       = "/thittam.iam.v1.IAMService/RevokeRole"
-	IAMService_ListRoles_FullMethodName        = "/thittam.iam.v1.IAMService/ListRoles"
-	IAMService_CheckPermission_FullMethodName  = "/thittam.iam.v1.IAMService/CheckPermission"
-	IAMService_CreateTenant_FullMethodName     = "/thittam.iam.v1.IAMService/CreateTenant"
-	IAMService_GetTenant_FullMethodName        = "/thittam.iam.v1.IAMService/GetTenant"
-	IAMService_SuspendTenant_FullMethodName    = "/thittam.iam.v1.IAMService/SuspendTenant"
-	IAMService_InviteUser_FullMethodName       = "/thittam.iam.v1.IAMService/InviteUser"
-	IAMService_AcceptInvitation_FullMethodName = "/thittam.iam.v1.IAMService/AcceptInvitation"
+	IAMService_Login_FullMethodName              = "/thittam.iam.v1.IAMService/Login"
+	IAMService_RefreshToken_FullMethodName       = "/thittam.iam.v1.IAMService/RefreshToken"
+	IAMService_Logout_FullMethodName             = "/thittam.iam.v1.IAMService/Logout"
+	IAMService_ValidateToken_FullMethodName      = "/thittam.iam.v1.IAMService/ValidateToken"
+	IAMService_CreateUser_FullMethodName         = "/thittam.iam.v1.IAMService/CreateUser"
+	IAMService_GetUser_FullMethodName            = "/thittam.iam.v1.IAMService/GetUser"
+	IAMService_ListUsers_FullMethodName          = "/thittam.iam.v1.IAMService/ListUsers"
+	IAMService_UpdateUser_FullMethodName         = "/thittam.iam.v1.IAMService/UpdateUser"
+	IAMService_DeactivateUser_FullMethodName     = "/thittam.iam.v1.IAMService/DeactivateUser"
+	IAMService_ChangePassword_FullMethodName     = "/thittam.iam.v1.IAMService/ChangePassword"
+	IAMService_AssignRole_FullMethodName         = "/thittam.iam.v1.IAMService/AssignRole"
+	IAMService_RevokeRole_FullMethodName         = "/thittam.iam.v1.IAMService/RevokeRole"
+	IAMService_ListRoles_FullMethodName          = "/thittam.iam.v1.IAMService/ListRoles"
+	IAMService_CheckPermission_FullMethodName    = "/thittam.iam.v1.IAMService/CheckPermission"
+	IAMService_CreateTenant_FullMethodName       = "/thittam.iam.v1.IAMService/CreateTenant"
+	IAMService_GetTenant_FullMethodName          = "/thittam.iam.v1.IAMService/GetTenant"
+	IAMService_SuspendTenant_FullMethodName      = "/thittam.iam.v1.IAMService/SuspendTenant"
+	IAMService_InviteUser_FullMethodName         = "/thittam.iam.v1.IAMService/InviteUser"
+	IAMService_AcceptInvitation_FullMethodName   = "/thittam.iam.v1.IAMService/AcceptInvitation"
+	IAMService_SetOIDCConfig_FullMethodName      = "/thittam.iam.v1.IAMService/SetOIDCConfig"
+	IAMService_StartImpersonation_FullMethodName = "/thittam.iam.v1.IAMService/StartImpersonation"
+	IAMService_EndImpersonation_FullMethodName   = "/thittam.iam.v1.IAMService/EndImpersonation"
 )
 
 // IAMServiceClient is the client API for IAMService service.
@@ -72,6 +75,11 @@ type IAMServiceClient interface {
 	// --- Invitations ---
 	InviteUser(ctx context.Context, in *InviteUserRequest, opts ...grpc.CallOption) (*Invitation, error)
 	AcceptInvitation(ctx context.Context, in *AcceptInvitationRequest, opts ...grpc.CallOption) (*TokenPair, error)
+	// --- OIDC configuration ---
+	SetOIDCConfig(ctx context.Context, in *SetOIDCConfigRequest, opts ...grpc.CallOption) (*SetOIDCConfigResponse, error)
+	// --- Impersonation (platform_admin only) ---
+	StartImpersonation(ctx context.Context, in *StartImpersonationRequest, opts ...grpc.CallOption) (*ImpersonationSession, error)
+	EndImpersonation(ctx context.Context, in *EndImpersonationRequest, opts ...grpc.CallOption) (*EndImpersonationResponse, error)
 }
 
 type iAMServiceClient struct {
@@ -253,6 +261,33 @@ func (c *iAMServiceClient) AcceptInvitation(ctx context.Context, in *AcceptInvit
 	return out, nil
 }
 
+func (c *iAMServiceClient) SetOIDCConfig(ctx context.Context, in *SetOIDCConfigRequest, opts ...grpc.CallOption) (*SetOIDCConfigResponse, error) {
+	out := new(SetOIDCConfigResponse)
+	err := c.cc.Invoke(ctx, IAMService_SetOIDCConfig_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *iAMServiceClient) StartImpersonation(ctx context.Context, in *StartImpersonationRequest, opts ...grpc.CallOption) (*ImpersonationSession, error) {
+	out := new(ImpersonationSession)
+	err := c.cc.Invoke(ctx, IAMService_StartImpersonation_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *iAMServiceClient) EndImpersonation(ctx context.Context, in *EndImpersonationRequest, opts ...grpc.CallOption) (*EndImpersonationResponse, error) {
+	out := new(EndImpersonationResponse)
+	err := c.cc.Invoke(ctx, IAMService_EndImpersonation_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IAMServiceServer is the server API for IAMService service.
 // All implementations must embed UnimplementedIAMServiceServer
 // for forward compatibility
@@ -281,6 +316,11 @@ type IAMServiceServer interface {
 	// --- Invitations ---
 	InviteUser(context.Context, *InviteUserRequest) (*Invitation, error)
 	AcceptInvitation(context.Context, *AcceptInvitationRequest) (*TokenPair, error)
+	// --- OIDC configuration ---
+	SetOIDCConfig(context.Context, *SetOIDCConfigRequest) (*SetOIDCConfigResponse, error)
+	// --- Impersonation (platform_admin only) ---
+	StartImpersonation(context.Context, *StartImpersonationRequest) (*ImpersonationSession, error)
+	EndImpersonation(context.Context, *EndImpersonationRequest) (*EndImpersonationResponse, error)
 	mustEmbedUnimplementedIAMServiceServer()
 }
 
@@ -344,6 +384,15 @@ func (UnimplementedIAMServiceServer) InviteUser(context.Context, *InviteUserRequ
 }
 func (UnimplementedIAMServiceServer) AcceptInvitation(context.Context, *AcceptInvitationRequest) (*TokenPair, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AcceptInvitation not implemented")
+}
+func (UnimplementedIAMServiceServer) SetOIDCConfig(context.Context, *SetOIDCConfigRequest) (*SetOIDCConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetOIDCConfig not implemented")
+}
+func (UnimplementedIAMServiceServer) StartImpersonation(context.Context, *StartImpersonationRequest) (*ImpersonationSession, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartImpersonation not implemented")
+}
+func (UnimplementedIAMServiceServer) EndImpersonation(context.Context, *EndImpersonationRequest) (*EndImpersonationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EndImpersonation not implemented")
 }
 func (UnimplementedIAMServiceServer) mustEmbedUnimplementedIAMServiceServer() {}
 
@@ -700,6 +749,60 @@ func _IAMService_AcceptInvitation_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IAMService_SetOIDCConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetOIDCConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMServiceServer).SetOIDCConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IAMService_SetOIDCConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMServiceServer).SetOIDCConfig(ctx, req.(*SetOIDCConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IAMService_StartImpersonation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartImpersonationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMServiceServer).StartImpersonation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IAMService_StartImpersonation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMServiceServer).StartImpersonation(ctx, req.(*StartImpersonationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IAMService_EndImpersonation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EndImpersonationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMServiceServer).EndImpersonation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IAMService_EndImpersonation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMServiceServer).EndImpersonation(ctx, req.(*EndImpersonationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IAMService_ServiceDesc is the grpc.ServiceDesc for IAMService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -782,6 +885,18 @@ var IAMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AcceptInvitation",
 			Handler:    _IAMService_AcceptInvitation_Handler,
+		},
+		{
+			MethodName: "SetOIDCConfig",
+			Handler:    _IAMService_SetOIDCConfig_Handler,
+		},
+		{
+			MethodName: "StartImpersonation",
+			Handler:    _IAMService_StartImpersonation_Handler,
+		},
+		{
+			MethodName: "EndImpersonation",
+			Handler:    _IAMService_EndImpersonation_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

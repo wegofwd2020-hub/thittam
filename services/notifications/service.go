@@ -165,11 +165,16 @@ func (s *Service) GetTemplate(ctx context.Context, tenantID, id uuid.UUID) (*Tem
 	return t, nil
 }
 
-// ListTemplates returns all templates for a tenant.
+// ListTemplates returns templates for a tenant. Capped at 500 — a tenant
+// realistically configures ≤50 templates; 500 is a generous safety ceiling.
 func (s *Service) ListTemplates(ctx context.Context, tenantID uuid.UUID) ([]Template, error) {
 	templates, err := s.repo.ListTemplates(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("notifications: list templates: %w", err)
+	}
+	const maxTemplates = 500
+	if len(templates) > maxTemplates {
+		templates = templates[:maxTemplates]
 	}
 	return templates, nil
 }

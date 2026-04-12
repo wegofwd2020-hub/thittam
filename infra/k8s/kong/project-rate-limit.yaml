@@ -1,0 +1,89 @@
+# Kong rate-limiting for project-management write endpoints
+#
+# WHY: Production create/update/archive RPCs trigger downstream NATS events
+# (ProjectCreated, MemberAssigned) consumed by notifications, reporting, and
+# the IAM system-role seeder. A burst of CreateProduction calls can flood the
+# EVENTS JetStream subject and exhaust the per-stream byte quota before the
+# JetStream storage limit kicks in. Crew operations additionally write to the
+# PostgreSQL tenant schema; unbounded bursts can exceed pgxpool connection limits.
+#
+# Rate: 60 write requests/minute per authenticated user.
+# Read-only RPCs (GetProduction, ListProductions, ListPhases, ListCrewMembers)
+# are not rate-limited — they are bounded DB reads with a server-side page cap.
+#
+# Apply:
+#   kubectl apply -f infra/k8s/kong/project-rate-limit.yaml -n thittam
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: project-write-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "guards against NATS EVENTS flood and pgxpool exhaustion"
+plugin: rate-limiting
+config:
+  # 60 write requests per minute per authenticated user.
+  # Sufficient for bulk crew-member imports (≤50 members/production, added
+  # one at a time via the UI); blocks runaway scripts.
+  minute: 60
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Ingress — project write RPCs (state-mutating paths only)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: project-write-routes
+  namespace: thittam
+  labels:
+    app: project-management
+    app.kubernetes.io/name: project-management
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: project-write-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # CreateProduction — triggers ProjectCreated NATS event
+          - path: /api/v1/productions
+            pathType: Exact
+            backend:
+              service:
+                name: project-management
+                port:
+                  number: 8080
+          # UpdateProduction / ArchiveProduction
+          - path: /api/v1/productions/
+            pathType: Prefix
+            backend:
+              service:
+                name: project-management
+                port:
+                  number: 8080
+          # Phase and crew write operations
+          - path: /api/v1/phases
+            pathType: Prefix
+            backend:
+              service:
+                name: project-management
+                port:
+                  number: 8080
+          - path: /api/v1/crew
+            pathType: Prefix
+            backend:
+              service:
+                name: project-management
+                port:
+                  number: 8080

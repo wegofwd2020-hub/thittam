@@ -79,9 +79,14 @@ func (p *Postgres) GetAccountByCode(ctx context.Context, tenantID uuid.UUID, cod
 	return accountFromDB(row), nil
 }
 
-func (p *Postgres) ListAccounts(ctx context.Context, tenantID uuid.UUID) ([]ledger.Account, error) {
+func (p *Postgres) ListAccounts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]ledger.Account, error) {
 	// Pass "" as the account_type filter to return all account types.
-	rows, err := p.q.ListAccounts(ctx, ListAccountsParams{TenantID: tenantID, Column2: ""})
+	rows, err := p.q.ListAccounts(ctx, ListAccountsParams{
+		TenantID: tenantID,
+		Column2:  "",
+		Limit:    int32(limit),
+		Offset:   int32(offset),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("ledger: list accounts: %w", err)
 	}

@@ -251,7 +251,9 @@ func (h *Handler) ListVersions(ctx context.Context, req *documentv1.ListVersions
 		return nil, status.Error(codes.InvalidArgument, "invalid document_id")
 	}
 
-	versions, err := h.svc.ListVersions(ctx, tenantID, docID)
+	// Proto does not carry limit/offset yet — apply a server-side cap.
+	const defaultLimit = 50
+	versions, err := h.svc.ListVersions(ctx, tenantID, docID, defaultLimit, 0)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -334,7 +336,9 @@ func (h *Handler) ListFolders(ctx context.Context, req *documentv1.ListFoldersRe
 		productionID = &id
 	}
 
-	folders, err := h.svc.ListFolders(ctx, tenantID, productionID)
+	// Proto does not carry limit/offset yet — apply a server-side cap.
+	const defaultLimit = 100
+	folders, err := h.svc.ListFolders(ctx, tenantID, productionID, defaultLimit, 0)
 	if err != nil {
 		return nil, grpcErr(err)
 	}

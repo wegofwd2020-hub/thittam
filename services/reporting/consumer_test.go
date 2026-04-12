@@ -59,9 +59,14 @@ type stubProjectionWriter struct {
 	teamAssignments    []struct{ TenantID, ProjectID uuid.UUID; Count int }
 
 	// Injected error overrides for failure tests.
-	upsertExpenseErr  error
-	upsertBudgetErr   error
-	upsertSnapshotErr error
+	upsertExpenseErr    error
+	upsertBudgetErr     error
+	upsertSnapshotErr   error
+	upsertPendingErr    error
+	incrementMonthlyErr error
+	incrementCategoryErr error
+	deletePendingErr    error
+	upsertTeamErr       error
 }
 
 func (s *stubProjectionWriter) UpsertExpenseFact(_ context.Context, f ExpenseFact) error {
@@ -75,6 +80,9 @@ func (s *stubProjectionWriter) UpsertExpenseFact(_ context.Context, f ExpenseFac
 }
 
 func (s *stubProjectionWriter) IncrementMonthlySpend(_ context.Context, tenantID uuid.UUID, month string, delta decimal.Decimal) error {
+	if s.incrementMonthlyErr != nil {
+		return s.incrementMonthlyErr
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.monthlySpendCalls = append(s.monthlySpendCalls, struct {
@@ -86,6 +94,9 @@ func (s *stubProjectionWriter) IncrementMonthlySpend(_ context.Context, tenantID
 }
 
 func (s *stubProjectionWriter) IncrementCategorySpend(_ context.Context, tenantID uuid.UUID, categoryID, _ string, delta decimal.Decimal) error {
+	if s.incrementCategoryErr != nil {
+		return s.incrementCategoryErr
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.categorySpendCalls = append(s.categorySpendCalls, struct {
@@ -97,6 +108,9 @@ func (s *stubProjectionWriter) IncrementCategorySpend(_ context.Context, tenantI
 }
 
 func (s *stubProjectionWriter) UpsertPendingApproval(_ context.Context, item PendingApprovalRow) error {
+	if s.upsertPendingErr != nil {
+		return s.upsertPendingErr
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pendingUpserts = append(s.pendingUpserts, item)
@@ -104,6 +118,9 @@ func (s *stubProjectionWriter) UpsertPendingApproval(_ context.Context, item Pen
 }
 
 func (s *stubProjectionWriter) DeletePendingApproval(_ context.Context, _, expenseID uuid.UUID) error {
+	if s.deletePendingErr != nil {
+		return s.deletePendingErr
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pendingDeletes = append(s.pendingDeletes, expenseID)
@@ -131,6 +148,9 @@ func (s *stubProjectionWriter) UpsertPortfolioSnapshot(_ context.Context, snap P
 }
 
 func (s *stubProjectionWriter) UpsertTeamAssignment(_ context.Context, tenantID, projectID uuid.UUID, _ string, memberCount int) error {
+	if s.upsertTeamErr != nil {
+		return s.upsertTeamErr
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.teamAssignments = append(s.teamAssignments, struct {
@@ -630,4 +650,213 @@ func (*failingWatermarkStore) RecordWatermark(_ context.Context, _ string, _ tim
 }
 func (*failingWatermarkStore) OldestWatermark(_ context.Context) (time.Time, error) {
 	return time.Time{}, nil
+}
+
+// ── NAK-path tests (DB error → message redelivery) ────────────────────────────
+
+func TestConsumer_HandleExpenseSubmitted_DBError_NaksMessage(t *testing.T) {
+	t.Parallel()
+
+	tenantID := uuid.MustParse("d1000000-0000-0000-0000-000000000010")
+	payload := events.ExpenseSubmittedPayload{
+		ExpenseID:    uuid.MustParse("d2000000-0000-0000-0000-000000000010"),
+		ProductionID: uuid.MustParse("d3000000-0000-0000-0000-000000000010"),
+		Amount:       "1000.00",
+		SubmittedAt:  time.Date(2026, 4, 10, 9, 0, 0, 0, time.UTC),
+	}
+
+	writer := &stubProjectionWriter{upsertPendingErr: errors.New("db timeout")}
+	consumer := newTestConsumer(writer, newStubWatermarkStore())
+
+	msg := &stubMessage{
+		subject: events.SubjectExpenseSubmitted,
+		data:    mustMarshalEnvelope(t, events.SubjectExpenseSubmitted, tenantID, time.Now(), payload),
+	}
+
+	err := consumer.handleExpenseSubmitted(context.Background(), msg)
+	require.NoError(t, err)
+	assert.False(t, msg.acked)
+	assert.True(t, msg.naked, "DB error on UpsertPendingApproval must NAK for redelivery")
+}
+
+func TestConsumer_HandleExpenseApproved_UpsertFact_DBError_NaksMessage(t *testing.T) {
+	t.Parallel()
+
+	tenantID := uuid.MustParse("d1000000-0000-0000-0000-000000000011")
+	payload := events.ExpenseApprovedPayload{
+		ExpenseID:    uuid.MustParse("d2000000-0000-0000-0000-000000000011"),
+		ProductionID: uuid.MustParse("d3000000-0000-0000-0000-000000000011"),
+		CategoryID:   "crew",
+		Amount:       "2000.00",
+		ApprovedAt:   time.Date(2026, 4, 10, 9, 0, 0, 0, time.UTC),
+		Month:        "2026-04",
+	}
+
+	writer := &stubProjectionWriter{upsertExpenseErr: errors.New("unique violation")}
+	consumer := newTestConsumer(writer, newStubWatermarkStore())
+
+	msg := &stubMessage{
+		subject: events.SubjectExpenseApproved,
+		data:    mustMarshalEnvelope(t, events.SubjectExpenseApproved, tenantID, time.Now(), payload),
+	}
+
+	err := consumer.handleExpenseApproved(context.Background(), msg)
+	require.NoError(t, err)
+	assert.False(t, msg.acked)
+	assert.True(t, msg.naked, "DB error on UpsertExpenseFact must NAK for redelivery")
+}
+
+func TestConsumer_HandleExpenseApproved_IncrementMonthly_DBError_NaksMessage(t *testing.T) {
+	t.Parallel()
+
+	tenantID := uuid.MustParse("d1000000-0000-0000-0000-000000000012")
+	payload := events.ExpenseApprovedPayload{
+		ExpenseID:    uuid.MustParse("d2000000-0000-0000-0000-000000000012"),
+		ProductionID: uuid.MustParse("d3000000-0000-0000-0000-000000000012"),
+		CategoryID:   "equipment",
+		Amount:       "3000.00",
+		ApprovedAt:   time.Date(2026, 4, 10, 9, 0, 0, 0, time.UTC),
+		Month:        "2026-04",
+	}
+
+	writer := &stubProjectionWriter{incrementMonthlyErr: errors.New("connection reset")}
+	consumer := newTestConsumer(writer, newStubWatermarkStore())
+
+	msg := &stubMessage{
+		subject: events.SubjectExpenseApproved,
+		data:    mustMarshalEnvelope(t, events.SubjectExpenseApproved, tenantID, time.Now(), payload),
+	}
+
+	err := consumer.handleExpenseApproved(context.Background(), msg)
+	require.NoError(t, err)
+	assert.False(t, msg.acked)
+	assert.True(t, msg.naked, "DB error on IncrementMonthlySpend must NAK for redelivery")
+}
+
+func TestConsumer_HandleExpenseApproved_IncrementCategory_DBError_NaksMessage(t *testing.T) {
+	t.Parallel()
+
+	tenantID := uuid.MustParse("d1000000-0000-0000-0000-000000000013")
+	payload := events.ExpenseApprovedPayload{
+		ExpenseID:    uuid.MustParse("d2000000-0000-0000-0000-000000000013"),
+		ProductionID: uuid.MustParse("d3000000-0000-0000-0000-000000000013"),
+		CategoryID:   "props",
+		Amount:       "500.00",
+		ApprovedAt:   time.Date(2026, 4, 10, 9, 0, 0, 0, time.UTC),
+		Month:        "2026-04",
+	}
+
+	writer := &stubProjectionWriter{incrementCategoryErr: errors.New("lock timeout")}
+	consumer := newTestConsumer(writer, newStubWatermarkStore())
+
+	msg := &stubMessage{
+		subject: events.SubjectExpenseApproved,
+		data:    mustMarshalEnvelope(t, events.SubjectExpenseApproved, tenantID, time.Now(), payload),
+	}
+
+	err := consumer.handleExpenseApproved(context.Background(), msg)
+	require.NoError(t, err)
+	assert.False(t, msg.acked)
+	assert.True(t, msg.naked, "DB error on IncrementCategorySpend must NAK for redelivery")
+}
+
+func TestConsumer_HandleExpenseApproved_DeletePending_DBError_NaksMessage(t *testing.T) {
+	t.Parallel()
+
+	tenantID := uuid.MustParse("d1000000-0000-0000-0000-000000000014")
+	payload := events.ExpenseApprovedPayload{
+		ExpenseID:    uuid.MustParse("d2000000-0000-0000-0000-000000000014"),
+		ProductionID: uuid.MustParse("d3000000-0000-0000-0000-000000000014"),
+		CategoryID:   "travel",
+		Amount:       "750.00",
+		ApprovedAt:   time.Date(2026, 4, 10, 9, 0, 0, 0, time.UTC),
+		Month:        "2026-04",
+	}
+
+	writer := &stubProjectionWriter{deletePendingErr: errors.New("foreign key violation")}
+	consumer := newTestConsumer(writer, newStubWatermarkStore())
+
+	msg := &stubMessage{
+		subject: events.SubjectExpenseApproved,
+		data:    mustMarshalEnvelope(t, events.SubjectExpenseApproved, tenantID, time.Now(), payload),
+	}
+
+	err := consumer.handleExpenseApproved(context.Background(), msg)
+	require.NoError(t, err)
+	assert.False(t, msg.acked)
+	assert.True(t, msg.naked, "DB error on DeletePendingApproval must NAK for redelivery")
+}
+
+func TestConsumer_HandleProjectCreated_DBError_NaksMessage(t *testing.T) {
+	t.Parallel()
+
+	tenantID := uuid.MustParse("d1000000-0000-0000-0000-000000000015")
+	payload := events.ProjectCreatedPayload{
+		ProjectID: uuid.MustParse("d2000000-0000-0000-0000-000000000015"),
+		Title:     "Feature Film",
+		Status:    "active",
+	}
+
+	writer := &stubProjectionWriter{upsertSnapshotErr: errors.New("deadlock detected")}
+	consumer := newTestConsumer(writer, newStubWatermarkStore())
+
+	msg := &stubMessage{
+		subject: events.SubjectProjectCreated,
+		data:    mustMarshalEnvelope(t, events.SubjectProjectCreated, tenantID, time.Now(), payload),
+	}
+
+	err := consumer.handleProjectCreated(context.Background(), msg)
+	require.NoError(t, err)
+	assert.False(t, msg.acked)
+	assert.True(t, msg.naked, "DB error on UpsertPortfolioSnapshot must NAK for redelivery")
+}
+
+func TestConsumer_HandleProjectStatusChanged_DBError_NaksMessage(t *testing.T) {
+	t.Parallel()
+
+	tenantID := uuid.MustParse("d1000000-0000-0000-0000-000000000016")
+	payload := events.ProjectStatusChangedPayload{
+		ProjectID:    uuid.MustParse("d2000000-0000-0000-0000-000000000016"),
+		Title:        "Documentary",
+		OldStatus:    "active",
+		NewStatus:    "completed",
+		CurrentPhase: "Wrap",
+	}
+
+	writer := &stubProjectionWriter{upsertSnapshotErr: errors.New("serialization failure")}
+	consumer := newTestConsumer(writer, newStubWatermarkStore())
+
+	msg := &stubMessage{
+		subject: events.SubjectProjectStatusChanged,
+		data:    mustMarshalEnvelope(t, events.SubjectProjectStatusChanged, tenantID, time.Now(), payload),
+	}
+
+	err := consumer.handleProjectStatusChanged(context.Background(), msg)
+	require.NoError(t, err)
+	assert.False(t, msg.acked)
+	assert.True(t, msg.naked, "DB error on UpsertPortfolioSnapshot must NAK for redelivery")
+}
+
+func TestConsumer_HandleProjectMemberAssigned_DBError_NaksMessage(t *testing.T) {
+	t.Parallel()
+
+	tenantID := uuid.MustParse("d1000000-0000-0000-0000-000000000017")
+	payload := events.ProjectMemberAssignedPayload{
+		ProjectID:    uuid.MustParse("d2000000-0000-0000-0000-000000000017"),
+		ProjectTitle: "TV Series",
+		MemberCount:  25,
+	}
+
+	writer := &stubProjectionWriter{upsertTeamErr: errors.New("connection refused")}
+	consumer := newTestConsumer(writer, newStubWatermarkStore())
+
+	msg := &stubMessage{
+		subject: events.SubjectProjectMemberAssigned,
+		data:    mustMarshalEnvelope(t, events.SubjectProjectMemberAssigned, tenantID, time.Now(), payload),
+	}
+
+	err := consumer.handleProjectMemberAssigned(context.Background(), msg)
+	require.NoError(t, err)
+	assert.False(t, msg.acked)
+	assert.True(t, msg.naked, "DB error on UpsertTeamAssignment must NAK for redelivery")
 }

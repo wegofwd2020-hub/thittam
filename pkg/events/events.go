@@ -41,6 +41,9 @@ const (
 	SubjectBillingSubscriptionSuspended = "thittam.billing.subscription.suspended"
 	SubjectBillingInvoicePaid           = "thittam.billing.invoice.paid"
 	SubjectBillingInvoiceOverdue        = "thittam.billing.invoice.overdue"
+
+	// Document domain events
+	SubjectDocumentSigned = "thittam.document.signed"
 )
 
 // Envelope wraps every domain event published to NATS JetStream.
@@ -228,6 +231,15 @@ type BillingInvoiceOverduePayload struct {
 	// TotalAmount serialized as string per Rule #1.
 	TotalAmount string `json:"total_amount"`
 	DunningAttempts int `json:"dunning_attempts"`
+}
+
+// DocumentSignedPayload is published when an e-signature is completed.
+// Subject: SubjectDocumentSigned
+type DocumentSignedPayload struct {
+	DocumentID   string    `json:"document_id"`
+	DocumentName string    `json:"document_name"`
+	SignedBy     uuid.UUID `json:"signed_by"`
+	SignedAt     time.Time `json:"signed_at"`
 }
 
 // ProjectMemberAssignedPayload is published when a crew member is assigned to a project.

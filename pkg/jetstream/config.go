@@ -44,8 +44,9 @@ const (
 
 // ConsumerName constants — durable consumer names per subscribing service.
 const (
-	ConsumerReportingFinancial    = "reporting-financial"
+	ConsumerReportingFinancial     = "reporting-financial"
 	ConsumerNotificationsFinancial = "notifications-financial"
+	ConsumerNotificationsEvents    = "notifications-events"
 )
 
 // FinancialSubjects are the NATS subjects that carry money-critical events.
@@ -192,4 +193,34 @@ func FinancialConsumers() []ConsumerConfig {
 			Description:    "Notifications service financial event consumer. Triggers approval-request and over-budget alerts.",
 		},
 	}
+}
+
+// EventsConsumers returns the durable consumer configs for services that
+// consume non-financial domain events from the EVENTS stream (project, document).
+// Financial subjects are intentionally excluded: those events arrive via the
+// FINANCIAL stream (FinancialConsumers) where DLQ protection and 7-day retention apply.
+func EventsConsumers() []ConsumerConfig {
+	// Non-financial subjects carried by the EVENTS stream that notifications
+	// must handle. Financial subjects are handled by notifications-financial on
+	// the FINANCIAL stream — duplicating them here would cause double notifications.
+	eventsFilterSubjects := []string{
+		"thittam.project.>",
+		"thittam.document.>",
+	}
+	return []ConsumerConfig{
+		{
+			StreamName:     StreamEvents,
+			DurableName:    ConsumerNotificationsEvents,
+			FilterSubjects: eventsFilterSubjects,
+			MaxDeliver:     MaxDeliverAttempts,
+			AckWait:        AckWait,
+			BackOff:        DeliveryBackOff,
+			Description:    "Notifications service non-financial event consumer. Handles project and document events.",
+		},
+	}
+}
+
+// AllConsumers returns every durable consumer config across all streams.
+func AllConsumers() []ConsumerConfig {
+	return append(FinancialConsumers(), EventsConsumers()...)
 }

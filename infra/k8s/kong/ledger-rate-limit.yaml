@@ -1,0 +1,185 @@
+# Kong rate-limiting for general-ledger write endpoints
+#
+# WHY: Journal entry creation is triggered by ExpenseApproved and BudgetApproved
+# NATS events, but also has direct write RPCs (CreateJournalEntry, ClosePeriod,
+# VoidEntry). Double-entry journal writes are irreversible — a voided entry cannot
+# be deleted, only offset. A burst of CreateJournalEntry calls:
+#   1. Generates a linear number of append-only rows in the ledger schema
+#   2. Fans out to reporting-analytics (AccountBalance projections)
+#   3. May trigger Period-end reconciliation checks on every write
+#
+# ClosePeriod and VoidEntry are one-shot administrative operations that must
+# never be replayed — the tightest limits reflect this.
+#
+# Three plugins:
+#   ledger-entry-rate-limit  — 20 req/min per user (journal writes; tight because
+#                              each write creates ≥2 immutable ledger rows)
+#   ledger-admin-rate-limit  — 10 req/min per user (ClosePeriod, VoidEntry — admin ops)
+#   ledger-query-rate-limit  — 120 req/min per user (read paths — no DB mutation,
+#                              but report queries can be expensive)
+#
+# Apply:
+#   kubectl apply -f infra/k8s/kong/ledger-rate-limit.yaml -n thittam
+---
+# Journal entry write plugin — strictest (irreversible, fan-out to reporting)
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: ledger-entry-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "guards against irreversible journal entry flood and reporting fan-out"
+plugin: rate-limiting
+config:
+  minute: 20
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Admin operations plugin — tightest (ClosePeriod / VoidEntry are one-shot)
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: ledger-admin-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "prevents accidental ClosePeriod/VoidEntry replay"
+plugin: rate-limiting
+config:
+  minute: 10
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Read / report plugin — generous (read-only, no mutations)
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: ledger-query-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "soft cap on expensive account-balance report queries"
+plugin: rate-limiting
+config:
+  minute: 120
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Ingress — journal entry writes
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ledger-entry-routes
+  namespace: thittam
+  labels:
+    app: general-ledger
+    app.kubernetes.io/name: general-ledger
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: ledger-entry-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # CreateJournalEntry — triggers AccountBalance update in reporting
+          - path: /api/v1/journal-entries
+            pathType: Exact
+            backend:
+              service:
+                name: general-ledger
+                port:
+                  number: 8083
+---
+# Ingress — period close and void (administrative, one-shot)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ledger-admin-routes
+  namespace: thittam
+  labels:
+    app: general-ledger
+    app.kubernetes.io/name: general-ledger
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: ledger-admin-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # ClosePeriod — finalises accounting period, blocks future entries
+          - path: /api/v1/periods/close
+            pathType: Prefix
+            backend:
+              service:
+                name: general-ledger
+                port:
+                  number: 8083
+          # VoidEntry — creates offsetting entry, marks original as void
+          - path: /api/v1/journal-entries/void
+            pathType: Prefix
+            backend:
+              service:
+                name: general-ledger
+                port:
+                  number: 8083
+---
+# Ingress — account and balance queries (read-only)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ledger-query-routes
+  namespace: thittam
+  labels:
+    app: general-ledger
+    app.kubernetes.io/name: general-ledger
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: ledger-query-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # ListAccounts / GetAccount
+          - path: /api/v1/accounts
+            pathType: Prefix
+            backend:
+              service:
+                name: general-ledger
+                port:
+                  number: 8083
+          # GetBalance / ListBalances
+          - path: /api/v1/balances
+            pathType: Prefix
+            backend:
+              service:
+                name: general-ledger
+                port:
+                  number: 8083

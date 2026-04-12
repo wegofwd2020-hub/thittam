@@ -115,9 +115,12 @@ func (s *Service) GetLineItem(ctx context.Context, id uuid.UUID) (*BudgetLineIte
 	return s.repo.GetLineItem(ctx, id)
 }
 
-// ListLineItems lists line items for a budget.
-func (s *Service) ListLineItems(ctx context.Context, budgetID uuid.UUID) ([]BudgetLineItem, error) {
-	return s.repo.ListLineItems(ctx, budgetID)
+// ListLineItems lists line items for a budget, capped at 200 per page.
+func (s *Service) ListLineItems(ctx context.Context, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	return s.repo.ListLineItems(ctx, budgetID, limit, offset)
 }
 
 // UpdateLineItemActuals updates actual and committed amounts on a line item.

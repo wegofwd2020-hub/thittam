@@ -15,11 +15,13 @@ SELECT * FROM accounts WHERE code = $1 AND tenant_id = $2;
 -- name: ListAccounts :many
 SELECT * FROM accounts
 WHERE tenant_id = $1 AND ($2 = '' OR account_type = $2) AND is_active = true
-ORDER BY code ASC;
+ORDER BY code ASC
+LIMIT $3 OFFSET $4;
 
 -- name: CreateAccountingPeriod :one
 INSERT INTO accounting_periods (id, tenant_id, year, month, status)
 VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: GetOpenPeriod :one
@@ -46,6 +48,7 @@ RETURNING next_seq;
 -- name: CreateJournalEntry :one
 INSERT INTO journal_entries (id, tenant_id, production_id, period_id, entry_number, reference, narration, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: GetJournalEntry :one
@@ -72,6 +75,7 @@ LIMIT $4 OFFSET $5;
 -- name: CreateJournalLine :one
 INSERT INTO journal_lines (id, journal_id, account_id, debit_amount, credit_amount, description)
 VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: ListJournalLines :many

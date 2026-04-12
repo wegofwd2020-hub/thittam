@@ -248,7 +248,11 @@ func (h *Handler) ListLineItems(ctx context.Context, req *budgetv1.ListLineItems
 		return nil, status.Error(codes.InvalidArgument, "invalid budget ID")
 	}
 
-	items, err := h.svc.ListLineItems(ctx, budgetID)
+	// Proto does not yet carry limit/offset — apply a server-side cap to prevent
+	// unbounded queries. Callers wanting a different page size should use the
+	// batch-export endpoint or wait for the proto to be updated.
+	const defaultLimit = 100
+	items, err := h.svc.ListLineItems(ctx, budgetID, defaultLimit, 0)
 	if err != nil {
 		return nil, grpcErr(err)
 	}

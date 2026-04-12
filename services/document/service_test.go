@@ -25,7 +25,7 @@ var (
 type mockRepo struct {
 	createFolderFn      func(ctx context.Context, folder *Folder) error
 	getFolderFn         func(ctx context.Context, tenantID, id uuid.UUID) (*Folder, error)
-	listFoldersFn       func(ctx context.Context, tenantID uuid.UUID, productionID *uuid.UUID) ([]Folder, error)
+	listFoldersFn       func(ctx context.Context, tenantID uuid.UUID, productionID *uuid.UUID, limit, offset int) ([]Folder, error)
 	createDocumentFn    func(ctx context.Context, doc *Document) error
 	getDocumentFn       func(ctx context.Context, tenantID, id uuid.UUID) (*Document, error)
 	listDocumentsFn     func(ctx context.Context, tenantID uuid.UUID, productionID, folderID *uuid.UUID, limit, offset int) ([]Document, error)
@@ -33,7 +33,7 @@ type mockRepo struct {
 	softDeleteFn        func(ctx context.Context, tenantID, id uuid.UUID, deletedAt time.Time) error
 	createVersionFn     func(ctx context.Context, v *DocumentVersion) error
 	getVersionFn        func(ctx context.Context, documentID uuid.UUID, version int) (*DocumentVersion, error)
-	listVersionsFn      func(ctx context.Context, documentID uuid.UUID) ([]DocumentVersion, error)
+	listVersionsFn      func(ctx context.Context, documentID uuid.UUID, limit, offset int) ([]DocumentVersion, error)
 }
 
 func (m *mockRepo) CreateFolder(ctx context.Context, f *Folder) error {
@@ -44,8 +44,8 @@ func (m *mockRepo) GetFolder(ctx context.Context, tenantID, id uuid.UUID) (*Fold
 	if m.getFolderFn != nil { return m.getFolderFn(ctx, tenantID, id) }
 	return &Folder{ID: id, TenantID: tenantID}, nil
 }
-func (m *mockRepo) ListFolders(ctx context.Context, tenantID uuid.UUID, productionID *uuid.UUID) ([]Folder, error) {
-	if m.listFoldersFn != nil { return m.listFoldersFn(ctx, tenantID, productionID) }
+func (m *mockRepo) ListFolders(ctx context.Context, tenantID uuid.UUID, productionID *uuid.UUID, limit, offset int) ([]Folder, error) {
+	if m.listFoldersFn != nil { return m.listFoldersFn(ctx, tenantID, productionID, limit, offset) }
 	return nil, nil
 }
 func (m *mockRepo) CreateDocument(ctx context.Context, doc *Document) error {
@@ -81,8 +81,8 @@ func (m *mockRepo) GetVersion(ctx context.Context, documentID uuid.UUID, version
 	if m.getVersionFn != nil { return m.getVersionFn(ctx, documentID, version) }
 	return &DocumentVersion{ID: uuid.New(), DocumentID: documentID, Version: version, SizeBytes: 512, StorageKey: "key/v1/file.pdf"}, nil
 }
-func (m *mockRepo) ListVersions(ctx context.Context, documentID uuid.UUID) ([]DocumentVersion, error) {
-	if m.listVersionsFn != nil { return m.listVersionsFn(ctx, documentID) }
+func (m *mockRepo) ListVersions(ctx context.Context, documentID uuid.UUID, limit, offset int) ([]DocumentVersion, error) {
+	if m.listVersionsFn != nil { return m.listVersionsFn(ctx, documentID, limit, offset) }
 	return nil, nil
 }
 
@@ -514,7 +514,7 @@ func TestConfirmVersion_WrongVersion(t *testing.T) {
 func TestListVersions_Success(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{
-		listVersionsFn: func(_ context.Context, docID uuid.UUID) ([]DocumentVersion, error) {
+		listVersionsFn: func(_ context.Context, docID uuid.UUID, _, _ int) ([]DocumentVersion, error) {
 			return []DocumentVersion{
 				{ID: uuid.New(), DocumentID: docID, Version: 1},
 				{ID: uuid.New(), DocumentID: docID, Version: 2},
@@ -522,7 +522,7 @@ func TestListVersions_Success(t *testing.T) {
 		},
 	}, &mockStore{}, &mockPublisher{})
 
-	versions, err := svc.ListVersions(context.Background(), fixedTenantID, fixedDocID)
+	versions, err := svc.ListVersions(context.Background(), fixedTenantID, fixedDocID, 50, 0)
 	require.NoError(t, err)
 	assert.Len(t, versions, 2)
 }
@@ -530,12 +530,12 @@ func TestListVersions_Success(t *testing.T) {
 func TestListFolders_Success(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{
-		listFoldersFn: func(_ context.Context, tenantID uuid.UUID, _ *uuid.UUID) ([]Folder, error) {
+		listFoldersFn: func(_ context.Context, tenantID uuid.UUID, _ *uuid.UUID, _, _ int) ([]Folder, error) {
 			return []Folder{{ID: fixedFolderID, TenantID: tenantID, Name: "Contracts"}}, nil
 		},
 	}, &mockStore{}, &mockPublisher{})
 
-	folders, err := svc.ListFolders(context.Background(), fixedTenantID, nil)
+	folders, err := svc.ListFolders(context.Background(), fixedTenantID, nil, 100, 0)
 	require.NoError(t, err)
 	assert.Len(t, folders, 1)
 	assert.Equal(t, "Contracts", folders[0].Name)

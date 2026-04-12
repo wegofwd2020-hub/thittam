@@ -85,7 +85,9 @@ func (h *Handler) ListAccounts(ctx context.Context, req *ledgerv1.ListAccountsRe
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
 	}
 
-	accounts, err := h.svc.ListAccounts(ctx, tenantID)
+	// Proto does not carry limit/offset yet — apply a server-side cap.
+	const defaultLimit = 200
+	accounts, err := h.svc.ListAccounts(ctx, tenantID, defaultLimit, 0)
 	if err != nil {
 		return nil, grpcErr(err)
 	}

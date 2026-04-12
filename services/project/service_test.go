@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -52,7 +53,7 @@ func (m *mockRepo) CreatePhase(ctx context.Context, p *Phase) error {
 	}
 	return nil
 }
-func (m *mockRepo) ListPhases(ctx context.Context, prodID uuid.UUID) ([]Phase, error) {
+func (m *mockRepo) ListPhases(ctx context.Context, prodID uuid.UUID, limit, offset int) ([]Phase, error) {
 	return nil, nil
 }
 func (m *mockRepo) GetPhase(ctx context.Context, id uuid.UUID) (*Phase, error) {
@@ -73,7 +74,7 @@ func (m *mockRepo) AddCrewMember(ctx context.Context, c *CrewMember) error {
 	}
 	return nil
 }
-func (m *mockRepo) ListCrewMembers(ctx context.Context, prodID uuid.UUID) ([]CrewMember, error) {
+func (m *mockRepo) ListCrewMembers(ctx context.Context, prodID uuid.UUID, limit, offset int) ([]CrewMember, error) {
 	if m.listCrewFn != nil {
 		return m.listCrewFn(ctx, prodID)
 	}
@@ -354,7 +355,7 @@ func TestListCrewMembers_Success(t *testing.T) {
 		},
 	})
 
-	crew, err := svc.ListCrewMembers(context.Background(), prodID)
+	crew, err := svc.ListCrewMembers(context.Background(), prodID, 50, 0)
 	require.NoError(t, err)
 	assert.Len(t, crew, 2)
 	assert.Equal(t, "Alice", crew[0].Name)
@@ -399,4 +400,52 @@ func TestUpdatePhaseStatus_TargetTypeNotInVertical(t *testing.T) {
 	require.Error(t, err)
 	// Could be ErrInvalidTransition or ErrInvalidPhaseType — both mean rejected.
 	require.True(t, err != nil)
+}
+
+func TestCreateProduction_RepoError_PropagatesError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		createProductionFn: func(_ context.Context, _ *Production) error {
+			return fmt.Errorf("db connection refused")
+		},
+	})
+
+	p := &Production{TenantID: uuid.New(), Title: "Test Film"}
+	err := svc.CreateProduction(context.Background(), p)
+	require.Error(t, err)
+}
+
+func TestCreateProduction_NilPublisher_DoesNotPanic(t *testing.T) {
+	t.Parallel()
+	// NewService with no publisher — publish() must be a no-op.
+	svc := NewService(&mockRepo{})
+	p := &Production{TenantID: uuid.New(), Title: "Silent Film"}
+	err := svc.CreateProduction(context.Background(), p)
+	require.NoError(t, err)
+	assert.NotEqual(t, uuid.Nil, p.ID)
+}
+
+// mockEventPublisher is a minimal stub that records PublishProductionCreated calls.
+type mockEventPublisher struct {
+	called bool
+}
+
+func (m *mockEventPublisher) PublishProductionCreated(_ context.Context, _ *Production) error {
+	m.called = true
+	return nil
+}
+
+func (m *mockEventPublisher) PublishCrewMemberAdded(_ context.Context, _ *CrewMember) error {
+	return nil
+}
+
+func TestCreateProduction_WithPublisher_CallsPublish(t *testing.T) {
+	t.Parallel()
+	pub := &mockEventPublisher{}
+	svc := NewService(&mockRepo{}, pub)
+
+	p := &Production{TenantID: uuid.New(), Title: "Published Film"}
+	err := svc.CreateProduction(context.Background(), p)
+	require.NoError(t, err)
+	assert.True(t, pub.called, "publisher must be called after successful creation")
 }

@@ -39,6 +39,13 @@ service IAMService {
   // --- Invitations ---
   rpc InviteUser(InviteUserRequest) returns (Invitation);
   rpc AcceptInvitation(AcceptInvitationRequest) returns (TokenPair);
+
+  // --- OIDC configuration ---
+  rpc SetOIDCConfig(SetOIDCConfigRequest) returns (SetOIDCConfigResponse);
+
+  // --- Impersonation (platform_admin only) ---
+  rpc StartImpersonation(StartImpersonationRequest) returns (ImpersonationSession);
+  rpc EndImpersonation(EndImpersonationRequest) returns (EndImpersonationResponse);
 }
 
 // --- Core domain messages ---
@@ -239,3 +246,47 @@ message AcceptInvitationRequest {
   string token = 1;
   string password = 2;
 }
+
+// OIDC configuration
+message SetOIDCConfigRequest {
+  string tenant_id = 1;
+  string issuer_url = 2;
+  string client_id = 3;
+  string client_secret = 4;          // plaintext; service encrypts before persisting
+  repeated string scopes = 5;        // defaults to ["openid","email","profile"]
+  string email_claim = 6;            // defaults to "email"
+  string display_name_claim = 7;     // defaults to "name"
+  string groups_claim = 8;           // optional
+  bool auto_provision = 9;
+  string default_role = 10;          // defaults to "crew_member"
+}
+
+message SetOIDCConfigResponse {}
+
+// Impersonation
+message ImpersonationSession {
+  string id = 1;
+  string platform_user_id = 2;
+  string tenant_id = 3;
+  string impersonated_user = 4;
+  string reason = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  google.protobuf.Timestamp ended_at = 8; // unset if still active
+  string ip_address = 9;
+}
+
+message StartImpersonationRequest {
+  string platform_user_id = 1;
+  string tenant_id = 2;
+  string impersonated_user = 3;
+  string reason = 4;
+  int32 duration_seconds = 5; // 0 = use maximum (4 hours)
+  string ip_address = 6;
+}
+
+message EndImpersonationRequest {
+  string session_id = 1;
+}
+
+message EndImpersonationResponse {}

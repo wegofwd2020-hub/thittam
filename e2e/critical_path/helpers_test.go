@@ -205,6 +205,21 @@ func (r *iamRepo) GetInvitationByToken(_ context.Context, _ string) (*iam.Invita
 	return nil, nil
 }
 func (r *iamRepo) MarkInvitationAccepted(_ context.Context, _ uuid.UUID) error { return nil }
+func (r *iamRepo) UpsertOIDCConfig(_ context.Context, _ iam.OIDCConfigParams) error {
+	return nil
+}
+func (r *iamRepo) StartImpersonation(_ context.Context, p iam.StartImpersonationParams) (*iam.ImpersonationSession, error) {
+	return &iam.ImpersonationSession{
+		ID:               uuid.New(),
+		PlatformUserID:   p.PlatformUserID,
+		TenantID:         p.TenantID,
+		ImpersonatedUser: p.ImpersonatedUser,
+		Reason:           p.Reason,
+	}, nil
+}
+func (r *iamRepo) EndImpersonationSession(_ context.Context, _ uuid.UUID) error { return nil }
+func (r *iamRepo) ExpireImpersonationSessions(_ context.Context) (int64, error) { return 0, nil }
+func (r *iamRepo) CreateAuditEntry(_ context.Context, _ *iam.AuditEntry) error  { return nil }
 
 // ── Budget mock repository ─────────────────────────────────────────────────
 
@@ -251,7 +266,7 @@ func (r *budgetRepo) GetLineItem(_ context.Context, id uuid.UUID) (*budget.Budge
 	}
 	return nil, budget.ErrLineItemNotFound
 }
-func (r *budgetRepo) ListLineItems(_ context.Context, _ uuid.UUID) ([]budget.BudgetLineItem, error) {
+func (r *budgetRepo) ListLineItems(_ context.Context, _ uuid.UUID, _, _ int) ([]budget.BudgetLineItem, error) {
 	return nil, nil
 }
 func (r *budgetRepo) UpdateLineItemActuals(_ context.Context, _ uuid.UUID, _, _ decimal.Decimal) error {
@@ -348,7 +363,7 @@ func (r *ledgerRepo) GetAccountByCode(_ context.Context, _ uuid.UUID, code strin
 	}
 	return nil, ledger.ErrAccountNotFound
 }
-func (r *ledgerRepo) ListAccounts(_ context.Context, _ uuid.UUID) ([]ledger.Account, error) {
+func (r *ledgerRepo) ListAccounts(_ context.Context, _ uuid.UUID, _, _ int) ([]ledger.Account, error) {
 	return nil, nil
 }
 func (r *ledgerRepo) CreatePeriod(_ context.Context, p *ledger.AccountingPeriod) error {

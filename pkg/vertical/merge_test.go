@@ -267,6 +267,171 @@ func TestDeepCopyConfig(t *testing.T) {
 	assert.Len(t, original.BudgetCategories, 2)
 }
 
+// ─── ExpenseCategory missing branches ────────────────────────────────────────
+
+func TestApplyOverride_AppendExpenseCategory(t *testing.T) {
+	t.Parallel()
+	override := `{
+		"expense_categories": {
+			"append": [
+				{"id": "catering", "label": "Catering", "tax_treatment": "input_gst", "default_account_code": "5300", "requires_po": false}
+			]
+		}
+	}`
+
+	result, err := ApplyOverride(baseConfig(), []byte(override))
+	require.NoError(t, err)
+	assert.Len(t, result.ExpenseCategories, 3)
+	assert.Equal(t, "catering", result.ExpenseCategories[2].ID)
+	assert.Equal(t, "Catering", result.ExpenseCategories[2].Label)
+}
+
+func TestApplyOverride_RemoveExpenseCategory(t *testing.T) {
+	t.Parallel()
+	override := `{
+		"expense_categories": {
+			"remove": ["equipment_rental"]
+		}
+	}`
+
+	result, err := ApplyOverride(baseConfig(), []byte(override))
+	require.NoError(t, err)
+	assert.Len(t, result.ExpenseCategories, 1)
+	assert.Equal(t, "location_rental", result.ExpenseCategories[0].ID)
+}
+
+// ─── InventoryCategory missing branches ──────────────────────────────────────
+
+func TestApplyOverride_AppendInventoryCategory(t *testing.T) {
+	t.Parallel()
+	override := `{
+		"inventory_categories": {
+			"append": [
+				{"id": "lighting", "label": "Lighting Rigs", "is_trackable": true}
+			]
+		}
+	}`
+
+	result, err := ApplyOverride(baseConfig(), []byte(override))
+	require.NoError(t, err)
+	assert.Len(t, result.InventoryCategories, 3)
+	assert.Equal(t, "lighting", result.InventoryCategories[2].ID)
+	assert.True(t, result.InventoryCategories[2].IsTrackable)
+}
+
+func TestApplyOverride_OverrideInventoryCategory(t *testing.T) {
+	t.Parallel()
+	override := `{
+		"inventory_categories": {
+			"override": {
+				"props": {"id": "props", "label": "Set Dressing Props", "is_trackable": true}
+			}
+		}
+	}`
+
+	result, err := ApplyOverride(baseConfig(), []byte(override))
+	require.NoError(t, err)
+	assert.Len(t, result.InventoryCategories, 2)
+	assert.Equal(t, "Set Dressing Props", result.InventoryCategories[1].Label)
+	assert.True(t, result.InventoryCategories[1].IsTrackable)
+	// Unchanged item preserved
+	assert.Equal(t, "Camera Equipment", result.InventoryCategories[0].Label)
+}
+
+// ─── PhaseType missing branches ──────────────────────────────────────────────
+
+func TestApplyOverride_OverridePhaseType(t *testing.T) {
+	t.Parallel()
+	override := `{
+		"phase_types": {
+			"override": {
+				"development": {"id": "development", "label": "Principal Photography", "order": 2, "allowed_transitions": ["post_production"]}
+			}
+		}
+	}`
+
+	result, err := ApplyOverride(baseConfig(), []byte(override))
+	require.NoError(t, err)
+	assert.Len(t, result.PhaseTypes, 3)
+	assert.Equal(t, "Principal Photography", result.PhaseTypes[0].Label)
+	assert.Equal(t, []string{"post_production"}, result.PhaseTypes[0].AllowedTransitions)
+	// Unchanged phases preserved
+	assert.Equal(t, "pre_production", result.PhaseTypes[1].ID)
+}
+
+func TestApplyOverride_RemovePhaseType(t *testing.T) {
+	t.Parallel()
+	override := `{
+		"phase_types": {
+			"remove": ["pre_production", "production"]
+		}
+	}`
+
+	result, err := ApplyOverride(baseConfig(), []byte(override))
+	require.NoError(t, err)
+	assert.Len(t, result.PhaseTypes, 1)
+	assert.Equal(t, "development", result.PhaseTypes[0].ID)
+}
+
+// ─── ReportDefinition missing branches ───────────────────────────────────────
+
+func TestApplyOverride_OverrideReportDefinition(t *testing.T) {
+	t.Parallel()
+	override := `{
+		"report_definitions": {
+			"override": {
+				"cost_report": {"id": "cost_report", "name": "Weekly Cost Summary", "description": "Summarised weekly"}
+			}
+		}
+	}`
+
+	result, err := ApplyOverride(baseConfig(), []byte(override))
+	require.NoError(t, err)
+	assert.Len(t, result.ReportDefinitions, 1)
+	assert.Equal(t, "Weekly Cost Summary", result.ReportDefinitions[0].Name)
+}
+
+func TestApplyOverride_RemoveReportDefinition(t *testing.T) {
+	t.Parallel()
+	override := `{
+		"report_definitions": {
+			"remove": ["cost_report"]
+		}
+	}`
+
+	result, err := ApplyOverride(baseConfig(), []byte(override))
+	require.NoError(t, err)
+	assert.Empty(t, result.ReportDefinitions)
+}
+
+// ─── EntityLabels — remaining 4 fields ───────────────────────────────────────
+
+func TestApplyOverride_EntityLabelOverride_AllRemainingFields(t *testing.T) {
+	t.Parallel()
+	override := `{
+		"entity_labels": {
+			"override": {
+				"phase_plural":       "Acts",
+				"team_member_plural": "Freelancers",
+				"rate_label":         "Hourly Rate",
+				"rate_unit":          "hour"
+			}
+		}
+	}`
+
+	result, err := ApplyOverride(baseConfig(), []byte(override))
+	require.NoError(t, err)
+	assert.Equal(t, "Acts", result.EntityLabels.PhasePlural)
+	assert.Equal(t, "Freelancers", result.EntityLabels.TeamMemberPlural)
+	assert.Equal(t, "Hourly Rate", result.EntityLabels.RateLabel)
+	assert.Equal(t, "hour", result.EntityLabels.RateUnit)
+	// Untouched fields remain
+	assert.Equal(t, "Production", result.EntityLabels.Project)
+	assert.Equal(t, "Productions", result.EntityLabels.ProjectPlural)
+	assert.Equal(t, "Phase", result.EntityLabels.Phase)
+	assert.Equal(t, "Crew Member", result.EntityLabels.TeamMember)
+}
+
 func TestOverride_JSONRoundTrip(t *testing.T) {
 	t.Parallel()
 	override := Override{

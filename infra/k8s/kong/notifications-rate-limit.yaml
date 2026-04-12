@@ -1,0 +1,129 @@
+# Kong rate-limiting for notifications write endpoints
+#
+# WHY: The notifications service dispatches email, SMS, and push messages via
+# third-party providers (SendGrid, Twilio, FCM). Two risk vectors:
+#
+#   1. Direct send RPCs (SendNotification): each call immediately invokes a
+#      paid T2 third-party API. Unbounded bursts exhaust monthly quotas and
+#      can trigger provider-side account suspension. Rate limiting here is
+#      a cost-control and abuse-prevention measure.
+#
+#   2. Preference update RPCs (UpdatePreferences, UnsubscribeAll): these are
+#      low-volume, deliberate user actions. A burst would indicate a script
+#      replaying unsubscribe requests, which could inadvertently mute
+#      production-critical notifications for the target user.
+#
+# Two plugins:
+#   notifications-send-rate-limit  — 20 req/min per user (direct sends, paid
+#                                    API calls; most sends are event-driven
+#                                    and don't go through this path at all)
+#   notifications-pref-rate-limit  — 10 req/min per user (preference mutations)
+#
+# Apply:
+#   kubectl apply -f infra/k8s/kong/notifications-rate-limit.yaml -n thittam
+---
+# Direct send plugin — guards paid third-party API quota
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: notifications-send-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "prevents paid provider quota exhaustion (SendGrid/Twilio/FCM)"
+plugin: rate-limiting
+config:
+  minute: 20
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Preference mutation plugin — tight, deliberate-action limit
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: notifications-pref-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "prevents bulk unsubscribe scripts silencing production-critical alerts"
+plugin: rate-limiting
+config:
+  minute: 10
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Ingress — direct notification sends
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: notifications-send-routes
+  namespace: thittam
+  labels:
+    app: notifications
+    app.kubernetes.io/name: notifications
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: notifications-send-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # SendNotification — immediately invokes SendGrid / Twilio / FCM
+          - path: /api/v1/notifications/send
+            pathType: Prefix
+            backend:
+              service:
+                name: notifications
+                port:
+                  number: 8087
+---
+# Ingress — notification preference mutations
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: notifications-pref-routes
+  namespace: thittam
+  labels:
+    app: notifications
+    app.kubernetes.io/name: notifications
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: notifications-pref-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # UpdatePreferences — channel and frequency settings per notification type
+          - path: /api/v1/preferences
+            pathType: Prefix
+            backend:
+              service:
+                name: notifications
+                port:
+                  number: 8087
+          # UnsubscribeAll — mutes all notifications for the requesting user
+          - path: /api/v1/notifications/unsubscribe
+            pathType: Prefix
+            backend:
+              service:
+                name: notifications
+                port:
+                  number: 8087

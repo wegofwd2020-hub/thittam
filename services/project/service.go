@@ -136,9 +136,12 @@ func (s *Service) AddCrewMember(ctx context.Context, c *CrewMember) error {
 	return nil
 }
 
-// ListCrewMembers lists crew for a production.
-func (s *Service) ListCrewMembers(ctx context.Context, productionID uuid.UUID) ([]CrewMember, error) {
-	return s.repo.ListCrewMembers(ctx, productionID)
+// ListCrewMembers lists crew for a production, capped at 200 per page.
+func (s *Service) ListCrewMembers(ctx context.Context, productionID uuid.UUID, limit, offset int) ([]CrewMember, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	return s.repo.ListCrewMembers(ctx, productionID, limit, offset)
 }
 
 // RemoveCrewMember removes a crew member.

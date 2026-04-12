@@ -3,6 +3,7 @@
 -- name: CreateAsset :one
 INSERT INTO assets (id, tenant_id, asset_code, name, category_id, description, ownership_type, status, purchase_date, purchase_cost, serial_number)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: GetAsset :one
@@ -36,6 +37,7 @@ RETURNING *;
 -- name: CheckoutAsset :one
 INSERT INTO asset_checkouts (id, asset_id, production_id, tenant_id, checked_out_to, expected_return, condition_out)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: CheckinAsset :one

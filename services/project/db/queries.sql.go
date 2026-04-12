@@ -15,6 +15,7 @@ import (
 const addCrewMember = `-- name: AddCrewMember :one
 INSERT INTO crew_members (id, production_id, tenant_id, user_id, name, role, department, day_rate, currency, start_date, end_date)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, production_id, tenant_id, user_id, name, role, department, day_rate, currency, start_date, end_date, created_at
 `
 
@@ -141,6 +142,7 @@ const createProduction = `-- name: CreateProduction :one
 
 INSERT INTO productions (id, tenant_id, title, slug, description, genre, language, status, start_date, end_date, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, tenant_id, title, slug, description, genre, language, status, start_date, end_date, created_by, created_at, updated_at
 `
 
@@ -246,11 +248,17 @@ func (q *Queries) GetProduction(ctx context.Context, arg GetProductionParams) (P
 }
 
 const listCrewMembers = `-- name: ListCrewMembers :many
-SELECT id, production_id, tenant_id, user_id, name, role, department, day_rate, currency, start_date, end_date, created_at FROM crew_members WHERE production_id = $1 ORDER BY name ASC
+SELECT id, production_id, tenant_id, user_id, name, role, department, day_rate, currency, start_date, end_date, created_at FROM crew_members WHERE production_id = $1 ORDER BY name ASC LIMIT $2 OFFSET $3
 `
 
-func (q *Queries) ListCrewMembers(ctx context.Context, productionID uuid.UUID) ([]CrewMember, error) {
-	rows, err := q.db.Query(ctx, listCrewMembers, productionID)
+type ListCrewMembersParams struct {
+	ProductionID uuid.UUID `json:"production_id"`
+	Limit        int32     `json:"limit"`
+	Offset       int32     `json:"offset"`
+}
+
+func (q *Queries) ListCrewMembers(ctx context.Context, arg ListCrewMembersParams) ([]CrewMember, error) {
+	rows, err := q.db.Query(ctx, listCrewMembers, arg.ProductionID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -283,11 +291,17 @@ func (q *Queries) ListCrewMembers(ctx context.Context, productionID uuid.UUID) (
 }
 
 const listPhases = `-- name: ListPhases :many
-SELECT id, production_id, tenant_id, phase_type, status, start_date, end_date, created_at, updated_at FROM phases WHERE production_id = $1 ORDER BY created_at ASC
+SELECT id, production_id, tenant_id, phase_type, status, start_date, end_date, created_at, updated_at FROM phases WHERE production_id = $1 ORDER BY created_at ASC LIMIT $2 OFFSET $3
 `
 
-func (q *Queries) ListPhases(ctx context.Context, productionID uuid.UUID) ([]Phase, error) {
-	rows, err := q.db.Query(ctx, listPhases, productionID)
+type ListPhasesParams struct {
+	ProductionID uuid.UUID `json:"production_id"`
+	Limit        int32     `json:"limit"`
+	Offset       int32     `json:"offset"`
+}
+
+func (q *Queries) ListPhases(ctx context.Context, arg ListPhasesParams) ([]Phase, error) {
+	rows, err := q.db.Query(ctx, listPhases, arg.ProductionID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

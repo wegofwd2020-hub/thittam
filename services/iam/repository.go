@@ -44,4 +44,27 @@ type Repository interface {
 	CreateInvitation(ctx context.Context, inv *Invitation) error
 	GetInvitationByToken(ctx context.Context, token string) (*Invitation, error)
 	MarkInvitationAccepted(ctx context.Context, id uuid.UUID) error
+
+	// OIDC configuration
+	// UpsertOIDCConfig creates or replaces the OIDC configuration for a tenant.
+	// ClientSecretEnc in params must be pre-encrypted by the caller.
+	UpsertOIDCConfig(ctx context.Context, params OIDCConfigParams) error
+
+	// Impersonation lifecycle
+	// StartImpersonation opens a new bounded-TTL impersonation session.
+	StartImpersonation(ctx context.Context, params StartImpersonationParams) (*ImpersonationSession, error)
+	// EndImpersonationSession marks a session as explicitly ended by setting ended_at = NOW().
+	// Returns ErrImpersonationNotFound if the session does not exist.
+	// Returns ErrImpersonationAlreadyEnded if ended_at is already set.
+	EndImpersonationSession(ctx context.Context, sessionID uuid.UUID) error
+	// ExpireImpersonationSessions sets ended_at = NOW() on all sessions whose
+	// expires_at < NOW() and ended_at IS NULL. Returns the count of rows updated.
+	// Called by the background expiry ticker in cmd/iam/main.go.
+	ExpireImpersonationSessions(ctx context.Context) (int64, error)
+
+	// Audit log — append-only. Rows must never be updated or deleted (Rule #7).
+	// CreateAuditEntry inserts a single audit record. If the write fails the
+	// caller must log the error but must not roll back the triggering operation —
+	// audit failures should surface as observability alerts, not user errors.
+	CreateAuditEntry(ctx context.Context, entry *AuditEntry) error
 }

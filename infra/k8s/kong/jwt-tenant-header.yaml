@@ -1,0 +1,28 @@
+# Kong pre-function plugin — forwards the JWT `tid` claim as `x-tenant-id`.
+#
+# Kong validates the JWT via the jwt plugin (separate config) before this
+# runs. By the time pre-function fires, the token is already verified and the
+# claims are available in kong.ctx.shared["authenticated_jwt_token"].claims.
+#
+# Applied as a KongClusterPlugin so it is active on every route — individual
+# routes that don't require a tenant (e.g. /healthz) are unaffected because
+# the upstream ignores the header if it is absent.
+#
+# The gRPC interceptor (pkg/interceptor/auth.go) reads x-tenant-id from
+# incoming metadata and calls tenant.WithID on the request context. Without
+# this plugin, all vertical-aware services return codes.Unauthenticated for
+# every production request.
+apiVersion: configuration.konghq.com/v1
+kind: KongClusterPlugin
+metadata:
+  name: jwt-tenant-header
+  labels:
+    global: "true"
+plugin: pre-function
+config:
+  access:
+    - |
+      local token = kong.ctx.shared["authenticated_jwt_token"]
+      if token and token.claims and token.claims.tid then
+        kong.service.request.set_header("x-tenant-id", token.claims.tid)
+      end

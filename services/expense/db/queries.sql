@@ -3,6 +3,7 @@
 -- name: CreatePurchaseOrder :one
 INSERT INTO purchase_orders (id, production_id, tenant_id, budget_line_id, po_number, vendor_name, vendor_gstin, description, amount, currency, raised_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: GetPurchaseOrder :one
@@ -25,6 +26,7 @@ RETURNING *;
 -- name: CreateExpense :one
 INSERT INTO expenses (id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, submitted_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: GetExpense :one
@@ -50,6 +52,7 @@ RETURNING *;
 -- name: CreatePettyCashAdvance :one
 INSERT INTO petty_cash_advances (id, production_id, tenant_id, issued_to, amount, purpose)
 VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: GetPettyCashAdvance :one

@@ -21,23 +21,24 @@
 //  2. IAM_KEY_DIR points to a directory with gitignored PEM files.
 //  3. FileSource reads the bytes — still never an env var containing the key.
 //
-// # Pending TODOs before production:
-//
-//   - Implement pkg/auth/jwt — JWTIssuer backed by Redis for refresh token storage
-//   - Wire OIDCProvider and OIDCConfigStore for tenants with OIDC auth
-//   - Pass jwtPrivateKey bytes to jwt.NewIssuer (not stored in env/log/file)
 package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
+	"google.golang.org/grpc"
 	"github.com/wegofwd2020/thittam/pkg/auth"
+	appcrypto "github.com/wegofwd2020/thittam/pkg/crypto"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
+	"github.com/wegofwd2020/thittam/pkg/migrate"
 	"github.com/wegofwd2020/thittam/pkg/secrets"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/iam"
@@ -67,7 +68,10 @@ func main() {
 	// VAULT_ADDR absent  → local dev: load T1 secrets from key files.
 	vaultAddr := os.Getenv("VAULT_ADDR")
 
-	var jwtPrivateKey []byte
+	var (
+		jwtPrivateKey   []byte
+		oidcEncryptKey  []byte
+	)
 	if vaultAddr != "" {
 		vaultSrc := secrets.NewVaultSource(secrets.VaultConfig{
 			Address:  vaultAddr,
@@ -82,6 +86,10 @@ func main() {
 		if err != nil {
 			log.Fatalf("iam: startup: load JWT private key from Vault: %v", err)
 		}
+		oidcEncryptKey, err = vaultSrc.GetSecret(ctx, "iam/oidc-encryption-key")
+		if err != nil {
+			log.Fatalf("iam: startup: load OIDC encryption key from Vault: %v", err)
+		}
 	} else {
 		keyDir := getenv("IAM_KEY_DIR", "./keys")
 		fileSrc := secrets.NewFileSource(keyDir)
@@ -90,17 +98,24 @@ func main() {
 			log.Fatalf("iam: startup: load JWT private key from %s: %v\n"+
 				"  Run: openssl genrsa -out keys/jwt_private.pem 2048", keyDir, err)
 		}
+		oidcEncryptKey, err = fileSrc.GetSecret(ctx, "oidc_encryption.key")
+		if err != nil {
+			log.Fatalf("iam: startup: load OIDC encryption key from %s: %v\n"+
+				"  Run: openssl rand -out keys/oidc_encryption.key 32", keyDir, err)
+		}
+	}
+	if len(oidcEncryptKey) != 32 {
+		log.Fatalf("iam: startup: oidc encryption key must be exactly 32 bytes, got %d", len(oidcEncryptKey))
 	}
 
-	// jwtPrivateKey bytes are held in memory only. Never stored in an env var,
-	// log, or written back to a file.
+	// T1 key bytes are held in memory only. Never stored in env vars, logs, or files.
 
 	// --- Redis ---
 	redisURL := requireenv("REDIS_URL")
 	rdb := redis.NewClient(&redis.Options{Addr: redisURL})
 	defer rdb.Close()
 
-	// --- JWT issuer (T1 secret consumed here, bytes not retained) ---
+	// --- JWT issuer ---
 	tokenIssuer, err := auth.NewJWTIssuer(jwtPrivateKey, rdb, auth.JWTConfig{})
 	if err != nil {
 		log.Fatalf("iam: startup: create JWT issuer: %v", err)
@@ -114,25 +129,84 @@ func main() {
 	verifier := auth.NewDualVerifier()
 	localProvider := auth.NewLocalProvider(repo, repo, verifier)
 
-	// TODO: wire OIDCProvider + OIDCConfigStore for tenants using OIDC auth.
-	// For now all tenants use local auth. resolver.Authenticate falls back to
-	// localProvider when no authorization code is present in the request.
-	resolver := auth.NewResolver(localProvider, nil, nil)
+	// OIDC provider: decryptingOIDCStore wraps repo.GetOIDCConfig and decrypts
+	// the AES-256-GCM client secret before passing it to the exchanger.
+	exchanger := auth.NewHTTPExchanger()
+	oidcStore := &decryptingOIDCStore{inner: repo, key: oidcEncryptKey}
+	oidcProvider := auth.NewOIDCProvider(oidcStore, exchanger, repo, repo)
+	resolver := auth.NewResolver(localProvider, oidcProvider, oidcStore)
+
+	// --- Schema migrator ---
+	// MIGRATIONS_BASE_PATH points to the root of the migrations directory tree.
+	// Each subdirectory (shared, iam, project, …) is applied in dependency order
+	// when a new tenant is provisioned. All paths must be relative to the working
+	// directory of the running binary (set via Kubernetes/Docker workdir or Makefile).
+	migrationsBase := getenv("MIGRATIONS_BASE_PATH", "migrations")
+	migrationPaths := []string{
+		migrationsBase + "/shared",
+		migrationsBase + "/iam",
+		migrationsBase + "/project",
+		migrationsBase + "/budget",
+		migrationsBase + "/expense",
+		migrationsBase + "/ledger",
+		migrationsBase + "/inventory",
+		migrationsBase + "/notifications",
+		migrationsBase + "/document",
+		migrationsBase + "/reporting",
+		migrationsBase + "/billing",
+		migrationsBase + "/audit",
+	}
+	schemaMigrator := &iamSchemaMigrator{
+		m: migrate.New(migrate.Options{
+			DBURL:       dbURL,
+			Parallelism: 1, // single-tenant path — no benefit from >1 worker
+		}),
+		paths: migrationPaths,
+	}
 
 	// --- Build service ---
-	svc := iam.NewService(repo, resolver, tokenIssuer, hasher, verifier)
+	svc := iam.NewService(repo, resolver, tokenIssuer, hasher, verifier).
+		WithOIDCEncryptionKey(oidcEncryptKey).
+		WithSchemaMigrator(schemaMigrator)
 	handler := iam.NewHandler(svc)
 
+	// --- Background: impersonation session expiry ticker ---
+	// Runs every minute. Sessions whose expires_at has passed but ended_at is
+	// still NULL are closed. This bounds how long a stale impersonation can
+	// remain open if the caller never called EndImpersonation explicitly.
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			n, err := repo.ExpireImpersonationSessions(ctx)
+			if err != nil {
+				log.Printf("iam: expire impersonation sessions: %v", err)
+				continue
+			}
+			if n > 0 {
+				log.Printf("iam: expired %d impersonation session(s)", n)
+			}
+		}
+	}()
+
 	// --- gRPC server ---
+	// UnaryCallerInterceptor reads Kong-injected metadata (x-caller-id,
+	// x-caller-role, x-caller-email, x-forwarded-for) and populates the
+	// caller identity + audit actor in each request context. Admin RPCs
+	// (SetOIDCConfig, SuspendTenant, DeactivateUser) call RequireRole to
+	// enforce platform_admin access at the handler level.
 	srv := server.New(server.Config{
 		Name:        "iam",
 		Port:        8086,
 		MetricsPort: 9096,
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryCallerInterceptor()},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamCallerInterceptor()},
 	}, nil)
 
 	iamv1.RegisterIAMServiceServer(srv.GRPCServer(), handler)
 
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
+	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
 
 	if vaultAddr != "" {
 		log.Printf("iam service ready on :8086")
@@ -145,11 +219,40 @@ func main() {
 	}
 }
 
+// decryptingOIDCStore wraps auth.OIDCConfigStore and decrypts the AES-256-GCM
+// client secret before returning the config to the caller.
+type decryptingOIDCStore struct {
+	inner auth.OIDCConfigStore
+	key   []byte
+}
+
+func (s *decryptingOIDCStore) GetOIDCConfig(ctx context.Context, tenantID uuid.UUID) (*auth.OIDCConfig, error) {
+	cfg, err := s.inner.GetOIDCConfig(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	plaintext, err := appcrypto.Decrypt(s.key, cfg.ClientSecret)
+	if err != nil {
+		return nil, fmt.Errorf("iam: decrypt client secret for tenant %s: %w", tenantID, err)
+	}
+	cfg.ClientSecret = plaintext
+	return cfg, nil
+}
+
 // dbChecker implements observability.HealthChecker for the PostgreSQL pool.
 type dbChecker struct{ pool *pgxpool.Pool }
 
 func (c *dbChecker) CheckHealth(ctx context.Context) error {
 	return c.pool.Ping(ctx)
+}
+
+// redisChecker implements observability.HealthChecker for the Redis client.
+// /readyz returns 503 until Redis is reachable — the JWT issuer and vertical
+// config cache both depend on it, so the service must not accept traffic without it.
+type redisChecker struct{ rdb *redis.Client }
+
+func (c *redisChecker) CheckHealth(ctx context.Context) error {
+	return c.rdb.Ping(ctx).Err()
 }
 
 // waitForVault blocks until CheckHealth succeeds or the deadline is exceeded.
@@ -182,4 +285,20 @@ func getenv(key, defaultValue string) string {
 		return v
 	}
 	return defaultValue
+}
+
+// iamSchemaMigrator implements iam.SchemaMigrator by running every migration
+// subdirectory in paths against the new tenant schema, in order.
+type iamSchemaMigrator struct {
+	m     *migrate.ParallelMigrator
+	paths []string
+}
+
+func (s *iamSchemaMigrator) MigrateTenantSchema(ctx context.Context, tenantID uuid.UUID) error {
+	for _, path := range s.paths {
+		if err := s.m.MigrateTenant(ctx, tenantID, path); err != nil {
+			return fmt.Errorf("migrate schema %s for tenant %s: %w", path, tenantID, err)
+		}
+	}
+	return nil
 }

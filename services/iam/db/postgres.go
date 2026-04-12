@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/services/iam"
@@ -26,12 +28,12 @@ func NewPostgres(db *pgxpool.Pool) *Postgres {
 	}
 }
 
-// Compile-time interface checks — Postgres must satisfy both the service Repository
-// and the auth store interfaces so it can be passed to auth.NewLocalProvider directly.
+// Compile-time interface checks.
 var (
-	_ iam.Repository   = (*Postgres)(nil)
-	_ auth.UserStore   = (*Postgres)(nil)
-	_ auth.TenantStore = (*Postgres)(nil)
+	_ iam.Repository       = (*Postgres)(nil)
+	_ auth.UserStore       = (*Postgres)(nil)
+	_ auth.TenantStore     = (*Postgres)(nil)
+	_ auth.OIDCConfigStore = (*Postgres)(nil)
 )
 
 // --- auth.UserStore ---
@@ -121,6 +123,57 @@ func (p *Postgres) GetTenantStatus(ctx context.Context, tenantID uuid.UUID) (str
 		return "", fmt.Errorf("iam/db: get tenant status: %w", err)
 	}
 	return t.Status, nil
+}
+
+// --- auth.OIDCConfigStore ---
+
+// GetOIDCConfig returns the OIDC configuration for a tenant.
+// Returns auth.ErrOIDCConfigMissing if the tenant has no OIDC row or uses local auth.
+func (p *Postgres) GetOIDCConfig(ctx context.Context, tenantID uuid.UUID) (*auth.OIDCConfig, error) {
+	const q = `
+		SELECT issuer_url, client_id, client_secret_enc, scopes,
+		       email_claim, display_name_claim, groups_claim,
+		       auto_provision, default_role
+		FROM   tenant_auth_config
+		WHERE  tenant_id = $1 AND auth_method = 'oidc'`
+
+	var (
+		issuerURL       string
+		clientID        string
+		clientSecretEnc string
+		scopes          []string
+		emailClaim      string
+		displayClaim    string
+		groupsClaim     pgtype.Text
+		autoProvision   bool
+		defaultRole     string
+	)
+	err := p.db.QueryRow(ctx, q, tenantID).Scan(
+		&issuerURL, &clientID, &clientSecretEnc, &scopes,
+		&emailClaim, &displayClaim, &groupsClaim,
+		&autoProvision, &defaultRole,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, auth.ErrOIDCConfigMissing
+		}
+		return nil, fmt.Errorf("iam/db: get oidc config: %w", err)
+	}
+	cfg := &auth.OIDCConfig{
+		TenantID:         tenantID,
+		IssuerURL:        issuerURL,
+		ClientID:         clientID,
+		ClientSecret:     clientSecretEnc, // encrypted at rest; exchanger decrypts
+		Scopes:           scopes,
+		EmailClaim:       emailClaim,
+		DisplayNameClaim: displayClaim,
+		AutoProvision:    autoProvision,
+		DefaultRole:      defaultRole,
+	}
+	if groupsClaim.Valid {
+		cfg.GroupsClaim = groupsClaim.String
+	}
+	return cfg, nil
 }
 
 // --- iam.Repository: Users ---
@@ -407,6 +460,195 @@ func (p *Postgres) GetInvitationByToken(ctx context.Context, token string) (*iam
 func (p *Postgres) MarkInvitationAccepted(ctx context.Context, id uuid.UUID) error {
 	if err := p.q.AcceptInvitation(ctx, id); err != nil {
 		return fmt.Errorf("iam/db: mark invitation accepted: %w", err)
+	}
+	return nil
+}
+
+// --- iam.Repository: OIDC configuration ---
+
+// UpsertOIDCConfig creates or replaces the OIDC configuration for a tenant.
+// The caller must pre-encrypt ClientSecretEnc with AES-256-GCM before calling.
+func (p *Postgres) UpsertOIDCConfig(ctx context.Context, params iam.OIDCConfigParams) error {
+	scopes := params.Scopes
+	if len(scopes) == 0 {
+		scopes = []string{"openid", "email", "profile"}
+	}
+	emailClaim := params.EmailClaim
+	if emailClaim == "" {
+		emailClaim = "email"
+	}
+	displayClaim := params.DisplayNameClaim
+	if displayClaim == "" {
+		displayClaim = "name"
+	}
+	defaultRole := params.DefaultRole
+	if defaultRole == "" {
+		defaultRole = "crew_member"
+	}
+
+	tenantID, err := uuid.Parse(params.TenantID)
+	if err != nil {
+		return fmt.Errorf("iam/db: upsert oidc config: invalid tenant_id: %w", err)
+	}
+
+	const q = `
+		INSERT INTO tenant_auth_config (
+			tenant_id, auth_method,
+			issuer_url, client_id, client_secret_enc, scopes,
+			email_claim, display_name_claim, groups_claim,
+			auto_provision, default_role
+		) VALUES (
+			$1, 'oidc',
+			$2, $3, $4, $5,
+			$6, $7, $8,
+			$9, $10
+		)
+		ON CONFLICT (tenant_id) DO UPDATE SET
+			auth_method        = 'oidc',
+			issuer_url         = EXCLUDED.issuer_url,
+			client_id          = EXCLUDED.client_id,
+			client_secret_enc  = EXCLUDED.client_secret_enc,
+			scopes             = EXCLUDED.scopes,
+			email_claim        = EXCLUDED.email_claim,
+			display_name_claim = EXCLUDED.display_name_claim,
+			groups_claim       = EXCLUDED.groups_claim,
+			auto_provision     = EXCLUDED.auto_provision,
+			default_role       = EXCLUDED.default_role,
+			updated_at         = now()`
+
+	var groupsClaim interface{}
+	if params.GroupsClaim != "" {
+		groupsClaim = params.GroupsClaim
+	}
+
+	_, err = p.db.Exec(ctx, q,
+		tenantID,
+		params.IssuerURL, params.ClientID, params.ClientSecretEnc, scopes,
+		emailClaim, displayClaim, groupsClaim,
+		params.AutoProvision, defaultRole,
+	)
+	if err != nil {
+		return fmt.Errorf("iam/db: upsert oidc config for tenant %s: %w", tenantID, err)
+	}
+	return nil
+}
+
+// --- iam.Repository: Impersonation lifecycle ---
+
+// StartImpersonation inserts a new active impersonation session row.
+func (p *Postgres) StartImpersonation(ctx context.Context, params iam.StartImpersonationParams) (*iam.ImpersonationSession, error) {
+	const q = `
+		INSERT INTO platform_impersonation_log
+			(id, platform_user_id, tenant_id, impersonated_user, reason, expires_at, ip_address)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, platform_user_id, tenant_id, impersonated_user, reason, started_at, expires_at, ip_address`
+
+	id := uuid.New()
+	expiresAt := time.Now().UTC().Add(params.Duration)
+
+	var (
+		session    iam.ImpersonationSession
+		ipAddr     pgtype.Text
+	)
+	err := p.db.QueryRow(ctx, q,
+		id,
+		params.PlatformUserID,
+		params.TenantID,
+		params.ImpersonatedUser,
+		params.Reason,
+		expiresAt,
+		params.IPAddress,
+	).Scan(
+		&session.ID,
+		&session.PlatformUserID,
+		&session.TenantID,
+		&session.ImpersonatedUser,
+		&session.Reason,
+		&session.StartedAt,
+		&session.ExpiresAt,
+		&ipAddr,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("iam/db: start impersonation: %w", err)
+	}
+	if ipAddr.Valid {
+		session.IPAddress = ipAddr.String
+	}
+	return &session, nil
+}
+
+// EndImpersonationSession sets ended_at = NOW() on the given session.
+// Returns ErrImpersonationNotFound if the session does not exist and
+// ErrImpersonationAlreadyEnded if it was already closed.
+func (p *Postgres) EndImpersonationSession(ctx context.Context, sessionID uuid.UUID) error {
+	const q = `
+		UPDATE platform_impersonation_log
+		SET    ended_at = NOW()
+		WHERE  id = $1 AND ended_at IS NULL`
+
+	// First check whether the session exists at all.
+	const existsQ = `SELECT ended_at FROM platform_impersonation_log WHERE id = $1`
+	var endedAt pgtype.Timestamptz
+	err := p.db.QueryRow(ctx, existsQ, sessionID).Scan(&endedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return iam.ErrImpersonationNotFound
+		}
+		return fmt.Errorf("iam/db: check impersonation session: %w", err)
+	}
+	if endedAt.Valid {
+		return iam.ErrImpersonationAlreadyEnded
+	}
+
+	tag, err := p.db.Exec(ctx, q, sessionID)
+	if err != nil {
+		return fmt.Errorf("iam/db: end impersonation session: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		// Race condition: another goroutine ended the session between the check and the update.
+		return iam.ErrImpersonationAlreadyEnded
+	}
+	return nil
+}
+
+// ExpireImpersonationSessions closes all sessions whose TTL has passed.
+// Called by the background ticker in cmd/iam/main.go; returns the count updated.
+func (p *Postgres) ExpireImpersonationSessions(ctx context.Context) (int64, error) {
+	const q = `
+		UPDATE platform_impersonation_log
+		SET    ended_at = NOW()
+		WHERE  ended_at IS NULL AND expires_at < NOW()`
+
+	tag, err := p.db.Exec(ctx, q)
+	if err != nil {
+		return 0, fmt.Errorf("iam/db: expire impersonation sessions: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// CreateAuditEntry inserts an append-only audit record.
+// The table must have an insert-only policy in production (no UPDATE/DELETE).
+func (p *Postgres) CreateAuditEntry(ctx context.Context, entry *iam.AuditEntry) error {
+	const q = `
+		INSERT INTO iam_audit_log
+			(id, actor_id, action, target_type, target_id, old_state, new_state, timestamp, tenant_id, ip_address)
+		VALUES
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+
+	_, err := p.db.Exec(ctx, q,
+		entry.ID,
+		entry.ActorID,
+		entry.Action,
+		entry.TargetType,
+		entry.TargetID,
+		entry.OldState,
+		entry.NewState,
+		entry.Timestamp,
+		entry.TenantID,
+		entry.IPAddress,
+	)
+	if err != nil {
+		return fmt.Errorf("iam/db: create audit entry: %w", err)
 	}
 	return nil
 }

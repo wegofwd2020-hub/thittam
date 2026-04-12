@@ -76,6 +76,7 @@ func main() {
 	ledgerv1.RegisterLedgerServiceServer(srv.GRPCServer(), handler)
 
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
+	srv.RegisterHealthChecker("nats", &natsChecker{nc: nc})
 
 	log.Printf("general-ledger service ready on :8083")
 	if err := srv.Run(); err != nil {
@@ -88,6 +89,18 @@ type dbChecker struct{ pool *pgxpool.Pool }
 
 func (c *dbChecker) CheckHealth(ctx context.Context) error {
 	return c.pool.Ping(ctx)
+}
+
+// natsChecker implements observability.HealthChecker for the NATS connection.
+// /readyz returns 503 when NATS is unreachable so Kubernetes stops routing
+// traffic to a pod that cannot publish domain events.
+type natsChecker struct{ nc *nats.Conn }
+
+func (c *natsChecker) CheckHealth(_ context.Context) error {
+	if !c.nc.IsConnected() {
+		return nats.ErrConnectionClosed
+	}
+	return nil
 }
 
 // requireenv returns the value of an env var or fatals if it is empty.

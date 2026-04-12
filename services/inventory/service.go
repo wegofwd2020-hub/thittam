@@ -88,7 +88,16 @@ func (s *Service) GetCheckout(ctx context.Context, id uuid.UUID) (*AssetCheckout
 	return s.repo.GetCheckout(ctx, id)
 }
 
-// ListCheckouts lists all checkouts for an asset.
+// ListCheckouts lists checkouts for an asset. Capped at 200 — a single prop
+// realistically has tens of checkout records; 200 bounds a runaway scan.
 func (s *Service) ListCheckouts(ctx context.Context, assetID uuid.UUID) ([]AssetCheckout, error) {
-	return s.repo.ListCheckouts(ctx, assetID)
+	checkouts, err := s.repo.ListCheckouts(ctx, assetID)
+	if err != nil {
+		return nil, err
+	}
+	const maxCheckouts = 200
+	if len(checkouts) > maxCheckouts {
+		checkouts = checkouts[:maxCheckouts]
+	}
+	return checkouts, nil
 }

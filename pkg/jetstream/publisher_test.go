@@ -94,6 +94,19 @@ func TestPublisher_Publish_AllFinancialSubjects(t *testing.T) {
 	}
 }
 
+func TestPublisher_Publish_UnmarshalablePayload_ReturnsError(t *testing.T) {
+	t.Parallel()
+	js := &mockJS{}
+	p := NewPublisher(js)
+
+	// A channel cannot be marshaled to JSON — events.NewEnvelope must return an error.
+	unmarshalable := make(chan int)
+	err := p.Publish(context.Background(), events.SubjectExpenseSubmitted, uuid.New(), unmarshalable)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "build envelope")
+	assert.Empty(t, js.calls, "js.Publish must not be called when envelope construction fails")
+}
+
 func TestPublisher_Publish_EventIDIsUnique(t *testing.T) {
 	t.Parallel()
 	js := &mockJS{}

@@ -59,9 +59,13 @@ func (s *Service) GetAccount(ctx context.Context, tenantID, id uuid.UUID) (*Acco
 	return a, nil
 }
 
-// ListAccounts returns all accounts for a tenant.
-func (s *Service) ListAccounts(ctx context.Context, tenantID uuid.UUID) ([]Account, error) {
-	accounts, err := s.repo.ListAccounts(ctx, tenantID)
+// ListAccounts returns accounts for a tenant, capped at 500 per page.
+// A chart of accounts is typically 50–500 codes; 500 is a safe hard ceiling.
+func (s *Service) ListAccounts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]Account, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	accounts, err := s.repo.ListAccounts(ctx, tenantID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("ledger: list accounts: %w", err)
 	}

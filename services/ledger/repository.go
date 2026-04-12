@@ -13,7 +13,7 @@ type Repository interface {
 	CreateAccount(ctx context.Context, account *Account) error
 	GetAccountByID(ctx context.Context, tenantID, id uuid.UUID) (*Account, error)
 	GetAccountByCode(ctx context.Context, tenantID uuid.UUID, code string) (*Account, error)
-	ListAccounts(ctx context.Context, tenantID uuid.UUID) ([]Account, error)
+	ListAccounts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]Account, error)
 
 	// Accounting Periods
 	CreatePeriod(ctx context.Context, period *AccountingPeriod) error

@@ -53,6 +53,7 @@ jobs:
           go test ./services/reporting/...     -short -coverprofile=cov_reporting.out
           go test ./services/project/...       -short -coverprofile=cov_project.out
           go test ./services/notifications/... -short -coverprofile=cov_notifications.out
+          go test ./services/billing/...       -short -coverprofile=cov_billing.out
 
           enforce() {
             local covfile="$1"
@@ -76,6 +77,7 @@ jobs:
           enforce cov_reporting.out     75 "services/reporting"
           enforce cov_project.out       75 "services/project"
           enforce cov_notifications.out 75 "services/notifications"
+          enforce cov_billing.out       75 "services/billing"
 
   lint:
     name: Lint
@@ -140,6 +142,113 @@ jobs:
         # No Docker, no DB — all service deps are in-process mocks.
         # Target: ≤5 minutes. These 5 tests run in <1 second.
         run: go test ./e2e/critical_path/... -v -short -race -timeout 5m
+
+  migration-validate:
+    name: Migration Validate (up + down)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: thittam
+          POSTGRES_PASSWORD: thittam_ci
+          POSTGRES_DB: thittam
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DB_URL: postgres://thittam:thittam_ci@localhost:5432/thittam?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install golang-migrate CLI
+        run: |
+          curl -sSL https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin migrate
+
+      - name: Run all migrations UP
+        run: |
+          set -euo pipefail
+          for dir in shared iam budget expense ledger inventory reporting project notifications document billing audit; do
+            echo "==> migrate up: ${dir}"
+            migrate -path "migrations/${dir}" \
+              -database "${DB_URL}&x-migrations-table=schema_migrations_${dir}" up
+          done
+
+      - name: Run all migrations DOWN (full rollback)
+        # Rolling back verifies that every migration has a valid .down.sql and
+        # that the down migration does not error. Rollback is run in reverse
+        # service order so foreign-key constraints are respected.
+        run: |
+          set -euo pipefail
+          for dir in audit billing document notifications project reporting inventory ledger expense budget iam shared; do
+            echo "==> migrate down: ${dir}"
+            migrate -path "migrations/${dir}" \
+              -database "${DB_URL}&x-migrations-table=schema_migrations_${dir}" down -all
+          done
+
+  secret-scan:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history needed so gitleaks can scan every commit in the PR.
+          fetch-depth: 0
+
+      - name: gitleaks — scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  vuln-scan:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
+      - name: govulncheck — scan for known CVEs in dependencies
+        # Fail the job if any vulnerability is found in reachable code.
+        # Use -show verbose to surface the call chain for triage.
+        run: govulncheck -show verbose ./...
+
+  proto-breaking:
+    name: Protobuf Breaking Change Detection
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: "1.34.0"
+
+      - name: buf lint — validate proto files
+        run: buf lint proto
+
+      - name: buf breaking — detect breaking changes against main
+        # Compare the current branch against the last known-good state on main.
+        # Fails if any field is removed, renamed, or type-changed in a way that
+        # would break existing clients.
+        run: buf breaking proto --against '.git#branch=main,subdir=proto'
 
   doc-drift:
     name: Documentation Drift Check

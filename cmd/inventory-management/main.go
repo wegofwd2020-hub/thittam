@@ -61,6 +61,7 @@ func main() {
 	inventoryv1.RegisterInventoryServiceServer(srv.GRPCServer(), handler)
 
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
+	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
 
 	log.Printf("inventory-management service ready on :8084")
 	if err := srv.Run(); err != nil {
@@ -73,6 +74,15 @@ type dbChecker struct{ pool *pgxpool.Pool }
 
 func (c *dbChecker) CheckHealth(ctx context.Context) error {
 	return c.pool.Ping(ctx)
+}
+
+// redisChecker implements observability.HealthChecker for the Redis connection.
+// /readyz returns 503 when Redis is unreachable — the vertical config cache
+// cannot be populated, which would cause all tenant-context lookups to fail.
+type redisChecker struct{ rdb *redis.Client }
+
+func (c *redisChecker) CheckHealth(ctx context.Context) error {
+	return c.rdb.Ping(ctx).Err()
 }
 
 // requireenv returns the value of an env var or fatals if it is empty.

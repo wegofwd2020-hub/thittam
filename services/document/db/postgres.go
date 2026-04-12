@@ -57,13 +57,14 @@ func (p *Postgres) GetFolder(ctx context.Context, tenantID, id uuid.UUID) (*docu
 	return &f, nil
 }
 
-func (p *Postgres) ListFolders(ctx context.Context, tenantID uuid.UUID, productionID *uuid.UUID) ([]document.Folder, error) {
-	const sql = `SELECT id, tenant_id, production_id, name, parent_id, created_by, created_at
+func (p *Postgres) ListFolders(ctx context.Context, tenantID uuid.UUID, productionID *uuid.UUID, limit, offset int) ([]document.Folder, error) {
+	const rawSQL = `SELECT id, tenant_id, production_id, name, parent_id, created_by, created_at
 		FROM folders
 		WHERE tenant_id = $1
 		  AND ($2::uuid IS NULL OR production_id = $2)
-		ORDER BY name ASC`
-	rows, err := p.db.Query(ctx, sql, tenantID, productionID)
+		ORDER BY name ASC
+		LIMIT $3 OFFSET $4`
+	rows, err := p.db.Query(ctx, rawSQL, tenantID, productionID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("document: list folders: %w", err)
 	}
@@ -205,8 +206,12 @@ func (p *Postgres) GetVersion(ctx context.Context, documentID uuid.UUID, version
 	return &v, nil
 }
 
-func (p *Postgres) ListVersions(ctx context.Context, documentID uuid.UUID) ([]document.DocumentVersion, error) {
-	rows, err := p.q.ListDocumentVersions(ctx, documentID)
+func (p *Postgres) ListVersions(ctx context.Context, documentID uuid.UUID, limit, offset int) ([]document.DocumentVersion, error) {
+	rows, err := p.q.ListDocumentVersions(ctx, ListDocumentVersionsParams{
+		DocumentID: documentID,
+		Limit:      int32(limit),
+		Offset:     int32(offset),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("document: list versions: %w", err)
 	}

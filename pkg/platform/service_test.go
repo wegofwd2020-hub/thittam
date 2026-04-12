@@ -36,9 +36,11 @@ func (m *mockUserStore) DeactivateUser(ctx context.Context, id uuid.UUID) error 
 func (m *mockUserStore) UpdateLastLogin(ctx context.Context, id uuid.UUID) error       { return nil }
 
 type mockImpersonationStore struct {
-	mu       sync.Mutex
-	sessions map[uuid.UUID]ActiveImpersonationSession // sessionID → session
-	revoked  map[uuid.UUID]RevocationReason
+	mu               sync.Mutex
+	sessions         map[uuid.UUID]ActiveImpersonationSession // sessionID → session
+	revoked          map[uuid.UUID]RevocationReason
+	revokeErrFn      func(sessionID uuid.UUID, reason RevocationReason) error // optional per-call error
+	activeSessionsErr error                                                    // returned by GetActiveSessionsForUser
 }
 
 func newMockImpersonationStore() *mockImpersonationStore {
@@ -67,6 +69,11 @@ func (m *mockImpersonationStore) LogImpersonation(ctx context.Context, req Imper
 func (m *mockImpersonationStore) RevokeSession(ctx context.Context, sessionID uuid.UUID, reason RevocationReason) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.revokeErrFn != nil {
+		if err := m.revokeErrFn(sessionID, reason); err != nil {
+			return err
+		}
+	}
 	if _, ok := m.sessions[sessionID]; !ok {
 		return ErrSessionNotFound
 	}
@@ -78,6 +85,9 @@ func (m *mockImpersonationStore) RevokeSession(ctx context.Context, sessionID uu
 func (m *mockImpersonationStore) GetActiveSessionsForUser(ctx context.Context, targetUserID uuid.UUID) ([]ActiveImpersonationSession, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.activeSessionsErr != nil {
+		return nil, m.activeSessionsErr
+	}
 	var out []ActiveImpersonationSession
 	for _, s := range m.sessions {
 		if s.TargetUserID == targetUserID {
@@ -498,6 +508,156 @@ func TestEndImpersonation_EmitsAuditEvent(t *testing.T) {
 }
 
 // --- Blocked actions ---
+
+// ─── WithNotifier ─────────────────────────────────────────────────────────────
+
+// captureNotifier records calls to NotifyImpersonationEnded.
+type captureNotifier struct {
+	mu    sync.Mutex
+	calls []struct {
+		sess   ActiveImpersonationSession
+		reason RevocationReason
+	}
+	notify chan struct{}
+}
+
+func newCaptureNotifier() *captureNotifier {
+	return &captureNotifier{notify: make(chan struct{}, 10)}
+}
+
+func (n *captureNotifier) NotifyImpersonationEnded(_ context.Context, sess ActiveImpersonationSession, reason RevocationReason) error {
+	n.mu.Lock()
+	n.calls = append(n.calls, struct {
+		sess   ActiveImpersonationSession
+		reason RevocationReason
+	}{sess, reason})
+	n.mu.Unlock()
+	n.notify <- struct{}{}
+	return nil
+}
+
+func (n *captureNotifier) count() int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return len(n.calls)
+}
+
+func TestWithNotifier_IsCalledOnPasswordChangeRevocation(t *testing.T) {
+	t.Parallel()
+	store := newMockImpersonationStore()
+	notifier := newCaptureNotifier()
+
+	s := newTestServiceWithStore(store, nil)
+	s.WithNotifier(notifier)
+
+	// Create an active session targeting testImpersonateID.
+	_, err := s.Impersonate(context.Background(), ImpersonationRequest{
+		PlatformUserID: testPlatformUserID,
+		TenantID:       testTenantID,
+		UserID:         testImpersonateID,
+		Reason:         "Notifier test",
+	})
+	require.NoError(t, err)
+
+	// Trigger revocation — notifier is called in a background goroutine.
+	require.NoError(t, s.RevokeOnPasswordChange(context.Background(), testImpersonateID))
+
+	// Wait for the goroutine to deliver the notification (or fail after 1 s).
+	select {
+	case <-notifier.notify:
+	case <-time.After(time.Second):
+		t.Fatal("notifier was not called within 1 s")
+	}
+
+	assert.Equal(t, 1, notifier.count(), "notifier must be called exactly once")
+}
+
+// ─── revokeAllForUser error paths ────────────────────────────────────────────
+
+func TestRevokeAllForUser_GetSessionsError_ReturnsError(t *testing.T) {
+	t.Parallel()
+	store := newMockImpersonationStore()
+	store.activeSessionsErr = errors.New("db connection refused")
+	s := newTestServiceWithStore(store, nil)
+
+	err := s.RevokeOnPasswordChange(context.Background(), uuid.New())
+	assert.Error(t, err)
+}
+
+func TestRevokeAllForUser_PartialRevokeFailure_ContinuesBestEffort(t *testing.T) {
+	t.Parallel()
+	store := newMockImpersonationStore()
+	s := newTestServiceWithStore(store, nil)
+	ctx := context.Background()
+
+	// Two sessions target the same user.
+	sess1, err := s.Impersonate(ctx, ImpersonationRequest{
+		PlatformUserID: testPlatformUserID, TenantID: testTenantID,
+		UserID: testImpersonateID, Reason: "Ticket E",
+	})
+	require.NoError(t, err)
+	sess2, err := s.Impersonate(ctx, ImpersonationRequest{
+		PlatformUserID: testPlatformUserID, TenantID: testTenantID,
+		UserID: testImpersonateID, Reason: "Ticket F",
+	})
+	require.NoError(t, err)
+
+	// Make RevokeSession fail specifically for sess1.
+	store.revokeErrFn = func(sessionID uuid.UUID, _ RevocationReason) error {
+		if sessionID == sess1.ID {
+			return errors.New("transient lock timeout")
+		}
+		return nil
+	}
+
+	// Overall call must still succeed (best-effort — partial failures are logged).
+	require.NoError(t, s.RevokeOnPasswordChange(ctx, testImpersonateID))
+
+	// sess1 failed revocation: must not appear in revoked map.
+	_, wasRevoked := store.revoked[sess1.ID]
+	assert.False(t, wasRevoked, "failed session must not be marked revoked")
+
+	// sess2 should be revoked successfully.
+	assert.Equal(t, RevocationPasswordChange, store.revoked[sess2.ID])
+}
+
+// ─── CheckAccess unknown role ─────────────────────────────────────────────────
+
+func TestCheckAccess_UnknownUserRole_ReturnsNotPlatformUser(t *testing.T) {
+	t.Parallel()
+	user := &PlatformUser{Role: Role("unknown-role")}
+	err := CheckAccess(user, RoleAdmin)
+	assert.ErrorIs(t, err, ErrNotPlatformUser)
+}
+
+// ─── SeedPlatformOwner error path ─────────────────────────────────────────────
+
+func TestSeedPlatformOwner_StoreError_ReturnsWrappedError(t *testing.T) {
+	t.Parallel()
+	s := newTestService(func(s *Service) {
+		s.users = &mockUserStore{
+			getByIDFn: func(_ context.Context, _ uuid.UUID) (*PlatformUser, error) {
+				return testPlatformAdmin(), nil
+			},
+		}
+		// Override CreateUser to return an error.
+		// mockUserStore.CreateUser always returns uuid.New(), nil so we need a custom store.
+	})
+
+	// Replace the user store with one that fails CreateUser.
+	failingStore := &failingCreateUserStore{}
+	s.users = failingStore
+
+	_, err := s.SeedPlatformOwner(context.Background(), "owner@example.com", "Owner", "$argon2id$hash")
+	assert.Error(t, err)
+}
+
+// failingCreateUserStore returns an error from CreateUser.
+type failingCreateUserStore struct{ mockUserStore }
+
+func (f *failingCreateUserStore) CreateUser(_ context.Context, _, _, _ string, _ Role, _ uuid.UUID) (uuid.UUID, error) {
+	return uuid.Nil, errors.New("platform: db write failed")
+}
 
 func TestIsActionBlocked(t *testing.T) {
 	t.Parallel()

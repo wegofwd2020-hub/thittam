@@ -84,6 +84,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 const createAccountingPeriod = `-- name: CreateAccountingPeriod :one
 INSERT INTO accounting_periods (id, tenant_id, year, month, status)
 VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, tenant_id, year, month, status, closed_by, closed_at
 `
 
@@ -119,6 +120,7 @@ func (q *Queries) CreateAccountingPeriod(ctx context.Context, arg CreateAccounti
 const createJournalEntry = `-- name: CreateJournalEntry :one
 INSERT INTO journal_entries (id, tenant_id, production_id, period_id, entry_number, reference, narration, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, tenant_id, production_id, period_id, entry_number, reference, narration, status, posted_by, posted_at, created_at
 `
 
@@ -164,6 +166,7 @@ func (q *Queries) CreateJournalEntry(ctx context.Context, arg CreateJournalEntry
 const createJournalLine = `-- name: CreateJournalLine :one
 INSERT INTO journal_lines (id, journal_id, account_id, debit_amount, credit_amount, description)
 VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, journal_id, account_id, debit_amount, credit_amount, currency, description
 `
 
@@ -367,15 +370,18 @@ const listAccounts = `-- name: ListAccounts :many
 SELECT id, tenant_id, code, name, account_type, parent_id, is_active FROM accounts
 WHERE tenant_id = $1 AND ($2 = '' OR account_type = $2) AND is_active = true
 ORDER BY code ASC
+LIMIT $3 OFFSET $4
 `
 
 type ListAccountsParams struct {
 	TenantID uuid.UUID   `json:"tenant_id"`
 	Column2  interface{} `json:"column_2"`
+	Limit    int32       `json:"limit"`
+	Offset   int32       `json:"offset"`
 }
 
 func (q *Queries) ListAccounts(ctx context.Context, arg ListAccountsParams) ([]Account, error) {
-	rows, err := q.db.Query(ctx, listAccounts, arg.TenantID, arg.Column2)
+	rows, err := q.db.Query(ctx, listAccounts, arg.TenantID, arg.Column2, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

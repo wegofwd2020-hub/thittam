@@ -340,7 +340,7 @@ func TestHandler_ListLineItems_Success(t *testing.T) {
 	t.Parallel()
 	budgetID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listLineItemsFn: func(_ context.Context, _ uuid.UUID) ([]BudgetLineItem, error) {
+		listLineItemsFn: func(_ context.Context, _ uuid.UUID, _, _ int) ([]BudgetLineItem, error) {
 			return []BudgetLineItem{{ID: uuid.New(), CategoryID: "above_the_line"}}, nil
 		},
 	}))

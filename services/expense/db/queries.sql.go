@@ -15,6 +15,7 @@ import (
 const createExpense = `-- name: CreateExpense :one
 INSERT INTO expenses (id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, submitted_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, status, submitted_by, approved_by, submitted_at, approved_at, created_at
 `
 
@@ -71,6 +72,7 @@ func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (E
 const createPettyCashAdvance = `-- name: CreatePettyCashAdvance :one
 INSERT INTO petty_cash_advances (id, production_id, tenant_id, issued_to, amount, purpose)
 VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, production_id, tenant_id, issued_to, amount, purpose, status, issued_at, settled_at, unspent_amount
 `
 
@@ -112,6 +114,7 @@ const createPurchaseOrder = `-- name: CreatePurchaseOrder :one
 
 INSERT INTO purchase_orders (id, production_id, tenant_id, budget_line_id, po_number, vendor_name, vendor_gstin, description, amount, currency, raised_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (id) DO NOTHING
 RETURNING id, production_id, tenant_id, budget_line_id, po_number, vendor_name, vendor_gstin, description, amount, currency, status, raised_by, approved_by, raised_at, approved_at, created_at
 `
 

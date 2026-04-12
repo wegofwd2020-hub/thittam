@@ -30,7 +30,7 @@ type mockRepo struct {
 	createAccountFn        func(ctx context.Context, account *Account) error
 	getAccountByIDFn       func(ctx context.Context, tenantID, id uuid.UUID) (*Account, error)
 	getAccountByCodeFn     func(ctx context.Context, tenantID uuid.UUID, code string) (*Account, error)
-	listAccountsFn         func(ctx context.Context, tenantID uuid.UUID) ([]Account, error)
+	listAccountsFn         func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]Account, error)
 	createPeriodFn         func(ctx context.Context, period *AccountingPeriod) error
 	getPeriodByIDFn        func(ctx context.Context, tenantID, id uuid.UUID) (*AccountingPeriod, error)
 	getOpenPeriodFn        func(ctx context.Context, tenantID uuid.UUID, year, month int) (*AccountingPeriod, error)
@@ -61,9 +61,9 @@ func (m *mockRepo) GetAccountByCode(ctx context.Context, tenantID uuid.UUID, cod
 	}
 	return &Account{ID: uuid.New(), TenantID: tenantID, Code: code, IsActive: true}, nil
 }
-func (m *mockRepo) ListAccounts(ctx context.Context, tenantID uuid.UUID) ([]Account, error) {
+func (m *mockRepo) ListAccounts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]Account, error) {
 	if m.listAccountsFn != nil {
-		return m.listAccountsFn(ctx, tenantID)
+		return m.listAccountsFn(ctx, tenantID, limit, offset)
 	}
 	return nil, nil
 }
@@ -557,12 +557,12 @@ func TestGetAccount_Error(t *testing.T) {
 func TestListAccounts_Success(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{
-		listAccountsFn: func(_ context.Context, _ uuid.UUID) ([]Account, error) {
+		listAccountsFn: func(_ context.Context, _ uuid.UUID, _, _ int) ([]Account, error) {
 			return []Account{{ID: fixedAccountID, Code: "5000"}}, nil
 		},
 	})
 
-	accounts, err := svc.ListAccounts(context.Background(), fixedTenantID)
+	accounts, err := svc.ListAccounts(context.Background(), fixedTenantID, 200, 0)
 	require.NoError(t, err)
 	assert.Len(t, accounts, 1)
 	assert.Equal(t, "5000", accounts[0].Code)
@@ -692,4 +692,37 @@ func TestSeedChartOfAccounts_CreateError(t *testing.T) {
 	}
 	err := svc.SeedChartOfAccounts(context.Background(), fixedTenantID, entries)
 	require.Error(t, err)
+}
+
+func TestListAccounts_OutOfRangeLimit_DefaultsTo200(t *testing.T) {
+	t.Parallel()
+	var capturedLimit int
+	svc := NewService(&mockRepo{
+		listAccountsFn: func(_ context.Context, _ uuid.UUID, limit, _ int) ([]Account, error) {
+			capturedLimit = limit
+			return nil, nil
+		},
+	})
+
+	// limit = 0 → should default to 200
+	_, err := svc.ListAccounts(context.Background(), fixedTenantID, 0, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 200, capturedLimit)
+
+	// limit > 500 → should default to 200
+	_, err = svc.ListAccounts(context.Background(), fixedTenantID, 9999, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 200, capturedLimit)
+}
+
+func TestPublish_NilPublisher_IsNoOp(t *testing.T) {
+	t.Parallel()
+	// NewService with no publisher — publish() must not panic.
+	svc := NewService(&mockRepo{})
+	called := false
+	svc.publish(context.Background(), func() error {
+		called = true
+		return nil
+	})
+	assert.False(t, called, "nil publisher: fn must not be called")
 }

@@ -7,7 +7,8 @@
         test test-race test-cover test-integration \
         validate-verticals coverage-check \
         generate generate-proto generate-sqlc \
-        lint build clean
+        lint build clean \
+        dev-keys
 
 # ── Database URL ───────────────────────────────────────────────────────────────
 # Default: system PostgreSQL on port 5433 (Ubuntu installs here — data persists
@@ -52,6 +53,9 @@ help:
 	@echo "    make coverage-check      Enforce per-package coverage thresholds (CI parity)"
 	@echo "    make validate-verticals  Validate all vertical YAML configs"
 	@echo "    make lint                golangci-lint"
+	@echo ""
+	@echo "  Local dev keys (gitignored — never committed):"
+	@echo "    make dev-keys       Generate keys/jwt_private.pem and keys/oidc_encryption.key (skips existing)"
 	@echo ""
 	@echo "  DB_URL currently: $(DB_URL)"
 	@echo ""
@@ -198,6 +202,7 @@ coverage-check:
 	@$(MAKE) _cov-enforce PKG=services/reporting     MIN=75
 	@$(MAKE) _cov-enforce PKG=services/project       MIN=75
 	@$(MAKE) _cov-enforce PKG=services/notifications MIN=75
+	@$(MAKE) _cov-enforce PKG=services/billing      MIN=75
 	@echo "==> All coverage thresholds passed."
 
 _cov-enforce:
@@ -232,3 +237,25 @@ build:
 clean:
 	rm -f coverage.out
 	go clean ./...
+
+# ── Local dev key generation ──────────────────────────────────────────────────
+# Creates gitignored key files for local development.
+# Production keys come from Vault (T1 secrets — see CODING_RULES.md Rule #2).
+# Never commit these files — they are listed in .gitignore.
+
+dev-keys:
+	@mkdir -p keys
+	@touch keys/.gitkeep
+	@if [ -f keys/jwt_private.pem ]; then \
+		echo "  keys/jwt_private.pem already exists — skipping"; \
+	else \
+		openssl genrsa -out keys/jwt_private.pem 2048; \
+		echo "  keys/jwt_private.pem generated (RSA-2048)"; \
+	fi
+	@if [ -f keys/oidc_encryption.key ]; then \
+		echo "  keys/oidc_encryption.key already exists — skipping"; \
+	else \
+		openssl rand -out keys/oidc_encryption.key 32; \
+		echo "  keys/oidc_encryption.key generated (32 random bytes, AES-256)"; \
+	fi
+	@echo "==> Dev keys ready in keys/  (gitignored — never commit these)"

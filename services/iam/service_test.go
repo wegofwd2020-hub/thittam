@@ -10,7 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/crypto"
 )
+
+// oidcTestKey is a deterministic 32-byte AES-256 key for OIDC service tests.
+var oidcTestKey = []byte("thittam-svc-test-key-32bytes-xxx")
 
 // --- Fixed test IDs (deterministic, never random) ---
 
@@ -24,28 +28,33 @@ var (
 // --- Mock Repository ---
 
 type mockRepo struct {
-	getUserByEmailFn       func(ctx context.Context, tenantID uuid.UUID, email string) (*auth.UserRecord, error)
-	getUserByIDFn          func(ctx context.Context, userID uuid.UUID) (*auth.UserRecord, error)
-	createOIDCUserFn       func(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*auth.UserRecord, error)
-	getTenantStatusFn      func(ctx context.Context, tenantID uuid.UUID) (string, error)
-	createUserFn           func(ctx context.Context, user *User) error
-	getUserFn              func(ctx context.Context, tenantID, id uuid.UUID) (*User, error)
-	listUsersFn            func(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]User, error)
-	updateUserFn           func(ctx context.Context, user *User) error
-	updatePasswordHashFn   func(ctx context.Context, userID uuid.UUID, hash string) error
-	deactivateUserFn       func(ctx context.Context, tenantID, id uuid.UUID) error
-	createTenantFn         func(ctx context.Context, tenant *Tenant) error
-	getTenantFn            func(ctx context.Context, id uuid.UUID) (*Tenant, error)
-	updateTenantStatusFn   func(ctx context.Context, id uuid.UUID, status string) error
-	createRoleFn           func(ctx context.Context, role *Role) error
-	getRoleFn              func(ctx context.Context, tenantID uuid.UUID, name string) (*Role, error)
-	listRolesFn            func(ctx context.Context, tenantID uuid.UUID) ([]Role, error)
-	assignRoleFn           func(ctx context.Context, ur *UserRole) error
-	revokeRoleFn           func(ctx context.Context, userID, roleID uuid.UUID) error
-	getUserPermissionsFn   func(ctx context.Context, userID uuid.UUID) ([]string, error)
-	createInvitationFn     func(ctx context.Context, inv *Invitation) error
-	getInvitationByTokenFn func(ctx context.Context, token string) (*Invitation, error)
-	markInvitationFn       func(ctx context.Context, id uuid.UUID) error
+	getUserByEmailFn              func(ctx context.Context, tenantID uuid.UUID, email string) (*auth.UserRecord, error)
+	getUserByIDFn                 func(ctx context.Context, userID uuid.UUID) (*auth.UserRecord, error)
+	createOIDCUserFn              func(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*auth.UserRecord, error)
+	getTenantStatusFn             func(ctx context.Context, tenantID uuid.UUID) (string, error)
+	createUserFn                  func(ctx context.Context, user *User) error
+	getUserFn                     func(ctx context.Context, tenantID, id uuid.UUID) (*User, error)
+	listUsersFn                   func(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]User, error)
+	updateUserFn                  func(ctx context.Context, user *User) error
+	updatePasswordHashFn          func(ctx context.Context, userID uuid.UUID, hash string) error
+	deactivateUserFn              func(ctx context.Context, tenantID, id uuid.UUID) error
+	createTenantFn                func(ctx context.Context, tenant *Tenant) error
+	getTenantFn                   func(ctx context.Context, id uuid.UUID) (*Tenant, error)
+	updateTenantStatusFn          func(ctx context.Context, id uuid.UUID, status string) error
+	createRoleFn                  func(ctx context.Context, role *Role) error
+	getRoleFn                     func(ctx context.Context, tenantID uuid.UUID, name string) (*Role, error)
+	listRolesFn                   func(ctx context.Context, tenantID uuid.UUID) ([]Role, error)
+	assignRoleFn                  func(ctx context.Context, ur *UserRole) error
+	revokeRoleFn                  func(ctx context.Context, userID, roleID uuid.UUID) error
+	getUserPermissionsFn          func(ctx context.Context, userID uuid.UUID) ([]string, error)
+	createInvitationFn            func(ctx context.Context, inv *Invitation) error
+	getInvitationByTokenFn        func(ctx context.Context, token string) (*Invitation, error)
+	markInvitationFn              func(ctx context.Context, id uuid.UUID) error
+	upsertOIDCConfigFn            func(ctx context.Context, params OIDCConfigParams) error
+	startImpersonationFn          func(ctx context.Context, params StartImpersonationParams) (*ImpersonationSession, error)
+	endImpersonationSessionFn     func(ctx context.Context, sessionID uuid.UUID) error
+	expireImpersonationSessionsFn func(ctx context.Context) (int64, error)
+	createAuditEntryFn            func(ctx context.Context, entry *AuditEntry) error
 }
 
 func (m *mockRepo) GetUserByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*auth.UserRecord, error) {
@@ -180,6 +189,42 @@ func (m *mockRepo) MarkInvitationAccepted(ctx context.Context, id uuid.UUID) err
 	}
 	return nil
 }
+func (m *mockRepo) UpsertOIDCConfig(ctx context.Context, params OIDCConfigParams) error {
+	if m.upsertOIDCConfigFn != nil {
+		return m.upsertOIDCConfigFn(ctx, params)
+	}
+	return nil
+}
+func (m *mockRepo) StartImpersonation(ctx context.Context, params StartImpersonationParams) (*ImpersonationSession, error) {
+	if m.startImpersonationFn != nil {
+		return m.startImpersonationFn(ctx, params)
+	}
+	return &ImpersonationSession{
+		ID:               uuid.MustParse("e5000000-0000-0000-0000-000000000005"),
+		PlatformUserID:   params.PlatformUserID,
+		TenantID:         params.TenantID,
+		ImpersonatedUser: params.ImpersonatedUser,
+		Reason:           params.Reason,
+	}, nil
+}
+func (m *mockRepo) EndImpersonationSession(ctx context.Context, sessionID uuid.UUID) error {
+	if m.endImpersonationSessionFn != nil {
+		return m.endImpersonationSessionFn(ctx, sessionID)
+	}
+	return nil
+}
+func (m *mockRepo) ExpireImpersonationSessions(ctx context.Context) (int64, error) {
+	if m.expireImpersonationSessionsFn != nil {
+		return m.expireImpersonationSessionsFn(ctx)
+	}
+	return 0, nil
+}
+func (m *mockRepo) CreateAuditEntry(ctx context.Context, entry *AuditEntry) error {
+	if m.createAuditEntryFn != nil {
+		return m.createAuditEntryFn(ctx, entry)
+	}
+	return nil
+}
 
 // --- Mock Authenticator ---
 
@@ -258,6 +303,18 @@ func (m *mockVerifier) Verify(password, hash string) error {
 		return nil
 	}
 	return auth.ErrInvalidCredentials
+}
+
+// mockSchemaMigrator implements SchemaMigrator for unit tests.
+type mockSchemaMigrator struct {
+	migrateFn func(ctx context.Context, tenantID uuid.UUID) error
+}
+
+func (m *mockSchemaMigrator) MigrateTenantSchema(ctx context.Context, tenantID uuid.UUID) error {
+	if m.migrateFn != nil {
+		return m.migrateFn(ctx, tenantID)
+	}
+	return nil
 }
 
 // --- Test helpers ---
@@ -832,6 +889,37 @@ func TestCreateTenant_DefaultPlan(t *testing.T) {
 	assert.Equal(t, "active", savedTenant.Status)
 }
 
+func TestCreateTenant_SchemaMigratorCalled(t *testing.T) {
+	t.Parallel()
+	var migratedTenantID uuid.UUID
+	m := &mockSchemaMigrator{
+		migrateFn: func(_ context.Context, id uuid.UUID) error {
+			migratedTenantID = id
+			return nil
+		},
+	}
+	svc := newTestService(&mockRepo{}).WithSchemaMigrator(m)
+
+	tenant, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme", Plan: "starter"})
+	require.NoError(t, err)
+	// Migrator must be called with the tenant ID that was assigned during creation.
+	assert.Equal(t, tenant.ID, migratedTenantID)
+}
+
+func TestCreateTenant_SchemaMigratorError_Propagates(t *testing.T) {
+	t.Parallel()
+	m := &mockSchemaMigrator{
+		migrateFn: func(_ context.Context, _ uuid.UUID) error {
+			return errors.New("migrate: schema creation failed")
+		},
+	}
+	svc := newTestService(&mockRepo{}).WithSchemaMigrator(m)
+
+	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme", Plan: "starter"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "migrate schema")
+}
+
 func TestSuspendTenant_Error(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{
@@ -860,4 +948,328 @@ func TestCreateUser_HashError(t *testing.T) {
 
 	_, err := svc.CreateUser(context.Background(), &User{TenantID: fixedTenantID, Email: "x@y.com"}, "pass")
 	require.Error(t, err)
+}
+
+func TestUpdateUser_Error(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		updateUserFn: func(_ context.Context, _ *User) error {
+			return errors.New("db error")
+		},
+	})
+
+	_, err := svc.UpdateUser(context.Background(), &User{ID: fixedUserID, TenantID: fixedTenantID})
+	require.Error(t, err)
+}
+
+func TestRevokeRole_Error(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		revokeRoleFn: func(_ context.Context, _, _ uuid.UUID) error {
+			return errors.New("db error")
+		},
+	})
+
+	err := svc.RevokeRole(context.Background(), fixedUserID, fixedRoleID)
+	require.Error(t, err)
+}
+
+func TestChangePassword_GetUserError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getUserByIDFn: func(_ context.Context, _ uuid.UUID) (*auth.UserRecord, error) {
+			return nil, errors.New("db error")
+		},
+	})
+
+	err := svc.ChangePassword(context.Background(), fixedUserID, "old", "new")
+	require.Error(t, err)
+}
+
+func TestChangePassword_HashNewPasswordError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(
+		&mockRepo{
+			getUserByIDFn: func(_ context.Context, _ uuid.UUID) (*auth.UserRecord, error) {
+				return &auth.UserRecord{PasswordHash: "hashed:oldpass"}, nil
+			},
+		},
+		&mockAuthenticator{},
+		&mockTokenIssuer{},
+		&mockHasher{
+			hashFn: func(_ string) (string, error) {
+				return "", errors.New("hash error")
+			},
+		},
+		&mockVerifier{},
+	)
+
+	err := svc.ChangePassword(context.Background(), fixedUserID, "oldpass", "newpass")
+	require.Error(t, err)
+}
+
+func TestChangePassword_UpdateHashError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getUserByIDFn: func(_ context.Context, _ uuid.UUID) (*auth.UserRecord, error) {
+			return &auth.UserRecord{PasswordHash: "hashed:oldpass"}, nil
+		},
+		updatePasswordHashFn: func(_ context.Context, _ uuid.UUID, _ string) error {
+			return errors.New("db error")
+		},
+	})
+
+	err := svc.ChangePassword(context.Background(), fixedUserID, "oldpass", "newpass")
+	require.Error(t, err)
+}
+
+// rehashIfNeeded is called from a goroutine inside Login.
+// These tests invoke it directly (same package) to exercise the early-return paths.
+
+func TestRehashIfNeeded_GetUserError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getUserByEmailFn: func(_ context.Context, _ uuid.UUID, _ string) (*auth.UserRecord, error) {
+			return nil, errors.New("db error")
+		},
+	})
+	// Must not panic; errors are swallowed (non-critical write, Rule #6).
+	svc.rehashIfNeeded(fixedTenantID, "user@example.com", "pass")
+}
+
+// --- WithOIDCEncryptionKey ---
+
+func TestWithOIDCEncryptionKey_SetsKeyAndReturnsReceiver(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{})
+	returned := svc.WithOIDCEncryptionKey(oidcTestKey)
+	// Must return the same receiver for chaining.
+	assert.Same(t, svc, returned)
+	// Key is stored internally — verify by calling SetOIDCConfig (which reads it).
+	err := svc.SetOIDCConfig(context.Background(), OIDCConfigParams{
+		TenantID:        fixedTenantID.String(),
+		ClientSecretEnc: "plaintext-secret",
+	})
+	// ErrOIDCKeyNotConfigured must NOT be returned — the key was set.
+	require.NotErrorIs(t, err, ErrOIDCKeyNotConfigured)
+}
+
+// --- SetOIDCConfig ---
+
+func TestSetOIDCConfig_NoKey_ReturnsErrOIDCKeyNotConfigured(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{})
+	// No WithOIDCEncryptionKey call — key is nil.
+	err := svc.SetOIDCConfig(context.Background(), OIDCConfigParams{
+		TenantID:        fixedTenantID.String(),
+		ClientSecretEnc: "plaintext",
+	})
+	require.ErrorIs(t, err, ErrOIDCKeyNotConfigured)
+}
+
+func TestSetOIDCConfig_BadKeyLength_EncryptError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{})
+	// 10-byte key is invalid for AES-256 — crypto.Encrypt returns ErrInvalidKeyLength.
+	svc.WithOIDCEncryptionKey([]byte("tooshort-key"))
+	err := svc.SetOIDCConfig(context.Background(), OIDCConfigParams{
+		TenantID:        fixedTenantID.String(),
+		ClientSecretEnc: "plaintext",
+	})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "encrypt client secret")
+}
+
+func TestSetOIDCConfig_RepoError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		upsertOIDCConfigFn: func(_ context.Context, _ OIDCConfigParams) error {
+			return errors.New("db error")
+		},
+	})
+	svc.WithOIDCEncryptionKey(oidcTestKey)
+
+	err := svc.SetOIDCConfig(context.Background(), OIDCConfigParams{
+		TenantID:        fixedTenantID.String(),
+		ClientSecretEnc: "plaintext",
+	})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "upsert oidc config")
+}
+
+func TestSetOIDCConfig_Success_SecretIsEncrypted(t *testing.T) {
+	t.Parallel()
+	const plaintext = "my-oauth2-client-secret"
+	var capturedParams OIDCConfigParams
+
+	svc := newTestService(&mockRepo{
+		upsertOIDCConfigFn: func(_ context.Context, p OIDCConfigParams) error {
+			capturedParams = p
+			return nil
+		},
+	})
+	svc.WithOIDCEncryptionKey(oidcTestKey)
+
+	err := svc.SetOIDCConfig(context.Background(), OIDCConfigParams{
+		TenantID:        fixedTenantID.String(),
+		IssuerURL:       "https://accounts.google.com",
+		ClientID:        "client-id-123",
+		ClientSecretEnc: plaintext,
+	})
+	require.NoError(t, err)
+
+	// Repo must receive the encrypted value, not the plaintext.
+	assert.NotEqual(t, plaintext, capturedParams.ClientSecretEnc,
+		"repo must receive ciphertext, not plaintext")
+
+	// The encrypted value must be decryptable back to the original.
+	decrypted, err := crypto.Decrypt(oidcTestKey, capturedParams.ClientSecretEnc)
+	require.NoError(t, err)
+	assert.Equal(t, plaintext, decrypted)
+
+	// Other fields must pass through unchanged.
+	assert.Equal(t, "https://accounts.google.com", capturedParams.IssuerURL)
+	assert.Equal(t, "client-id-123", capturedParams.ClientID)
+}
+
+// --- Impersonation service tests ---
+
+var fixedSessionID = uuid.MustParse("e5000000-0000-0000-0000-000000000005")
+
+func TestStartImpersonation_Success(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{})
+	params := StartImpersonationParams{
+		PlatformUserID:   fixedUserID,
+		TenantID:         fixedTenantID,
+		ImpersonatedUser: uuid.MustParse("f6000000-0000-0000-0000-000000000006"),
+		Reason:           "Customer support ticket #12345",
+		Duration:         30 * time.Minute,
+		IPAddress:        "10.0.0.1",
+	}
+	session, err := svc.StartImpersonation(context.Background(), params)
+	require.NoError(t, err)
+	assert.Equal(t, params.Reason, session.Reason)
+	assert.Equal(t, params.TenantID, session.TenantID)
+}
+
+func TestStartImpersonation_DurationCappedAt4Hours(t *testing.T) {
+	t.Parallel()
+	var capturedParams StartImpersonationParams
+	svc := newTestService(&mockRepo{
+		startImpersonationFn: func(_ context.Context, p StartImpersonationParams) (*ImpersonationSession, error) {
+			capturedParams = p
+			return &ImpersonationSession{ID: fixedSessionID, Reason: p.Reason}, nil
+		},
+	})
+
+	_, err := svc.StartImpersonation(context.Background(), StartImpersonationParams{
+		PlatformUserID:   fixedUserID,
+		TenantID:         fixedTenantID,
+		ImpersonatedUser: fixedUserID,
+		Reason:           "test",
+		Duration:         24 * time.Hour, // exceeds maxImpersonationDuration
+	})
+	require.NoError(t, err)
+	assert.Equal(t, maxImpersonationDuration, capturedParams.Duration)
+}
+
+func TestStartImpersonation_ZeroDuration_UsesMax(t *testing.T) {
+	t.Parallel()
+	var capturedParams StartImpersonationParams
+	svc := newTestService(&mockRepo{
+		startImpersonationFn: func(_ context.Context, p StartImpersonationParams) (*ImpersonationSession, error) {
+			capturedParams = p
+			return &ImpersonationSession{ID: fixedSessionID}, nil
+		},
+	})
+
+	_, err := svc.StartImpersonation(context.Background(), StartImpersonationParams{
+		PlatformUserID: fixedUserID, TenantID: fixedTenantID,
+		ImpersonatedUser: fixedUserID, Reason: "test", Duration: 0,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, maxImpersonationDuration, capturedParams.Duration)
+}
+
+func TestStartImpersonation_RepoError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		startImpersonationFn: func(_ context.Context, _ StartImpersonationParams) (*ImpersonationSession, error) {
+			return nil, errors.New("db error")
+		},
+	})
+
+	_, err := svc.StartImpersonation(context.Background(), StartImpersonationParams{
+		PlatformUserID: fixedUserID, TenantID: fixedTenantID,
+		ImpersonatedUser: fixedUserID, Reason: "test", Duration: time.Hour,
+	})
+	require.Error(t, err)
+}
+
+func TestEndImpersonation_Success(t *testing.T) {
+	t.Parallel()
+	var endedID uuid.UUID
+	svc := newTestService(&mockRepo{
+		endImpersonationSessionFn: func(_ context.Context, id uuid.UUID) error {
+			endedID = id
+			return nil
+		},
+	})
+
+	err := svc.EndImpersonation(context.Background(), fixedSessionID, fixedUserID)
+	require.NoError(t, err)
+	assert.Equal(t, fixedSessionID, endedID)
+}
+
+func TestEndImpersonation_NotFound(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		endImpersonationSessionFn: func(_ context.Context, _ uuid.UUID) error {
+			return ErrImpersonationNotFound
+		},
+	})
+
+	err := svc.EndImpersonation(context.Background(), fixedSessionID, fixedUserID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrImpersonationNotFound)
+}
+
+func TestEndImpersonation_AlreadyEnded(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		endImpersonationSessionFn: func(_ context.Context, _ uuid.UUID) error {
+			return ErrImpersonationAlreadyEnded
+		},
+	})
+
+	err := svc.EndImpersonation(context.Background(), fixedSessionID, fixedUserID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrImpersonationAlreadyEnded)
+}
+
+func TestRehashIfNeeded_NeedsRehash_HashFails(t *testing.T) {
+	t.Parallel()
+	// A bcrypt-prefixed hash triggers NeedsRehash=true so the upgrade path is taken.
+	bcryptLikeHash := "$2a$10$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	svc := NewService(
+		&mockRepo{
+			getUserByEmailFn: func(_ context.Context, _ uuid.UUID, _ string) (*auth.UserRecord, error) {
+				return &auth.UserRecord{
+					ID:           fixedUserID,
+					PasswordHash: bcryptLikeHash,
+				}, nil
+			},
+		},
+		&mockAuthenticator{},
+		&mockTokenIssuer{},
+		&mockHasher{
+			hashFn: func(_ string) (string, error) {
+				return "", errors.New("hash error")
+			},
+		},
+		&mockVerifier{},
+	)
+	// Must not panic; hash failure is swallowed.
+	svc.rehashIfNeeded(fixedTenantID, "user@example.com", "pass")
 }

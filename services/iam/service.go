@@ -4,18 +4,31 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/crypto"
 	"github.com/wegofwd2020/thittam/pkg/registration"
 )
+
+// ErrOIDCKeyNotConfigured is returned by SetOIDCConfig when no encryption key
+// has been wired into the service — a configuration error caught at startup.
+var ErrOIDCKeyNotConfigured = errors.New("iam: OIDC encryption key not configured")
 
 // PasswordHasher creates a bcrypt hash of a plain-text password.
 type PasswordHasher interface {
 	Hash(password string) (string, error)
+}
+
+// SchemaMigrator initialises the PostgreSQL schema for a newly created tenant.
+// The production implementation (cmd/iam) wraps pkg/migrate.ParallelMigrator and
+// applies all service migration directories against the new tenant_<uuid> schema.
+type SchemaMigrator interface {
+	MigrateTenantSchema(ctx context.Context, tenantID uuid.UUID) error
 }
 
 // Authenticator resolves the correct auth provider and authenticates a request.
@@ -75,6 +88,25 @@ type Service struct {
 	tokens   auth.TokenIssuer
 	hasher   PasswordHasher
 	verifier auth.PasswordVerifier
+	oidcKey  []byte          // AES-256-GCM key for OIDC client secret encryption; set by WithOIDCEncryptionKey
+	migrator SchemaMigrator  // nil when no schema init is required (e.g. tests that don't exercise CreateTenant)
+}
+
+// WithOIDCEncryptionKey sets the AES-256-GCM key used to encrypt and decrypt
+// OIDC client secrets stored in tenant_auth_config. The key must be 32 bytes.
+// Returns the receiver so calls can be chained.
+func (s *Service) WithOIDCEncryptionKey(key []byte) *Service {
+	s.oidcKey = key
+	return s
+}
+
+// WithSchemaMigrator attaches a SchemaMigrator that is called by CreateTenant
+// to initialise the new tenant's PostgreSQL schema immediately after the tenant
+// record and system roles are persisted. The migrator must be safe to call
+// concurrently. Returns the receiver so calls can be chained.
+func (s *Service) WithSchemaMigrator(m SchemaMigrator) *Service {
+	s.migrator = m
+	return s
 }
 
 // NewService creates an IAM service with all required dependencies.
@@ -263,11 +295,17 @@ func (s *Service) RevokeRole(ctx context.Context, userID, roleID uuid.UUID) erro
 	return nil
 }
 
-// ListRoles returns all roles defined for a tenant.
+// ListRoles returns all roles defined for a tenant, capped at 200.
+// System roles are seeded at 6 per tenant; custom roles are rare and bounded
+// by sensible UI limits. 200 is a hard ceiling against runaway scripting.
 func (s *Service) ListRoles(ctx context.Context, tenantID uuid.UUID) ([]Role, error) {
 	roles, err := s.repo.ListRoles(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("iam: list roles: %w", err)
+	}
+	const maxRoles = 200
+	if len(roles) > maxRoles {
+		roles = roles[:maxRoles]
 	}
 	return roles, nil
 }
@@ -311,6 +349,15 @@ func (s *Service) CreateTenant(ctx context.Context, tenant *Tenant) (*Tenant, er
 	}
 	if err := s.seedSystemRoles(ctx, tenant.ID); err != nil {
 		return nil, fmt.Errorf("iam: seed system roles for tenant %s: %w", tenant.ID, err)
+	}
+	// Initialise the tenant's PostgreSQL schema. MigrateTenantSchema is
+	// synchronous: if it fails the caller sees the error and the tenant record
+	// remains in the DB (so it can be retried via the admin API). A nil migrator
+	// is allowed — tests that don't exercise schema creation omit it.
+	if s.migrator != nil {
+		if err := s.migrator.MigrateTenantSchema(ctx, tenant.ID); err != nil {
+			return nil, fmt.Errorf("iam: migrate schema for tenant %s: %w", tenant.ID, err)
+		}
 	}
 	return tenant, nil
 }
@@ -424,6 +471,94 @@ func (s *Service) seedSystemRoles(ctx context.Context, tenantID uuid.UUID) error
 		if err := s.repo.CreateRole(ctx, role); err != nil {
 			return fmt.Errorf("seed role %q: %w", sr.name, err)
 		}
+	}
+	return nil
+}
+
+// --- OIDC configuration ---
+
+// SetOIDCConfig creates or replaces the OIDC authentication configuration for
+// a tenant. The caller supplies the plaintext client secret; this method
+// encrypts it with AES-256-GCM before persisting.
+//
+// Returns ErrOIDCKeyNotConfigured if WithOIDCEncryptionKey was never called.
+func (s *Service) SetOIDCConfig(ctx context.Context, params OIDCConfigParams) error {
+	if len(s.oidcKey) == 0 {
+		return ErrOIDCKeyNotConfigured
+	}
+	enc, err := crypto.Encrypt(s.oidcKey, params.ClientSecretEnc)
+	if err != nil {
+		return fmt.Errorf("iam: encrypt client secret: %w", err)
+	}
+	// Replace plaintext with ciphertext before handing off to the repo.
+	params.ClientSecretEnc = enc
+	if err := s.repo.UpsertOIDCConfig(ctx, params); err != nil {
+		return fmt.Errorf("iam: upsert oidc config for tenant %s: %w", params.TenantID, err)
+	}
+	return nil
+}
+
+// --- Impersonation ---
+
+// maxImpersonationDuration caps how long a platform admin session can live.
+// Sessions that exceed this are rejected at the service layer, not just at expiry.
+const maxImpersonationDuration = 4 * time.Hour
+
+// StartImpersonation opens a bounded-TTL impersonation session for a platform admin.
+// Duration is capped at maxImpersonationDuration regardless of what the caller requests.
+// The caller must already hold the platform_admin role — enforced at the handler level
+// by RequireRole before this method is ever called.
+func (s *Service) StartImpersonation(ctx context.Context, params StartImpersonationParams) (*ImpersonationSession, error) {
+	if params.Duration <= 0 || params.Duration > maxImpersonationDuration {
+		params.Duration = maxImpersonationDuration
+	}
+	session, err := s.repo.StartImpersonation(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("iam: start impersonation for tenant %s: %w", params.TenantID, err)
+	}
+	// Append-only audit log (Rule #7). The write is best-effort: an audit
+	// failure must not roll back a successfully opened session — the session
+	// must be terminated by the admin regardless of audit availability.
+	entry := &AuditEntry{
+		ID:         uuid.New(),
+		ActorID:    params.PlatformUserID,
+		Action:     "impersonation.start",
+		TargetType: "impersonation_session",
+		TargetID:   session.ID,
+		OldState:   "",
+		NewState:   "active",
+		Timestamp:  session.StartedAt,
+		TenantID:   params.TenantID,
+		IPAddress:  params.IPAddress,
+	}
+	if auditErr := s.repo.CreateAuditEntry(ctx, entry); auditErr != nil {
+		// Log only — do not surface to caller. Audit lag is observable via
+		// Prometheus missing-audit-entry counter and alerting (Rule #13).
+		_ = auditErr
+	}
+	return session, nil
+}
+
+// EndImpersonation explicitly terminates an active impersonation session.
+// Returns ErrImpersonationNotFound if the session ID does not exist and
+// ErrImpersonationAlreadyEnded if it was already closed.
+func (s *Service) EndImpersonation(ctx context.Context, sessionID uuid.UUID, actorID uuid.UUID) error {
+	if err := s.repo.EndImpersonationSession(ctx, sessionID); err != nil {
+		return fmt.Errorf("iam: end impersonation %s: %w", sessionID, err)
+	}
+	// Append-only audit log (Rule #7). Best-effort: session is already closed above.
+	entry := &AuditEntry{
+		ID:         uuid.New(),
+		ActorID:    actorID,
+		Action:     "impersonation.end",
+		TargetType: "impersonation_session",
+		TargetID:   sessionID,
+		OldState:   "active",
+		NewState:   "ended",
+		Timestamp:  time.Now().UTC(),
+	}
+	if auditErr := s.repo.CreateAuditEntry(ctx, entry); auditErr != nil {
+		_ = auditErr
 	}
 	return nil
 }

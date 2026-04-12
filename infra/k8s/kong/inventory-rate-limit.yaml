@@ -1,0 +1,149 @@
+# Kong rate-limiting for inventory-management write endpoints
+#
+# WHY: Inventory write RPCs (CreateItem, UpdateItem, CheckOutItem, CheckInItem,
+# TransferItem) each write to the PostgreSQL tenant schema and publish an
+# InventoryUpdated NATS event consumed by reporting-analytics. A burst of
+# CheckOutItem / CheckInItem calls (e.g., a bulk scanning workflow) can:
+#   1. Exceed pgxpool connection limits on the shared DB node
+#   2. Produce an event spike on the INVENTORY JetStream subject
+#
+# CheckOut / CheckIn are physical-world actions bound by scanner UX speed;
+# 60 req/min per user is generous (1/s) while still blocking runaway scripts.
+# Bulk item creation (importing equipment manifests) can legitimately exceed
+# that, so CreateItem gets a separate 120 req/min plugin.
+#
+# Two plugins:
+#   inventory-write-rate-limit  — 60 req/min per user (checkout/checkin/transfer)
+#   inventory-create-rate-limit — 120 req/min per user (bulk item/location creation)
+#
+# Apply:
+#   kubectl apply -f infra/k8s/kong/inventory-rate-limit.yaml -n thittam
+---
+# Checkout / checkin / transfer plugin
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: inventory-write-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "guards against INVENTORY JetStream flood and pgxpool exhaustion"
+plugin: rate-limiting
+config:
+  minute: 60
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Bulk item/location creation plugin — higher limit for import workflows
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: inventory-create-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "permits equipment manifest imports while blocking runaway scripts"
+plugin: rate-limiting
+config:
+  minute: 120
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Ingress — checkout, checkin, transfer (state-changing physical-world ops)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: inventory-write-routes
+  namespace: thittam
+  labels:
+    app: inventory-management
+    app.kubernetes.io/name: inventory-management
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: inventory-write-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # CheckOutItem / CheckInItem — triggers InventoryUpdated NATS event
+          - path: /api/v1/items/checkout
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-management
+                port:
+                  number: 8084
+          - path: /api/v1/items/checkin
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-management
+                port:
+                  number: 8084
+          # TransferItem — moves item between locations
+          - path: /api/v1/items/transfer
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-management
+                port:
+                  number: 8084
+          # UpdateItem — metadata/condition updates
+          - path: /api/v1/items/
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-management
+                port:
+                  number: 8084
+---
+# Ingress — item and location creation (bulk import path)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: inventory-create-routes
+  namespace: thittam
+  labels:
+    app: inventory-management
+    app.kubernetes.io/name: inventory-management
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: inventory-create-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # CreateItem — initial item registration (equipment manifest import)
+          - path: /api/v1/items
+            pathType: Exact
+            backend:
+              service:
+                name: inventory-management
+                port:
+                  number: 8084
+          # CreateLocation / UpdateLocation
+          - path: /api/v1/locations
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-management
+                port:
+                  number: 8084

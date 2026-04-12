@@ -241,10 +241,17 @@ const listDocumentVersions = `-- name: ListDocumentVersions :many
 SELECT id, document_id, version, storage_key, size_bytes, uploaded_by, created_at FROM document_versions
 WHERE document_id = $1
 ORDER BY version ASC
+LIMIT $2 OFFSET $3
 `
 
-func (q *Queries) ListDocumentVersions(ctx context.Context, documentID uuid.UUID) ([]DocumentVersion, error) {
-	rows, err := q.db.Query(ctx, listDocumentVersions, documentID)
+type ListDocumentVersionsParams struct {
+	DocumentID uuid.UUID `json:"document_id"`
+	Limit      int32     `json:"limit"`
+	Offset     int32     `json:"offset"`
+}
+
+func (q *Queries) ListDocumentVersions(ctx context.Context, arg ListDocumentVersionsParams) ([]DocumentVersion, error) {
+	rows, err := q.db.Query(ctx, listDocumentVersions, arg.DocumentID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -334,16 +341,19 @@ WHERE tenant_id = $1
   AND ($2::uuid IS NULL OR production_id = $2)
   AND ($3::uuid IS NULL OR parent_id = $3)
 ORDER BY name ASC
+LIMIT $4 OFFSET $5
 `
 
 type ListFoldersParams struct {
 	TenantID uuid.UUID `json:"tenant_id"`
 	Column2  uuid.UUID `json:"column_2"`
 	Column3  uuid.UUID `json:"column_3"`
+	Limit    int32     `json:"limit"`
+	Offset   int32     `json:"offset"`
 }
 
 func (q *Queries) ListFolders(ctx context.Context, arg ListFoldersParams) ([]Folder, error) {
-	rows, err := q.db.Query(ctx, listFolders, arg.TenantID, arg.Column2, arg.Column3)
+	rows, err := q.db.Query(ctx, listFolders, arg.TenantID, arg.Column2, arg.Column3, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

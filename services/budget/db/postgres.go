@@ -145,8 +145,12 @@ func (p *Postgres) GetLineItem(ctx context.Context, id uuid.UUID) (*budget.Budge
 	return lineItemFromDB(row), nil
 }
 
-func (p *Postgres) ListLineItems(ctx context.Context, budgetID uuid.UUID) ([]budget.BudgetLineItem, error) {
-	rows, err := p.q.ListLineItems(ctx, budgetID)
+func (p *Postgres) ListLineItems(ctx context.Context, budgetID uuid.UUID, limit, offset int) ([]budget.BudgetLineItem, error) {
+	rows, err := p.q.ListLineItems(ctx, ListLineItemsParams{
+		BudgetID: budgetID,
+		Limit:    int32(limit),
+		Offset:   int32(offset),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("budget: list line items: %w", err)
 	}

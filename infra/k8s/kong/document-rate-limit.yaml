@@ -1,0 +1,144 @@
+# Kong rate-limiting for document upload and download endpoints
+#
+# WHY: File I/O operations are the most resource-intensive RPCs in the
+# document service. An unbounded upload or download loop can:
+#   - Saturate S3 throughput quota (shared across all tenants)
+#   - Fill the pod's in-flight request buffer causing OOMKill
+#   - Create thousands of presigned-URL tokens that bypass CDN caching
+#
+# Two separate plugins with different limits:
+#   document-upload-rate-limit  — 20 req/min per user (initiate + confirm + version)
+#   document-download-rate-limit — 60 req/min per user (download URLs are cheap but
+#                                   token-farm abuse is the risk to guard against)
+#
+# Read-only metadata endpoints (GetDocument, ListDocuments, ListVersions,
+# ListFolders) are not rate-limited — they are DB reads with no S3 cost.
+#
+# Apply:
+#   kubectl apply -f infra/k8s/kong/document-rate-limit.yaml -n thittam
+---
+# Upload rate-limit plugin (write path — S3 PUT operations)
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: document-upload-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "guards against S3 throughput exhaustion; see gap audit #4"
+plugin: rate-limiting
+config:
+  # 20 uploads per minute per authenticated user.
+  # Generous for legitimate batch-ingest workflows; blocks runaway scripts.
+  minute: 20
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Download rate-limit plugin (presigned URL generation)
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: document-download-rate-limit
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    thittam.io/security-note: "guards against presigned-URL token farming"
+plugin: rate-limiting
+config:
+  # 60 download URL requests per minute per authenticated user.
+  # Enough for a UI loading a document-heavy project page; blocks token farming.
+  minute: 60
+  policy: redis
+  fault_tolerant: true
+  redis_host: redis.thittam.svc.cluster.local
+  redis_port: 6379
+  limit_by: consumer
+  hide_client_headers: false
+---
+# Ingress — upload and version-write endpoints (S3 PUT path)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: document-upload-routes
+  namespace: thittam
+  labels:
+    app: document
+    app.kubernetes.io/name: document
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: document-upload-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # InitiateUpload — creates presigned S3 PUT URL
+          - path: /api/v1/documents/upload
+            pathType: Prefix
+            backend:
+              service:
+                name: document
+                port:
+                  number: 8088
+          # ConfirmUpload — marks upload complete, creates document record
+          - path: /api/v1/documents/confirm
+            pathType: Prefix
+            backend:
+              service:
+                name: document
+                port:
+                  number: 8088
+          # CreateVersion — new version presigned URL
+          - path: /api/v1/documents/versions
+            pathType: Prefix
+            backend:
+              service:
+                name: document
+                port:
+                  number: 8088
+          # RestoreVersion — rewrites the active version pointer
+          - path: /api/v1/documents/restore
+            pathType: Prefix
+            backend:
+              service:
+                name: document
+                port:
+                  number: 8088
+---
+# Ingress — download URL generation (S3 GET presigned URL path)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: document-download-routes
+  namespace: thittam
+  labels:
+    app: document
+    app.kubernetes.io/name: document
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: security
+  annotations:
+    konghq.com/plugins: document-download-rate-limit
+    konghq.com/strip-path: "true"
+    kubernetes.io/ingress.class: kong
+spec:
+  rules:
+    - http:
+        paths:
+          # GetDownloadURL — generates presigned S3 GET URL
+          - path: /api/v1/documents/download
+            pathType: Prefix
+            backend:
+              service:
+                name: document
+                port:
+                  number: 8088

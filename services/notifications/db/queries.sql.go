@@ -15,6 +15,7 @@ import (
 const createNotificationLog = `-- name: CreateNotificationLog :one
 INSERT INTO notification_log (id, tenant_id, recipient_id, channel, event_type, subject, status)
 VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+ON CONFLICT (id) DO NOTHING
 RETURNING id, tenant_id, recipient_id, channel, event_type, subject, provider_msg_id, status, retry_count, error_message, sent_at, delivered_at, created_at
 `
 

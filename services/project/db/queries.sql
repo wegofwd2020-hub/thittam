@@ -4,6 +4,7 @@
 -- name: CreateProduction :one
 INSERT INTO productions (id, tenant_id, title, slug, description, genre, language, status, start_date, end_date, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: GetProduction :one
@@ -40,7 +41,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: ListPhases :many
-SELECT * FROM phases WHERE production_id = $1 ORDER BY created_at ASC;
+SELECT * FROM phases WHERE production_id = $1 ORDER BY created_at ASC LIMIT $2 OFFSET $3;
 
 -- name: GetPhase :one
 SELECT * FROM phases WHERE id = $1;
@@ -53,10 +54,11 @@ RETURNING *;
 -- name: AddCrewMember :one
 INSERT INTO crew_members (id, production_id, tenant_id, user_id, name, role, department, day_rate, currency, start_date, end_date)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: ListCrewMembers :many
-SELECT * FROM crew_members WHERE production_id = $1 ORDER BY name ASC;
+SELECT * FROM crew_members WHERE production_id = $1 ORDER BY name ASC LIMIT $2 OFFSET $3;
 
 -- name: RemoveCrewMember :exec
 DELETE FROM crew_members WHERE id = $1;

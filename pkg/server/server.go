@@ -12,11 +12,13 @@ import (
 	"os/signal"
 	"runtime/debug"
 	"syscall"
+	"time"
 
 	"github.com/wegofwd2020/thittam/pkg/observability"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 )
@@ -27,6 +29,12 @@ type Config struct {
 	Port        int
 	MetricsPort int              // health/metrics HTTP port (default: 9090)
 	Loader      *vertical.Loader // vertical config loader (nil = skip vertical interceptor)
+
+	// ExtraUnaryInterceptors are appended after the built-in chain
+	// (recovery → metrics → vertical). Use this to add the caller-identity
+	// interceptor or any service-specific middleware.
+	ExtraUnaryInterceptors  []grpc.UnaryServerInterceptor
+	ExtraStreamInterceptors []grpc.StreamServerInterceptor
 }
 
 // Server wraps a gRPC server with interceptors and lifecycle management.
@@ -76,9 +84,24 @@ func New(cfg Config, logger Logger) *Server {
 		streamInterceptors = append(streamInterceptors, vertical.StreamInterceptor(cfg.Loader))
 	}
 
+	unaryInterceptors = append(unaryInterceptors, cfg.ExtraUnaryInterceptors...)
+	streamInterceptors = append(streamInterceptors, cfg.ExtraStreamInterceptors...)
+
 	gs := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(unaryInterceptors...),
 		grpc.ChainStreamInterceptor(streamInterceptors...),
+		// Keepalive: send pings after 30s idle, timeout after 10s, allow client
+		// pings as frequently as every 5 minutes. Prevents silent TCP half-open
+		// connections from blocking handler goroutines indefinitely.
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			MaxConnectionIdle: 5 * time.Minute,
+			Time:              30 * time.Second,
+			Timeout:           10 * time.Second,
+		}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             5 * time.Minute,
+			PermitWithoutStream: true,
+		}),
 	)
 
 	reflection.Register(gs)
@@ -138,7 +161,34 @@ func (s *Server) Run() error {
 	go func() {
 		<-ctx.Done()
 		s.logger.Info("shutting down", "service", s.cfg.Name)
-		s.gs.GracefulStop()
+
+		// Stop the health/metrics HTTP server first so Kubernetes removes this
+		// pod from load-balancer rotation before we start draining gRPC RPCs.
+		// A 5s budget is sufficient — the HTTP server handles only lightweight
+		// health probes and Prometheus scrapes, never long-lived connections.
+		httpCtx, httpCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer httpCancel()
+		if err := s.health.Stop(httpCtx); err != nil {
+			s.logger.Error("health server stop error", "service", s.cfg.Name, "error", err)
+		}
+
+		// Allow up to 30s for in-flight RPCs to complete. If the deadline is
+		// exceeded (e.g., a long-running streaming RPC), fall back to hard Stop
+		// so the process does not hang indefinitely past the pod termination grace period.
+		drainCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		stopped := make(chan struct{})
+		go func() {
+			s.gs.GracefulStop()
+			close(stopped)
+		}()
+		select {
+		case <-stopped:
+			// clean drain
+		case <-drainCtx.Done():
+			s.logger.Error("graceful stop timed out, forcing stop", "service", s.cfg.Name)
+			s.gs.Stop()
+		}
 	}()
 
 	// Start health/metrics HTTP server
