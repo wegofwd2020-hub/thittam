@@ -2,6 +2,7 @@ package billing
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -10,6 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	billingv1 "github.com/wegofwd2020/thittam/gen/billing/v1"
+	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Deterministic UUIDs for handler test fixtures.
@@ -68,6 +74,60 @@ func fixedPM() *PaymentMethod {
 // newHandlerWithRepo builds a Handler backed by the given mock repo.
 func newHandlerWithRepo(r Repository) *Handler {
 	return NewHandler(NewService(r))
+}
+
+// --- mock document client ---
+
+type mockDocClient struct {
+	getDownloadURLFn func(ctx context.Context, req *documentv1.GetDownloadURLRequest, opts ...grpc.CallOption) (*documentv1.DownloadURL, error)
+}
+
+func (m *mockDocClient) GetDownloadURL(ctx context.Context, req *documentv1.GetDownloadURLRequest, opts ...grpc.CallOption) (*documentv1.DownloadURL, error) {
+	if m.getDownloadURLFn != nil {
+		return m.getDownloadURLFn(ctx, req, opts...)
+	}
+	return &documentv1.DownloadURL{
+		Url:       "https://storage.example.com/invoice.pdf?sig=abc",
+		ExpiresAt: timestamppb.New(time.Date(2026, 4, 13, 0, 0, 0, 0, time.UTC)),
+	}, nil
+}
+
+// Satisfy the full documentv1.DocumentServiceClient interface — only GetDownloadURL is used.
+func (m *mockDocClient) InitiateUpload(_ context.Context, _ *documentv1.InitiateUploadRequest, _ ...grpc.CallOption) (*documentv1.UploadURL, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in billing tests")
+}
+func (m *mockDocClient) ConfirmUpload(_ context.Context, _ *documentv1.ConfirmUploadRequest, _ ...grpc.CallOption) (*documentv1.Document, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in billing tests")
+}
+func (m *mockDocClient) GetDocument(_ context.Context, _ *documentv1.GetDocumentRequest, _ ...grpc.CallOption) (*documentv1.Document, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in billing tests")
+}
+func (m *mockDocClient) ListDocuments(_ context.Context, _ *documentv1.ListDocumentsRequest, _ ...grpc.CallOption) (*documentv1.ListDocumentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in billing tests")
+}
+func (m *mockDocClient) DeleteDocument(_ context.Context, _ *documentv1.DeleteDocumentRequest, _ ...grpc.CallOption) (*documentv1.DeleteDocumentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in billing tests")
+}
+func (m *mockDocClient) MoveDocument(_ context.Context, _ *documentv1.MoveDocumentRequest, _ ...grpc.CallOption) (*documentv1.Document, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in billing tests")
+}
+func (m *mockDocClient) CreateVersion(_ context.Context, _ *documentv1.CreateVersionRequest, _ ...grpc.CallOption) (*documentv1.UploadURL, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in billing tests")
+}
+func (m *mockDocClient) ConfirmVersion(_ context.Context, _ *documentv1.ConfirmVersionRequest, _ ...grpc.CallOption) (*documentv1.DocumentVersion, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in billing tests")
+}
+func (m *mockDocClient) ListVersions(_ context.Context, _ *documentv1.ListVersionsRequest, _ ...grpc.CallOption) (*documentv1.ListVersionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in billing tests")
+}
+func (m *mockDocClient) CreateFolder(_ context.Context, _ *documentv1.CreateFolderRequest, _ ...grpc.CallOption) (*documentv1.Folder, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in billing tests")
+}
+func (m *mockDocClient) ListFolders(_ context.Context, _ *documentv1.ListFoldersRequest, _ ...grpc.CallOption) (*documentv1.ListFoldersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in billing tests")
+}
+func (m *mockDocClient) RestoreVersion(_ context.Context, _ *documentv1.RestoreVersionRequest, _ ...grpc.CallOption) (*documentv1.Document, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in billing tests")
 }
 
 // --- GetSubscription ---
@@ -495,4 +555,118 @@ func TestGrpcErr(t *testing.T) {
 			assert.Contains(t, s.Error(), tc.wantCode)
 		})
 	}
+}
+
+// --- DownloadInvoice ---
+
+func newHandlerWithDocClient(r Repository, doc documentv1.DocumentServiceClient) *Handler {
+	return NewHandlerWithDeps(NewService(r), doc)
+}
+
+var fixedPDFDocID = uuid.MustParse("a1000000-0000-0000-0000-000000000099")
+
+func TestHandler_DownloadInvoice_Success(t *testing.T) {
+	t.Parallel()
+	pdfID := fixedPDFDocID
+	inv := fixedInvoice()
+	inv.PDFDocumentID = &pdfID
+
+	h := newHandlerWithDocClient(&mockRepo{
+		getInvoiceFn: func(_ context.Context, _, _ uuid.UUID) (*Invoice, error) {
+			return inv, nil
+		},
+	}, &mockDocClient{})
+
+	resp, err := h.DownloadInvoice(context.Background(), &billingv1.DownloadInvoiceRequest{
+		TenantId:  fixedTenantID.String(),
+		InvoiceId: fixedInvID.String(),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "https://storage.example.com/invoice.pdf?sig=abc", resp.Url)
+	assert.Equal(t, "2026-04-13T00:00:00Z", resp.ExpiresAt)
+}
+
+func TestHandler_DownloadInvoice_NoPDF_ReturnsNotFound(t *testing.T) {
+	t.Parallel()
+	inv := fixedInvoice() // PDFDocumentID is nil
+
+	h := newHandlerWithDocClient(&mockRepo{
+		getInvoiceFn: func(_ context.Context, _, _ uuid.UUID) (*Invoice, error) {
+			return inv, nil
+		},
+	}, &mockDocClient{})
+
+	_, err := h.DownloadInvoice(context.Background(), &billingv1.DownloadInvoiceRequest{
+		TenantId:  fixedTenantID.String(),
+		InvoiceId: fixedInvID.String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+func TestHandler_DownloadInvoice_NilDocClient_ReturnsUnavailable(t *testing.T) {
+	t.Parallel()
+	pdfID := fixedPDFDocID
+	inv := fixedInvoice()
+	inv.PDFDocumentID = &pdfID
+
+	// nil docClient — service not configured
+	h := newHandlerWithDocClient(&mockRepo{
+		getInvoiceFn: func(_ context.Context, _, _ uuid.UUID) (*Invoice, error) {
+			return inv, nil
+		},
+	}, nil)
+
+	_, err := h.DownloadInvoice(context.Background(), &billingv1.DownloadInvoiceRequest{
+		TenantId:  fixedTenantID.String(),
+		InvoiceId: fixedInvID.String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Unavailable, status.Code(err))
+}
+
+func TestHandler_DownloadInvoice_DocServiceError_ReturnsInternal(t *testing.T) {
+	t.Parallel()
+	pdfID := fixedPDFDocID
+	inv := fixedInvoice()
+	inv.PDFDocumentID = &pdfID
+
+	h := newHandlerWithDocClient(&mockRepo{
+		getInvoiceFn: func(_ context.Context, _, _ uuid.UUID) (*Invoice, error) {
+			return inv, nil
+		},
+	}, &mockDocClient{
+		getDownloadURLFn: func(_ context.Context, _ *documentv1.GetDownloadURLRequest, _ ...grpc.CallOption) (*documentv1.DownloadURL, error) {
+			return nil, errors.New("document service unavailable")
+		},
+	})
+
+	_, err := h.DownloadInvoice(context.Background(), &billingv1.DownloadInvoiceRequest{
+		TenantId:  fixedTenantID.String(),
+		InvoiceId: fixedInvID.String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+func TestHandler_DownloadInvoice_InvalidTenantID(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithDocClient(&mockRepo{}, &mockDocClient{})
+	_, err := h.DownloadInvoice(context.Background(), &billingv1.DownloadInvoiceRequest{
+		TenantId:  "not-a-uuid",
+		InvoiceId: fixedInvID.String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_DownloadInvoice_InvoiceNotFound(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithDocClient(&mockRepo{}, &mockDocClient{})
+	_, err := h.DownloadInvoice(context.Background(), &billingv1.DownloadInvoiceRequest{
+		TenantId:  fixedTenantID.String(),
+		InvoiceId: fixedInvID.String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }

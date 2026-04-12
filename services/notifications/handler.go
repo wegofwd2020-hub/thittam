@@ -251,7 +251,7 @@ func grpcErr(err error) error {
 	case errors.Is(err, ErrInvalidChannel):
 		return status.Error(codes.InvalidArgument, "invalid channel; must be email, sms, in_app, or push")
 	case errors.Is(err, ErrNoSenderForChannel):
-		return status.Error(codes.Unimplemented, "no sender configured for channel")
+		return status.Error(codes.FailedPrecondition, "no sender configured for channel")
 	case errors.Is(err, ErrNotificationNotFound):
 		return status.Error(codes.NotFound, "notification not found")
 	}

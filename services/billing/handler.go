@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	billingv1 "github.com/wegofwd2020/thittam/gen/billing/v1"
+	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -16,12 +17,18 @@ import (
 // Handler implements billingv1.BillingServiceServer.
 type Handler struct {
 	billingv1.UnimplementedBillingServiceServer
-	svc *Service
+	svc       *Service
+	docClient documentv1.DocumentServiceClient // nil → DownloadInvoice returns NotFound
 }
 
 // NewHandler creates a billing handler.
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
+}
+
+// NewHandlerWithDeps creates a billing handler with optional downstream clients.
+func NewHandlerWithDeps(svc *Service, docClient documentv1.DocumentServiceClient) *Handler {
+	return &Handler{svc: svc, docClient: docClient}
 }
 
 // --- Subscriptions ---
@@ -134,10 +141,47 @@ func (h *Handler) GetInvoice(ctx context.Context, req *billingv1.GetInvoiceReque
 }
 
 // DownloadInvoice returns a presigned download URL for the invoice PDF.
-// PDF generation and storage are handled by the document service; this RPC
-// returns Unimplemented until that integration is wired up.
-func (h *Handler) DownloadInvoice(_ context.Context, _ *billingv1.DownloadInvoiceRequest) (*billingv1.InvoiceDownloadURL, error) {
-	return nil, status.Error(codes.Unimplemented, "invoice PDF download requires document service integration")
+// The PDF is stored in the document service; we proxy the presigned URL from there.
+// Returns NotFound when no PDF has been generated yet for the invoice.
+func (h *Handler) DownloadInvoice(ctx context.Context, req *billingv1.DownloadInvoiceRequest) (*billingv1.InvoiceDownloadURL, error) {
+	tenantID, err := uuid.Parse(req.TenantId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+	}
+	invoiceID, err := uuid.Parse(req.InvoiceId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid invoice_id: %v", err)
+	}
+
+	inv, err := h.svc.GetInvoice(ctx, tenantID, invoiceID)
+	if err != nil {
+		return nil, grpcErr(err)
+	}
+
+	if inv.PDFDocumentID == nil {
+		return nil, status.Error(codes.NotFound, "invoice PDF not yet available")
+	}
+
+	if h.docClient == nil {
+		return nil, status.Error(codes.Unavailable, "document service not configured")
+	}
+
+	docURL, err := h.docClient.GetDownloadURL(ctx, &documentv1.GetDownloadURLRequest{
+		TenantId: tenantID.String(),
+		Id:       inv.PDFDocumentID.String(),
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "fetch invoice download URL: %v", err)
+	}
+
+	expiresAt := ""
+	if t := docURL.GetExpiresAt(); t != nil {
+		expiresAt = t.AsTime().UTC().Format(time.RFC3339)
+	}
+	return &billingv1.InvoiceDownloadURL{
+		Url:       docURL.GetUrl(),
+		ExpiresAt: expiresAt,
+	}, nil
 }
 
 // --- Payment methods ---

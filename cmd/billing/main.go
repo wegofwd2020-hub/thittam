@@ -10,9 +10,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	billingv1 "github.com/wegofwd2020/thittam/gen/billing/v1"
+	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/billing"
 	billingdb "github.com/wegofwd2020/thittam/services/billing/db"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
@@ -37,7 +40,24 @@ func main() {
 	// when the billing saga (invoice.paid → subscription.activated) is wired up.
 	repo := billingdb.NewPostgres(pool)
 	svc := billing.NewService(repo)
-	handler := billing.NewHandler(svc)
+
+	// --- Document service client (for invoice PDF download URLs) ---
+	// DOCUMENT_SERVICE_ADDR is T3 (non-sensitive endpoint), safe as env var.
+	// mTLS is handled by the Istio sidecar; we connect with plain credentials
+	// inside the mesh and let Envoy handle TLS termination.
+	var docClient documentv1.DocumentServiceClient
+	if addr := os.Getenv("DOCUMENT_SERVICE_ADDR"); addr != "" {
+		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Fatalf("billing: startup: connect to document service: %v", err)
+		}
+		defer conn.Close()
+		docClient = documentv1.NewDocumentServiceClient(conn)
+	} else {
+		log.Printf("billing: DOCUMENT_SERVICE_ADDR not set — DownloadInvoice will return Unavailable")
+	}
+
+	handler := billing.NewHandlerWithDeps(svc, docClient)
 
 	// --- gRPC server ---
 	srv := server.New(server.Config{

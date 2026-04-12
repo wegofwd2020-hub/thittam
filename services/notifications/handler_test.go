@@ -42,9 +42,9 @@ func TestHandler_Send_Success(t *testing.T) {
 		EventType:        "expense.approved",
 		Data:             map[string]string{"Name": "Jane"},
 	})
-	// No sender configured — expect ErrNoSenderForChannel → Unimplemented
+	// No sender configured — expect ErrNoSenderForChannel → FailedPrecondition
 	require.Error(t, err)
-	assert.Equal(t, codes.Unimplemented, status.Code(err))
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 }
 
 func TestHandler_Send_InvalidTenantID(t *testing.T) {
@@ -303,7 +303,7 @@ func TestGrpcErr_AllCodes(t *testing.T) {
 		{ErrTemplateNotFound, codes.NotFound},
 		{ErrTemplateRender, codes.InvalidArgument},
 		{ErrInvalidChannel, codes.InvalidArgument},
-		{ErrNoSenderForChannel, codes.Unimplemented},
+		{ErrNoSenderForChannel, codes.FailedPrecondition},
 		{ErrNotificationNotFound, codes.NotFound},
 	}
 	for _, tc := range cases {
