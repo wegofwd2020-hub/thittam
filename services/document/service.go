@@ -9,9 +9,29 @@ import (
 )
 
 const (
-	uploadURLTTL   = 60 * time.Minute  // presigned PUT URLs are valid for 1 hour
-	downloadURLTTL = 15 * time.Minute  // presigned GET URLs expire after 15 minutes
+	// assumedBandwidthBytesPerSec is a conservative 10 Mbps baseline used to
+	// estimate file transfer time when sizing presigned URL windows.
+	assumedBandwidthBytesPerSec int64 = 1_250_000
+
+	urlWindowBuffer = 5 * time.Minute  // headroom added on top of transfer time
+	urlWindowMin    = 15 * time.Minute // floor — never issue a URL shorter than this
+	urlWindowMax    = 4 * time.Hour    // cap — never issue a URL longer than this
+
+	// largeURLWindowThreshold is the TTL above which a security warn log is emitted
+	// so that operators can review unusually large file transfers.
+	largeURLWindowThreshold = time.Hour
 )
+
+// Logger defines structured logging for the document service.
+type Logger interface {
+	Info(msg string, keysAndValues ...interface{})
+	Warn(msg string, keysAndValues ...interface{})
+}
+
+type noopLogger struct{}
+
+func (noopLogger) Info(_ string, _ ...interface{}) {}
+func (noopLogger) Warn(_ string, _ ...interface{}) {}
 
 // ObjectStore is the interface for S3-compatible object storage.
 // Implementations wrap MinIO (self-hosted) or AWS S3 (cloud).
@@ -42,11 +62,43 @@ type Service struct {
 	repo      Repository
 	store     ObjectStore
 	publisher EventPublisher
+	logger    Logger
 }
 
 // NewService creates a document service.
 func NewService(repo Repository, store ObjectStore, publisher EventPublisher) *Service {
-	return &Service{repo: repo, store: store, publisher: publisher}
+	return &Service{
+		repo:      repo,
+		store:     store,
+		publisher: publisher,
+		logger:    noopLogger{},
+	}
+}
+
+// WithLogger attaches a structured logger to the service.
+// If not set, log output is silently discarded.
+func (s *Service) WithLogger(l Logger) *Service {
+	s.logger = l
+	return s
+}
+
+// presignedURLWindow returns the presigned URL validity window for a file of
+// sizeBytes. Formula: max(urlWindowMin, ceil(sizeBytes/bandwidth) + urlWindowBuffer),
+// capped at urlWindowMax. Zero or negative sizes return urlWindowMin.
+func presignedURLWindow(sizeBytes int64) time.Duration {
+	if sizeBytes <= 0 {
+		return urlWindowMin
+	}
+	// Integer ceiling division: (a + b - 1) / b
+	transferSecs := (sizeBytes + assumedBandwidthBytesPerSec - 1) / assumedBandwidthBytesPerSec
+	window := time.Duration(transferSecs)*time.Second + urlWindowBuffer
+	if window < urlWindowMin {
+		window = urlWindowMin
+	}
+	if window > urlWindowMax {
+		window = urlWindowMax
+	}
+	return window
 }
 
 // --- Upload lifecycle ---
@@ -58,7 +110,17 @@ func (s *Service) InitiateUpload(ctx context.Context, req *InitiateUploadRequest
 	docID := uuid.New()
 	key := storageKey(req.TenantID, docID, req.ProductionID, 1, req.Name)
 
-	url, err := s.store.PresignedPutURL(ctx, key, uploadURLTTL)
+	ttl := presignedURLWindow(req.SizeHintBytes)
+	if ttl > largeURLWindowThreshold {
+		s.logger.Warn("large presigned upload URL window issued",
+			"tenant_id", req.TenantID.String(),
+			"document_id", docID.String(),
+			"size_hint_bytes", req.SizeHintBytes,
+			"ttl", ttl.String(),
+		)
+	}
+
+	url, err := s.store.PresignedPutURL(ctx, key, ttl)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPresignFailed, err)
 	}
@@ -82,7 +144,7 @@ func (s *Service) InitiateUpload(ctx context.Context, req *InitiateUploadRequest
 	return &UploadURL{
 		DocumentID: docID,
 		URL:        url,
-		ExpiresAt:  time.Now().UTC().Add(uploadURLTTL),
+		ExpiresAt:  time.Now().UTC().Add(ttl),
 	}, nil
 }
 
@@ -175,7 +237,8 @@ func (s *Service) DeleteDocument(ctx context.Context, tenantID, id uuid.UUID) er
 	return nil
 }
 
-// GetDownloadURL returns a 15-minute presigned GET URL for the current version.
+// GetDownloadURL returns a presigned GET URL for the current version. The URL
+// validity window scales with file size (min 15 min, max 4 h).
 func (s *Service) GetDownloadURL(ctx context.Context, tenantID, id uuid.UUID) (*DownloadURL, error) {
 	doc, err := s.GetDocument(ctx, tenantID, id)
 	if err != nil {
@@ -185,14 +248,24 @@ func (s *Service) GetDownloadURL(ctx context.Context, tenantID, id uuid.UUID) (*
 		return nil, ErrUploadNotConfirmed
 	}
 
-	url, err := s.store.PresignedGetURL(ctx, doc.StorageKey, downloadURLTTL)
+	ttl := presignedURLWindow(doc.SizeBytes)
+	if ttl > largeURLWindowThreshold {
+		s.logger.Warn("large presigned download URL window issued",
+			"tenant_id", tenantID.String(),
+			"document_id", id.String(),
+			"size_bytes", doc.SizeBytes,
+			"ttl", ttl.String(),
+		)
+	}
+
+	url, err := s.store.PresignedGetURL(ctx, doc.StorageKey, ttl)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPresignFailed, err)
 	}
 
 	return &DownloadURL{
 		URL:       url,
-		ExpiresAt: time.Now().UTC().Add(downloadURLTTL),
+		ExpiresAt: time.Now().UTC().Add(ttl),
 	}, nil
 }
 
@@ -229,7 +302,18 @@ func (s *Service) CreateVersion(ctx context.Context, tenantID, documentID, uploa
 	nextVersion := doc.CurrentVersion + 1
 	key := storageKey(doc.TenantID, doc.ID, doc.ProductionID, nextVersion, doc.Name)
 
-	url, err := s.store.PresignedPutURL(ctx, key, uploadURLTTL)
+	// Use the current version's size as a hint — new versions are typically similar.
+	ttl := presignedURLWindow(doc.SizeBytes)
+	if ttl > largeURLWindowThreshold {
+		s.logger.Warn("large presigned upload URL window issued",
+			"tenant_id", tenantID.String(),
+			"document_id", documentID.String(),
+			"size_bytes", doc.SizeBytes,
+			"ttl", ttl.String(),
+		)
+	}
+
+	url, err := s.store.PresignedPutURL(ctx, key, ttl)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPresignFailed, err)
 	}
@@ -237,7 +321,7 @@ func (s *Service) CreateVersion(ctx context.Context, tenantID, documentID, uploa
 	return &UploadURL{
 		DocumentID: documentID,
 		URL:        url,
-		ExpiresAt:  time.Now().UTC().Add(uploadURLTTL),
+		ExpiresAt:  time.Now().UTC().Add(ttl),
 	}, nil
 }
 

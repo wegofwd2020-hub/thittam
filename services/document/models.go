@@ -62,6 +62,10 @@ type InitiateUploadRequest struct {
 	Name         string
 	MimeType     string
 	UploadedBy   uuid.UUID
+	// SizeHintBytes is the expected file size. When non-zero the presigned PUT URL
+	// validity window scales with the estimated transfer time (min 15 min, max 4 h).
+	// Zero or negative values use the minimum window.
+	SizeHintBytes int64
 }
 
 // UploadURL is returned by InitiateUpload and CreateVersion.
@@ -72,7 +76,8 @@ type UploadURL struct {
 	ExpiresAt  time.Time `json:"expires_at"`
 }
 
-// DownloadURL is a short-lived presigned GET URL (15-minute TTL).
+// DownloadURL is a presigned GET URL whose validity window scales with file size
+// (minimum 15 minutes, maximum 4 hours).
 type DownloadURL struct {
 	URL       string    `json:"url"`
 	ExpiresAt time.Time `json:"expires_at"`

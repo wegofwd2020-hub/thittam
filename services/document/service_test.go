@@ -322,11 +322,12 @@ func TestGetDownloadURL_ReturnsPresignedURL(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{})
 
+	// Default mock doc has SizeBytes: 1024 — well below the minimum window threshold.
 	dl, err := svc.GetDownloadURL(context.Background(), fixedTenantID, fixedDocID)
 	require.NoError(t, err)
 	assert.Contains(t, dl.URL, "get/")
 	assert.True(t, dl.ExpiresAt.After(time.Now()))
-	assert.True(t, dl.ExpiresAt.Before(time.Now().Add(downloadURLTTL+time.Minute)))
+	assert.True(t, dl.ExpiresAt.Before(time.Now().Add(presignedURLWindow(1024)+time.Minute)))
 }
 
 func TestGetDownloadURL_PendingUpload(t *testing.T) {
@@ -603,4 +604,125 @@ func TestCreateVersion_UploadNotConfirmed(t *testing.T) {
 	_, err := svc.CreateVersion(context.Background(), fixedTenantID, fixedDocID, fixedUserID)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrUploadNotConfirmed)
+}
+
+// --- Tests: presignedURLWindow ---
+
+func TestPresignedURLWindow(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		sizeBytes int64
+		want      time.Duration
+	}{
+		{
+			// Zero bytes → minimum window.
+			name:      "zero bytes",
+			sizeBytes: 0,
+			want:      urlWindowMin,
+		},
+		{
+			// Negative size (defensive) → minimum window.
+			name:      "negative size",
+			sizeBytes: -1,
+			want:      urlWindowMin,
+		},
+		{
+			// 1 KB: transfer ≪ 1 sec; buffer alone is 5 min; minimum (15 min) applies.
+			name:      "1 KB — minimum applies",
+			sizeBytes: 1024,
+			want:      urlWindowMin,
+		},
+		{
+			// 500 MB: transfer ≈ 419 sec (≈7 min); 7 min + 5 min buffer = 12 min;
+			// minimum (15 min) still applies.
+			name:      "500 MB — minimum applies",
+			sizeBytes: 500 * 1024 * 1024,
+			want:      urlWindowMin,
+		},
+		{
+			// 1 GB: transfer = ceil(1 073 741 824 / 1 250 000) = 859 sec;
+			// 859 s + 300 s = 1 159 s = 19 min 19 s — above minimum, below cap.
+			name:      "1 GB — above minimum",
+			sizeBytes: 1 << 30,
+			want:      859*time.Second + urlWindowBuffer,
+		},
+		{
+			// 20 GB: transfer = ceil(21 474 836 480 / 1 250 000) = 17 180 sec;
+			// 17 180 s + 300 s = 17 480 s = 4 h 51 min — capped at 4 h.
+			name:      "20 GB — cap applies",
+			sizeBytes: 20 << 30,
+			want:      urlWindowMax,
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := presignedURLWindow(tc.sizeBytes)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// --- Tests: security logging for large URL windows ---
+
+type captureLogger struct {
+	warnMsgs []string
+}
+
+func (l *captureLogger) Info(_ string, _ ...interface{}) {}
+func (l *captureLogger) Warn(msg string, _ ...interface{}) {
+	l.warnMsgs = append(l.warnMsgs, msg)
+}
+
+func TestGetDownloadURL_LargeFile_LogsWarning(t *testing.T) {
+	t.Parallel()
+	// 5 GB file: window ≈ 1h16m — above largeURLWindowThreshold (1 h).
+	const largeSize = 5 << 30
+
+	log := &captureLogger{}
+	svc := NewService(&mockRepo{
+		getDocumentFn: func(_ context.Context, tenantID, id uuid.UUID) (*Document, error) {
+			return &Document{
+				ID: id, TenantID: tenantID,
+				StorageKey: "key/v1/bigfile.bin", SizeBytes: largeSize,
+				CurrentVersion: 1, UploadedBy: fixedUserID,
+			}, nil
+		},
+	}, &mockStore{}, &mockPublisher{}).WithLogger(log)
+
+	_, err := svc.GetDownloadURL(context.Background(), fixedTenantID, fixedDocID)
+	require.NoError(t, err)
+	require.Len(t, log.warnMsgs, 1)
+	assert.Contains(t, log.warnMsgs[0], "large presigned download URL window issued")
+}
+
+func TestGetDownloadURL_SmallFile_NoWarning(t *testing.T) {
+	t.Parallel()
+	log := &captureLogger{}
+	svc := newTestService(&mockRepo{}).WithLogger(log) // default mock: 1 KB
+
+	_, err := svc.GetDownloadURL(context.Background(), fixedTenantID, fixedDocID)
+	require.NoError(t, err)
+	assert.Empty(t, log.warnMsgs)
+}
+
+func TestInitiateUpload_LargeSizeHint_LogsWarning(t *testing.T) {
+	t.Parallel()
+	const largeSize = 5 << 30
+
+	log := &captureLogger{}
+	svc := NewService(&mockRepo{}, &mockStore{}, &mockPublisher{}).WithLogger(log)
+
+	_, err := svc.InitiateUpload(context.Background(), &InitiateUploadRequest{
+		TenantID:      fixedTenantID,
+		Name:          "bigfile.bin",
+		MimeType:      "application/octet-stream",
+		UploadedBy:    fixedUserID,
+		SizeHintBytes: largeSize,
+	})
+	require.NoError(t, err)
+	require.Len(t, log.warnMsgs, 1)
+	assert.Contains(t, log.warnMsgs[0], "large presigned upload URL window issued")
 }
