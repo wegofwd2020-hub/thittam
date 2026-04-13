@@ -117,6 +117,7 @@ if consumer_exists FINANCIAL reporting-financial; then
   echo "  [skip] FINANCIAL/reporting-financial consumer already exists"
 else
   $NATS --server "${NATS_URL}" consumer add FINANCIAL reporting-financial \
+    --defaults \
     --pull \
     --deliver all \
     --ack explicit \
@@ -138,6 +139,7 @@ if consumer_exists FINANCIAL notifications-financial; then
   echo "  [skip] FINANCIAL/notifications-financial consumer already exists"
 else
   $NATS --server "${NATS_URL}" consumer add FINANCIAL notifications-financial \
+    --defaults \
     --pull \
     --deliver all \
     --ack explicit \
@@ -163,6 +165,7 @@ if consumer_exists EVENTS notifications-events; then
   echo "  [skip] EVENTS/notifications-events consumer already exists"
 else
   $NATS --server "${NATS_URL}" consumer add EVENTS notifications-events \
+    --defaults \
     --pull \
     --deliver all \
     --ack explicit \
