@@ -323,27 +323,40 @@ jobs:
     # PRs via thittam_docs/.github/workflows/ci.yml.
 
     steps:
+      - name: Skip if DOCS_REPO_TOKEN not configured
+        # thittam_docs is a private repo; the default GITHUB_TOKEN cannot read
+        # it. Without a PAT, gracefully skip rather than 404 on checkout.
+        # To enable: add a PAT with `Contents: read` on wegofwd2020-hub/thittam_docs
+        # as repo secret DOCS_REPO_TOKEN.
+        if: ${{ secrets.DOCS_REPO_TOKEN == '' }}
+        run: |
+          echo "::warning::DOCS_REPO_TOKEN not set — drift check skipped."
+          echo "Add a PAT to repo secrets to enable. See ticket #57."
+          exit 0
+
       - name: Checkout application repo
+        if: ${{ secrets.DOCS_REPO_TOKEN != '' }}
         uses: actions/checkout@v4
         with:
           path: app
 
       - name: Checkout docs repo
+        if: ${{ secrets.DOCS_REPO_TOKEN != '' }}
         uses: actions/checkout@v4
         with:
           repository: wegofwd2020-hub/thittam_docs
-          # Read-only access — no token needed for a public repo.
-          # For a private repo, set a PAT in secrets.DOCS_REPO_TOKEN.
-          token: ${{ secrets.DOCS_REPO_TOKEN || github.token }}
+          token: ${{ secrets.DOCS_REPO_TOKEN }}
           path: docs
 
       - uses: actions/setup-go@v5
+        if: ${{ secrets.DOCS_REPO_TOKEN != '' }}
         with:
           go-version: "1.25"
           cache: true
           cache-dependency-path: app/go.sum
 
       - name: Check documentation drift (Rule #16)
+        if: ${{ secrets.DOCS_REPO_TOKEN != '' }}
         working-directory: app
         run: |
           go run ./tools/check-doc-drift \
