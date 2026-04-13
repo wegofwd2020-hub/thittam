@@ -115,7 +115,7 @@ else
     --ack explicit \
     --wait 30s \
     --max-deliver 5 \
-    --backoff "5s,30s,5m,30m" \
+    --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
     --filter "thittam.budget.>,thittam.expense.>,thittam.ledger.>,thittam.billing.>" \
     --description "Reporting-analytics financial projection consumer"
   echo "  [ok] FINANCIAL/reporting-financial consumer created"
@@ -130,7 +130,7 @@ else
     --ack explicit \
     --wait 30s \
     --max-deliver 5 \
-    --backoff "5s,30s,5m,30m" \
+    --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
     --filter "thittam.budget.>,thittam.expense.>,thittam.ledger.>,thittam.billing.>" \
     --description "Notifications service financial event consumer"
   echo "  [ok] FINANCIAL/notifications-financial consumer created"
@@ -149,7 +149,7 @@ else
     --ack explicit \
     --wait 30s \
     --max-deliver 5 \
-    --backoff "5s,30s,5m,30m" \
+    --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
     --filter "thittam.project.>,thittam.document.>" \
     --description "Notifications service non-financial event consumer (project, document)"
   echo "  [ok] EVENTS/notifications-events consumer created"
