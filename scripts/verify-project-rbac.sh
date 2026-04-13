@@ -92,9 +92,13 @@ probe() {
   local ok=false
   case "$expected" in
     pass)
-      # Anything other than PermissionDenied / Unauthenticated counts as "permission granted".
-      # NotFound / InvalidArgument from the handler (because IDs are dummy) is fine here.
-      [ "$code" != "PermissionDenied" ] && [ "$code" != "Unauthenticated" ] && ok=true
+      # Permission was granted iff the handler ran. Allow OK plus the
+      # status codes the handler can legitimately return when given dummy
+      # IDs (NotFound / InvalidArgument / FailedPrecondition).
+      # Anything else — Unavailable, Internal, PermissionDenied — is a fail.
+      case "$code" in
+        OK|NotFound|InvalidArgument|FailedPrecondition) ok=true ;;
+      esac
       ;;
     deny)
       [ "$code" = "PermissionDenied" ] && ok=true
