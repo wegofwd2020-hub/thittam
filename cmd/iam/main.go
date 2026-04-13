@@ -113,7 +113,7 @@ func main() {
 	// --- Redis ---
 	redisURL := requireenv("REDIS_URL")
 	rdb := redis.NewClient(&redis.Options{Addr: redisURL})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	// --- JWT issuer ---
 	tokenIssuer, err := auth.NewJWTIssuer(jwtPrivateKey, rdb, auth.JWTConfig{})

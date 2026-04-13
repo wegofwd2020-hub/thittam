@@ -47,7 +47,7 @@ func main() {
 	// --- Redis ---
 	redisURL := requireenv("REDIS_URL")
 	rdb := redis.NewClient(&redis.Options{Addr: redisURL})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	// --- Vertical config loader ---
 	vdb := verticaldb.NewStore(pool)
@@ -62,7 +62,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("expense-tracking: startup: connect to NATS: %v", err)
 	}
-	defer nc.Drain()
+	defer func() { _ = nc.Drain() }()
 
 	js, err := nc.JetStream()
 	if err != nil {
@@ -75,7 +75,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("expense-tracking: startup: dial IAM: %v", err)
 	}
-	defer closeIAM()
+	defer func() { _ = closeIAM() }()
 
 	// --- Repository and service ---
 	repo := expensedb.NewPostgres(pool)

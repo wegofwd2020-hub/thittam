@@ -89,7 +89,7 @@ func (h *HealthServer) Stop(ctx context.Context) error {
 func (h *HealthServer) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(HealthStatus{
+	_ = json.NewEncoder(w).Encode(HealthStatus{
 		Status:  "ok",
 		Service: h.serviceName,
 	})
@@ -133,5 +133,5 @@ func (h *HealthServer) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		status.Status = "degraded"
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}
-	json.NewEncoder(w).Encode(status)
+	_ = json.NewEncoder(w).Encode(status)
 }

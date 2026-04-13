@@ -47,7 +47,7 @@ func main() {
 	// --- Redis ---
 	redisURL := requireenv("REDIS_URL")
 	rdb := redis.NewClient(&redis.Options{Addr: redisURL})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	// --- Vertical config loader ---
 	vdb := verticaldb.NewStore(pool)
