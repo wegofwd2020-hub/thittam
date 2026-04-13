@@ -54,7 +54,7 @@ go test -coverprofile=coverage.out ./...  # Coverage
 # Linting & security
 golangci-lint run ./...         # Linting
 buf lint                        # Protobuf validation
-buf breaking --against .git#branch=main  # Breaking change detection
+buf breaking proto --against '.git#branch=main,subdir=proto'  # Breaking change detection
 govulncheck ./...               # Vulnerability scanning
 gitleaks protect --staged       # Secret detection
 

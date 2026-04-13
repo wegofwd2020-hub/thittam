@@ -1,7 +1,7 @@
 package crypto
 
 import (
-	"strings"
+	"encoding/base64"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -72,13 +72,15 @@ func TestDecrypt_Tampered(t *testing.T) {
 	enc, err := Encrypt(testKey, "secret")
 	require.NoError(t, err)
 
-	// Flip the last character of the base64url string.
-	tampered := enc[:len(enc)-1] + strings.Map(func(r rune) rune {
-		if r == 'A' {
-			return 'B'
-		}
-		return 'A'
-	}, string(enc[len(enc)-1]))
+	// Round-trip through base64 and flip a byte we know is part of the
+	// ciphertext payload (not the auth tag's structure or any padding bits
+	// that base64.RawURLEncoding would silently strip on decode). Byte 0
+	// is the first nonce byte — always 12 bytes of nonce live at the head.
+	raw, err := base64.RawURLEncoding.DecodeString(enc)
+	require.NoError(t, err)
+	require.Greater(t, len(raw), 0)
+	raw[0] ^= 0x01
+	tampered := base64.RawURLEncoding.EncodeToString(raw)
 
 	_, err = Decrypt(testKey, tampered)
 	assert.ErrorIs(t, err, ErrDecryptionFailed)

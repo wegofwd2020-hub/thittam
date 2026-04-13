@@ -35,3 +35,6 @@ coverage.out
 keys/*.pem
 keys/*.key
 infra/local/keys/*.pem
+
+# Dev service logs — written by scripts/dev-start.sh
+logs/
