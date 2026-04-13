@@ -125,6 +125,7 @@ else
     --max-deliver 5 \
     --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
     --no-headers-only \
+    --max-pending=-1 \
     --filter thittam.budget.\> \
     --filter thittam.expense.\> \
     --filter thittam.ledger.\> \
@@ -145,6 +146,7 @@ else
     --max-deliver 5 \
     --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
     --no-headers-only \
+    --max-pending=-1 \
     --filter thittam.budget.\> \
     --filter thittam.expense.\> \
     --filter thittam.ledger.\> \
@@ -169,6 +171,7 @@ else
     --max-deliver 5 \
     --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
     --no-headers-only \
+    --max-pending=-1 \
     --filter thittam.project.\> \
     --filter thittam.document.\> \
     --description "Notifications service non-financial event consumer (project, document)"
