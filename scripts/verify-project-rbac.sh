@@ -78,14 +78,15 @@ probe() {
   local out code
   out=$(grpcurl -plaintext "${hdrs[@]}" -d "$body" "$addr" "$method" 2>&1)
   local rc=$?
-  if echo "$out" | grep -qE 'code = [A-Za-z]+'; then
+  # grpcurl error format: "  Code: <Word>"  (capitalised, colon, no equals).
+  # Older lowercase "code = X" format kept as a fallback.
+  if echo "$out" | grep -qE '^[[:space:]]*Code:[[:space:]]+[A-Za-z]+'; then
+    code=$(echo "$out" | grep -oE 'Code:[[:space:]]+[A-Za-z]+' | head -1 | awk '{print $2}')
+  elif echo "$out" | grep -qE 'code = [A-Za-z]+'; then
     code=$(echo "$out" | grep -oE 'code = [A-Za-z]+' | head -1 | awk '{print $3}')
   elif [ $rc -eq 0 ]; then
-    # No status code in output and grpcurl exited 0 → call genuinely succeeded.
     code=OK
   else
-    # grpcurl errored without producing a gRPC status (e.g. dial failure,
-    # service down). Surface as Unavailable so the assertion fails loudly.
     code=Unavailable
   fi
 

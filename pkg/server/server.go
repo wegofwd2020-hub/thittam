@@ -79,13 +79,18 @@ func New(cfg Config, logger Logger) *Server {
 		observability.StreamMetricsInterceptor(metrics),
 	}
 
+	// Extras (typically the caller-identity interceptor) MUST run before the
+	// vertical interceptor, because vertical loads the per-tenant config keyed
+	// on the tenant ID that the caller interceptor extracts from metadata.
+	// Without this order, vertical sees no tenant and the handler panics with
+	// "vertical: MustFromContext called without vertical config in context".
+	unaryInterceptors = append(unaryInterceptors, cfg.ExtraUnaryInterceptors...)
+	streamInterceptors = append(streamInterceptors, cfg.ExtraStreamInterceptors...)
+
 	if cfg.Loader != nil {
 		unaryInterceptors = append(unaryInterceptors, vertical.UnaryInterceptor(cfg.Loader))
 		streamInterceptors = append(streamInterceptors, vertical.StreamInterceptor(cfg.Loader))
 	}
-
-	unaryInterceptors = append(unaryInterceptors, cfg.ExtraUnaryInterceptors...)
-	streamInterceptors = append(streamInterceptors, cfg.ExtraStreamInterceptors...)
 
 	gs := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(unaryInterceptors...),
