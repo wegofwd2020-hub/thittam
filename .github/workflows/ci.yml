@@ -194,6 +194,68 @@ jobs:
               -database "${DB_URL}&x-migrations-table=schema_migrations_${dir}" down -all
           done
 
+  integration-tests:
+    name: Integration Tests (real Postgres)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: thittam
+          POSTGRES_PASSWORD: thittam_ci
+          POSTGRES_DB: thittam
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      # Tests run against a dedicated thittam_test DB so they cannot collide
+      # with a parallel migration-validate job using thittam.
+      TEST_DB_URL: postgres://thittam:thittam_ci@localhost:5432/thittam_test?sslmode=disable
+      THITTAM_TEST_DSN: postgres://thittam:thittam_ci@localhost:5432/thittam_test?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Install golang-migrate CLI
+        run: |
+          curl -sSL https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin migrate
+
+      - name: Create thittam_test database
+        env:
+          PGPASSWORD: thittam_ci
+        run: |
+          psql -h localhost -U thittam -d postgres \
+            -c "CREATE DATABASE thittam_test OWNER thittam;"
+
+      - name: Run all migrations against thittam_test
+        # Mirrors `make migrate-all` ordering: shared first (vertical_definitions
+        # is referenced by tenant rows), then iam (tenants/users referenced by
+        # the rest), then service migrations.
+        run: |
+          set -euo pipefail
+          for dir in shared iam budget expense ledger inventory reporting project notifications document billing audit; do
+            echo "==> migrate up: ${dir}"
+            migrate -path "migrations/${dir}" \
+              -database "${TEST_DB_URL}&x-migrations-table=schema_migrations_${dir}" up
+          done
+
+      - name: Run integration tests (-tags=integration)
+        # Includes the trigger from #39 (services/iam/db/user_roles_scope_*)
+        # and the rewritten pkg/vertical/db integration test.
+        run: go test ./... -tags=integration -race -timeout 5m
+
   secret-scan:
     name: Secret Detection
     runs-on: ubuntu-latest
