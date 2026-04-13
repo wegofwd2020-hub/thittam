@@ -57,8 +57,12 @@ func (h *Handler) CreateProduction(ctx context.Context, req *projectv1.CreatePro
 		Slug:        req.GetTitle(), // slug normalised from title; a utility can replace this
 		Description: req.GetDescription(),
 		Genre:       req.GetGenre(),
-		Status:      "active",
-		CreatedBy:   uuid.Nil, // populated by auth interceptor once wired
+		// Default status is the first phase ("development"). Must be one of the
+		// values allowed by the productions_status_check CHECK constraint:
+		// development | pre_production | production | post_production | released | archived.
+		// "active" was used here historically and silently failed every INSERT.
+		Status:    "development",
+		CreatedBy: uuid.Nil, // populated by auth interceptor once wired
 	}
 
 	if err := h.svc.CreateProduction(ctx, prod); err != nil {
