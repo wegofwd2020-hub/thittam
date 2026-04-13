@@ -1,5 +1,5 @@
 import { env } from "@/env";
-import type { ApiResponse, TokenPair } from "./types";
+import type { TokenPair } from "./types";
 import { ApiError } from "./client";
 import type { ApiErrorBody } from "./types";
 
@@ -39,27 +39,24 @@ async function authRequest<T>(
 
 /**
  * Authenticate with email and password credentials.
+ *
+ * The grpc-gateway returns the TokenPair flat at the top level — no
+ * `{data: ...}` envelope. See thittam #60 Phase A.
  */
 export async function login(
   email: string,
   password: string,
 ): Promise<TokenPair> {
-  const response = await authRequest<ApiResponse<TokenPair>>(
-    "/api/v1/auth/login",
-    { email, password },
-  );
-  return response.data;
+  return authRequest<TokenPair>("/api/v1/auth/login", { email, password });
 }
 
 /**
  * Exchange a refresh token for a new token pair.
  */
 export async function refreshToken(token: string): Promise<TokenPair> {
-  const response = await authRequest<ApiResponse<TokenPair>>(
-    "/api/v1/auth/refresh",
-    { refresh_token: token },
-  );
-  return response.data;
+  return authRequest<TokenPair>("/api/v1/auth/refresh", {
+    refresh_token: token,
+  });
 }
 
 /**
