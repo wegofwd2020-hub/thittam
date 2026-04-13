@@ -10,9 +10,9 @@
 set -euo pipefail
 
 PG_PORT=${PG_PORT:-5433}
-DB_NAME=thittam
-DB_USER=thittam
-DB_PASS=thittam_dev
+DB_NAME=${DB_NAME:-thittam}
+DB_USER=${DB_USER:-thittam}
+DB_PASS=${DB_PASS:-thittam_dev}
 
 echo "==> System PostgreSQL on port $PG_PORT"
 

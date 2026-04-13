@@ -1,8 +1,10 @@
 .PHONY: help \
         infra-up infra-down infra-up-full \
         nats-provision \
-        db-init db-drop db-reset \
+        db-init db-drop db-reset db-bootstrap \
+        db-test-bootstrap db-test-reset \
         migrate-all migrate-down migrate-tenant migrate-all-tenants seed \
+        dev-start dev-start-fresh dev-stop \
         run-all run-web \
         test test-race test-cover test-integration \
         validate-verticals coverage-check \
@@ -15,6 +17,10 @@
 # across reboots, no Docker volume wipe issues).
 # Override: DB_URL=postgres://thittam:thittam_dev@localhost:5434/thittam?sslmode=disable make migrate-all
 DB_URL ?= postgres://thittam:thittam_dev@localhost:5433/thittam?sslmode=disable
+
+# Test database — fully isolated from dev DB. Owned by db-test-bootstrap /
+# db-test-reset and read by `go test ... -tags=integration` via THITTAM_TEST_DSN.
+TEST_DB_URL ?= postgres://thittam:thittam_dev@localhost:5433/thittam_test?sslmode=disable
 
 # ── Infrastructure compose files ───────────────────────────────────────────────
 INFRA_FILE     := infra/local/docker-compose.infra.yml   # Redis + NATS + MinIO (no postgres)
@@ -31,9 +37,16 @@ help:
 	@echo "    make nats-provision Provision JetStream streams and consumers (requires nats CLI)"
 	@echo ""
 	@echo "  Local database (system PostgreSQL on port 5433):"
-	@echo "    make db-init        Create thittam role + database on system postgres"
-	@echo "    make db-drop        Drop thittam database from system postgres"
-	@echo "    make db-reset       Fresh start: drop → init → migrate → seed"
+	@echo "    make db-bootstrap            Idempotent: ensure DB exists + migrate (no data loss)"
+	@echo "    make db-bootstrap WITH_SEED=1   Same, but also load XYZ_CBA seed"
+	@echo "    make db-reset                Destructive: drop → init → migrate → seed"
+	@echo "    make db-init                 (low-level) Create thittam role + database"
+	@echo "    make db-drop                 (low-level) Drop thittam database"
+	@echo ""
+	@echo "  Test database (thittam_test — isolated from dev DB):"
+	@echo "    make db-test-bootstrap       Idempotent: ensure thittam_test exists + migrate"
+	@echo "    make db-test-reset           Destructive: drop → init → migrate"
+	@echo "    make test-integration        Verify head, run -tags=integration tests"
 	@echo ""
 	@echo "  Migrations:"
 	@echo "    make migrate-all               Run all DB migrations (dependency order)"
@@ -43,7 +56,11 @@ help:
 	@echo "    make seed                      Load XYZ_CBA demo seed data"
 	@echo ""
 	@echo "  Run:"
-	@echo "    make run-all        Start all 9 backend services (requires tmuxinator)"
+	@echo "    make dev-start         Start infra + services. Verifies DB head; never mutates DB."
+	@echo "    make dev-start-fresh   db-reset → dev-start (clean slate, full rebuild)"
+	@echo "    make dev-stop       Stop all dev services (keeps Docker containers running)"
+	@echo "    make dev-stop-all   Stop all dev services AND Docker containers"
+	@echo "    make run-all        Start all 9 backend services via tmuxinator (requires tmuxinator)"
 	@echo "    make run-web        Start Next.js frontend on :3000"
 	@echo ""
 	@echo "  Quality:"
@@ -84,8 +101,26 @@ db-init:
 db-drop:
 	@./scripts/local-db-drop.sh
 
-db-reset: db-drop db-init migrate-all seed
-	@echo "==> Database reset complete."
+# db-bootstrap — idempotent. Pass WITH_SEED=1 to also seed.
+# This is what developers run after pulling new migrations; safe to re-run.
+db-bootstrap:
+	@if [ "$(WITH_SEED)" = "1" ]; then \
+		./scripts/db-bootstrap.sh --with-seed; \
+	else \
+		./scripts/db-bootstrap.sh; \
+	fi
+
+# db-reset — destructive. Drop dev DB, recreate, migrate, seed.
+db-reset:
+	@./scripts/db-reset.sh
+
+# db-test-bootstrap — idempotent. Ensure thittam_test exists and is at head.
+db-test-bootstrap:
+	@./scripts/db-test-bootstrap.sh
+
+# db-test-reset — destructive. Drop and rebuild thittam_test only.
+db-test-reset:
+	@./scripts/db-test-reset.sh
 
 # ── Migrations ────────────────────────────────────────────────────────────────
 # Run in dependency order: iam first (tenants/users tables referenced by others)
@@ -157,6 +192,21 @@ seed:
 	done
 	@echo "==> Seed complete."
 
+# ── Dev stack shortcuts ───────────────────────────────────────────────────────
+
+dev-start:
+	@./scripts/dev-start.sh
+
+# dev-start-fresh — destructive convenience: rebuild dev DB then start.
+# Equivalent to: make db-reset && make dev-start.
+dev-start-fresh: db-reset dev-start
+
+dev-stop:
+	@./scripts/dev-stop.sh
+
+dev-stop-all:
+	@./scripts/dev-stop.sh --infra
+
 # ── Services ──────────────────────────────────────────────────────────────────
 
 run-all:
@@ -177,8 +227,10 @@ test-cover:
 	go test ./... -race -coverprofile=coverage.out
 	go tool cover -html=coverage.out
 
-test-integration:
-	go test ./... -tags=integration -race
+# test-integration — bootstrap thittam_test (idempotent, no data loss) then
+# run all integration-tagged tests. Honours THITTAM_TEST_DSN if exported.
+test-integration: db-test-bootstrap
+	THITTAM_TEST_DSN="$(TEST_DB_URL)" go test ./... -tags=integration -race
 
 # ── Vertical schema validation ────────────────────────────────────────────────
 # Validates every *.yaml file in pkg/vertical/configs/ against the vertical

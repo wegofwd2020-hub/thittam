@@ -8,8 +8,11 @@
 set -euo pipefail
 
 PG_PORT=${PG_PORT:-5433}
-DB_NAME=thittam
-DB_USER=thittam
+DB_NAME=${DB_NAME:-thittam}
+DB_USER=${DB_USER:-thittam}
+# DROP_ROLE=false keeps the role around (useful when other DBs share it,
+# e.g. dropping thittam_test must not break thittam).
+DROP_ROLE=${DROP_ROLE:-true}
 
 echo "==> Dropping database '$DB_NAME' on port $PG_PORT..."
 sudo -u postgres psql -p "$PG_PORT" -c \
@@ -17,6 +20,9 @@ sudo -u postgres psql -p "$PG_PORT" -c \
   > /dev/null 2>&1 || true
 
 sudo -u postgres psql -p "$PG_PORT" -c "DROP DATABASE IF EXISTS $DB_NAME;"
-sudo -u postgres psql -p "$PG_PORT" -c "DROP ROLE IF EXISTS $DB_USER;"
 
-echo "==> Dropped. Run 'make db-init' to recreate."
+if [ "$DROP_ROLE" = "true" ]; then
+  sudo -u postgres psql -p "$PG_PORT" -c "DROP ROLE IF EXISTS $DB_USER;"
+fi
+
+echo "==> Dropped."
