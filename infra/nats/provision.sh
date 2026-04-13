@@ -120,6 +120,7 @@ else
     --pull \
     --deliver all \
     --ack explicit \
+    --replay=instant \
     --wait 30s \
     --max-deliver 5 \
     --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
@@ -139,6 +140,7 @@ else
     --pull \
     --deliver all \
     --ack explicit \
+    --replay=instant \
     --wait 30s \
     --max-deliver 5 \
     --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
@@ -162,6 +164,7 @@ else
     --pull \
     --deliver all \
     --ack explicit \
+    --replay=instant \
     --wait 30s \
     --max-deliver 5 \
     --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
