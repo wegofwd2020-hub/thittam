@@ -296,6 +296,32 @@ if [ "$SVC_ONLY" = false ]; then
 
 fi  # end of SVC_ONLY skip block
 
+# ── 7. Service-port preflight ────────────────────────────────────────────────
+# Refuse to start if any service port is already bound — otherwise the new
+# binary fails to listen with "address already in use", logs the error, exits,
+# and the verification script ends up hitting whichever stale binary is still
+# bound. Detected during #52 verification when this exact scenario silently
+# masked the IAM client wiring.
+
+header "Service-port preflight"
+SERVICE_PORTS=(8080 8081 8082 8083 8084 8085 8086 8087 8088 8089)
+PORT_BUSY=()
+for p in "${SERVICE_PORTS[@]}"; do
+  if (echo > "/dev/tcp/localhost/$p") >/dev/null 2>&1; then
+    PORT_BUSY+=("$p")
+  fi
+done
+if [ ${#PORT_BUSY[@]} -gt 0 ]; then
+  fail "Service port(s) already bound: ${PORT_BUSY[*]}"
+  echo ""
+  echo "  A previous dev-start is still running. Stop it first:"
+  echo -e "    ${BOLD}./scripts/dev-stop.sh${RESET}"
+  echo "  If that doesn't free the ports, force-kill:"
+  echo -e "    ${BOLD}pkill -f 'go run ./cmd' || true${RESET}"
+  exit 1
+fi
+ok "All service ports free"
+
 # ── 8. Services ───────────────────────────────────────────────────────────────
 
 header "Starting Services"
