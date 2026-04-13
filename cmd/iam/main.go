@@ -39,6 +39,7 @@ import (
 	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/encoding/protojson"
 	"github.com/wegofwd2020/thittam/pkg/auth"
 	appcrypto "github.com/wegofwd2020/thittam/pkg/crypto"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
@@ -217,7 +218,21 @@ func main() {
 	// generated grpc-gateway mux on a separate HTTP port so the gRPC port
 	// stays a clean gRPC-only surface for service-to-service calls.
 	go func() {
-		gwMux := runtime.NewServeMux()
+		// UseProtoNames=true emits snake_case field names (matching the .proto)
+		// instead of grpc-gateway's default camelCase. The web client's TS types
+		// are snake_case (e.g. TokenPair.access_token), so this avoids per-field
+		// rename work on the UI side.
+		gwMux := runtime.NewServeMux(
+			runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
+				MarshalOptions: protojson.MarshalOptions{
+					UseProtoNames:   true,
+					EmitUnpopulated: true,
+				},
+				UnmarshalOptions: protojson.UnmarshalOptions{
+					DiscardUnknown: true,
+				},
+			}),
+		)
 		opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 		if err := iamv1.RegisterIAMServiceHandlerFromEndpoint(ctx, gwMux, "localhost:8086", opts); err != nil {
 			log.Fatalf("iam: register gateway: %v", err)
