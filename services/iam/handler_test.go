@@ -353,6 +353,116 @@ func TestHandler_CheckPermission_InvalidUserID(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestHandler_CheckPermission_WithProjectID(t *testing.T) {
+	t.Parallel()
+	wantProject := uuid.New()
+	var seenProject *uuid.UUID
+	h := NewHandler(newTestService(&mockRepo{
+		getUserPermissionsFn: func(_ context.Context, _ uuid.UUID, projectID *uuid.UUID) ([]string, error) {
+			seenProject = projectID
+			return []string{"expense:approve"}, nil
+		},
+	}))
+
+	resp, err := h.CheckPermission(context.Background(), &iamv1.CheckPermissionRequest{
+		UserId:     uuid.New().String(),
+		Permission: "expense:approve",
+		ProjectId:  wantProject.String(),
+	})
+	require.NoError(t, err)
+	assert.True(t, resp.GetAllowed())
+	require.NotNil(t, seenProject)
+	assert.Equal(t, wantProject, *seenProject)
+}
+
+func TestHandler_CheckPermission_InvalidProjectID(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().CheckPermission(context.Background(), &iamv1.CheckPermissionRequest{
+		UserId:     uuid.New().String(),
+		Permission: "x",
+		ProjectId:  "not-a-uuid",
+	})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// --- AssignProjectRole ---
+
+func TestHandler_AssignProjectRole_Success(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(newTestService(&mockRepo{
+		getRoleByIDFn: func(_ context.Context, tenantID, roleID uuid.UUID) (*Role, error) {
+			return &Role{ID: roleID, TenantID: tenantID, Name: "project_supervisor", IsSystem: true}, nil
+		},
+	}))
+
+	resp, err := h.AssignProjectRole(context.Background(), &iamv1.AssignProjectRoleRequest{
+		TenantId:   uuid.New().String(),
+		UserId:     uuid.New().String(),
+		RoleId:     uuid.New().String(),
+		ProjectId:  uuid.New().String(),
+		AssignedBy: uuid.New().String(),
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+
+func TestHandler_AssignProjectRole_RejectsTenantWideRole(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(newTestService(&mockRepo{
+		getRoleByIDFn: func(_ context.Context, tenantID, roleID uuid.UUID) (*Role, error) {
+			return &Role{ID: roleID, TenantID: tenantID, Name: "manager", IsSystem: true}, nil
+		},
+	}))
+
+	_, err := h.AssignProjectRole(context.Background(), &iamv1.AssignProjectRoleRequest{
+		TenantId:   uuid.New().String(),
+		UserId:     uuid.New().String(),
+		RoleId:     uuid.New().String(),
+		ProjectId:  uuid.New().String(),
+		AssignedBy: uuid.New().String(),
+	})
+	// ErrRoleNotProjectScoped maps to InvalidArgument in grpcError.
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_AssignProjectRole_InvalidArgs(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, field string }{
+		{"invalid tenant_id", "tenant"},
+		{"invalid user_id", "user"},
+		{"invalid role_id", "role"},
+		{"invalid project_id", "project"},
+		{"invalid assigned_by", "assigned_by"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := &iamv1.AssignProjectRoleRequest{
+				TenantId:   uuid.New().String(),
+				UserId:     uuid.New().String(),
+				RoleId:     uuid.New().String(),
+				ProjectId:  uuid.New().String(),
+				AssignedBy: uuid.New().String(),
+			}
+			switch tc.field {
+			case "tenant":
+				req.TenantId = "bad"
+			case "user":
+				req.UserId = "bad"
+			case "role":
+				req.RoleId = "bad"
+			case "project":
+				req.ProjectId = "bad"
+			case "assigned_by":
+				req.AssignedBy = "bad"
+			}
+			_, err := newHandler().AssignProjectRole(context.Background(), req)
+			assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		})
+	}
+}
+
 // --- CreateTenant ---
 
 func TestHandler_CreateTenant_Success(t *testing.T) {
