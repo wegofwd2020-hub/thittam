@@ -17,8 +17,10 @@
 #   make db-reset                   # destructive: drop + rebuild + seed
 #
 # Usage:
-#   ./scripts/dev-start.sh              # normal start (DB must already be bootstrapped)
-#   ./scripts/dev-start.sh --svc-only   # skip infra check; start services only
+#   ./scripts/dev-start.sh                       # normal start (DB must already be bootstrapped)
+#   ./scripts/dev-start.sh --svc-only            # skip infra check; start services only
+#   ./scripts/dev-start.sh --with-project-rbac   # enable ADR-014 Phase 2 enforcement
+#                                                  (sets IAM_SERVICE_ADDR + PROJECT_SCOPED_RBAC=true)
 #
 # Logs: logs/<service>.log  (created in repo root; gitignored)
 # PIDs: /tmp/thittam-dev.pids
@@ -40,9 +42,11 @@ LOG_DIR="logs"
 
 # Parse flags
 SVC_ONLY=false
+WITH_PROJECT_RBAC=false
 for arg in "$@"; do
   case $arg in
-    --svc-only) SVC_ONLY=true ;;
+    --svc-only)         SVC_ONLY=true ;;
+    --with-project-rbac) WITH_PROJECT_RBAC=true ;;
     --fresh|--no-seed)
       echo "ERROR: '$arg' is no longer supported by dev-start.sh."
       echo "DB lifecycle is now separate. Use:"
@@ -52,11 +56,20 @@ for arg in "$@"; do
       ;;
     *)
       echo "Unknown flag: $arg"
-      echo "Usage: $0 [--svc-only]"
+      echo "Usage: $0 [--svc-only] [--with-project-rbac]"
       exit 1
       ;;
   esac
 done
+
+# --with-project-rbac exports the ADR-014 Phase 2 rollout env vars so the
+# four project-scoped services dial IAM and enforce permissions. Enable in
+# dev to verify the rollout playbook end-to-end (see verify-project-rbac.sh).
+# Production rollout is controlled by the deployment manifest, not this flag.
+if [ "$WITH_PROJECT_RBAC" = true ]; then
+  export IAM_SERVICE_ADDR="${IAM_SERVICE_ADDR:-localhost:8086}"
+  export PROJECT_SCOPED_RBAC=true
+fi
 
 # Source shared DB helpers (check_db_reachable, check_migration_head).
 # shellcheck disable=SC1091
@@ -165,6 +178,7 @@ echo "  DB:    ${DB_URL}"
 echo "  Redis: ${REDIS_URL}"
 echo "  NATS:  ${NATS_URL}"
 [ "$SVC_ONLY" = true ] && echo -e "  ${YELLOW}Mode: --svc-only (skip infra checks)${RESET}"
+[ "$WITH_PROJECT_RBAC" = true ] && echo -e "  ${YELLOW}Mode: --with-project-rbac (PROJECT_SCOPED_RBAC=true, IAM_SERVICE_ADDR=$IAM_SERVICE_ADDR)${RESET}"
 
 mkdir -p "$LOG_DIR"
 > "$PID_FILE"   # truncate on fresh start
