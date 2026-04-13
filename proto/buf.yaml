@@ -13,3 +13,10 @@ lint:
     - ENUM_VALUE_PREFIX
     # Allow request/response messages not to be named <RPC>Request/<RPC>Response.
     - RPC_REQUEST_RESPONSE_UNIQUE
+    # RPCs return their core domain type directly (e.g. GetSubscription returns
+    # Subscription, GetUser returns User) rather than a wrapping <Rpc>Response
+    # message. Pragma matches the existing RPC_REQUEST_RESPONSE_UNIQUE exception.
+    - RPC_RESPONSE_STANDARD_NAME
+    # Same rationale on the request side — e.g. HandlePaymentWebhook accepts
+    # WebhookPayload directly, not HandlePaymentWebhookRequest.
+    - RPC_REQUEST_STANDARD_NAME
