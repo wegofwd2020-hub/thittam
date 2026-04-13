@@ -232,7 +232,7 @@ export default function DashboardPage() {
           className="text-2xl font-bold tracking-tight font-heading"
           style={{ color: "var(--thittam-foreground, #0f172a)" }}
         >
-          Welcome{user ? `, ${user.displayName}` : ""}
+          Welcome{user ? `, ${user.display_name}` : ""}
         </h1>
         <p
           className="mt-1 text-sm font-body"

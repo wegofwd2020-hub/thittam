@@ -29,8 +29,8 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const initials = user?.displayName
-    ? user.displayName
+  const initials = user?.display_name
+    ? user.display_name
         .split(" ")
         .map((n) => n[0])
         .join("")
@@ -109,7 +109,7 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
                     className="truncate text-sm font-medium"
                     style={{ color: "var(--thittam-foreground, #0f172a)" }}
                   >
-                    {user.displayName}
+                    {user.display_name}
                   </p>
                   <p
                     className="truncate text-xs"

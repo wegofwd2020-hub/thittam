@@ -19,7 +19,8 @@ import type { TokenPair } from "@/lib/api/types";
 export interface User {
   id: string;
   email: string;
-  displayName: string;
+  // snake_case to match grpc-gateway JSON (UseProtoNames=true). #60 Phase A.
+  display_name: string;
   roles: string[];
   permissions: string[];
 }

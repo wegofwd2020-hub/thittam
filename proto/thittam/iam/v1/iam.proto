@@ -77,6 +77,12 @@ message User {
   string display_name = 4;
   string status = 5; // active|invited|deactivated
   google.protobuf.Timestamp created_at = 6;
+  // Roles + permissions are populated by GetCurrentUser (read from the JWT
+  // claims). Other handlers (CreateUser, GetUser, ListUsers) leave them
+  // empty — callers that need them must use GetCurrentUser or query the
+  // role assignments separately.
+  repeated string roles = 7;
+  repeated string permissions = 8;
 }
 
 message Tenant {

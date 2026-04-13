@@ -75,9 +75,11 @@ func (h *Handler) ValidateToken(ctx context.Context, req *iamv1.ValidateTokenReq
 }
 
 // GetCurrentUser extracts the bearer token from the Authorization metadata,
-// resolves the user + tenant, and returns both. The grpc-gateway forwards
-// HTTP headers as gRPC metadata, so the UI's `Authorization: Bearer …`
-// header arrives here verbatim.
+// resolves the user + tenant, and returns both. Roles + permissions on the
+// returned User come from the validated JWT claims (the User table doesn't
+// store them inline). The grpc-gateway forwards HTTP headers as gRPC
+// metadata, so the UI's `Authorization: Bearer …` header arrives here
+// verbatim.
 func (h *Handler) GetCurrentUser(ctx context.Context, _ *iamv1.GetCurrentUserRequest) (*iamv1.GetCurrentUserResponse, error) {
 	token, err := bearerTokenFromContext(ctx)
 	if err != nil {
@@ -87,8 +89,15 @@ func (h *Handler) GetCurrentUser(ctx context.Context, _ *iamv1.GetCurrentUserReq
 	if err != nil {
 		return nil, grpcError(err)
 	}
+	claims, err := h.svc.tokens.Validate(ctx, token)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	userProto := userToProto(user)
+	userProto.Roles = claims.Roles
+	userProto.Permissions = claims.Permissions
 	return &iamv1.GetCurrentUserResponse{
-		User:   userToProto(user),
+		User:   userProto,
 		Tenant: tenantToProto(tenant),
 	}, nil
 }
