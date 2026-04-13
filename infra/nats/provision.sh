@@ -113,7 +113,7 @@ else
     --pull \
     --deliver all \
     --ack explicit \
-    --ack-wait 30s \
+    --wait 30s \
     --max-deliver 5 \
     --backoff "5s,30s,5m,30m" \
     --filter "thittam.budget.>,thittam.expense.>,thittam.ledger.>,thittam.billing.>" \
@@ -128,7 +128,7 @@ else
     --pull \
     --deliver all \
     --ack explicit \
-    --ack-wait 30s \
+    --wait 30s \
     --max-deliver 5 \
     --backoff "5s,30s,5m,30m" \
     --filter "thittam.budget.>,thittam.expense.>,thittam.ledger.>,thittam.billing.>" \
@@ -147,7 +147,7 @@ else
     --pull \
     --deliver all \
     --ack explicit \
-    --ack-wait 30s \
+    --wait 30s \
     --max-deliver 5 \
     --backoff "5s,30s,5m,30m" \
     --filter "thittam.project.>,thittam.document.>" \
