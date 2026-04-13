@@ -31,6 +31,7 @@ fi
 TENANT_ID="d0000000-0000-0000-0000-000000000001"
 
 PRIYA_ID="d1000000-0000-0000-0000-000000000002"     # manager
+ARUN_ID="d1000000-0000-0000-0000-000000000003"      # coordinator (has budget:write)
 VIKRAM_ID="d1000000-0000-0000-0000-000000000005"    # project_supervisor on Last Horizon
 DEEPA_ID="d1000000-0000-0000-0000-000000000006"     # member
 
@@ -164,48 +165,56 @@ probe "member: CheckOutAsset"                      deny "$DEEPA_ID" "$PROJECT_LA
 
 echo ""
 echo -e "${BOLD}4. Coverage expansion (#47) — additional gated mutating RPCs${RESET}"
+# Per the matrix in docs/security/rbac-role-model.md:
+#   member        — production:read, expense:submit
+#   coordinator   — budget:read/write, production:read/write, expense:approve, …
+#   manager       — budget:read/approve, production:read/write, expense:approve, …
 
-# member denied across the new gates
-probe "member: CreateBudget"                       deny "$DEEPA_ID" - \
+# Member denied where they truly lack the permission.
+probe "member: CreateBudget                (budget:write)" deny "$DEEPA_ID" - \
   "$BUDGET_ADDR"   thittam.budget.v1.BudgetService/CreateBudget \
   "{\"production_id\":\"$PROJECT_LAST_HORIZON\",\"label\":\"x\",\"currency\":\"INR\"}"
 
-probe "member: CreateLineItem"                     deny "$DEEPA_ID" - \
+probe "member: CreateLineItem              (budget:write)" deny "$DEEPA_ID" - \
   "$BUDGET_ADDR"   thittam.budget.v1.BudgetService/CreateLineItem \
   "{\"budget_id\":\"$DUMMY_BUDGET_ID\",\"category_id\":\"x\",\"budgeted_amount\":\"1.00\"}"
 
-probe "member: CreatePurchaseOrder"                deny "$DEEPA_ID" - \
-  "$EXPENSE_ADDR"  thittam.expense.v1.ExpenseService/CreatePurchaseOrder \
-  "{\"production_id\":\"$PROJECT_LAST_HORIZON\",\"po_number\":\"x\",\"vendor_name\":\"x\",\"description\":\"x\",\"amount\":\"1.00\",\"currency\":\"INR\"}"
-
-probe "member: SubmitExpense"                      deny "$DEEPA_ID" - \
-  "$EXPENSE_ADDR"  thittam.expense.v1.ExpenseService/SubmitExpense \
-  "{\"production_id\":\"$PROJECT_LAST_HORIZON\",\"category_id\":\"x\",\"description\":\"x\",\"amount\":\"1.00\",\"currency\":\"INR\"}"
-
-probe "member: CreateProduction"                   deny "$DEEPA_ID" - \
+probe "member: CreateProduction            (production:write)" deny "$DEEPA_ID" - \
   "$PROJECT_ADDR"  thittam.project.v1.ProjectService/CreateProduction \
   "{\"title\":\"x\"}"
 
-probe "member: AddCrewMember"                      deny "$DEEPA_ID" - \
+probe "member: AddCrewMember               (resource:manage)" deny "$DEEPA_ID" - \
   "$PROJECT_ADDR"  thittam.project.v1.ProjectService/AddCrewMember \
   "{\"production_id\":\"$PROJECT_LAST_HORIZON\",\"name\":\"x\",\"role\":\"x\",\"department\":\"x\",\"day_rate\":\"1.00\"}"
 
-probe "member: CreateAsset"                        deny "$DEEPA_ID" - \
+probe "member: CreateAsset                 (inventory:write)" deny "$DEEPA_ID" - \
   "$INVENTORY_ADDR" thittam.inventory.v1.InventoryService/CreateAsset \
   "{\"name\":\"x\",\"category_id\":\"x\"}"
 
-probe "member: CheckInAsset"                       deny "$DEEPA_ID" - \
+probe "member: CheckInAsset                (inventory:checkout)" deny "$DEEPA_ID" - \
   "$INVENTORY_ADDR" thittam.inventory.v1.InventoryService/CheckInAsset \
   "{\"checkout_id\":\"$DUMMY_ASSET_ID\",\"asset_id\":\"$DUMMY_ASSET_ID\"}"
 
-# manager passes the same gates
-probe "manager: CreateBudget"                      pass "$PRIYA_ID" - \
-  "$BUDGET_ADDR"   thittam.budget.v1.BudgetService/CreateBudget \
-  "{\"production_id\":\"$PROJECT_LAST_HORIZON\",\"label\":\"verify\",\"currency\":\"INR\"}"
+# Member is allowed expense:submit per matrix, so these pass the gate.
+# Probes confirm the gate fired (handler reached) but did not deny.
+probe "member: CreatePurchaseOrder         (expense:submit, allowed)" pass "$DEEPA_ID" - \
+  "$EXPENSE_ADDR"  thittam.expense.v1.ExpenseService/CreatePurchaseOrder \
+  "{\"production_id\":\"$PROJECT_LAST_HORIZON\",\"po_number\":\"verify-$$-$RANDOM\",\"vendor_name\":\"x\",\"description\":\"x\",\"amount\":\"1.00\",\"currency\":\"INR\"}"
 
-probe "manager: CreateProduction"                  pass "$PRIYA_ID" - \
+probe "member: SubmitExpense               (expense:submit, allowed)" pass "$DEEPA_ID" - \
+  "$EXPENSE_ADDR"  thittam.expense.v1.ExpenseService/SubmitExpense \
+  "{\"production_id\":\"$PROJECT_LAST_HORIZON\",\"category_id\":\"x\",\"description\":\"x\",\"amount\":\"1.00\",\"currency\":\"INR\"}"
+
+# Coordinator passes budget:write where manager does not (manager is approve-only).
+probe "coordinator: CreateBudget           (budget:write)" pass "$ARUN_ID" - \
+  "$BUDGET_ADDR"   thittam.budget.v1.BudgetService/CreateBudget \
+  "{\"production_id\":\"$PROJECT_LAST_HORIZON\",\"label\":\"verify-$$-$RANDOM\",\"currency\":\"INR\"}"
+
+# Manager passes production:write. Title gets a unique suffix to avoid slug
+# collision when the script is re-run multiple times in one dev session.
+probe "manager: CreateProduction           (production:write)" pass "$PRIYA_ID" - \
   "$PROJECT_ADDR"  thittam.project.v1.ProjectService/CreateProduction \
-  "{\"title\":\"verify-rbac-tmp\"}"
+  "{\"title\":\"verify-rbac-tmp-$$-$RANDOM\"}"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
