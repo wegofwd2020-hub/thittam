@@ -35,6 +35,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/cors"
 	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -221,8 +222,26 @@ func main() {
 		if err := iamv1.RegisterIAMServiceHandlerFromEndpoint(ctx, gwMux, "localhost:8086", opts); err != nil {
 			log.Fatalf("iam: register gateway: %v", err)
 		}
-		log.Printf("iam REST gateway ready on :9086")
-		if err := http.ListenAndServe(":9086", gwMux); err != nil {
+		// CORS for local browser dev. The Next.js dev server runs on :3100
+		// (and historically :3000); add both. In production Kong handles CORS
+		// at the edge — this wrapper is a local-dev convenience.
+		corsHandler := cors.New(cors.Options{
+			AllowedOrigins: []string{
+				"http://localhost:3100",
+				"http://localhost:3000",
+			},
+			AllowedMethods: []string{
+				http.MethodGet, http.MethodPost, http.MethodPut,
+				http.MethodPatch, http.MethodDelete, http.MethodOptions,
+			},
+			AllowedHeaders: []string{
+				"Content-Type", "Authorization",
+				"X-Tenant-Id", "X-Project-Id", "X-Caller-Id",
+			},
+			AllowCredentials: true,
+		}).Handler(gwMux)
+		log.Printf("iam REST gateway ready on :9086 (CORS allow-list: localhost:3100, localhost:3000)")
+		if err := http.ListenAndServe(":9086", corsHandler); err != nil {
 			log.Fatalf("iam: gateway listen: %v", err)
 		}
 	}()
