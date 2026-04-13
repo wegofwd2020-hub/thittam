@@ -48,7 +48,7 @@ else
     --storage file \
     --replicas 1 \
     --max-age 24h \
-    --max-bytes -1 \
+    --max-bytes=-1 \
     --discard old \
     --dupe-window 2m \
     --description "All Thittam domain events (24-hour retention)"
@@ -65,7 +65,7 @@ else
     --storage file \
     --replicas 1 \
     --max-age 7d \
-    --max-bytes -1 \
+    --max-bytes=-1 \
     --discard old \
     --dupe-window 2m \
     --description "Financial domain events: budget, expense, ledger (7-day retention, DLQ via FINANCIAL_DLQ)"
@@ -85,7 +85,7 @@ else
     --storage file \
     --replicas 1 \
     --max-age 7d \
-    --max-bytes -1 \
+    --max-bytes=-1 \
     --discard old \
     --description "Dead-letter advisories for FINANCIAL consumers (ops investigation + replay)"
   echo "  [ok] FINANCIAL_DLQ stream created"
