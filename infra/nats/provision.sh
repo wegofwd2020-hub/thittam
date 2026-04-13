@@ -106,6 +106,13 @@ echo "--- Consumers ---"
 # MaxDeliver=5 with backoff: 5s, 30s, 5m, 30m
 # After 5 failed deliveries NATS publishes a MaxDeliveries advisory → FINANCIAL_DLQ stream.
 
+# NOTE on --filter: pass once per subject. Newer nats CLI does NOT split a
+# single comma-separated value — it stores the literal "a.>,b.>" as a single
+# subject filter that no real message will ever match, so the consumer looks
+# created but every subscribe gets "subject does not match consumer".
+# NOTE on --no-headers-only: newer CLI defaults headers-only to true under
+# some prompt paths; force off so message bodies are delivered.
+
 if consumer_exists FINANCIAL reporting-financial; then
   echo "  [skip] FINANCIAL/reporting-financial consumer already exists"
 else
@@ -116,7 +123,11 @@ else
     --wait 30s \
     --max-deliver 5 \
     --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
-    --filter "thittam.budget.>,thittam.expense.>,thittam.ledger.>,thittam.billing.>" \
+    --no-headers-only \
+    --filter thittam.budget.\> \
+    --filter thittam.expense.\> \
+    --filter thittam.ledger.\> \
+    --filter thittam.billing.\> \
     --description "Reporting-analytics financial projection consumer"
   echo "  [ok] FINANCIAL/reporting-financial consumer created"
 fi
@@ -131,7 +142,11 @@ else
     --wait 30s \
     --max-deliver 5 \
     --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
-    --filter "thittam.budget.>,thittam.expense.>,thittam.ledger.>,thittam.billing.>" \
+    --no-headers-only \
+    --filter thittam.budget.\> \
+    --filter thittam.expense.\> \
+    --filter thittam.ledger.\> \
+    --filter thittam.billing.\> \
     --description "Notifications service financial event consumer"
   echo "  [ok] FINANCIAL/notifications-financial consumer created"
 fi
@@ -150,7 +165,9 @@ else
     --wait 30s \
     --max-deliver 5 \
     --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
-    --filter "thittam.project.>,thittam.document.>" \
+    --no-headers-only \
+    --filter thittam.project.\> \
+    --filter thittam.document.\> \
     --description "Notifications service non-financial event consumer (project, document)"
   echo "  [ok] EVENTS/notifications-events consumer created"
 fi
