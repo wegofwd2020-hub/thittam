@@ -88,13 +88,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (accessToken: string) => {
       api.setToken(accessToken);
       try {
-        const { data } = await api.get<{ user: User; tenant: Tenant }>(
+        // grpc-gateway returns {user, tenant} flat at the response root —
+        // no {data: ...} envelope. See thittam #60 Phase A.
+        const me = await api.get<{ user: User; tenant: Tenant }>(
           "/api/v1/auth/me"
         );
-        setUser(data.user);
-        setTenant(data.tenant);
-        api.setTenantId(data.tenant.id);
-        localStorage.setItem(TENANT_ID_KEY, data.tenant.id);
+        setUser(me.user);
+        setTenant(me.tenant);
+        api.setTenantId(me.tenant.id);
+        localStorage.setItem(TENANT_ID_KEY, me.tenant.id);
       } catch {
         // Token might be expired -- try refresh
         const rt = getStoredRefreshToken();
@@ -103,13 +105,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const pair = await apiRefreshToken(rt);
             storeTokens(pair);
             api.setToken(pair.access_token);
-            const { data } = await api.get<{ user: User; tenant: Tenant }>(
+            const me = await api.get<{ user: User; tenant: Tenant }>(
               "/api/v1/auth/me"
             );
-            setUser(data.user);
-            setTenant(data.tenant);
-            api.setTenantId(data.tenant.id);
-            localStorage.setItem(TENANT_ID_KEY, data.tenant.id);
+            setUser(me.user);
+            setTenant(me.tenant);
+            api.setTenantId(me.tenant.id);
+            localStorage.setItem(TENANT_ID_KEY, me.tenant.id);
           } catch {
             clearAuth();
           }
@@ -138,13 +140,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       storeTokens(pair);
       api.setToken(pair.access_token);
 
-      const { data } = await api.get<{ user: User; tenant: Tenant }>(
+      const me = await api.get<{ user: User; tenant: Tenant }>(
         "/api/v1/auth/me"
       );
-      setUser(data.user);
-      setTenant(data.tenant);
-      api.setTenantId(data.tenant.id);
-      localStorage.setItem(TENANT_ID_KEY, data.tenant.id);
+      setUser(me.user);
+      setTenant(me.tenant);
+      api.setTenantId(me.tenant.id);
+      localStorage.setItem(TENANT_ID_KEY, me.tenant.id);
     },
     []
   );
