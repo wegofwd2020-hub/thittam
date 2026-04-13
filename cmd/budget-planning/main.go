@@ -17,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	budgetv1 "github.com/wegofwd2020/thittam/gen/budget/v1"
 	"github.com/wegofwd2020/thittam/pkg/events"
+	"github.com/wegofwd2020/thittam/pkg/iamclient"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
@@ -66,10 +67,22 @@ func main() {
 	}
 	pub := jetstream.NewPublisher(js)
 
+	// --- IAM permission checker (ADR-014 Phase 2) ---
+	// Optional: when IAM_SERVICE_ADDR is unset, RequirePermission calls in
+	// the handler are no-ops. This is the rollback-safe default.
+	iamPerm, closeIAM, err := iamclient.DialFromEnv("budget-planning")
+	if err != nil {
+		log.Fatalf("budget-planning: startup: dial IAM: %v", err)
+	}
+	defer closeIAM()
+
 	// --- Repository and service ---
 	repo := budgetdb.NewPostgres(pool)
 	svc := budget.NewService(repo, &budgetPublisher{pub: pub})
 	handler := budget.NewHandler(svc)
+	if iamPerm != nil {
+		handler = handler.WithPermissionChecker(iamPerm)
+	}
 
 	// --- gRPC server ---
 	srv := server.New(server.Config{

@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	inventoryv1 "github.com/wegofwd2020/thittam/gen/inventory/v1"
+	"github.com/wegofwd2020/thittam/pkg/iamclient"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	verticaldb "github.com/wegofwd2020/thittam/pkg/vertical/db"
@@ -45,10 +46,20 @@ func main() {
 	vdb := verticaldb.NewStore(pool)
 	loader := vertical.NewLoader(rdb, vdb, nil)
 
+	// --- IAM permission checker (ADR-014 Phase 2) ---
+	iamPerm, closeIAM, err := iamclient.DialFromEnv("inventory-management")
+	if err != nil {
+		log.Fatalf("inventory-management: startup: dial IAM: %v", err)
+	}
+	defer closeIAM()
+
 	// --- Repository and service ---
 	repo := inventorydb.NewPostgres(pool)
 	svc := inventory.NewService(repo)
 	handler := inventory.NewHandler(svc)
+	if iamPerm != nil {
+		handler = handler.WithPermissionChecker(iamPerm)
+	}
 
 	// --- gRPC server ---
 	srv := server.New(server.Config{

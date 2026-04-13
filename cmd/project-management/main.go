@@ -17,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	projectv1 "github.com/wegofwd2020/thittam/gen/project/v1"
 	"github.com/wegofwd2020/thittam/pkg/events"
+	"github.com/wegofwd2020/thittam/pkg/iamclient"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
@@ -69,10 +70,20 @@ func main() {
 	}
 	pub := jetstream.NewPublisher(js)
 
+	// --- IAM permission checker (ADR-014 Phase 2) ---
+	iamPerm, closeIAM, err := iamclient.DialFromEnv("project-management")
+	if err != nil {
+		log.Fatalf("project-management: startup: dial IAM: %v", err)
+	}
+	defer closeIAM()
+
 	// --- Repository and service ---
 	repo := projectdb.NewPostgres(pool)
 	svc := project.NewService(repo, &projectPublisher{pub: pub})
 	handler := project.NewHandler(svc)
+	if iamPerm != nil {
+		handler = handler.WithPermissionChecker(iamPerm)
+	}
 
 	// --- gRPC server ---
 	srv := server.New(server.Config{
