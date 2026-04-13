@@ -49,7 +49,7 @@ func testOIDCConfig() *OIDCConfig {
 		EmailClaim:       "email",
 		DisplayNameClaim: "name",
 		AutoProvision:    true,
-		DefaultRole:      "crew_member",
+		DefaultRole:      "member",
 	}
 }
 
@@ -104,7 +104,7 @@ func TestOIDCProvider_JITProvision_NewUser(t *testing.T) {
 					Email:       email,
 					DisplayName: displayName,
 					Status:      "active",
-					Roles:       []string{"crew_member"},
+					Roles:       []string{"member"},
 				}, nil
 			},
 		}

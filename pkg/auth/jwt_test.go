@@ -57,7 +57,7 @@ func fixtureAuthResult() *AuthResult {
 		UserID:          fixtureUserID,
 		TenantID:        fixtureTenantID,
 		Email:           "user@example.com",
-		Roles:           []string{"line_producer"},
+		Roles:           []string{"coordinator"},
 		Permissions:     []string{"budget:read", "expense:submit"},
 		AuthMethod:      ProviderLocal,
 		AuthenticatedAt: time.Now().UTC(),
@@ -110,7 +110,7 @@ func TestJWTIssuer_Validate_ValidToken(t *testing.T) {
 	assert.Equal(t, fixtureUserID, claims.Subject)
 	assert.Equal(t, fixtureTenantID, claims.TenantID)
 	assert.Equal(t, "user@example.com", claims.Email)
-	assert.Equal(t, []string{"line_producer"}, claims.Roles)
+	assert.Equal(t, []string{"coordinator"}, claims.Roles)
 	assert.Equal(t, []string{"budget:read", "expense:submit"}, claims.Permissions)
 	assert.Equal(t, ProviderLocal, claims.AuthMethod)
 }

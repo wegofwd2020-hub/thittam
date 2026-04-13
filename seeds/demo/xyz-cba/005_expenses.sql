@@ -75,7 +75,7 @@ INSERT INTO expenses (id, production_id, tenant_id, category_id, description, am
  'd1000000-0000-0000-0000-000000000007', NULL,
  '2026-03-25T09:00:00Z'),
 
--- ══════════ EXACT APPROVAL LIMIT (₹2,00,000 = line_producer limit) ══════════
+-- ══════════ EXACT APPROVAL LIMIT (₹2,00,000 = coordinator limit) ══════════
 
 ('d5000000-0000-0000-0000-000000000014', 'd2000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
  'location_rental', 'Luxury hotel suite — 4 nights (Ladakh talent accommodation)', '200000.00', 'INR', 'approved',

@@ -125,8 +125,8 @@ func movieProductionConfig() *vertical.Config {
 		},
 		ApprovalWorkflow: vertical.ApprovalWorkflow{
 			Limits: []vertical.ApprovalLimit{
-				{Role: "line_producer", MaxAmount: decimal.NewFromInt(200000)},
-				{Role: "executive_producer", MaxAmount: decimal.NewFromInt(1000000)},
+				{Role: "coordinator", MaxAmount: decimal.NewFromInt(200000)},
+				{Role: "manager", MaxAmount: decimal.NewFromInt(1000000)},
 			},
 			DualApprovalAbove: decimal.NewFromInt(1000000),
 		},
@@ -221,13 +221,13 @@ func TestApproveExpense_WithinLimit(t *testing.T) {
 			return &Expense{
 				ID:       id,
 				TenantID: tid,
-				Amount:   decimal.NewFromInt(150000), // within line_producer's 200k limit
+				Amount:   decimal.NewFromInt(150000), // within coordinator's 200k limit
 				Status:   "submitted",
 			}, nil
 		},
 	})
 
-	err := svc.ApproveExpense(ctxWithVertical(), tenantID, expenseID, uuid.New(), "line_producer")
+	err := svc.ApproveExpense(ctxWithVertical(), tenantID, expenseID, uuid.New(), "coordinator")
 	require.NoError(t, err)
 }
 
@@ -241,13 +241,13 @@ func TestApproveExpense_ExceedsLimit(t *testing.T) {
 			return &Expense{
 				ID:       id,
 				TenantID: tid,
-				Amount:   decimal.NewFromInt(300000), // exceeds line_producer's 200k limit
+				Amount:   decimal.NewFromInt(300000), // exceeds coordinator's 200k limit
 				Status:   "submitted",
 			}, nil
 		},
 	})
 
-	err := svc.ApproveExpense(ctxWithVertical(), tenantID, expenseID, uuid.New(), "line_producer")
+	err := svc.ApproveExpense(ctxWithVertical(), tenantID, expenseID, uuid.New(), "coordinator")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrApprovalLimitExceeded)
 }
@@ -268,8 +268,8 @@ func TestApproveExpense_DualApprovalThreshold(t *testing.T) {
 		},
 	})
 
-	// executive_producer has 1M limit, but amount is 1.5M — exceeds their limit
-	err := svc.ApproveExpense(ctxWithVertical(), tenantID, expenseID, uuid.New(), "executive_producer")
+	// manager has 1M limit, but amount is 1.5M — exceeds their limit
+	err := svc.ApproveExpense(ctxWithVertical(), tenantID, expenseID, uuid.New(), "manager")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrApprovalLimitExceeded)
 }
@@ -290,8 +290,8 @@ func TestApproveExpense_ExactDualApprovalBoundary(t *testing.T) {
 		},
 	})
 
-	// executive_producer has 1M limit — amount exceeds it
-	err := svc.ApproveExpense(ctxWithVertical(), tenantID, expenseID, uuid.New(), "executive_producer")
+	// manager has 1M limit — amount exceeds it
+	err := svc.ApproveExpense(ctxWithVertical(), tenantID, expenseID, uuid.New(), "manager")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrApprovalLimitExceeded)
 }
@@ -311,7 +311,7 @@ func TestGetApprovalLimits(t *testing.T) {
 	svc := NewService(&mockRepo{})
 	wf := svc.GetApprovalLimits(ctxWithVertical())
 	assert.Len(t, wf.Limits, 2)
-	assert.Equal(t, "line_producer", wf.Limits[0].Role)
+	assert.Equal(t, "coordinator", wf.Limits[0].Role)
 	assert.True(t, wf.DualApprovalAbove.Equal(decimal.NewFromInt(1000000)))
 }
 
@@ -325,7 +325,7 @@ func TestApproveExpense_AlreadyApproved(t *testing.T) {
 		},
 	})
 
-	err := svc.ApproveExpense(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), "line_producer")
+	err := svc.ApproveExpense(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), "coordinator")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrAlreadyApproved)
 }

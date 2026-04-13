@@ -107,7 +107,7 @@ function buildMockPreview(verticalId: string): DemoPreview {
         { name: "Priya Sharma", email: "priya@sunrise-studios.demo", role: "admin", department: "Executive", temp_password: "Demo@Sun2024!" },
         { name: "James Chen", email: "james@sunrise-studios.demo", role: "producer", department: "Production", temp_password: "Demo@Sun2024!" },
         { name: "Maria Lopez", email: "maria@sunrise-studios.demo", role: "finance_director", department: "Finance", temp_password: "Demo@Sun2024!" },
-        { name: "Alex Kim", email: "alex@sunrise-studios.demo", role: "line_producer", department: "Production", temp_password: "Demo@Sun2024!" },
+        { name: "Alex Kim", email: "alex@sunrise-studios.demo", role: "coordinator", department: "Production", temp_password: "Demo@Sun2024!" },
         { name: "Sarah Johnson", email: "sarah@sunrise-studios.demo", role: "dept_head", department: "Art", temp_password: "Demo@Sun2024!" },
         { name: "Mike Davis", email: "mike@sunrise-studios.demo", role: "dept_head", department: "Camera", temp_password: "Demo@Sun2024!" },
         { name: "Anika Patel", email: "anika@sunrise-studios.demo", role: "coordinator", department: "Production", temp_password: "Demo@Sun2024!" },

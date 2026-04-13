@@ -2227,7 +2227,7 @@ type SetOIDCConfigRequest struct {
 	DisplayNameClaim string   `protobuf:"bytes,7,opt,name=display_name_claim,json=displayNameClaim,proto3" json:"display_name_claim,omitempty"` // defaults to "name"
 	GroupsClaim      string   `protobuf:"bytes,8,opt,name=groups_claim,json=groupsClaim,proto3" json:"groups_claim,omitempty"`                  // optional
 	AutoProvision    bool     `protobuf:"varint,9,opt,name=auto_provision,json=autoProvision,proto3" json:"auto_provision,omitempty"`
-	DefaultRole      string   `protobuf:"bytes,10,opt,name=default_role,json=defaultRole,proto3" json:"default_role,omitempty"` // defaults to "crew_member"
+	DefaultRole      string   `protobuf:"bytes,10,opt,name=default_role,json=defaultRole,proto3" json:"default_role,omitempty"` // defaults to "member"
 }
 
 func (x *SetOIDCConfigRequest) Reset() {

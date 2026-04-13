@@ -35,8 +35,8 @@ func MovieProductionConfig() *vertical.Config {
 		},
 		ApprovalWorkflow: vertical.ApprovalWorkflow{
 			Limits: []vertical.ApprovalLimit{
-				{Role: "line_producer", MaxAmount: decimal.NewFromInt(200000)},
-				{Role: "executive_producer", MaxAmount: decimal.NewFromInt(1000000)},
+				{Role: "coordinator", MaxAmount: decimal.NewFromInt(200000)},
+				{Role: "manager", MaxAmount: decimal.NewFromInt(1000000)},
 			},
 			DualApprovalAbove: decimal.NewFromInt(1000000),
 		},
@@ -93,9 +93,9 @@ func SoftwareDevelopmentConfig() *vertical.Config {
 		},
 		ApprovalWorkflow: vertical.ApprovalWorkflow{
 			Limits: []vertical.ApprovalLimit{
-				{Role: "department_head", MaxAmount: decimal.NewFromInt(50000)},
-				{Role: "line_producer", MaxAmount: decimal.NewFromInt(500000)},
-				{Role: "executive_producer", MaxAmount: decimal.NewFromInt(2000000)},
+				{Role: "accountant", MaxAmount: decimal.NewFromInt(50000)},
+				{Role: "coordinator", MaxAmount: decimal.NewFromInt(500000)},
+				{Role: "manager", MaxAmount: decimal.NewFromInt(2000000)},
 			},
 			DualApprovalAbove: decimal.NewFromInt(2000000),
 		},
@@ -153,9 +153,9 @@ func ConstructionConfig() *vertical.Config {
 		},
 		ApprovalWorkflow: vertical.ApprovalWorkflow{
 			Limits: []vertical.ApprovalLimit{
-				{Role: "department_head", MaxAmount: decimal.NewFromInt(50000)},
-				{Role: "line_producer", MaxAmount: decimal.NewFromInt(500000)},
-				{Role: "executive_producer", MaxAmount: decimal.NewFromInt(5000000)},
+				{Role: "accountant", MaxAmount: decimal.NewFromInt(50000)},
+				{Role: "coordinator", MaxAmount: decimal.NewFromInt(500000)},
+				{Role: "manager", MaxAmount: decimal.NewFromInt(5000000)},
 			},
 			DualApprovalAbove: decimal.NewFromInt(5000000),
 		},
@@ -212,9 +212,9 @@ func EventsManagementConfig() *vertical.Config {
 		},
 		ApprovalWorkflow: vertical.ApprovalWorkflow{
 			Limits: []vertical.ApprovalLimit{
-				{Role: "department_head", MaxAmount: decimal.NewFromInt(25000)},
-				{Role: "line_producer", MaxAmount: decimal.NewFromInt(250000)},
-				{Role: "executive_producer", MaxAmount: decimal.NewFromInt(2000000)},
+				{Role: "accountant", MaxAmount: decimal.NewFromInt(25000)},
+				{Role: "coordinator", MaxAmount: decimal.NewFromInt(250000)},
+				{Role: "manager", MaxAmount: decimal.NewFromInt(2000000)},
 			},
 			DualApprovalAbove: decimal.NewFromInt(2000000),
 		},

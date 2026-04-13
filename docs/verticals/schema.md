@@ -209,9 +209,9 @@ in the tenant's base currency (typically INR).
 ```yaml
 approval_workflow:
   limits:
-    - role: line_producer
+    - role: coordinator
       max_amount: 200000
-    - role: executive_producer
+    - role: manager
       max_amount: 1000000
   dual_approval_above: 1000000
 ```

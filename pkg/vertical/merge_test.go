@@ -46,7 +46,7 @@ func baseConfig() *Config {
 		},
 		ApprovalWorkflow: ApprovalWorkflow{
 			Limits: []ApprovalLimit{
-				{Role: "line_producer", MaxAmount: decimal.NewFromInt(200000)},
+				{Role: "coordinator", MaxAmount: decimal.NewFromInt(200000)},
 			},
 			DualApprovalAbove: decimal.NewFromInt(1000000),
 		},

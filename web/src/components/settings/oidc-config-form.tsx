@@ -45,7 +45,7 @@ export function OidcConfigForm({
     display_name_claim: initialValues?.display_name_claim ?? "name",
     groups_claim: initialValues?.groups_claim ?? "",
     auto_provision: initialValues?.auto_provision ?? false,
-    default_role: initialValues?.default_role ?? roles[0]?.name ?? "crew_member",
+    default_role: initialValues?.default_role ?? roles[0]?.name ?? "member",
   });
 
   const [scopeInput, setScopeInput] = useState("");

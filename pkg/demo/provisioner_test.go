@@ -77,7 +77,7 @@ func testPreview() *DemoPreview {
 		VerticalName: "Movie Production",
 		Users: []DemoUser{
 			{Name: "Admin", Email: "admin@test-co.demo", Role: "super_admin", TempPassword: "demo1234"},
-			{Name: "Producer", Email: "producer@test-co.demo", Role: "line_producer", TempPassword: "demo1234"},
+			{Name: "Producer", Email: "producer@test-co.demo", Role: "coordinator", TempPassword: "demo1234"},
 		},
 		Projects: []DemoProject{
 			{Title: "Test Film", Phase: "production"},

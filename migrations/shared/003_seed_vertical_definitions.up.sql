@@ -52,8 +52,8 @@ INSERT INTO vertical_definitions (id, name, version, description, config) VALUES
     ],
     "approval_workflow": {
       "limits":[
-        {"role":"line_producer","max_amount":"200000"},
-        {"role":"executive_producer","max_amount":"1000000"}
+        {"role":"coordinator","max_amount":"200000"},
+        {"role":"manager","max_amount":"1000000"}
       ],
       "dual_approval_above":"1000000"
     },
@@ -178,9 +178,9 @@ INSERT INTO vertical_definitions (id, name, version, description, config) VALUES
     ],
     "approval_workflow": {
       "limits":[
-        {"role":"department_head","max_amount":"50000"},
-        {"role":"line_producer","max_amount":"500000"},
-        {"role":"executive_producer","max_amount":"2000000"}
+        {"role":"accountant","max_amount":"50000"},
+        {"role":"coordinator","max_amount":"500000"},
+        {"role":"manager","max_amount":"2000000"}
       ],
       "dual_approval_above":"2000000"
     },
@@ -314,9 +314,9 @@ INSERT INTO vertical_definitions (id, name, version, description, config) VALUES
     ],
     "approval_workflow": {
       "limits":[
-        {"role":"department_head","max_amount":"50000"},
-        {"role":"line_producer","max_amount":"500000"},
-        {"role":"executive_producer","max_amount":"5000000"}
+        {"role":"accountant","max_amount":"50000"},
+        {"role":"coordinator","max_amount":"500000"},
+        {"role":"manager","max_amount":"5000000"}
       ],
       "dual_approval_above":"5000000"
     },
@@ -464,9 +464,9 @@ INSERT INTO vertical_definitions (id, name, version, description, config) VALUES
     ],
     "approval_workflow": {
       "limits":[
-        {"role":"department_head","max_amount":"25000"},
-        {"role":"line_producer","max_amount":"250000"},
-        {"role":"executive_producer","max_amount":"2000000"}
+        {"role":"accountant","max_amount":"25000"},
+        {"role":"coordinator","max_amount":"250000"},
+        {"role":"manager","max_amount":"2000000"}
       ],
       "dual_approval_above":"2000000"
     },

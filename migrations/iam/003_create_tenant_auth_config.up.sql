@@ -13,7 +13,7 @@ CREATE TABLE tenant_auth_config (
     display_name_claim TEXT NOT NULL DEFAULT 'name',
     groups_claim       TEXT,          -- Optional: IdP groups claim for role mapping
     auto_provision     BOOLEAN NOT NULL DEFAULT true,
-    default_role       TEXT NOT NULL DEFAULT 'crew_member',
+    default_role       TEXT NOT NULL DEFAULT 'member',
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
 

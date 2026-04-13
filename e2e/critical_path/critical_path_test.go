@@ -20,7 +20,7 @@ import (
 //
 // Verifies that CreateTenant:
 //   - Persists the tenant with "active" status
-//   - Seeds all system roles (super_admin, executive_producer, etc.)
+//   - Seeds all system roles (super_admin, manager, coordinator, etc.)
 //   - Applies a default plan when none is provided
 
 func TestCriticalPath_TenantRegistration(t *testing.T) {
@@ -144,9 +144,9 @@ func TestCriticalPath_ExpenseLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "submitted", submitted.Status)
 
-	// Step 2: Approve by line_producer (limit 500k, amount 150k — within limit).
+	// Step 2: Approve by coordinator (limit 500k, amount 150k — within limit).
 	approverID := uuid.MustParse("a0000000-0000-0000-0000-000000000098")
-	err = svc.ApproveExpense(ctx, fixedTenantID, fixedExpenseID, approverID, "line_producer")
+	err = svc.ApproveExpense(ctx, fixedTenantID, fixedExpenseID, approverID, "coordinator")
 	require.NoError(t, err)
 
 	approved, err := svc.GetExpense(ctx, fixedTenantID, fixedExpenseID)

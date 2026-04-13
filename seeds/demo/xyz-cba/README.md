@@ -41,7 +41,7 @@ All users share password: `demo1234`
 
 ### Expense Tracking
 - 20 expenses covering all statuses: paid, approved, submitted, rejected, draft
-- Expense #14 (₹2,00,000) is at the exact `line_producer` approval limit
+- Expense #14 (₹2,00,000) is at the exact `coordinator` approval limit
 - Expense #15 (₹35,00,000) was rejected for exceeding the BTL budget line
 - 4 petty cash entries (₹2,200 to ₹15,000)
 - Vendor GSTIN populated on PO-required expenses

@@ -59,7 +59,7 @@ func movieVerticalCtx() context.Context {
 		},
 		ApprovalWorkflow: vertical.ApprovalWorkflow{
 			Limits: []vertical.ApprovalLimit{
-				{Role: "line_producer", MaxAmount: decimal.NewFromInt(500000)},
+				{Role: "coordinator", MaxAmount: decimal.NewFromInt(500000)},
 			},
 			DualApprovalAbove: decimal.NewFromInt(1000000),
 		},

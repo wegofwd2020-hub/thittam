@@ -276,7 +276,7 @@ message SetOIDCConfigRequest {
   string display_name_claim = 7;     // defaults to "name"
   string groups_claim = 8;           // optional
   bool auto_provision = 9;
-  string default_role = 10;          // defaults to "crew_member"
+  string default_role = 10;          // defaults to "member"
 }
 
 message SetOIDCConfigResponse {}

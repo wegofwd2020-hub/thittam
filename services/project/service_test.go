@@ -115,8 +115,8 @@ func movieProductionConfig() *vertical.Config {
 		},
 		ApprovalWorkflow: vertical.ApprovalWorkflow{
 			Limits: []vertical.ApprovalLimit{
-				{Role: "line_producer", MaxAmount: decimal.NewFromInt(200000)},
-				{Role: "executive_producer", MaxAmount: decimal.NewFromInt(1000000)},
+				{Role: "coordinator", MaxAmount: decimal.NewFromInt(200000)},
+				{Role: "manager", MaxAmount: decimal.NewFromInt(1000000)},
 			},
 			DualApprovalAbove: decimal.NewFromInt(1000000),
 		},

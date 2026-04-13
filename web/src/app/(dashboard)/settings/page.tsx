@@ -58,7 +58,7 @@ const mockUsers: MockUser[] = [
     email: "priya.sharma@xyzcba.com",
     display_name: "Priya Sharma",
     status: "active",
-    roles: ["executive_producer"],
+    roles: ["manager"],
     last_login_at: "2026-04-04T09:30:00Z",
     created_at: "2025-06-15T14:00:00Z",
   },
@@ -67,7 +67,7 @@ const mockUsers: MockUser[] = [
     email: "arjun.mehta@xyzcba.com",
     display_name: "Arjun Mehta",
     status: "active",
-    roles: ["line_producer"],
+    roles: ["coordinator"],
     last_login_at: "2026-04-03T17:45:00Z",
     created_at: "2025-07-01T09:00:00Z",
   },
@@ -76,7 +76,7 @@ const mockUsers: MockUser[] = [
     email: "deepa.nair@xyzcba.com",
     display_name: "Deepa Nair",
     status: "active",
-    roles: ["production_accountant"],
+    roles: ["accountant"],
     last_login_at: "2026-04-04T07:00:00Z",
     created_at: "2025-07-10T11:00:00Z",
   },
@@ -94,7 +94,7 @@ const mockUsers: MockUser[] = [
     email: "ravi.kumar@xyzcba.com",
     display_name: "Ravi Kumar",
     status: "active",
-    roles: ["crew_member"],
+    roles: ["member"],
     last_login_at: "2026-04-02T14:10:00Z",
     created_at: "2025-09-01T08:00:00Z",
   },
@@ -112,7 +112,7 @@ const mockUsers: MockUser[] = [
     email: "vikram.singh@xyzcba.com",
     display_name: "Vikram Singh",
     status: "deactivated",
-    roles: ["crew_member"],
+    roles: ["member"],
     last_login_at: "2025-12-15T11:30:00Z",
     created_at: "2025-08-20T09:00:00Z",
   },
@@ -137,7 +137,7 @@ const mockRoles = [
   },
   {
     id: "role-002",
-    name: "executive_producer",
+    name: "manager",
     permissions: [
       "production:read", "production:write",
       "budget:read", "budget:write", "budget:approve",
@@ -149,7 +149,7 @@ const mockRoles = [
   },
   {
     id: "role-003",
-    name: "line_producer",
+    name: "coordinator",
     permissions: [
       "production:read", "production:write",
       "budget:read", "budget:write",
@@ -160,7 +160,7 @@ const mockRoles = [
   },
   {
     id: "role-004",
-    name: "production_accountant",
+    name: "accountant",
     permissions: [
       "production:read",
       "budget:read", "budget:write",
@@ -182,7 +182,7 @@ const mockRoles = [
   },
   {
     id: "role-006",
-    name: "crew_member",
+    name: "member",
     permissions: [
       "production:read",
       "budget:read",
@@ -248,7 +248,7 @@ const mockAuditEntries: AuditEntry[] = [
     action: "updated",
     resource_type: "user",
     resource_id: "usr-007",
-    old_state: { roles: ["crew_member"] },
+    old_state: { roles: ["member"] },
     new_state: { roles: ["production_manager"] },
     occurred_at: "2026-04-02T15:45:00Z",
   },
@@ -304,7 +304,7 @@ const mockAuditEntries: AuditEntry[] = [
     resource_type: "user",
     resource_id: "usr-007",
     old_state: null,
-    new_state: { email: "meena.iyer@xyzcba.com", roles: ["crew_member"], status: "invited" },
+    new_state: { email: "meena.iyer@xyzcba.com", roles: ["member"], status: "invited" },
     occurred_at: "2026-03-28T16:00:00Z",
   },
 ];
@@ -335,7 +335,7 @@ const mockAuthConfig = {
   display_name_claim: "name",
   groups_claim: null as string | null,
   auto_provision: false,
-  default_role: "crew_member",
+  default_role: "member",
 };
 
 // ---------------------------------------------------------------------------
@@ -419,13 +419,13 @@ export default function SettingsPage() {
                 backgroundColor:
                   r === "super_admin"
                     ? "#fae8ff"
-                    : r === "executive_producer"
+                    : r === "manager"
                       ? "#dbeafe"
                       : "var(--thittam-muted, #f1f5f9)",
                 color:
                   r === "super_admin"
                     ? "#a21caf"
-                    : r === "executive_producer"
+                    : r === "manager"
                       ? "#1d4ed8"
                       : "var(--thittam-foreground, #0f172a)",
               }}

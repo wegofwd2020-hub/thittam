@@ -435,7 +435,7 @@ func TestHandler_GetApprovalLimits(t *testing.T) {
 	resp, err := newHandler().GetApprovalLimits(ctxWithVertical(), &expensev1.GetApprovalLimitsRequest{})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetLimits(), 2)
-	assert.Equal(t, "line_producer", resp.GetLimits()[0].GetRole())
+	assert.Equal(t, "coordinator", resp.GetLimits()[0].GetRole())
 	assert.Equal(t, "200000.00", resp.GetLimits()[0].GetMaxAmount())
 	assert.Equal(t, "1000000.00", resp.GetDualApprovalAbove())
 }

@@ -127,8 +127,8 @@ func TestIsolation_BOQReportNotForEvents(t *testing.T) {
 
 func TestIsolation_DifferentApprovalLimitsPerVertical(t *testing.T) {
 	t.Parallel()
-	eventsLimit := EventsManagementConfig().ApprovalWorkflow.LimitForRole("department_head")
-	constructionLimit := ConstructionConfig().ApprovalWorkflow.LimitForRole("department_head")
+	eventsLimit := EventsManagementConfig().ApprovalWorkflow.LimitForRole("accountant")
+	constructionLimit := ConstructionConfig().ApprovalWorkflow.LimitForRole("accountant")
 	require.NotNil(t, eventsLimit)
 	require.NotNil(t, constructionLimit)
 	assert.False(t, eventsLimit.Equal(*constructionLimit))
