@@ -324,6 +324,11 @@ jobs:
     # Run when Go source files change (someone may rename/remove an identifier)
     # or when triggered manually. The docs repo runs the same check on its own
     # PRs via thittam_docs/.github/workflows/ci.yml.
+    #
+    # GitHub Actions does not allow `secrets.X` directly inside `if:` expressions —
+    # we surface the secret via env at job scope and gate steps on that env var.
+    env:
+      DOCS_TOKEN_PRESENT: ${{ secrets.DOCS_REPO_TOKEN != '' }}
 
     steps:
       - name: Skip if DOCS_REPO_TOKEN not configured
@@ -331,20 +336,19 @@ jobs:
         # it. Without a PAT, gracefully skip rather than 404 on checkout.
         # To enable: add a PAT with `Contents: read` on wegofwd2020-hub/thittam_docs
         # as repo secret DOCS_REPO_TOKEN.
-        if: ${{ secrets.DOCS_REPO_TOKEN == '' }}
+        if: env.DOCS_TOKEN_PRESENT == 'false'
         run: |
           echo "::warning::DOCS_REPO_TOKEN not set — drift check skipped."
           echo "Add a PAT to repo secrets to enable. See ticket #57."
-          exit 0
 
       - name: Checkout application repo
-        if: ${{ secrets.DOCS_REPO_TOKEN != '' }}
+        if: env.DOCS_TOKEN_PRESENT == 'true'
         uses: actions/checkout@v4
         with:
           path: app
 
       - name: Checkout docs repo
-        if: ${{ secrets.DOCS_REPO_TOKEN != '' }}
+        if: env.DOCS_TOKEN_PRESENT == 'true'
         uses: actions/checkout@v4
         with:
           repository: wegofwd2020-hub/thittam_docs
@@ -352,14 +356,14 @@ jobs:
           path: docs
 
       - uses: actions/setup-go@v5
-        if: ${{ secrets.DOCS_REPO_TOKEN != '' }}
+        if: env.DOCS_TOKEN_PRESENT == 'true'
         with:
           go-version: "1.25.9"
           cache: true
           cache-dependency-path: app/go.sum
 
       - name: Check documentation drift (Rule #16)
-        if: ${{ secrets.DOCS_REPO_TOKEN != '' }}
+        if: env.DOCS_TOKEN_PRESENT == 'true'
         working-directory: app
         run: |
           go run ./tools/check-doc-drift \
