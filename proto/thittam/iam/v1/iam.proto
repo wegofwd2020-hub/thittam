@@ -27,6 +27,13 @@ service IAMService {
   }
   rpc ValidateToken(ValidateTokenRequest) returns (Claims);
 
+  // GetCurrentUser returns the user + tenant identified by the bearer token
+  // in the Authorization header. The UI's session-hydration flow calls this
+  // after login to populate its in-memory session.
+  rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse) {
+    option (google.api.http) = { get: "/api/v1/auth/me" };
+  }
+
   // --- Users ---
   rpc CreateUser(CreateUserRequest) returns (User);
   rpc GetUser(GetUserRequest) returns (User);
@@ -150,6 +157,13 @@ message LogoutResponse {}
 
 message ValidateTokenRequest {
   string access_token = 1;
+}
+
+message GetCurrentUserRequest {}
+
+message GetCurrentUserResponse {
+  User user = 1;
+  Tenant tenant = 2;
 }
 
 // Users

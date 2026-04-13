@@ -200,6 +200,27 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*auth.
 	return pair, nil
 }
 
+// GetCurrentUser validates the access token, looks up the user + tenant
+// it identifies, and returns both. Used by the UI's session-hydration
+// flow (`GET /api/v1/auth/me`). The token comes from the Authorization
+// metadata; the handler extracts and strips the "Bearer " prefix before
+// calling this method.
+func (s *Service) GetCurrentUser(ctx context.Context, accessToken string) (*User, *Tenant, error) {
+	claims, err := s.tokens.Validate(ctx, accessToken)
+	if err != nil {
+		return nil, nil, fmt.Errorf("iam: validate token: %w", err)
+	}
+	user, err := s.repo.GetUser(ctx, claims.TenantID, claims.Subject)
+	if err != nil {
+		return nil, nil, fmt.Errorf("iam: get user %s: %w", claims.Subject, err)
+	}
+	tenant, err := s.repo.GetTenant(ctx, claims.TenantID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("iam: get tenant %s: %w", claims.TenantID, err)
+	}
+	return user, tenant, nil
+}
+
 // Logout revokes a refresh token, invalidating the session.
 func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 	if err := s.tokens.Revoke(ctx, refreshToken); err != nil {

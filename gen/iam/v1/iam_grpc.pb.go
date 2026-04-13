@@ -27,6 +27,7 @@ const (
 	IAMService_RefreshToken_FullMethodName       = "/thittam.iam.v1.IAMService/RefreshToken"
 	IAMService_Logout_FullMethodName             = "/thittam.iam.v1.IAMService/Logout"
 	IAMService_ValidateToken_FullMethodName      = "/thittam.iam.v1.IAMService/ValidateToken"
+	IAMService_GetCurrentUser_FullMethodName     = "/thittam.iam.v1.IAMService/GetCurrentUser"
 	IAMService_CreateUser_FullMethodName         = "/thittam.iam.v1.IAMService/CreateUser"
 	IAMService_GetUser_FullMethodName            = "/thittam.iam.v1.IAMService/GetUser"
 	IAMService_ListUsers_FullMethodName          = "/thittam.iam.v1.IAMService/ListUsers"
@@ -60,6 +61,10 @@ type IAMServiceClient interface {
 	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*TokenPair, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
 	ValidateToken(ctx context.Context, in *ValidateTokenRequest, opts ...grpc.CallOption) (*Claims, error)
+	// GetCurrentUser returns the user + tenant identified by the bearer token
+	// in the Authorization header. The UI's session-hydration flow calls this
+	// after login to populate its in-memory session.
+	GetCurrentUser(ctx context.Context, in *GetCurrentUserRequest, opts ...grpc.CallOption) (*GetCurrentUserResponse, error)
 	// --- Users ---
 	CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*User, error)
 	GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*User, error)
@@ -125,6 +130,15 @@ func (c *iAMServiceClient) Logout(ctx context.Context, in *LogoutRequest, opts .
 func (c *iAMServiceClient) ValidateToken(ctx context.Context, in *ValidateTokenRequest, opts ...grpc.CallOption) (*Claims, error) {
 	out := new(Claims)
 	err := c.cc.Invoke(ctx, IAMService_ValidateToken_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *iAMServiceClient) GetCurrentUser(ctx context.Context, in *GetCurrentUserRequest, opts ...grpc.CallOption) (*GetCurrentUserResponse, error) {
+	out := new(GetCurrentUserResponse)
+	err := c.cc.Invoke(ctx, IAMService_GetCurrentUser_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -314,6 +328,10 @@ type IAMServiceServer interface {
 	RefreshToken(context.Context, *RefreshTokenRequest) (*TokenPair, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	ValidateToken(context.Context, *ValidateTokenRequest) (*Claims, error)
+	// GetCurrentUser returns the user + tenant identified by the bearer token
+	// in the Authorization header. The UI's session-hydration flow calls this
+	// after login to populate its in-memory session.
+	GetCurrentUser(context.Context, *GetCurrentUserRequest) (*GetCurrentUserResponse, error)
 	// --- Users ---
 	CreateUser(context.Context, *CreateUserRequest) (*User, error)
 	GetUser(context.Context, *GetUserRequest) (*User, error)
@@ -357,6 +375,9 @@ func (UnimplementedIAMServiceServer) Logout(context.Context, *LogoutRequest) (*L
 }
 func (UnimplementedIAMServiceServer) ValidateToken(context.Context, *ValidateTokenRequest) (*Claims, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateToken not implemented")
+}
+func (UnimplementedIAMServiceServer) GetCurrentUser(context.Context, *GetCurrentUserRequest) (*GetCurrentUserResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCurrentUser not implemented")
 }
 func (UnimplementedIAMServiceServer) CreateUser(context.Context, *CreateUserRequest) (*User, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateUser not implemented")
@@ -496,6 +517,24 @@ func _IAMService_ValidateToken_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(IAMServiceServer).ValidateToken(ctx, req.(*ValidateTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IAMService_GetCurrentUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCurrentUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMServiceServer).GetCurrentUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IAMService_GetCurrentUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMServiceServer).GetCurrentUser(ctx, req.(*GetCurrentUserRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -864,6 +903,10 @@ var IAMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateToken",
 			Handler:    _IAMService_ValidateToken_Handler,
+		},
+		{
+			MethodName: "GetCurrentUser",
+			Handler:    _IAMService_GetCurrentUser_Handler,
 		},
 		{
 			MethodName: "CreateUser",

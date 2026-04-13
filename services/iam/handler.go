@@ -3,6 +3,7 @@ package iam
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,6 +11,7 @@ import (
 	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -70,6 +72,45 @@ func (h *Handler) ValidateToken(ctx context.Context, req *iamv1.ValidateTokenReq
 		return nil, grpcError(err)
 	}
 	return claimsToProto(claims), nil
+}
+
+// GetCurrentUser extracts the bearer token from the Authorization metadata,
+// resolves the user + tenant, and returns both. The grpc-gateway forwards
+// HTTP headers as gRPC metadata, so the UI's `Authorization: Bearer …`
+// header arrives here verbatim.
+func (h *Handler) GetCurrentUser(ctx context.Context, _ *iamv1.GetCurrentUserRequest) (*iamv1.GetCurrentUserResponse, error) {
+	token, err := bearerTokenFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	user, tenant, err := h.svc.GetCurrentUser(ctx, token)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return &iamv1.GetCurrentUserResponse{
+		User:   userToProto(user),
+		Tenant: tenantToProto(tenant),
+	}, nil
+}
+
+// bearerTokenFromContext extracts a bearer access token from the incoming
+// gRPC Authorization metadata. Returns Unauthenticated if missing or
+// malformed.
+func bearerTokenFromContext(ctx context.Context) (string, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return "", status.Error(codes.Unauthenticated, "missing metadata")
+	}
+	values := md.Get("authorization")
+	if len(values) == 0 {
+		return "", status.Error(codes.Unauthenticated, "missing authorization header")
+	}
+	const prefix = "Bearer "
+	v := values[0]
+	if len(v) <= len(prefix) || !strings.EqualFold(v[:len(prefix)], prefix) {
+		return "", status.Error(codes.Unauthenticated, "authorization header must be 'Bearer <token>'")
+	}
+	return v[len(prefix):], nil
 }
 
 // --- Users ---
