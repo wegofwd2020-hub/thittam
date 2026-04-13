@@ -45,6 +45,12 @@ func (h *Handler) CreateBudget(ctx context.Context, req *budgetv1.CreateBudgetRe
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
+			return nil, err
+		}
+	}
+
 	productionID, err := uuid.Parse(req.GetProductionId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")
@@ -127,6 +133,12 @@ func (h *Handler) SubmitBudget(ctx context.Context, req *budgetv1.SubmitBudgetRe
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
+			return nil, err
+		}
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid budget ID")
@@ -177,6 +189,12 @@ func (h *Handler) CreateBudgetFromTemplate(ctx context.Context, req *budgetv1.Cr
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
+			return nil, err
+		}
+	}
+
 	productionID, err := uuid.Parse(req.GetProductionId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")
@@ -212,6 +230,12 @@ func (h *Handler) CreateLineItem(ctx context.Context, req *budgetv1.CreateLineIt
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
+			return nil, err
+		}
 	}
 
 	budgetID, err := uuid.Parse(req.GetBudgetId())
@@ -280,6 +304,12 @@ func (h *Handler) ListLineItems(ctx context.Context, req *budgetv1.ListLineItems
 }
 
 func (h *Handler) UpdateLineItemActuals(ctx context.Context, req *budgetv1.UpdateLineItemActualsRequest) (*budgetv1.BudgetLineItem, error) {
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
+			return nil, err
+		}
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid line item ID")

@@ -45,6 +45,12 @@ func (h *Handler) CreateAsset(ctx context.Context, req *inventoryv1.CreateAssetR
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "inventory:write"); err != nil {
+			return nil, err
+		}
+	}
+
 	purchaseCost := decimal.Zero
 	if s := req.GetPurchaseCost(); s != "" {
 		var err error
@@ -177,6 +183,12 @@ func (h *Handler) CheckInAsset(ctx context.Context, req *inventoryv1.CheckInAsse
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "inventory:checkout"); err != nil {
+			return nil, err
+		}
 	}
 
 	checkoutID, err := uuid.Parse(req.GetCheckoutId())

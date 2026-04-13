@@ -45,6 +45,12 @@ func (h *Handler) CreateProduction(ctx context.Context, req *projectv1.CreatePro
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
+			return nil, err
+		}
+	}
+
 	prod := &Production{
 		TenantID:    tenantID,
 		Title:       req.GetTitle(),
@@ -114,6 +120,12 @@ func (h *Handler) UpdateProduction(ctx context.Context, req *projectv1.UpdatePro
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
+			return nil, err
+		}
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")
@@ -145,6 +157,12 @@ func (h *Handler) ArchiveProduction(ctx context.Context, req *projectv1.ArchiveP
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
+			return nil, err
+		}
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")
@@ -167,6 +185,12 @@ func (h *Handler) CreatePhase(ctx context.Context, req *projectv1.CreatePhaseReq
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
+			return nil, err
+		}
 	}
 
 	productionID, err := uuid.Parse(req.GetProductionId())
@@ -243,6 +267,12 @@ func (h *Handler) AddCrewMember(ctx context.Context, req *projectv1.AddCrewMembe
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "resource:manage"); err != nil {
+			return nil, err
+		}
+	}
+
 	productionID, err := uuid.Parse(req.GetProductionId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")
@@ -304,6 +334,12 @@ func (h *Handler) ListCrewMembers(ctx context.Context, req *projectv1.ListCrewMe
 }
 
 func (h *Handler) RemoveCrewMember(ctx context.Context, req *projectv1.RemoveCrewMemberRequest) (*projectv1.RemoveCrewMemberResponse, error) {
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "resource:manage"); err != nil {
+			return nil, err
+		}
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid crew member ID")
