@@ -26,6 +26,11 @@ type Config struct {
 	ReportDefinitions   []ReportDefinition  `json:"report_definitions"`
 	CustomFields           CustomFields         `json:"custom_fields"`
 	DefaultChartOfAccounts []ChartOfAccountEntry `json:"default_chart_of_accounts"`
+
+	// RoleLabels maps internal system-role names (e.g. "manager") to per-vertical
+	// display labels (e.g. "Executive Producer"). Internal names are stable code
+	// identifiers; labels are resolved at UI render time via RoleLabelFor.
+	RoleLabels map[string]string `json:"role_labels"`
 }
 
 type EntityLabels struct {

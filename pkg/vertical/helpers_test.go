@@ -213,3 +213,28 @@ func TestFindReportDefinition(t *testing.T) {
 }
 
 func int64Ptr(v int64) *int64 { return &v }
+
+func TestRoleLabelFor_ReturnsConfiguredLabel(t *testing.T) {
+	cfg := &Config{
+		RoleLabels: map[string]string{
+			"manager":     "Executive Producer",
+			"coordinator": "Line Producer",
+		},
+	}
+	assert.Equal(t, "Executive Producer", cfg.RoleLabelFor("manager"))
+	assert.Equal(t, "Line Producer", cfg.RoleLabelFor("coordinator"))
+}
+
+func TestRoleLabelFor_FallsBackToInternalName(t *testing.T) {
+	cfg := &Config{RoleLabels: map[string]string{"manager": "Boss"}}
+	// Missing key falls back to the internal role name without panic.
+	assert.Equal(t, "accountant", cfg.RoleLabelFor("accountant"))
+	// Empty value also falls back.
+	cfg.RoleLabels["empty"] = ""
+	assert.Equal(t, "empty", cfg.RoleLabelFor("empty"))
+}
+
+func TestRoleLabelFor_NilMap(t *testing.T) {
+	cfg := &Config{}
+	assert.Equal(t, "manager", cfg.RoleLabelFor("manager"))
+}

@@ -125,6 +125,15 @@ vertical:
       data_sources: [budget-planning, expense-tracking]
       default_columns: [category, budget, actual, variance]
 
+  role_labels:
+    super_admin: Super Admin
+    manager: Executive Producer
+    coordinator: Line Producer
+    accountant: Production Accountant
+    inventory_manager: Inventory Manager
+    project_supervisor: Production Manager
+    member: Crew Member
+
   custom_fields:
     project:
       - key: call_sheet_time

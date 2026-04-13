@@ -43,10 +43,11 @@ type mockRepo struct {
 	updateTenantStatusFn          func(ctx context.Context, id uuid.UUID, status string) error
 	createRoleFn                  func(ctx context.Context, role *Role) error
 	getRoleFn                     func(ctx context.Context, tenantID uuid.UUID, name string) (*Role, error)
+	getRoleByIDFn                 func(ctx context.Context, tenantID, roleID uuid.UUID) (*Role, error)
 	listRolesFn                   func(ctx context.Context, tenantID uuid.UUID) ([]Role, error)
 	assignRoleFn                  func(ctx context.Context, ur *UserRole) error
 	revokeRoleFn                  func(ctx context.Context, userID, roleID uuid.UUID) error
-	getUserPermissionsFn          func(ctx context.Context, userID uuid.UUID) ([]string, error)
+	getUserPermissionsFn          func(ctx context.Context, userID uuid.UUID, projectID *uuid.UUID) ([]string, error)
 	createInvitationFn            func(ctx context.Context, inv *Invitation) error
 	getInvitationByTokenFn        func(ctx context.Context, token string) (*Invitation, error)
 	markInvitationFn              func(ctx context.Context, id uuid.UUID) error
@@ -147,6 +148,12 @@ func (m *mockRepo) GetRole(ctx context.Context, tenantID uuid.UUID, name string)
 	}
 	return &Role{ID: fixedRoleID, TenantID: tenantID, Name: name}, nil
 }
+func (m *mockRepo) GetRoleByID(ctx context.Context, tenantID, roleID uuid.UUID) (*Role, error) {
+	if m.getRoleByIDFn != nil {
+		return m.getRoleByIDFn(ctx, tenantID, roleID)
+	}
+	return &Role{ID: roleID, TenantID: tenantID, Name: "member", IsSystem: true}, nil
+}
 func (m *mockRepo) ListRoles(ctx context.Context, tenantID uuid.UUID) ([]Role, error) {
 	if m.listRolesFn != nil {
 		return m.listRolesFn(ctx, tenantID)
@@ -165,9 +172,9 @@ func (m *mockRepo) RevokeRole(ctx context.Context, userID, roleID uuid.UUID) err
 	}
 	return nil
 }
-func (m *mockRepo) GetUserPermissions(ctx context.Context, userID uuid.UUID) ([]string, error) {
+func (m *mockRepo) GetUserPermissions(ctx context.Context, userID uuid.UUID, projectID *uuid.UUID) ([]string, error) {
 	if m.getUserPermissionsFn != nil {
-		return m.getUserPermissionsFn(ctx, userID)
+		return m.getUserPermissionsFn(ctx, userID, projectID)
 	}
 	return nil, nil
 }
@@ -479,12 +486,12 @@ func TestChangePassword_Success(t *testing.T) {
 func TestCheckPermission_Found(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{
-		getUserPermissionsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+		getUserPermissionsFn: func(_ context.Context, _ uuid.UUID, _ *uuid.UUID) ([]string, error) {
 			return []string{"production:read", "budget:write"}, nil
 		},
 	})
 
-	ok, err := svc.CheckPermission(context.Background(), fixedUserID, "budget:write")
+	ok, err := svc.CheckPermission(context.Background(), fixedUserID, "budget:write", nil)
 	require.NoError(t, err)
 	assert.True(t, ok)
 }
@@ -492,14 +499,98 @@ func TestCheckPermission_Found(t *testing.T) {
 func TestCheckPermission_NotFound(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{
-		getUserPermissionsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+		getUserPermissionsFn: func(_ context.Context, _ uuid.UUID, _ *uuid.UUID) ([]string, error) {
 			return []string{"production:read"}, nil
 		},
 	})
 
-	ok, err := svc.CheckPermission(context.Background(), fixedUserID, "budget:approve")
+	ok, err := svc.CheckPermission(context.Background(), fixedUserID, "budget:approve", nil)
 	require.NoError(t, err)
 	assert.False(t, ok)
+}
+
+func TestCheckPermission_ProjectScopedSeparation(t *testing.T) {
+	t.Parallel()
+	projectA := uuid.MustParse("aa000000-0000-0000-0000-000000000001")
+	projectB := uuid.MustParse("bb000000-0000-0000-0000-000000000002")
+
+	// Repository fixture: user has tenant-wide "production:read" via member,
+	// plus "expense:approve" project-scoped to projectA via project_supervisor.
+	svc := newTestService(&mockRepo{
+		getUserPermissionsFn: func(_ context.Context, _ uuid.UUID, projectID *uuid.UUID) ([]string, error) {
+			perms := []string{"production:read"} // tenant-wide member
+			if projectID != nil && *projectID == projectA {
+				perms = append(perms, "expense:approve") // project-scoped on A only
+			}
+			return perms, nil
+		},
+	})
+
+	// Tenant-wide check sees only the tenant-wide grant.
+	okTenant, err := svc.CheckPermission(context.Background(), fixedUserID, "expense:approve", nil)
+	require.NoError(t, err)
+	assert.False(t, okTenant)
+
+	// Project A: project-scoped grant is visible.
+	okA, err := svc.CheckPermission(context.Background(), fixedUserID, "expense:approve", &projectA)
+	require.NoError(t, err)
+	assert.True(t, okA)
+
+	// Project B: same user, different project — must not leak.
+	okB, err := svc.CheckPermission(context.Background(), fixedUserID, "expense:approve", &projectB)
+	require.NoError(t, err)
+	assert.False(t, okB)
+
+	// Tenant-wide perm still resolves under either scope.
+	okMerge, err := svc.CheckPermission(context.Background(), fixedUserID, "production:read", &projectB)
+	require.NoError(t, err)
+	assert.True(t, okMerge)
+}
+
+func TestAssignProjectRole_RejectsTenantWideRole(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getRoleByIDFn: func(_ context.Context, tenantID, roleID uuid.UUID) (*Role, error) {
+			return &Role{ID: roleID, TenantID: tenantID, Name: "manager", IsSystem: true}, nil
+		},
+	})
+	err := svc.AssignProjectRole(context.Background(),
+		fixedTenantID, fixedUserID, fixedRoleID, uuid.New(), fixedUserID)
+	require.ErrorIs(t, err, ErrRoleNotProjectScoped)
+}
+
+func TestAssignProjectRole_AcceptsProjectSupervisor(t *testing.T) {
+	t.Parallel()
+	var captured *UserRole
+	svc := newTestService(&mockRepo{
+		getRoleByIDFn: func(_ context.Context, tenantID, roleID uuid.UUID) (*Role, error) {
+			return &Role{ID: roleID, TenantID: tenantID, Name: "project_supervisor", IsSystem: true}, nil
+		},
+		assignRoleFn: func(_ context.Context, ur *UserRole) error {
+			captured = ur
+			return nil
+		},
+	})
+	projectID := uuid.New()
+	err := svc.AssignProjectRole(context.Background(),
+		fixedTenantID, fixedUserID, fixedRoleID, projectID, fixedUserID)
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	require.NotNil(t, captured.ProjectID)
+	assert.Equal(t, projectID, *captured.ProjectID)
+}
+
+func TestAssignProjectRole_AllowsCustomRole(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getRoleByIDFn: func(_ context.Context, tenantID, roleID uuid.UUID) (*Role, error) {
+			// Custom (non-system) roles bypass the project-scope guard.
+			return &Role{ID: roleID, TenantID: tenantID, Name: "auditor", IsSystem: false}, nil
+		},
+	})
+	err := svc.AssignProjectRole(context.Background(),
+		fixedTenantID, fixedUserID, fixedRoleID, uuid.New(), fixedUserID)
+	require.NoError(t, err)
 }
 
 func TestCreateTenant_InvalidPlan(t *testing.T) {
@@ -528,7 +619,58 @@ func TestCreateTenant_SeedsSystemRoles(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, seededRoles, len(systemRoles))
 	assert.Contains(t, seededRoles, "super_admin")
-	assert.Contains(t, seededRoles, "crew_member")
+	assert.Contains(t, seededRoles, "member")
+	assert.Contains(t, seededRoles, "inventory_manager")
+	assert.Contains(t, seededRoles, "project_supervisor")
+}
+
+func TestSystemRoles_InventoryManagerPermissions(t *testing.T) {
+	t.Parallel()
+	var inv struct{ perms []string }
+	for _, r := range systemRoles {
+		if r.name == "inventory_manager" {
+			inv.perms = r.permissions
+		}
+	}
+	assert.ElementsMatch(t, []string{
+		"inventory:read", "inventory:write", "inventory:checkout", "inventory:retire",
+	}, inv.perms)
+}
+
+func TestSystemRoles_ProjectSupervisorPermissions(t *testing.T) {
+	t.Parallel()
+	var ps []string
+	for _, r := range systemRoles {
+		if r.name == "project_supervisor" {
+			ps = r.permissions
+		}
+	}
+	assert.ElementsMatch(t, []string{
+		"production:read",
+		"budget:read",
+		"expense:submit", "expense:approve",
+		"resource:manage",
+		"inventory:checkout",
+	}, ps)
+}
+
+func TestCheckPermission_InventoryRetire_OnlyInventoryManager(t *testing.T) {
+	t.Parallel()
+	// inventory_manager holds inventory:retire; no other system role does.
+	for _, r := range systemRoles {
+		hasRetire := false
+		for _, p := range r.permissions {
+			if p == "inventory:retire" {
+				hasRetire = true
+				break
+			}
+		}
+		if r.name == "inventory_manager" {
+			assert.True(t, hasRetire, "inventory_manager must have inventory:retire")
+		} else {
+			assert.False(t, hasRetire, "%s must not have inventory:retire", r.name)
+		}
+	}
 }
 
 func TestCreateTenant_GeneratesSlugFromName(t *testing.T) {

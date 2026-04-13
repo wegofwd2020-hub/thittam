@@ -27,6 +27,7 @@ service IAMService {
 
   // --- Roles & Permissions ---
   rpc AssignRole(AssignRoleRequest) returns (AssignRoleResponse);
+  rpc AssignProjectRole(AssignProjectRoleRequest) returns (AssignProjectRoleResponse);
   rpc RevokeRole(RevokeRoleRequest) returns (RevokeRoleResponse);
   rpc ListRoles(ListRolesRequest) returns (ListRolesResponse);
   rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse);
@@ -195,6 +196,19 @@ message AssignRoleRequest {
 
 message AssignRoleResponse {}
 
+// AssignProjectRole grants a project-scoped role (ADR-014 Phase 2). The role
+// must be a project-scopable role (project_supervisor or a custom role); the
+// IAM service rejects attempts to project-scope tenant-wide system roles.
+message AssignProjectRoleRequest {
+  string tenant_id   = 1;
+  string user_id     = 2;
+  string role_id     = 3;
+  string project_id  = 4;
+  string assigned_by = 5;
+}
+
+message AssignProjectRoleResponse {}
+
 message RevokeRoleRequest {
   string user_id = 1;
   string role_id = 2;
@@ -211,8 +225,12 @@ message ListRolesResponse {
 }
 
 message CheckPermissionRequest {
-  string user_id = 1;
+  string user_id    = 1;
   string permission = 2;
+  // Optional. When set, project-scoped role assignments for this project are
+  // merged with tenant-wide assignments before evaluating the permission.
+  // Empty string means tenant-wide check (ADR-014 Phase 2).
+  string project_id = 3;
 }
 
 message CheckPermissionResponse {

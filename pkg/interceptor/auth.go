@@ -35,11 +35,12 @@ const (
 // CallerInfo holds the authenticated caller's identity extracted from
 // Kong-injected gRPC metadata.
 type CallerInfo struct {
-	UserID   uuid.UUID
-	TenantID uuid.UUID
-	Email    string
-	Role     string
-	IP       string
+	UserID    uuid.UUID
+	TenantID  uuid.UUID
+	ProjectID uuid.UUID // x-project-id; uuid.Nil for non-project-scoped requests
+	Email     string
+	Role      string
+	IP        string
 }
 
 type callerKey struct{}
@@ -85,11 +86,12 @@ func UnaryCallerInterceptor() grpc.UnaryServerInterceptor {
 		md, _ := metadata.FromIncomingContext(ctx)
 
 		caller := CallerInfo{
-			UserID:   uuidFromMD(md, "x-caller-id"),
-			TenantID: uuidFromMD(md, "x-tenant-id"),
-			Email:    firstMD(md, "x-caller-email"),
-			Role:     firstMD(md, "x-caller-role"),
-			IP:       firstMD(md, "x-forwarded-for"),
+			UserID:    uuidFromMD(md, "x-caller-id"),
+			TenantID:  uuidFromMD(md, "x-tenant-id"),
+			ProjectID: uuidFromMD(md, "x-project-id"),
+			Email:     firstMD(md, "x-caller-email"),
+			Role:      firstMD(md, "x-caller-role"),
+			IP:        firstMD(md, "x-forwarded-for"),
 		}
 
 		ctx = WithCaller(ctx, caller)
@@ -120,11 +122,12 @@ func StreamCallerInterceptor() grpc.StreamServerInterceptor {
 		md, _ := metadata.FromIncomingContext(ctx)
 
 		caller := CallerInfo{
-			UserID:   uuidFromMD(md, "x-caller-id"),
-			TenantID: uuidFromMD(md, "x-tenant-id"),
-			Email:    firstMD(md, "x-caller-email"),
-			Role:     firstMD(md, "x-caller-role"),
-			IP:       firstMD(md, "x-forwarded-for"),
+			UserID:    uuidFromMD(md, "x-caller-id"),
+			TenantID:  uuidFromMD(md, "x-tenant-id"),
+			ProjectID: uuidFromMD(md, "x-project-id"),
+			Email:     firstMD(md, "x-caller-email"),
+			Role:      firstMD(md, "x-caller-role"),
+			IP:        firstMD(md, "x-forwarded-for"),
 		}
 
 		ctx = WithCaller(ctx, caller)

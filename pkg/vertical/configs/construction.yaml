@@ -265,6 +265,15 @@ vertical:
       data_sources: [inventory-management, expense-tracking]
       default_columns: [plant_item, days_hired, cost, utilization_pct]
 
+  role_labels:
+    super_admin: Super Admin
+    manager: Project Director
+    coordinator: Site Manager
+    accountant: Quantity Surveyor
+    inventory_manager: Plant Manager
+    project_supervisor: Site Supervisor
+    member: Site Worker
+
   custom_fields:
     project:
       - key: contract_number

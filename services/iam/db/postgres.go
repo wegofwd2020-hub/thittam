@@ -353,6 +353,25 @@ func (p *Postgres) GetRole(ctx context.Context, tenantID uuid.UUID, name string)
 	}, nil
 }
 
+func (p *Postgres) GetRoleByID(ctx context.Context, tenantID, roleID uuid.UUID) (*iam.Role, error) {
+	const q = `SELECT id, tenant_id, name, permissions, is_system FROM roles WHERE tenant_id = $1 AND id = $2`
+	row := p.db.QueryRow(ctx, q, tenantID, roleID)
+	var r Role
+	if err := row.Scan(&r.ID, &r.TenantID, &r.Name, &r.Permissions, &r.IsSystem); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, iam.ErrRoleNotFound
+		}
+		return nil, fmt.Errorf("iam/db: get role by id: %w", err)
+	}
+	return &iam.Role{
+		ID:          r.ID,
+		TenantID:    r.TenantID,
+		Name:        r.Name,
+		Permissions: r.Permissions,
+		IsSystem:    r.IsSystem,
+	}, nil
+}
+
 func (p *Postgres) ListRoles(ctx context.Context, tenantID uuid.UUID) ([]iam.Role, error) {
 	rows, err := p.q.ListRoles(ctx, tenantID)
 	if err != nil {
@@ -375,6 +394,7 @@ func (p *Postgres) AssignRole(ctx context.Context, ur *iam.UserRole) error {
 	if err := p.q.AssignRole(ctx, AssignRoleParams{
 		UserID:     ur.UserID,
 		RoleID:     ur.RoleID,
+		ProjectID:  ur.ProjectID,
 		AssignedBy: ur.AssignedBy,
 	}); err != nil {
 		return fmt.Errorf("iam/db: assign role: %w", err)
@@ -392,24 +412,41 @@ func (p *Postgres) RevokeRole(ctx context.Context, userID, roleID uuid.UUID) err
 	return nil
 }
 
-// GetUserPermissions returns the union of all permissions held by the user across
-// all assigned roles. Deduplication is done in-memory — sets are small (typically <50).
-func (p *Postgres) GetUserPermissions(ctx context.Context, userID uuid.UUID) ([]string, error) {
-	roles, err := p.q.ListUserRoles(ctx, userID)
+// GetUserPermissions returns the union of permissions held by the user.
+// projectID nil → tenant-wide assignments only (project_id IS NULL).
+// projectID non-nil → tenant-wide assignments + project-scoped assignments
+// for that specific project (ADR-014 Phase 2).
+// Deduplication is done in-memory — sets are small (typically <50).
+func (p *Postgres) GetUserPermissions(ctx context.Context, userID uuid.UUID, projectID *uuid.UUID) ([]string, error) {
+	const q = `
+		SELECT r.permissions
+		FROM roles r
+		JOIN user_roles ur ON ur.role_id = r.id
+		WHERE ur.user_id = $1
+		  AND (ur.project_id IS NULL OR ur.project_id = $2)`
+	rows, err := p.db.Query(ctx, q, userID, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("iam/db: get user permissions: %w", err)
 	}
+	defer rows.Close()
 	seen := make(map[string]struct{})
-	for _, r := range roles {
-		for _, perm := range r.Permissions {
+	for rows.Next() {
+		var perms []string
+		if err := rows.Scan(&perms); err != nil {
+			return nil, fmt.Errorf("iam/db: scan user permissions: %w", err)
+		}
+		for _, perm := range perms {
 			seen[perm] = struct{}{}
 		}
 	}
-	perms := make([]string, 0, len(seen))
-	for p := range seen {
-		perms = append(perms, p)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iam/db: iterate user permissions: %w", err)
 	}
-	return perms, nil
+	out := make([]string, 0, len(seen))
+	for p := range seen {
+		out = append(out, p)
+	}
+	return out, nil
 }
 
 // --- iam.Repository: Invitations ---
@@ -483,7 +520,7 @@ func (p *Postgres) UpsertOIDCConfig(ctx context.Context, params iam.OIDCConfigPa
 	}
 	defaultRole := params.DefaultRole
 	if defaultRole == "" {
-		defaultRole = "crew_member"
+		defaultRole = "member"
 	}
 
 	tenantID, err := uuid.Parse(params.TenantID)

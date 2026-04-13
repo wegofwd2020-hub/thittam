@@ -51,33 +51,40 @@ var systemRoles = []struct {
 		"report:read",
 		"user:manage",
 	}},
-	{"executive_producer", []string{
+	{"manager", []string{
 		"production:read", "production:write",
 		"budget:read", "budget:approve",
 		"expense:approve",
 		"inventory:checkout",
 		"report:read",
 	}},
-	{"line_producer", []string{
+	{"coordinator", []string{
 		"production:read", "production:write",
 		"budget:read", "budget:write",
 		"expense:approve",
 		"inventory:checkout",
 		"report:read",
 	}},
-	{"production_accountant", []string{
+	{"accountant", []string{
 		"budget:read",
 		"expense:submit", "expense:approve",
 		"report:read",
 	}},
-	{"department_head", []string{
+	{"member", []string{
 		"production:read",
 		"expense:submit",
-		"inventory:checkout",
 	}},
-	{"crew_member", []string{
+	{"inventory_manager", []string{
+		"inventory:read", "inventory:write", "inventory:checkout", "inventory:retire",
+	}},
+	// project_supervisor permissions are seeded tenant-wide in Phase 1.
+	// Phase 2 (#42) adds project_id scoping when user_roles.project_id lands.
+	{"project_supervisor", []string{
 		"production:read",
-		"expense:submit",
+		"budget:read",
+		"expense:submit", "expense:approve",
+		"resource:manage",
+		"inventory:checkout",
 	}},
 }
 
@@ -310,10 +317,12 @@ func (s *Service) ListRoles(ctx context.Context, tenantID uuid.UUID) ([]Role, er
 	return roles, nil
 }
 
-// CheckPermission returns true if the user holds the given permission through
-// any of their assigned roles.
-func (s *Service) CheckPermission(ctx context.Context, userID uuid.UUID, permission string) (bool, error) {
-	perms, err := s.repo.GetUserPermissions(ctx, userID)
+// CheckPermission returns true if the user holds the given permission.
+// projectID is optional: nil checks tenant-wide assignments only; a non-nil
+// projectID merges tenant-wide assignments with project-scoped assignments
+// for that project (ADR-014 Phase 2).
+func (s *Service) CheckPermission(ctx context.Context, userID uuid.UUID, permission string, projectID *uuid.UUID) (bool, error) {
+	perms, err := s.repo.GetUserPermissions(ctx, userID, projectID)
 	if err != nil {
 		return false, fmt.Errorf("iam: get permissions for user %s: %w", userID, err)
 	}
@@ -323,6 +332,37 @@ func (s *Service) CheckPermission(ctx context.Context, userID uuid.UUID, permiss
 		}
 	}
 	return false, nil
+}
+
+// projectScopedRoles is the set of system roles that may be assigned with a
+// project_id. Mirrors the trigger in migrations/iam/012.
+var projectScopedRoles = map[string]bool{
+	"project_supervisor": true,
+}
+
+// AssignProjectRole grants a project-scoped role to a user for a specific
+// project. Returns ErrRoleNotProjectScoped if the role is a tenant-wide-only
+// system role (super_admin, manager, coordinator, accountant, inventory_manager,
+// member). Custom roles (is_system = false) are allowed through.
+func (s *Service) AssignProjectRole(ctx context.Context, tenantID, userID, roleID, projectID, assignedBy uuid.UUID) error {
+	role, err := s.repo.GetRoleByID(ctx, tenantID, roleID)
+	if err != nil {
+		return fmt.Errorf("iam: lookup role %s: %w", roleID, err)
+	}
+	if role.IsSystem && !projectScopedRoles[role.Name] {
+		return ErrRoleNotProjectScoped
+	}
+	ur := &UserRole{
+		UserID:     userID,
+		RoleID:     roleID,
+		ProjectID:  &projectID,
+		AssignedBy: assignedBy,
+		AssignedAt: time.Now().UTC(),
+	}
+	if err := s.repo.AssignRole(ctx, ur); err != nil {
+		return fmt.Errorf("iam: assign project role %s to user %s on project %s: %w", roleID, userID, projectID, err)
+	}
+	return nil
 }
 
 // --- Tenants ---

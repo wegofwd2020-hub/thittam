@@ -18,4 +18,7 @@ var (
 	ErrInvitationAccepted = errors.New("iam: invitation already accepted")
 	ErrTenantSlugTaken    = errors.New("iam: tenant slug already taken")
 	ErrInvalidPlan        = errors.New("iam: invalid plan; must be starter, professional, or enterprise")
+	// ErrRoleNotProjectScoped is returned by AssignProjectRole when the caller
+	// supplies a role that must be tenant-wide (e.g. super_admin, manager).
+	ErrRoleNotProjectScoped = errors.New("iam: role cannot be project-scoped")
 )

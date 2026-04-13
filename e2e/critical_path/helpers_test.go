@@ -186,6 +186,14 @@ func (r *iamRepo) GetRole(_ context.Context, _ uuid.UUID, name string) (*iam.Rol
 	}
 	return nil, iam.ErrRoleNotFound
 }
+func (r *iamRepo) GetRoleByID(_ context.Context, _, roleID uuid.UUID) (*iam.Role, error) {
+	for _, ro := range r.roles {
+		if ro.ID == roleID {
+			return ro, nil
+		}
+	}
+	return nil, iam.ErrRoleNotFound
+}
 func (r *iamRepo) ListRoles(_ context.Context, _ uuid.UUID) ([]iam.Role, error) {
 	out := make([]iam.Role, len(r.roles))
 	for i, ro := range r.roles {
@@ -195,7 +203,7 @@ func (r *iamRepo) ListRoles(_ context.Context, _ uuid.UUID) ([]iam.Role, error) 
 }
 func (r *iamRepo) AssignRole(_ context.Context, _ *iam.UserRole) error   { return nil }
 func (r *iamRepo) RevokeRole(_ context.Context, _, _ uuid.UUID) error    { return nil }
-func (r *iamRepo) GetUserPermissions(_ context.Context, _ uuid.UUID) ([]string, error) {
+func (r *iamRepo) GetUserPermissions(_ context.Context, _ uuid.UUID, _ *uuid.UUID) ([]string, error) {
 	return nil, nil
 }
 

@@ -86,6 +86,15 @@ func (c *Config) FindInventoryCategory(id string) *InventoryCategory {
 	return nil
 }
 
+// RoleLabelFor returns the per-vertical display label for a system role.
+// Falls back to the internal role name if no label is configured.
+func (c *Config) RoleLabelFor(role string) string {
+	if label, ok := c.RoleLabels[role]; ok && label != "" {
+		return label
+	}
+	return role
+}
+
 // FindReportDefinition returns the ReportDefinition with the given ID, or nil.
 func (c *Config) FindReportDefinition(id string) *ReportDefinition {
 	for i := range c.ReportDefinitions {

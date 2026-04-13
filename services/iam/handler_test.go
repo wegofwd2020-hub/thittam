@@ -334,7 +334,7 @@ func TestHandler_ListRoles_InvalidTenantID(t *testing.T) {
 func TestHandler_CheckPermission_Success(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(newTestService(&mockRepo{
-		getUserPermissionsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+		getUserPermissionsFn: func(_ context.Context, _ uuid.UUID, _ *uuid.UUID) ([]string, error) {
 			return []string{"budget:read"}, nil
 		},
 	}))

@@ -22,19 +22,21 @@ func (q *Queries) AcceptInvitation(ctx context.Context, id uuid.UUID) error {
 }
 
 const assignRole = `-- name: AssignRole :exec
-INSERT INTO user_roles (user_id, role_id, assigned_by)
-VALUES ($1, $2, $3)
-ON CONFLICT (user_id, role_id) DO NOTHING
+INSERT INTO user_roles (user_id, role_id, project_id, assigned_by)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (user_id, role_id, COALESCE(project_id, '00000000-0000-0000-0000-000000000000'::uuid))
+DO NOTHING
 `
 
 type AssignRoleParams struct {
-	UserID     uuid.UUID `json:"user_id"`
-	RoleID     uuid.UUID `json:"role_id"`
-	AssignedBy uuid.UUID `json:"assigned_by"`
+	UserID     uuid.UUID  `json:"user_id"`
+	RoleID     uuid.UUID  `json:"role_id"`
+	ProjectID  *uuid.UUID `json:"project_id"`
+	AssignedBy uuid.UUID  `json:"assigned_by"`
 }
 
 func (q *Queries) AssignRole(ctx context.Context, arg AssignRoleParams) error {
-	_, err := q.db.Exec(ctx, assignRole, arg.UserID, arg.RoleID, arg.AssignedBy)
+	_, err := q.db.Exec(ctx, assignRole, arg.UserID, arg.RoleID, arg.ProjectID, arg.AssignedBy)
 	return err
 }
 

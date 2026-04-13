@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	projectv1 "github.com/wegofwd2020/thittam/gen/project/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/tenant"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	"google.golang.org/grpc/codes"
@@ -17,12 +18,20 @@ import (
 // Handler implements the gRPC ProjectService.
 type Handler struct {
 	projectv1.UnimplementedProjectServiceServer
-	svc *Service
+	svc  *Service
+	perm interceptor.PermissionChecker // optional; nil skips RequirePermission
 }
 
 // NewHandler creates a Handler wrapping the given Service.
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
+}
+
+// WithPermissionChecker attaches an IAM permission checker so handlers can
+// enforce ADR-014 project-scoped RBAC. Returns the receiver for chaining.
+func (h *Handler) WithPermissionChecker(p interceptor.PermissionChecker) *Handler {
+	h.perm = p
+	return h
 }
 
 // Compile-time interface check.
@@ -204,6 +213,12 @@ func (h *Handler) ListPhases(ctx context.Context, req *projectv1.ListPhasesReque
 }
 
 func (h *Handler) UpdatePhaseStatus(ctx context.Context, req *projectv1.UpdatePhaseStatusRequest) (*projectv1.Phase, error) {
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
+			return nil, err
+		}
+	}
+
 	phaseID, err := uuid.Parse(req.GetPhaseId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid phase ID")

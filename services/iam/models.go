@@ -39,11 +39,14 @@ type Role struct {
 }
 
 // UserRole records that a user holds a role within their tenant.
+// A nil ProjectID means the assignment is tenant-wide. A non-nil ProjectID
+// scopes the role to a single production (ADR-014 Phase 2).
 type UserRole struct {
-	UserID     uuid.UUID `json:"user_id"`
-	RoleID     uuid.UUID `json:"role_id"`
-	AssignedBy uuid.UUID `json:"assigned_by"`
-	AssignedAt time.Time `json:"assigned_at"`
+	UserID     uuid.UUID  `json:"user_id"`
+	RoleID     uuid.UUID  `json:"role_id"`
+	ProjectID  *uuid.UUID `json:"project_id,omitempty"`
+	AssignedBy uuid.UUID  `json:"assigned_by"`
+	AssignedAt time.Time  `json:"assigned_at"`
 }
 
 // OIDCConfigParams carries the fields for creating or replacing a tenant's OIDC
@@ -59,7 +62,7 @@ type OIDCConfigParams struct {
 	DisplayNameClaim string   // defaults to "name"
 	GroupsClaim      string   // optional
 	AutoProvision    bool
-	DefaultRole      string // defaults to "crew_member"
+	DefaultRole      string // defaults to "member"
 }
 
 // ImpersonationSession records a platform admin actively impersonating a tenant user.

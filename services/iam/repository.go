@@ -35,10 +35,15 @@ type Repository interface {
 	// Roles
 	CreateRole(ctx context.Context, role *Role) error
 	GetRole(ctx context.Context, tenantID uuid.UUID, name string) (*Role, error)
+	GetRoleByID(ctx context.Context, tenantID, roleID uuid.UUID) (*Role, error)
 	ListRoles(ctx context.Context, tenantID uuid.UUID) ([]Role, error)
 	AssignRole(ctx context.Context, ur *UserRole) error
 	RevokeRole(ctx context.Context, userID, roleID uuid.UUID) error
-	GetUserPermissions(ctx context.Context, userID uuid.UUID) ([]string, error)
+	// GetUserPermissions returns the union of permissions held by the user.
+	// If projectID is nil, only tenant-wide assignments (project_id IS NULL) contribute.
+	// If projectID is non-nil, tenant-wide assignments are merged with project-scoped
+	// assignments for that specific project.
+	GetUserPermissions(ctx context.Context, userID uuid.UUID, projectID *uuid.UUID) ([]string, error)
 
 	// Invitations
 	CreateInvitation(ctx context.Context, inv *Invitation) error

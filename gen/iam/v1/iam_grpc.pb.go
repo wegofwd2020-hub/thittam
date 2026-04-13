@@ -34,6 +34,7 @@ const (
 	IAMService_DeactivateUser_FullMethodName     = "/thittam.iam.v1.IAMService/DeactivateUser"
 	IAMService_ChangePassword_FullMethodName     = "/thittam.iam.v1.IAMService/ChangePassword"
 	IAMService_AssignRole_FullMethodName         = "/thittam.iam.v1.IAMService/AssignRole"
+	IAMService_AssignProjectRole_FullMethodName  = "/thittam.iam.v1.IAMService/AssignProjectRole"
 	IAMService_RevokeRole_FullMethodName         = "/thittam.iam.v1.IAMService/RevokeRole"
 	IAMService_ListRoles_FullMethodName          = "/thittam.iam.v1.IAMService/ListRoles"
 	IAMService_CheckPermission_FullMethodName    = "/thittam.iam.v1.IAMService/CheckPermission"
@@ -65,6 +66,7 @@ type IAMServiceClient interface {
 	ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*ChangePasswordResponse, error)
 	// --- Roles & Permissions ---
 	AssignRole(ctx context.Context, in *AssignRoleRequest, opts ...grpc.CallOption) (*AssignRoleResponse, error)
+	AssignProjectRole(ctx context.Context, in *AssignProjectRoleRequest, opts ...grpc.CallOption) (*AssignProjectRoleResponse, error)
 	RevokeRole(ctx context.Context, in *RevokeRoleRequest, opts ...grpc.CallOption) (*RevokeRoleResponse, error)
 	ListRoles(ctx context.Context, in *ListRolesRequest, opts ...grpc.CallOption) (*ListRolesResponse, error)
 	CheckPermission(ctx context.Context, in *CheckPermissionRequest, opts ...grpc.CallOption) (*CheckPermissionResponse, error)
@@ -189,6 +191,15 @@ func (c *iAMServiceClient) AssignRole(ctx context.Context, in *AssignRoleRequest
 	return out, nil
 }
 
+func (c *iAMServiceClient) AssignProjectRole(ctx context.Context, in *AssignProjectRoleRequest, opts ...grpc.CallOption) (*AssignProjectRoleResponse, error) {
+	out := new(AssignProjectRoleResponse)
+	err := c.cc.Invoke(ctx, IAMService_AssignProjectRole_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *iAMServiceClient) RevokeRole(ctx context.Context, in *RevokeRoleRequest, opts ...grpc.CallOption) (*RevokeRoleResponse, error) {
 	out := new(RevokeRoleResponse)
 	err := c.cc.Invoke(ctx, IAMService_RevokeRole_FullMethodName, in, out, opts...)
@@ -306,6 +317,7 @@ type IAMServiceServer interface {
 	ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error)
 	// --- Roles & Permissions ---
 	AssignRole(context.Context, *AssignRoleRequest) (*AssignRoleResponse, error)
+	AssignProjectRole(context.Context, *AssignProjectRoleRequest) (*AssignProjectRoleResponse, error)
 	RevokeRole(context.Context, *RevokeRoleRequest) (*RevokeRoleResponse, error)
 	ListRoles(context.Context, *ListRolesRequest) (*ListRolesResponse, error)
 	CheckPermission(context.Context, *CheckPermissionRequest) (*CheckPermissionResponse, error)
@@ -360,6 +372,9 @@ func (UnimplementedIAMServiceServer) ChangePassword(context.Context, *ChangePass
 }
 func (UnimplementedIAMServiceServer) AssignRole(context.Context, *AssignRoleRequest) (*AssignRoleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AssignRole not implemented")
+}
+func (UnimplementedIAMServiceServer) AssignProjectRole(context.Context, *AssignProjectRoleRequest) (*AssignProjectRoleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AssignProjectRole not implemented")
 }
 func (UnimplementedIAMServiceServer) RevokeRole(context.Context, *RevokeRoleRequest) (*RevokeRoleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RevokeRole not implemented")
@@ -601,6 +616,24 @@ func _IAMService_AssignRole_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(IAMServiceServer).AssignRole(ctx, req.(*AssignRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IAMService_AssignProjectRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AssignProjectRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMServiceServer).AssignProjectRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IAMService_AssignProjectRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMServiceServer).AssignProjectRole(ctx, req.(*AssignProjectRoleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -853,6 +886,10 @@ var IAMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AssignRole",
 			Handler:    _IAMService_AssignRole_Handler,
+		},
+		{
+			MethodName: "AssignProjectRole",
+			Handler:    _IAMService_AssignProjectRole_Handler,
 		},
 		{
 			MethodName: "RevokeRole",

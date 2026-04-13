@@ -30,6 +30,21 @@ type VerticalYAML struct {
 	CustomFields        *CustomFieldsYAML       `yaml:"custom_fields"`
 
 	DefaultChartOfAccounts []ChartOfAccountEntry `yaml:"default_chart_of_accounts"`
+
+	RoleLabels map[string]string `yaml:"role_labels"`
+}
+
+// SystemRoleNames is the closed set of internal role names seeded by the iam
+// service for every tenant. Vertical YAML files must provide a label for every
+// entry in this set. Keep in sync with services/iam.systemRoles.
+var SystemRoleNames = []string{
+	"super_admin",
+	"manager",
+	"coordinator",
+	"accountant",
+	"member",
+	"inventory_manager",
+	"project_supervisor",
 }
 
 type EntityLabelsYAML struct {
@@ -242,6 +257,18 @@ func Validate(yamlData []byte) ([]ValidationError, error) {
 	// Phase transition validation
 	if len(v.PhaseTypes) > 0 {
 		errs = append(errs, validatePhaseTransitions(v.PhaseTypes)...)
+	}
+
+	// Role label coverage: every system role must have a label entry.
+	// Unknown keys in role_labels are not an error — they may reference roles
+	// added in a future iam release before this YAML is updated.
+	for _, name := range SystemRoleNames {
+		if _, ok := v.RoleLabels[name]; !ok {
+			errs = append(errs, ValidationError{
+				"vertical.role_labels",
+				fmt.Sprintf("missing label for system role %q", name),
+			})
+		}
 	}
 
 	if len(errs) > 0 {

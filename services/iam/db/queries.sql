@@ -51,9 +51,10 @@ RETURNING *;
 SELECT * FROM roles WHERE tenant_id = $1 ORDER BY name ASC;
 
 -- name: AssignRole :exec
-INSERT INTO user_roles (user_id, role_id, assigned_by)
-VALUES ($1, $2, $3)
-ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id, project_id, assigned_by)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (user_id, role_id, COALESCE(project_id, '00000000-0000-0000-0000-000000000000'::uuid))
+DO NOTHING;
 
 -- name: RevokeRole :exec
 DELETE FROM user_roles WHERE user_id = $1 AND role_id = $2;

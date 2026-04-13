@@ -228,11 +228,46 @@ func (h *Handler) CheckPermission(ctx context.Context, req *iamv1.CheckPermissio
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
 	}
-	allowed, err := h.svc.CheckPermission(ctx, userID, req.GetPermission())
+	var projectID *uuid.UUID
+	if pid := req.GetProjectId(); pid != "" {
+		parsed, err := uuid.Parse(pid)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid project_id")
+		}
+		projectID = &parsed
+	}
+	allowed, err := h.svc.CheckPermission(ctx, userID, req.GetPermission(), projectID)
 	if err != nil {
 		return nil, grpcError(err)
 	}
 	return &iamv1.CheckPermissionResponse{Allowed: allowed}, nil
+}
+
+func (h *Handler) AssignProjectRole(ctx context.Context, req *iamv1.AssignProjectRoleRequest) (*iamv1.AssignProjectRoleResponse, error) {
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	userID, err := uuid.Parse(req.GetUserId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
+	}
+	roleID, err := uuid.Parse(req.GetRoleId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid role_id")
+	}
+	projectID, err := uuid.Parse(req.GetProjectId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid project_id")
+	}
+	assignedBy, err := uuid.Parse(req.GetAssignedBy())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid assigned_by")
+	}
+	if err := h.svc.AssignProjectRole(ctx, tenantID, userID, roleID, projectID, assignedBy); err != nil {
+		return nil, grpcError(err)
+	}
+	return &iamv1.AssignProjectRoleResponse{}, nil
 }
 
 // --- Tenants ---
@@ -506,7 +541,8 @@ func grpcError(err error) error {
 		errors.Is(err, ErrInvitationAccepted):
 		return status.Error(codes.FailedPrecondition, err.Error())
 
-	case errors.Is(err, ErrInvalidPlan):
+	case errors.Is(err, ErrInvalidPlan),
+		errors.Is(err, ErrRoleNotProjectScoped):
 		return status.Error(codes.InvalidArgument, err.Error())
 
 	case errors.Is(err, auth.ErrInvalidCredentials),

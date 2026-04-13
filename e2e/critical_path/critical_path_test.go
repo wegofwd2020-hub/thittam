@@ -55,7 +55,7 @@ func TestCriticalPath_TenantRegistration(t *testing.T) {
 		roleNames[i] = r.Name
 	}
 	assert.Contains(t, roleNames, "super_admin")
-	assert.Contains(t, roleNames, "line_producer")
+	assert.Contains(t, roleNames, "coordinator")
 }
 
 // ── Critical Path 2: Budget Lifecycle ─────────────────────────────────────

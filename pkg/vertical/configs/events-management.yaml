@@ -280,6 +280,15 @@ vertical:
       data_sources: [budget-planning, expense-tracking]
       default_columns: [category, budget, actual, variance, variance_pct]
 
+  role_labels:
+    super_admin: Super Admin
+    manager: Event Director
+    coordinator: Event Coordinator
+    accountant: Finance Controller
+    inventory_manager: Equipment Manager
+    project_supervisor: Floor Manager
+    member: Event Staff
+
   custom_fields:
     project:
       - key: client_name

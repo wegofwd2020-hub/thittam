@@ -255,6 +255,15 @@ vertical:
       data_sources: [budget-planning, expense-tracking]
       default_columns: [date, budget_remaining, actual_spend, forecast]
 
+  role_labels:
+    super_admin: Super Admin
+    manager: Engineering Manager
+    coordinator: Tech Lead
+    accountant: Finance Controller
+    inventory_manager: Asset Manager
+    project_supervisor: Project Manager
+    member: Team Member
+
   custom_fields:
     project:
       - key: engagement_type

@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	expensev1 "github.com/wegofwd2020/thittam/gen/expense/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/tenant"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	"google.golang.org/grpc/codes"
@@ -17,12 +18,20 @@ import (
 // Handler implements the gRPC ExpenseService.
 type Handler struct {
 	expensev1.UnimplementedExpenseServiceServer
-	svc *Service
+	svc  *Service
+	perm interceptor.PermissionChecker // optional; when nil RequirePermission is skipped
 }
 
 // NewHandler creates a Handler wrapping the given Service.
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
+}
+
+// WithPermissionChecker attaches an IAM permission checker so handlers can
+// enforce ADR-014 project-scoped RBAC. Returns the receiver for chaining.
+func (h *Handler) WithPermissionChecker(p interceptor.PermissionChecker) *Handler {
+	h.perm = p
+	return h
 }
 
 // Compile-time interface check.
@@ -240,6 +249,12 @@ func (h *Handler) ApproveExpense(ctx context.Context, req *expensev1.ApproveExpe
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if h.perm != nil {
+		if err := interceptor.RequirePermission(ctx, h.perm, "expense:approve"); err != nil {
+			return nil, err
+		}
 	}
 
 	expenseID, err := uuid.Parse(req.GetExpenseId())
