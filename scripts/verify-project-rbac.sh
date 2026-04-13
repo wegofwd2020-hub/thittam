@@ -16,6 +16,16 @@
 
 set -uo pipefail
 
+# Hard prereq — without grpcurl every probe silently produces no output, which
+# the parser would interpret as code=OK and mis-flag pass-expected probes as
+# successful. Bail loudly instead.
+if ! command -v grpcurl >/dev/null 2>&1; then
+  echo "ERROR: grpcurl not found on PATH."
+  echo "Install with: go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest"
+  echo "Then ensure \$HOME/go/bin is on your PATH."
+  exit 2
+fi
+
 # ── Constants (mirror seeds/demo/xyz-cba/) ────────────────────────────────────
 
 TENANT_ID="d0000000-0000-0000-0000-000000000001"
@@ -66,9 +76,18 @@ probe() {
   fi
 
   local out code
-  out=$(grpcurl -plaintext "${hdrs[@]}" -d "$body" "$addr" "$method" 2>&1 || true)
-  code=$(echo "$out" | grep -oE 'code = [A-Za-z]+' | head -1 | awk '{print $3}')
-  if [ -z "$code" ]; then code=OK; fi
+  out=$(grpcurl -plaintext "${hdrs[@]}" -d "$body" "$addr" "$method" 2>&1)
+  local rc=$?
+  if echo "$out" | grep -qE 'code = [A-Za-z]+'; then
+    code=$(echo "$out" | grep -oE 'code = [A-Za-z]+' | head -1 | awk '{print $3}')
+  elif [ $rc -eq 0 ]; then
+    # No status code in output and grpcurl exited 0 → call genuinely succeeded.
+    code=OK
+  else
+    # grpcurl errored without producing a gRPC status (e.g. dial failure,
+    # service down). Surface as Unavailable so the assertion fails loudly.
+    code=Unavailable
+  fi
 
   local ok=false
   case "$expected" in
