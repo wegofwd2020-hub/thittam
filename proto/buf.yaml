@@ -2,6 +2,9 @@ version: v1
 name: buf.build/wegofwd2020-hub/thittam
 deps:
   - buf.build/protocolbuffers/wellknowntypes
+  # googleapis provides google/api/annotations.proto used for grpc-gateway
+  # HTTP mappings on RPCs that the UI consumes via REST. See ticket #60.
+  - buf.build/googleapis/googleapis
 breaking:
   use:
     - FILE

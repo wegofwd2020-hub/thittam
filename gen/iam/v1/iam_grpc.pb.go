@@ -53,6 +53,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type IAMServiceClient interface {
 	// --- Authentication ---
+	// HTTP mappings exposed via grpc-gateway in cmd/iam/main.go on :9086.
+	// Kong (in production) and scripts/dev-start.sh (locally) front this
+	// with the public REST surface the UI calls.
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*TokenPair, error)
 	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*TokenPair, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
@@ -304,6 +307,9 @@ func (c *iAMServiceClient) EndImpersonation(ctx context.Context, in *EndImperson
 // for forward compatibility
 type IAMServiceServer interface {
 	// --- Authentication ---
+	// HTTP mappings exposed via grpc-gateway in cmd/iam/main.go on :9086.
+	// Kong (in production) and scripts/dev-start.sh (locally) front this
+	// with the public REST surface the UI calls.
 	Login(context.Context, *LoginRequest) (*TokenPair, error)
 	RefreshToken(context.Context, *RefreshTokenRequest) (*TokenPair, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)

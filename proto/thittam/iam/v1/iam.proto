@@ -9,12 +9,22 @@ package thittam.iam.v1;
 option go_package = "github.com/wegofwd2020/thittam/gen/iam/v1;iamv1";
 
 import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
 
 service IAMService {
   // --- Authentication ---
-  rpc Login(LoginRequest) returns (TokenPair);
-  rpc RefreshToken(RefreshTokenRequest) returns (TokenPair);
-  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  // HTTP mappings exposed via grpc-gateway in cmd/iam/main.go on :9086.
+  // Kong (in production) and scripts/dev-start.sh (locally) front this
+  // with the public REST surface the UI calls.
+  rpc Login(LoginRequest) returns (TokenPair) {
+    option (google.api.http) = { post: "/api/v1/auth/login" body: "*" };
+  }
+  rpc RefreshToken(RefreshTokenRequest) returns (TokenPair) {
+    option (google.api.http) = { post: "/api/v1/auth/refresh" body: "*" };
+  }
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {
+    option (google.api.http) = { post: "/api/v1/auth/logout" body: "*" };
+  }
   rpc ValidateToken(ValidateTokenRequest) returns (Claims);
 
   // --- Users ---
@@ -39,7 +49,9 @@ service IAMService {
 
   // --- Invitations ---
   rpc InviteUser(InviteUserRequest) returns (Invitation);
-  rpc AcceptInvitation(AcceptInvitationRequest) returns (TokenPair);
+  rpc AcceptInvitation(AcceptInvitationRequest) returns (TokenPair) {
+    option (google.api.http) = { post: "/api/v1/invitations/{token}/accept" body: "*" };
+  }
 
   // --- OIDC configuration ---
   rpc SetOIDCConfig(SetOIDCConfigRequest) returns (SetOIDCConfigResponse);

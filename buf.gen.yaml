@@ -17,3 +17,13 @@ plugins:
       - paths=import
       - module=github.com/wegofwd2020/thittam
       - require_unimplemented_servers=true
+
+  # Generate grpc-gateway REST handlers (HTTP/JSON → gRPC translation).
+  # Each .proto with google.api.http annotations gets a sibling
+  # *_gw.pb.go that exposes a runtime.ServeMux suitable for net/http.
+  - plugin: grpc-gateway
+    out: .
+    opt:
+      - paths=import
+      - module=github.com/wegofwd2020/thittam
+      - generate_unbound_methods=false

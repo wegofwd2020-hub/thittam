@@ -27,14 +27,17 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"github.com/wegofwd2020/thittam/pkg/auth"
 	appcrypto "github.com/wegofwd2020/thittam/pkg/crypto"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
@@ -207,6 +210,22 @@ func main() {
 
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
 	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
+
+	// --- REST gateway (grpc-gateway, ADR-014 follow-up #60) ---
+	// The UI calls REST endpoints (/api/v1/auth/login etc.). Mount the
+	// generated grpc-gateway mux on a separate HTTP port so the gRPC port
+	// stays a clean gRPC-only surface for service-to-service calls.
+	go func() {
+		gwMux := runtime.NewServeMux()
+		opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+		if err := iamv1.RegisterIAMServiceHandlerFromEndpoint(ctx, gwMux, "localhost:8086", opts); err != nil {
+			log.Fatalf("iam: register gateway: %v", err)
+		}
+		log.Printf("iam REST gateway ready on :9086")
+		if err := http.ListenAndServe(":9086", gwMux); err != nil {
+			log.Fatalf("iam: gateway listen: %v", err)
+		}
+	}()
 
 	if vaultAddr != "" {
 		log.Printf("iam service ready on :8086")
