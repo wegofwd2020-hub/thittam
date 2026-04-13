@@ -118,7 +118,6 @@ if consumer_exists FINANCIAL reporting-financial; then
 else
   $NATS --server "${NATS_URL}" consumer add FINANCIAL reporting-financial \
     --defaults \
-    --pull \
     --deliver all \
     --ack explicit \
     --replay=instant \
@@ -140,7 +139,6 @@ if consumer_exists FINANCIAL notifications-financial; then
 else
   $NATS --server "${NATS_URL}" consumer add FINANCIAL notifications-financial \
     --defaults \
-    --pull \
     --deliver all \
     --ack explicit \
     --replay=instant \
@@ -166,7 +164,6 @@ if consumer_exists EVENTS notifications-events; then
 else
   $NATS --server "${NATS_URL}" consumer add EVENTS notifications-events \
     --defaults \
-    --pull \
     --deliver all \
     --ack explicit \
     --replay=instant \
