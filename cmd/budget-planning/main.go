@@ -15,9 +15,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/grpc"
+
 	budgetv1 "github.com/wegofwd2020/thittam/gen/budget/v1"
 	"github.com/wegofwd2020/thittam/pkg/events"
 	"github.com/wegofwd2020/thittam/pkg/iamclient"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
@@ -85,11 +88,17 @@ func main() {
 	}
 
 	// --- gRPC server ---
+	// UnaryCallerInterceptor reads Kong-injected metadata (x-caller-id,
+	// x-tenant-id, x-project-id, x-caller-role, x-caller-email) and populates
+	// the caller identity, tenant context, and audit actor on every request.
+	// Without it handlers see no tenant and reject with Unauthenticated.
 	srv := server.New(server.Config{
 		Name:        "budget-planning",
 		Port:        8081,
 		MetricsPort: 9091,
 		Loader:      loader,
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryCallerInterceptor()},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamCallerInterceptor()},
 	}, nil)
 
 	budgetv1.RegisterBudgetServiceServer(srv.GRPCServer(), handler)

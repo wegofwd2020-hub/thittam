@@ -15,9 +15,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/grpc"
+
 	expensev1 "github.com/wegofwd2020/thittam/gen/expense/v1"
 	"github.com/wegofwd2020/thittam/pkg/events"
 	"github.com/wegofwd2020/thittam/pkg/iamclient"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
@@ -88,6 +91,8 @@ func main() {
 		Port:        8082,
 		MetricsPort: 9092,
 		Loader:      loader,
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryCallerInterceptor()},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamCallerInterceptor()},
 	}, nil)
 
 	expensev1.RegisterExpenseServiceServer(srv.GRPCServer(), handler)

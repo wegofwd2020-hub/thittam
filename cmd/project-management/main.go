@@ -15,9 +15,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/grpc"
+
 	projectv1 "github.com/wegofwd2020/thittam/gen/project/v1"
 	"github.com/wegofwd2020/thittam/pkg/events"
 	"github.com/wegofwd2020/thittam/pkg/iamclient"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
@@ -91,6 +94,8 @@ func main() {
 		Port:        8080,
 		MetricsPort: 9090,
 		Loader:      loader,
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryCallerInterceptor()},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamCallerInterceptor()},
 	}, nil)
 
 	projectv1.RegisterProjectServiceServer(srv.GRPCServer(), handler)

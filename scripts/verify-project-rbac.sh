@@ -155,7 +155,7 @@ probe "member: ApproveExpense"                     deny "$DEEPA_ID" "$PROJECT_LA
 
 probe "member: UpdatePhaseStatus"                  deny "$DEEPA_ID" "$PROJECT_LAST_HORIZON" \
   "$PROJECT_ADDR" thittam.project.v1.ProjectService/UpdatePhaseStatus \
-  "{\"phase_id\":\"$DUMMY_PHASE_ID\",\"status\":\"in_progress\"}"
+  "{\"phase_id\":\"$DUMMY_PHASE_ID\",\"new_phase_type\":\"production\"}"
 
 probe "member: CheckOutAsset"                      deny "$DEEPA_ID" "$PROJECT_LAST_HORIZON" \
   "$INVENTORY_ADDR" thittam.inventory.v1.InventoryService/CheckOutAsset \

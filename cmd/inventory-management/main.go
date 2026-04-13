@@ -13,8 +13,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/grpc"
+
 	inventoryv1 "github.com/wegofwd2020/thittam/gen/inventory/v1"
 	"github.com/wegofwd2020/thittam/pkg/iamclient"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	verticaldb "github.com/wegofwd2020/thittam/pkg/vertical/db"
@@ -67,6 +70,8 @@ func main() {
 		Port:        8084,
 		MetricsPort: 9094,
 		Loader:      loader,
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryCallerInterceptor()},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamCallerInterceptor()},
 	}, nil)
 
 	inventoryv1.RegisterInventoryServiceServer(srv.GRPCServer(), handler)
