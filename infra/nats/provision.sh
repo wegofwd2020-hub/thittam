@@ -38,12 +38,16 @@ consumer_exists() {
 
 echo "--- Streams ---"
 
-# EVENTS: all domain events for general consumption (notifications, audit)
+# EVENTS: non-financial domain events (24-hour retention, general consumers).
+# Subjects are explicitly listed because JetStream forbids subject overlap
+# between streams — the financial subjects below live on their own stream
+# with longer retention.
 if stream_exists EVENTS; then
   echo "  [skip] EVENTS stream already exists"
 else
   $NATS --server "${NATS_URL}" stream add EVENTS \
-    --subjects "thittam.>" \
+    --defaults \
+    --subjects "thittam.iam.>,thittam.notifications.>,thittam.document.>,thittam.project.>,thittam.inventory.>,thittam.reporting.>" \
     --retention limits \
     --storage file \
     --replicas 1 \
@@ -51,7 +55,7 @@ else
     --max-bytes=-1 \
     --discard old \
     --dupe-window 2m \
-    --description "All Thittam domain events (24-hour retention)"
+    --description "Non-financial Thittam domain events (24-hour retention)"
   echo "  [ok] EVENTS stream created"
 fi
 
@@ -60,6 +64,7 @@ if stream_exists FINANCIAL; then
   echo "  [skip] FINANCIAL stream already exists"
 else
   $NATS --server "${NATS_URL}" stream add FINANCIAL \
+    --defaults \
     --subjects "thittam.budget.>,thittam.expense.>,thittam.ledger.>,thittam.billing.>" \
     --retention limits \
     --storage file \
@@ -80,6 +85,7 @@ if stream_exists FINANCIAL_DLQ; then
   echo "  [skip] FINANCIAL_DLQ stream already exists"
 else
   $NATS --server "${NATS_URL}" stream add FINANCIAL_DLQ \
+    --defaults \
     --subjects '$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.FINANCIAL.>' \
     --retention limits \
     --storage file \
