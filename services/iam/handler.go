@@ -31,9 +31,16 @@ var _ iamv1.IAMServiceServer = (*Handler)(nil)
 // --- Authentication ---
 
 func (h *Handler) Login(ctx context.Context, req *iamv1.LoginRequest) (*iamv1.TokenPair, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	// Empty tenant_id is allowed — the service resolves it from the email
+	// (single-tenant emails only; ambiguous emails return ErrAmbiguousEmail
+	// and the caller must retry with tenant_id explicitly set).
+	var tenantID uuid.UUID
+	if raw := req.GetTenantId(); raw != "" {
+		parsed, err := uuid.Parse(raw)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		}
+		tenantID = parsed
 	}
 	pair, err := h.svc.Login(ctx, tenantID, req.GetEmail(), req.GetPassword())
 	if err != nil {
