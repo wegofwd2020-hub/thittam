@@ -136,11 +136,20 @@ func NewService(
 // --- Authentication ---
 
 // Login authenticates a user and returns a JWT token pair.
+// If tenantID is uuid.Nil the tenant is resolved from the user's email
+// (single-tenant emails only — ambiguous emails return ErrAmbiguousEmail).
 // If the stored hash uses bcrypt (or weak argon2id params), it is silently
 // upgraded to argon2id in the background after a successful login. This
 // migration is best-effort — a rehash failure is logged but never surfaces
 // to the caller (Rule #6: non-critical writes must not block reads).
 func (s *Service) Login(ctx context.Context, tenantID uuid.UUID, email, password string) (*auth.TokenPair, error) {
+	if tenantID == uuid.Nil {
+		resolved, err := s.repo.FindTenantByEmail(ctx, email)
+		if err != nil {
+			return nil, fmt.Errorf("iam: resolve tenant for %s: %w", email, err)
+		}
+		tenantID = resolved
+	}
 	result, err := s.auth.Authenticate(ctx, auth.AuthRequest{
 		TenantID: tenantID,
 		Email:    email,

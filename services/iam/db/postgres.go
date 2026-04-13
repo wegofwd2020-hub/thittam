@@ -38,6 +38,41 @@ var (
 
 // --- auth.UserStore ---
 
+// FindTenantByEmail scans every tenant for a user with this email. Used by
+// Login when the caller does not know the tenant. Returns:
+//   - the unique tenant_id, no error → caller can proceed
+//   - uuid.Nil + iam.ErrUserNotFound → no such email
+//   - uuid.Nil + iam.ErrAmbiguousEmail → email in multiple tenants; caller
+//     must supply tenant_id explicitly.
+//
+// users(tenant_id, email) is unique, so within a single tenant the email is
+// unique; ambiguity is only possible when the same email is invited into
+// two distinct tenants.
+func (p *Postgres) FindTenantByEmail(ctx context.Context, email string) (uuid.UUID, error) {
+	rows, err := p.db.Query(ctx,
+		`SELECT tenant_id FROM users WHERE email = $1 LIMIT 2`, email)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("iam/db: find tenant by email: %w", err)
+	}
+	defer rows.Close()
+	var tenants []uuid.UUID
+	for rows.Next() {
+		var tid uuid.UUID
+		if err := rows.Scan(&tid); err != nil {
+			return uuid.Nil, fmt.Errorf("iam/db: scan tenant_id: %w", err)
+		}
+		tenants = append(tenants, tid)
+	}
+	switch len(tenants) {
+	case 0:
+		return uuid.Nil, iam.ErrUserNotFound
+	case 1:
+		return tenants[0], nil
+	default:
+		return uuid.Nil, iam.ErrAmbiguousEmail
+	}
+}
+
 // GetUserByEmail returns the user record needed for authentication.
 // Roles and permissions are loaded alongside so the JWT can carry them.
 func (p *Postgres) GetUserByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*auth.UserRecord, error) {

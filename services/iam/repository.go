@@ -13,6 +13,13 @@ import (
 type Repository interface {
 	// auth.UserStore — used by auth.LocalProvider and auth.OIDCProvider.
 	GetUserByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*auth.UserRecord, error)
+	// FindTenantByEmail returns the tenant ID for the user with this email,
+	// scanning across all tenants. Used by Login when the caller doesn't
+	// know which tenant they belong to (e.g. the public login form). Returns
+	// ErrUserNotFound if no user matches, or an ambiguity error if multiple
+	// tenants have a user with the same email — in that case the caller MUST
+	// supply tenant_id explicitly.
+	FindTenantByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetUserByID(ctx context.Context, userID uuid.UUID) (*auth.UserRecord, error)
 	CreateOIDCUser(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*auth.UserRecord, error)
 

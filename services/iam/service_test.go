@@ -29,6 +29,7 @@ var (
 
 type mockRepo struct {
 	getUserByEmailFn              func(ctx context.Context, tenantID uuid.UUID, email string) (*auth.UserRecord, error)
+	findTenantByEmailFn           func(ctx context.Context, email string) (uuid.UUID, error)
 	getUserByIDFn                 func(ctx context.Context, userID uuid.UUID) (*auth.UserRecord, error)
 	createOIDCUserFn              func(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*auth.UserRecord, error)
 	getTenantStatusFn             func(ctx context.Context, tenantID uuid.UUID) (string, error)
@@ -63,6 +64,12 @@ func (m *mockRepo) GetUserByEmail(ctx context.Context, tenantID uuid.UUID, email
 		return m.getUserByEmailFn(ctx, tenantID, email)
 	}
 	return &auth.UserRecord{ID: fixedUserID, TenantID: tenantID, Email: email, Status: "active"}, nil
+}
+func (m *mockRepo) FindTenantByEmail(ctx context.Context, email string) (uuid.UUID, error) {
+	if m.findTenantByEmailFn != nil {
+		return m.findTenantByEmailFn(ctx, email)
+	}
+	return fixedTenantID, nil
 }
 func (m *mockRepo) GetUserByID(ctx context.Context, userID uuid.UUID) (*auth.UserRecord, error) {
 	if m.getUserByIDFn != nil {
@@ -340,6 +347,45 @@ func TestLogin_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "access", pair.AccessToken)
 	assert.Equal(t, "Bearer", pair.TokenType)
+}
+
+func TestLogin_TenantResolvedFromEmail(t *testing.T) {
+	t.Parallel()
+	resolvedTenant := uuid.MustParse("d0000000-0000-0000-0000-0000000000aa")
+	var seenTenant uuid.UUID
+	svc := NewService(
+		&mockRepo{
+			findTenantByEmailFn: func(_ context.Context, _ string) (uuid.UUID, error) {
+				return resolvedTenant, nil
+			},
+		},
+		&mockAuthenticator{
+			authenticateFn: func(_ context.Context, req auth.AuthRequest) (*auth.AuthResult, error) {
+				seenTenant = req.TenantID
+				return &auth.AuthResult{UserID: fixedUserID, TenantID: req.TenantID, Email: req.Email, AuthenticatedAt: time.Now()}, nil
+			},
+		},
+		&mockTokenIssuer{},
+		&mockHasher{},
+		&mockVerifier{},
+	)
+
+	_, err := svc.Login(context.Background(), uuid.Nil, "lookup@example.com", "pw")
+	require.NoError(t, err)
+	assert.Equal(t, resolvedTenant, seenTenant, "Authenticate must receive the resolved tenant")
+}
+
+func TestLogin_AmbiguousEmail_ReturnsError(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		findTenantByEmailFn: func(_ context.Context, _ string) (uuid.UUID, error) {
+			return uuid.Nil, ErrAmbiguousEmail
+		},
+	})
+
+	_, err := svc.Login(context.Background(), uuid.Nil, "shared@example.com", "pw")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrAmbiguousEmail)
 }
 
 func TestLogin_AuthError_Propagates(t *testing.T) {

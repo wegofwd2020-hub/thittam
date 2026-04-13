@@ -118,6 +118,9 @@ func newIAMRepo() *iamRepo {
 func (r *iamRepo) GetUserByEmail(_ context.Context, _ uuid.UUID, _ string) (*auth.UserRecord, error) {
 	return nil, nil
 }
+func (r *iamRepo) FindTenantByEmail(_ context.Context, _ string) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
 func (r *iamRepo) GetUserByID(_ context.Context, _ uuid.UUID) (*auth.UserRecord, error) {
 	return nil, nil
 }

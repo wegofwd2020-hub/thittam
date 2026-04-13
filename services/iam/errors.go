@@ -21,4 +21,8 @@ var (
 	// ErrRoleNotProjectScoped is returned by AssignProjectRole when the caller
 	// supplies a role that must be tenant-wide (e.g. super_admin, manager).
 	ErrRoleNotProjectScoped = errors.New("iam: role cannot be project-scoped")
+	// ErrAmbiguousEmail is returned by Login when no tenant_id was supplied
+	// and the email exists in more than one tenant. The caller must retry
+	// with an explicit tenant_id.
+	ErrAmbiguousEmail = errors.New("iam: email exists in multiple tenants — supply tenant_id")
 )
