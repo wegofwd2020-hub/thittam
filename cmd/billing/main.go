@@ -51,7 +51,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("billing: startup: connect to document service: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		docClient = documentv1.NewDocumentServiceClient(conn)
 	} else {
 		log.Printf("billing: DOCUMENT_SERVICE_ADDR not set — DownloadInvoice will return Unavailable")

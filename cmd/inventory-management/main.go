@@ -54,7 +54,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("inventory-management: startup: dial IAM: %v", err)
 	}
-	defer closeIAM()
+	defer func() { _ = closeIAM() }()
 
 	// --- Repository and service ---
 	repo := inventorydb.NewPostgres(pool)

@@ -45,15 +45,15 @@ func runList(env, token string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tVERSION\tSTATUS")
+	_, _ = fmt.Fprintln(w, "ID\tNAME\tVERSION\tSTATUS")
 	for _, item := range items {
 		status := "active"
 		if !item.IsActive {
 			status = "inactive"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", item.ID, item.Name, item.Version, status)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", item.ID, item.Name, item.Version, status)
 	}
-	w.Flush()
+	_ = w.Flush()
 
 	return nil
 }

@@ -49,7 +49,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("notifications: startup: connect to NATS: %v", err)
 	}
-	defer nc.Drain()
+	defer func() { _ = nc.Drain() }()
 
 	js, err := nc.JetStream()
 	if err != nil {
@@ -88,7 +88,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("notifications: startup: subscribe to financial stream: %v", err)
 	}
-	defer subFinancial.Unsubscribe()
+	defer func() { _ = subFinancial.Unsubscribe() }()
 
 	subEvents, err := jetstream.Subscribe(js,
 		jetstream.StreamEvents,
@@ -98,7 +98,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("notifications: startup: subscribe to events stream: %v", err)
 	}
-	defer subEvents.Unsubscribe()
+	defer func() { _ = subEvents.Unsubscribe() }()
 
 	// --- gRPC server ---
 	// Notifications is a universal service — no vertical interceptor needed.

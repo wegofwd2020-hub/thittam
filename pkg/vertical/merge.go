@@ -90,7 +90,7 @@ func ApplyOverride(base *Config, overrideJSON []byte) (*Config, error) {
 func deepCopyConfig(cfg *Config) *Config {
 	data, _ := json.Marshal(cfg)
 	var copy Config
-	json.Unmarshal(data, &copy)
+	_ = json.Unmarshal(data, &copy)
 	return &copy
 }
 
@@ -102,7 +102,9 @@ func applyFlatMerge(base *Config, overrideJSON []byte) (*Config, error) {
 	}
 
 	var baseMap map[string]interface{}
-	json.Unmarshal(baseJSON, &baseMap)
+	if err := json.Unmarshal(baseJSON, &baseMap); err != nil {
+		return base, nil
+	}
 
 	var overrideMap map[string]interface{}
 	if err := json.Unmarshal(overrideJSON, &overrideMap); err != nil {
@@ -169,7 +171,7 @@ func applyBudgetCategoryOverride(base []BudgetCategory, op *ArrayOverride) []Bud
 	for id, raw := range op.Override {
 		for i := range base {
 			if base[i].ID == id {
-				json.Unmarshal(raw, &base[i])
+				_ = json.Unmarshal(raw, &base[i])
 				break
 			}
 		}
@@ -200,7 +202,7 @@ func applyExpenseCategoryOverride(base []ExpenseCategory, op *ArrayOverride) []E
 	for id, raw := range op.Override {
 		for i := range base {
 			if base[i].ID == id {
-				json.Unmarshal(raw, &base[i])
+				_ = json.Unmarshal(raw, &base[i])
 				break
 			}
 		}
@@ -228,7 +230,7 @@ func applyInventoryCategoryOverride(base []InventoryCategory, op *ArrayOverride)
 	for id, raw := range op.Override {
 		for i := range base {
 			if base[i].ID == id {
-				json.Unmarshal(raw, &base[i])
+				_ = json.Unmarshal(raw, &base[i])
 				break
 			}
 		}
@@ -256,7 +258,7 @@ func applyPhaseTypeOverride(base []PhaseType, op *ArrayOverride) []PhaseType {
 	for id, raw := range op.Override {
 		for i := range base {
 			if base[i].ID == id {
-				json.Unmarshal(raw, &base[i])
+				_ = json.Unmarshal(raw, &base[i])
 				break
 			}
 		}
@@ -284,7 +286,7 @@ func applyReportDefinitionOverride(base []ReportDefinition, op *ArrayOverride) [
 	for id, raw := range op.Override {
 		for i := range base {
 			if base[i].ID == id {
-				json.Unmarshal(raw, &base[i])
+				_ = json.Unmarshal(raw, &base[i])
 				break
 			}
 		}

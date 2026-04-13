@@ -138,7 +138,7 @@ func (s *Service) CreateTemplate(ctx context.Context, tmpl *Template) (*Template
 	if tmpl.ID == uuid.Nil {
 		tmpl.ID = uuid.New()
 	}
-	if tmpl.IsActive == false {
+	if !tmpl.IsActive {
 		tmpl.IsActive = true
 	}
 	if err := s.repo.CreateTemplate(ctx, tmpl); err != nil {

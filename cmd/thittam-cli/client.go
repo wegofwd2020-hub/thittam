@@ -88,7 +88,7 @@ func (c *AdminClient) RegisterVertical(req RegisterVerticalRequest, force bool) 
 	if err != nil {
 		return fmt.Errorf("API call failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -110,7 +110,7 @@ func (c *AdminClient) ListVerticals() ([]VerticalListItem, error) {
 	if err != nil {
 		return nil, fmt.Errorf("API call failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -136,7 +136,7 @@ func (c *AdminClient) DeprecateVertical(id string) error {
 	if err != nil {
 		return fmt.Errorf("API call failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)

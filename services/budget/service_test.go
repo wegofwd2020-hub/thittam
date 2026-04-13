@@ -328,7 +328,7 @@ func TestListBudgets_DefaultLimit(t *testing.T) {
 			return nil, nil
 		},
 	})
-	svc.ListBudgets(context.Background(), uuid.New(), uuid.New(), "", 0, 0)
+	_, _ = svc.ListBudgets(context.Background(), uuid.New(), uuid.New(), "", 0, 0)
 	assert.Equal(t, 20, capturedLimit)
 }
 

@@ -48,7 +48,7 @@ func TestListVerticals_ParsesResponse(t *testing.T) {
 			{ID: "movie-production", Name: "Movie Production", Version: "1.0.0", IsActive: true},
 			{ID: "software-development", Name: "Software Dev", Version: "1.0.0", IsActive: true},
 		}
-		json.NewEncoder(w).Encode(items)
+		_ = json.NewEncoder(w).Encode(items)
 	}))
 	defer server.Close()
 
@@ -70,7 +70,7 @@ func TestRegisterVertical_SendsPayload(t *testing.T) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "/admin/v1/verticals", r.URL.Path)
 
-		json.NewDecoder(r.Body).Decode(&receivedPayload)
+		_ = json.NewDecoder(r.Body).Decode(&receivedPayload)
 		w.WriteHeader(http.StatusCreated)
 	}))
 	defer server.Close()
@@ -113,7 +113,7 @@ func TestRegisterVertical_Force(t *testing.T) {
 func TestRegisterVertical_APIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
-		w.Write([]byte(`{"error":"already exists"}`))
+		_, _ = w.Write([]byte(`{"error":"already exists"}`))
 	}))
 	defer server.Close()
 

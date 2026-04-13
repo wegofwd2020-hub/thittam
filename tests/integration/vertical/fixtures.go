@@ -236,4 +236,3 @@ func EventsManagementConfig() *vertical.Config {
 }
 
 func intPtr(n int) *int { return &n }
-func strPtr(s string) *string { return &s }

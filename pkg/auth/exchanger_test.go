@@ -98,8 +98,8 @@ func (f *fakeOIDCServer) oidcCtx(ctx context.Context) context.Context {
 
 // jwk returns the public key as a JWK map for the /jwks endpoint.
 func (f *fakeOIDCServer) jwk() map[string]any {
-	n := base64.RawURLEncoding.EncodeToString(f.privKey.PublicKey.N.Bytes())
-	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(f.privKey.PublicKey.E)).Bytes())
+	n := base64.RawURLEncoding.EncodeToString(f.privKey.N.Bytes())
+	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(f.privKey.E)).Bytes())
 	return map[string]any{
 		"kty": "RSA", "alg": "RS256", "use": "sig",
 		"kid": "test-key", "n": n, "e": e,

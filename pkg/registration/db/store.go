@@ -111,7 +111,7 @@ func (s *Store) InTx(ctx context.Context, fn func(tx TxStore) error) error {
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	txStore := TxStore{
 		q:  New(tx),

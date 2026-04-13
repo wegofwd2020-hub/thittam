@@ -105,7 +105,7 @@ func (v *VaultSource) GetSecret(ctx context.Context, name string) ([]byte, error
 	if err != nil {
 		return nil, fmt.Errorf("secrets: vault request %s: %w", name, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -194,7 +194,7 @@ func (v *VaultSource) login(ctx context.Context) (token string, leaseDuration in
 	if err != nil {
 		return "", 0, fmt.Errorf("vault login request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

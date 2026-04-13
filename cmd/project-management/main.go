@@ -65,7 +65,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("project-management: startup: connect to NATS: %v", err)
 	}
-	defer nc.Drain()
+	defer func() { _ = nc.Drain() }()
 
 	js, err := nc.JetStream()
 	if err != nil {
@@ -78,7 +78,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("project-management: startup: dial IAM: %v", err)
 	}
-	defer closeIAM()
+	defer func() { _ = closeIAM() }()
 
 	// --- Repository and service ---
 	repo := projectdb.NewPostgres(pool)

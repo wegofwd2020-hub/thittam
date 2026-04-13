@@ -24,7 +24,7 @@ func setupInterceptorLoader(t *testing.T, db DB) *Loader {
 	t.Cleanup(mr.Close)
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { rdb.Close() })
+	t.Cleanup(func() { _ = rdb.Close() })
 
 	return NewLoader(rdb, db, nil)
 }

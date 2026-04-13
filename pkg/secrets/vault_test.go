@@ -34,11 +34,11 @@ func (s *stubVault) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.loginCalls++
 		if s.loginStatus != 0 && s.loginStatus != http.StatusOK {
 			w.WriteHeader(s.loginStatus)
-			json.NewEncoder(w).Encode(vaultErrorResponse{Errors: []string{"permission denied"}})
+			_ = json.NewEncoder(w).Encode(vaultErrorResponse{Errors: []string{"permission denied"}})
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(vaultLoginResponse{
+		_ = json.NewEncoder(w).Encode(vaultLoginResponse{
 			Auth: struct {
 				ClientToken   string `json:"client_token"`
 				LeaseDuration int    `json:"lease_duration"`
@@ -51,16 +51,16 @@ func (s *stubVault) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/v1/" + "secret/data/" + s.secretPath:
 		if r.Header.Get("X-Vault-Token") == "" {
 			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(vaultErrorResponse{Errors: []string{"missing token"}})
+			_ = json.NewEncoder(w).Encode(vaultErrorResponse{Errors: []string{"missing token"}})
 			return
 		}
 		if s.secretStatus != 0 && s.secretStatus != http.StatusOK {
 			w.WriteHeader(s.secretStatus)
-			json.NewEncoder(w).Encode(vaultErrorResponse{Errors: []string{"not found"}})
+			_ = json.NewEncoder(w).Encode(vaultErrorResponse{Errors: []string{"not found"}})
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(vaultSecretResponse{
+		_ = json.NewEncoder(w).Encode(vaultSecretResponse{
 			Data: struct {
 				Data map[string]string `json:"data"`
 			}{
@@ -216,7 +216,7 @@ func TestVaultSource_GetSecret_MissingValueKey(t *testing.T) {
 		switch r.URL.Path {
 		case "/v1/auth/approle/login":
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(vaultLoginResponse{
+			_ = json.NewEncoder(w).Encode(vaultLoginResponse{
 				Auth: struct {
 					ClientToken   string `json:"client_token"`
 					LeaseDuration int    `json:"lease_duration"`
@@ -224,7 +224,7 @@ func TestVaultSource_GetSecret_MissingValueKey(t *testing.T) {
 			})
 		default:
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(vaultSecretResponse{
+			_ = json.NewEncoder(w).Encode(vaultSecretResponse{
 				Data: struct {
 					Data map[string]string `json:"data"`
 				}{Data: map[string]string{"other_key": "oops"}},

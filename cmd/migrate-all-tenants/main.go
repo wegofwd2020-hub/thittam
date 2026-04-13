@@ -106,7 +106,7 @@ func loadTenantIDs(ctx context.Context, dbURL string) ([]uuid.UUID, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("ping db: %w", err)
@@ -117,7 +117,7 @@ func loadTenantIDs(ctx context.Context, dbURL string) ([]uuid.UUID, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query tenants: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var ids []uuid.UUID
 	for rows.Next() {

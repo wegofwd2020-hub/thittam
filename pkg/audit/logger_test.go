@@ -224,8 +224,8 @@ func TestLogger_Query(t *testing.T) {
 	}, silentLogger{})
 
 	// Insert directly to store for query testing
-	store.Insert(context.Background(), testEvent())
-	store.Insert(context.Background(), testEvent())
+	_ = store.Insert(context.Background(), testEvent())
+	_ = store.Insert(context.Background(), testEvent())
 
 	events, err := logger.Query(context.Background(), QueryFilter{
 		TenantID: testTenantID,

@@ -293,6 +293,3 @@ func uuidToPgUUID(id *uuid.UUID) pgtype.UUID {
 	return pgtype.UUID{Bytes: *id, Valid: true}
 }
 
-func pgUUIDFromPtr(id *uuid.UUID) pgtype.UUID {
-	return uuidToPgUUID(id)
-}

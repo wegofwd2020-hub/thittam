@@ -60,7 +60,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("reporting-analytics: startup: connect to NATS: %v", err)
 	}
-	defer nc.Drain()
+	defer func() { _ = nc.Drain() }()
 
 	js, err := nc.JetStream()
 	if err != nil {

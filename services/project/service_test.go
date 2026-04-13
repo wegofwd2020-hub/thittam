@@ -239,7 +239,7 @@ func TestListProductions_DefaultLimit(t *testing.T) {
 			return nil, nil
 		},
 	})
-	svc.ListProductions(context.Background(), uuid.New(), "", 0, 0)
+	_, _ = svc.ListProductions(context.Background(), uuid.New(), "", 0, 0)
 	assert.Equal(t, 20, capturedLimit)
 }
 
@@ -252,7 +252,7 @@ func TestListProductions_MaxLimitEnforced(t *testing.T) {
 			return nil, nil
 		},
 	})
-	svc.ListProductions(context.Background(), uuid.New(), "", 9999, 0)
+	_, _ = svc.ListProductions(context.Background(), uuid.New(), "", 9999, 0)
 	assert.Equal(t, 20, capturedLimit)
 }
 

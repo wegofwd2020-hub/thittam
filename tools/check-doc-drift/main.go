@@ -101,7 +101,7 @@ func scanMarkdownFile(path string) ([]finding, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var (
 		findings      []finding
@@ -219,7 +219,7 @@ func indexFile(path string, index map[string]bool) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {

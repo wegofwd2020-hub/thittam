@@ -38,7 +38,7 @@ func setupTestLoader(t *testing.T, db DB) (*Loader, *miniredis.Miniredis) {
 	t.Cleanup(mr.Close)
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { rdb.Close() })
+	t.Cleanup(func() { _ = rdb.Close() })
 
 	return NewLoader(rdb, db, nil), mr
 }
@@ -63,7 +63,7 @@ func TestGetConfig_CacheHit(t *testing.T) {
 
 	// Pre-populate cache
 	key := "vertical:config:tenant:" + tenantID.String()
-	mr.Set(key, string(data))
+	_ = mr.Set(key, string(data))
 
 	cfg, err := loader.GetConfig(context.Background(), tenantID)
 	require.NoError(t, err)
@@ -115,7 +115,7 @@ func TestGetConfig_CorruptCache_FallsThroughToDB(t *testing.T) {
 
 	// Set corrupt data in cache
 	key := "vertical:config:tenant:" + tenantID.String()
-	mr.Set(key, "not-valid-json{{{")
+	_ = mr.Set(key, "not-valid-json{{{")
 
 	cfg, err := loader.GetConfig(context.Background(), tenantID)
 	require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestInvalidate(t *testing.T) {
 
 	// Pre-populate cache
 	key := "vertical:config:tenant:" + tenantID.String()
-	mr.Set(key, string(data))
+	_ = mr.Set(key, string(data))
 	assert.True(t, mr.Exists(key))
 
 	err := loader.Invalidate(context.Background(), tenantID)
@@ -143,7 +143,7 @@ func TestNewLoader_NilLogger(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	loader := NewLoader(rdb, &mockDB{}, nil)
 	assert.NotNil(t, loader.logger)

@@ -594,7 +594,7 @@ func TestListInvoices_DefaultLimit(t *testing.T) {
 			return nil, nil
 		},
 	})
-	svc.ListInvoices(context.Background(), fixedTenantID, 0, 0)
+	_, _ = svc.ListInvoices(context.Background(), fixedTenantID, 0, 0)
 	assert.Equal(t, 20, capturedLimit)
 }
 
@@ -607,7 +607,7 @@ func TestListInvoices_MaxLimitEnforced(t *testing.T) {
 			return nil, nil
 		},
 	})
-	svc.ListInvoices(context.Background(), fixedTenantID, 9999, 0)
+	_, _ = svc.ListInvoices(context.Background(), fixedTenantID, 9999, 0)
 	assert.Equal(t, 20, capturedLimit)
 }
 
