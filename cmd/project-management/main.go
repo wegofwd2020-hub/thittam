@@ -90,9 +90,12 @@ func main() {
 
 	// --- gRPC server ---
 	srv := server.New(server.Config{
-		Name:        "project-management",
-		Port:        8080,
-		MetricsPort: 9090,
+		Name: "project-management",
+		// Ports shifted from 8080/9090 to 8090/9100 to avoid conflicts with
+		// other projects on the same dev host (notably StudyBuddy, which
+		// uses 8080 for its API). All other thittam services keep 808x/909x.
+		Port:        8090,
+		MetricsPort: 9100,
 		Loader:      loader,
 		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryCallerInterceptor()},
 		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamCallerInterceptor()},
@@ -104,7 +107,7 @@ func main() {
 	srv.RegisterHealthChecker("nats", &natsChecker{nc: nc})
 	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
 
-	log.Printf("project-management service ready on :8080")
+	log.Printf("project-management service ready on :8090")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("project-management: %v", err)
 	}

@@ -304,7 +304,7 @@ fi  # end of SVC_ONLY skip block
 # masked the IAM client wiring.
 
 header "Service-port preflight"
-SERVICE_PORTS=(8080 8081 8082 8083 8084 8085 8086 8087 8088 8089)
+SERVICE_PORTS=(8090 8081 8082 8083 8084 8085 8086 8087 8088 8089)
 PORT_BUSY=()
 for p in "${SERVICE_PORTS[@]}"; do
   if (echo > "/dev/tcp/localhost/$p") >/dev/null 2>&1; then
@@ -349,7 +349,7 @@ start_svc "inventory-management" "cmd/inventory-management"
 # (reporting-analytics makes read-only gRPC calls to project, budget, expense, ledger).
 
 step "Waiting for core services..."
-wait_http "project-management  (/healthz)" "http://localhost:9090/healthz" 30 2
+wait_http "project-management  (/healthz)" "http://localhost:9100/healthz" 30 2
 wait_http "budget-planning     (/healthz)" "http://localhost:9091/healthz" 30 2
 wait_http "expense-tracking    (/healthz)" "http://localhost:9092/healthz" 30 2
 wait_http "general-ledger      (/healthz)" "http://localhost:9093/healthz" 30 2
@@ -377,7 +377,7 @@ echo -e "${BOLD}${GREEN}  Thittam is ready for testing            ${RESET}"
 echo -e "${BOLD}${GREEN}══════════════════════════════════════════${RESET}"
 echo ""
 echo -e "  ${BOLD}Service endpoints (gRPC):${RESET}"
-echo "    project-management   :8080     budget-planning      :8081"
+echo "    project-management   :8090     budget-planning      :8081"
 echo "    expense-tracking     :8082     general-ledger       :8083"
 echo "    inventory-management :8084     reporting-analytics  :8085"
 echo "    iam                  :8086     notifications        :8087"

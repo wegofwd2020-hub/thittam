@@ -42,7 +42,7 @@ PROJECT_OTHER="d2000000-0000-0000-0000-000000000002"   # different production â€
 IAM_ADDR=localhost:8086
 BUDGET_ADDR=localhost:8081
 EXPENSE_ADDR=localhost:8082
-PROJECT_ADDR=localhost:8080
+PROJECT_ADDR=localhost:8090
 INVENTORY_ADDR=localhost:8084
 
 # Dummy IDs for the gated RPC bodies. These don't need to refer to real rows â€”
