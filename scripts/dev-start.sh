@@ -136,6 +136,25 @@ wait_http() {
   return 1
 }
 
+# wait_tcp <name> <host> <port> [retries] [interval]
+# For services that do not speak HTTP (Redis, Postgres). Uses bash's built-in
+# /dev/tcp so no external binary (nc, redis-cli) is required.
+wait_tcp() {
+  local name="$1" host="$2" port="$3" retries="${4:-30}" interval="${5:-2}"
+  local i=0
+  while [ $i -lt $retries ]; do
+    if (echo > "/dev/tcp/$host/$port") >/dev/null 2>&1; then
+      ok "$name is ready"
+      return 0
+    fi
+    i=$((i + 1))
+    printf "    waiting for %s (%d/%d)...\r" "$name" "$i" "$retries"
+    sleep "$interval"
+  done
+  fail "$name did not become ready after $((retries * interval))s"
+  return 1
+}
+
 # ── Helper: start a service ───────────────────────────────────────────────────
 #
 # start_svc <name> <cmd_path> [extra_env_key=val ...]
@@ -233,9 +252,8 @@ if [ "$SVC_ONLY" = false ]; then
   step "Starting Redis, NATS, MinIO..."
   docker compose -f "$INFRA_FILE" up -d --quiet-pull 2>&1 | grep -v "^$" || true
 
-  wait_http "Redis"     "http://localhost:6380" 15 2 || \
-    { warn "Redis health endpoint not available — checking via redis-cli..."; \
-      redis-cli -p 6380 ping | grep -q PONG && ok "Redis is up" || { fail "Redis did not start"; exit 1; }; }
+  # Redis speaks RESP, not HTTP — use a TCP port check.
+  wait_tcp "Redis" localhost 6380 15 2 || { fail "Redis did not start"; exit 1; }
 
   wait_http "NATS"      "http://localhost:8222/healthz" 15 2
   wait_http "MinIO"     "http://localhost:9000/minio/health/live" 20 2
