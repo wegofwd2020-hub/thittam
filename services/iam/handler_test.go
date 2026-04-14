@@ -468,8 +468,9 @@ func TestHandler_AssignProjectRole_InvalidArgs(t *testing.T) {
 func TestHandler_CreateTenant_Success(t *testing.T) {
 	t.Parallel()
 	resp, err := newHandler().CreateTenant(context.Background(), &iamv1.CreateTenantRequest{
-		Name: "Red Chillies Entertainment",
-		Plan: "starter",
+		Name:        "Red Chillies Entertainment",
+		Plan:        "starter",
+		CountryCode: "IN", // #61 — required; currency derived as INR
 	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.GetId())

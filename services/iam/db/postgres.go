@@ -306,11 +306,17 @@ func (p *Postgres) DeactivateUser(ctx context.Context, tenantID, id uuid.UUID) e
 
 func (p *Postgres) CreateTenant(ctx context.Context, t *iam.Tenant) error {
 	row, err := p.q.CreateTenant(ctx, CreateTenantParams{
-		ID:     t.ID,
-		Name:   t.Name,
-		Slug:   t.Slug,
-		Plan:   t.Plan,
-		Status: t.Status,
+		ID:                  t.ID,
+		Name:                t.Name,
+		Slug:                t.Slug,
+		Plan:                t.Plan,
+		Status:              t.Status,
+		AddressLine1:        pgTextFromString(t.AddressLine1),
+		AddressLine2:        pgTextFromString(t.AddressLine2),
+		City:                pgTextFromString(t.City),
+		CountryCode:         t.CountryCode,
+		PostalCode:          pgTextFromString(t.PostalCode),
+		PrimaryCurrencyCode: t.PrimaryCurrencyCode,
 	})
 	if err != nil {
 		return fmt.Errorf("iam/db: create tenant: %w", err)
@@ -321,6 +327,46 @@ func (p *Postgres) CreateTenant(ctx context.Context, t *iam.Tenant) error {
 	t.CreatedAt = row.CreatedAt
 	t.IsDemo = row.IsDemo
 	return nil
+}
+
+// UpdateTenantAddress replaces the address + country + currency on an
+// existing tenant. Used by the Settings → Company page (#61).
+func (p *Postgres) UpdateTenantAddress(ctx context.Context, t *iam.Tenant) (*iam.Tenant, error) {
+	row, err := p.q.UpdateTenantAddress(ctx, UpdateTenantAddressParams{
+		ID:                  t.ID,
+		AddressLine1:        pgTextFromString(t.AddressLine1),
+		AddressLine2:        pgTextFromString(t.AddressLine2),
+		City:                pgTextFromString(t.City),
+		CountryCode:         t.CountryCode,
+		PostalCode:          pgTextFromString(t.PostalCode),
+		PrimaryCurrencyCode: t.PrimaryCurrencyCode,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, iam.ErrTenantNotFound
+		}
+		return nil, fmt.Errorf("iam/db: update tenant address: %w", err)
+	}
+	return dbTenantToDomain(row), nil
+}
+
+// pgTextFromString wraps a Go string as a pgtype.Text, treating the empty
+// string as NULL so the DB stores NULL for unspecified optional fields
+// rather than empty strings.
+func pgTextFromString(s string) pgtype.Text {
+	if s == "" {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: s, Valid: true}
+}
+
+// pgTextToString returns the inner string or empty if NULL — used for
+// serialising DB Tenant rows back to the domain model.
+func pgTextToString(t pgtype.Text) string {
+	if !t.Valid {
+		return ""
+	}
+	return t.String
 }
 
 func (p *Postgres) GetTenant(ctx context.Context, id uuid.UUID) (*iam.Tenant, error) {
@@ -426,10 +472,14 @@ func (p *Postgres) ListRoles(ctx context.Context, tenantID uuid.UUID) ([]iam.Rol
 }
 
 func (p *Postgres) AssignRole(ctx context.Context, ur *iam.UserRole) error {
+	var projectID pgtype.UUID
+	if ur.ProjectID != nil {
+		projectID = pgtype.UUID{Bytes: *ur.ProjectID, Valid: true}
+	}
 	if err := p.q.AssignRole(ctx, AssignRoleParams{
 		UserID:     ur.UserID,
 		RoleID:     ur.RoleID,
-		ProjectID:  ur.ProjectID,
+		ProjectID:  projectID,
 		AssignedBy: ur.AssignedBy,
 	}); err != nil {
 		return fmt.Errorf("iam/db: assign role: %w", err)
@@ -762,12 +812,18 @@ func dbUserToDomain(u User) *iam.User {
 
 func dbTenantToDomain(t Tenant) *iam.Tenant {
 	return &iam.Tenant{
-		ID:        t.ID,
-		Name:      t.Name,
-		Slug:      t.Slug,
-		Plan:      t.Plan,
-		Status:    t.Status,
-		IsDemo:    t.IsDemo,
-		CreatedAt: t.CreatedAt,
+		ID:                  t.ID,
+		Name:                t.Name,
+		Slug:                t.Slug,
+		Plan:                t.Plan,
+		Status:              t.Status,
+		IsDemo:              t.IsDemo,
+		CreatedAt:           t.CreatedAt,
+		AddressLine1:        pgTextToString(t.AddressLine1),
+		AddressLine2:        pgTextToString(t.AddressLine2),
+		City:                pgTextToString(t.City),
+		CountryCode:         t.CountryCode,
+		PostalCode:          pgTextToString(t.PostalCode),
+		PrimaryCurrencyCode: t.PrimaryCurrencyCode,
 	}
 }

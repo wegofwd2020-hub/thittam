@@ -3,9 +3,22 @@
 -- platform_users is the internal admin user table.
 
 -- name: CreateTenant :one
-INSERT INTO tenants (id, name, slug, plan, status)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO tenants (
+    id, name, slug, plan, status,
+    address_line1, address_line2, city, country_code, postal_code, primary_currency_code
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (slug) DO NOTHING
+RETURNING *;
+
+-- name: UpdateTenantAddress :one
+UPDATE tenants SET
+    address_line1 = $2,
+    address_line2 = $3,
+    city = $4,
+    country_code = $5,
+    postal_code = $6,
+    primary_currency_code = $7
+WHERE id = $1
 RETURNING *;
 
 -- name: GetTenant :one

@@ -27,6 +27,16 @@ type Tenant struct {
 	Status    string    `json:"status"` // active, suspended, deactivated
 	IsDemo    bool      `json:"is_demo"`
 	CreatedAt time.Time `json:"created_at"`
+
+	// Company location (#61). AddressLine2 is optional; the rest are
+	// required at registration time but existing demo tenants were
+	// backfilled to IN / INR in migration 014.
+	AddressLine1        string `json:"address_line1,omitempty"`
+	AddressLine2        string `json:"address_line2,omitempty"`
+	City                string `json:"city,omitempty"`
+	CountryCode         string `json:"country_code"`          // ISO 3166-1 alpha-2
+	PostalCode          string `json:"postal_code,omitempty"`
+	PrimaryCurrencyCode string `json:"primary_currency_code"` // ISO 4217
 }
 
 // Role is a named collection of permissions scoped to a tenant.

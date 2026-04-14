@@ -175,6 +175,19 @@ func (r *iamRepo) UpdateTenantStatus(_ context.Context, id uuid.UUID, status str
 	}
 	return iam.ErrTenantNotFound
 }
+func (r *iamRepo) UpdateTenantAddress(_ context.Context, t *iam.Tenant) (*iam.Tenant, error) {
+	existing, ok := r.tenants[t.ID]
+	if !ok {
+		return nil, iam.ErrTenantNotFound
+	}
+	existing.AddressLine1 = t.AddressLine1
+	existing.AddressLine2 = t.AddressLine2
+	existing.City = t.City
+	existing.CountryCode = t.CountryCode
+	existing.PostalCode = t.PostalCode
+	existing.PrimaryCurrencyCode = t.PrimaryCurrencyCode
+	return existing, nil
+}
 
 // Roles
 func (r *iamRepo) CreateRole(_ context.Context, role *iam.Role) error {

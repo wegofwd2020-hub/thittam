@@ -38,6 +38,10 @@ type Repository interface {
 	CreateTenant(ctx context.Context, tenant *Tenant) error
 	GetTenant(ctx context.Context, id uuid.UUID) (*Tenant, error)
 	UpdateTenantStatus(ctx context.Context, id uuid.UUID, status string) error
+	// UpdateTenantAddress replaces the address + country + currency fields
+	// on an existing tenant. Other fields (name, plan, status) are not
+	// touched. Returns ErrTenantNotFound if the row is missing.
+	UpdateTenantAddress(ctx context.Context, tenant *Tenant) (*Tenant, error)
 
 	// Roles
 	CreateRole(ctx context.Context, role *Role) error

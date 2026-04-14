@@ -381,7 +381,12 @@ type ListAccountsParams struct {
 }
 
 func (q *Queries) ListAccounts(ctx context.Context, arg ListAccountsParams) ([]Account, error) {
-	rows, err := q.db.Query(ctx, listAccounts, arg.TenantID, arg.Column2, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listAccounts,
+		arg.TenantID,
+		arg.Column2,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}

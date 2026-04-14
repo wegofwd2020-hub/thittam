@@ -42,6 +42,7 @@ const (
 	IAMService_CreateTenant_FullMethodName       = "/thittam.iam.v1.IAMService/CreateTenant"
 	IAMService_GetTenant_FullMethodName          = "/thittam.iam.v1.IAMService/GetTenant"
 	IAMService_SuspendTenant_FullMethodName      = "/thittam.iam.v1.IAMService/SuspendTenant"
+	IAMService_SetTenantAddress_FullMethodName   = "/thittam.iam.v1.IAMService/SetTenantAddress"
 	IAMService_InviteUser_FullMethodName         = "/thittam.iam.v1.IAMService/InviteUser"
 	IAMService_AcceptInvitation_FullMethodName   = "/thittam.iam.v1.IAMService/AcceptInvitation"
 	IAMService_SetOIDCConfig_FullMethodName      = "/thittam.iam.v1.IAMService/SetOIDCConfig"
@@ -82,6 +83,7 @@ type IAMServiceClient interface {
 	CreateTenant(ctx context.Context, in *CreateTenantRequest, opts ...grpc.CallOption) (*Tenant, error)
 	GetTenant(ctx context.Context, in *GetTenantRequest, opts ...grpc.CallOption) (*Tenant, error)
 	SuspendTenant(ctx context.Context, in *SuspendTenantRequest, opts ...grpc.CallOption) (*Tenant, error)
+	SetTenantAddress(ctx context.Context, in *SetTenantAddressRequest, opts ...grpc.CallOption) (*Tenant, error)
 	// --- Invitations ---
 	InviteUser(ctx context.Context, in *InviteUserRequest, opts ...grpc.CallOption) (*Invitation, error)
 	AcceptInvitation(ctx context.Context, in *AcceptInvitationRequest, opts ...grpc.CallOption) (*TokenPair, error)
@@ -271,6 +273,15 @@ func (c *iAMServiceClient) SuspendTenant(ctx context.Context, in *SuspendTenantR
 	return out, nil
 }
 
+func (c *iAMServiceClient) SetTenantAddress(ctx context.Context, in *SetTenantAddressRequest, opts ...grpc.CallOption) (*Tenant, error) {
+	out := new(Tenant)
+	err := c.cc.Invoke(ctx, IAMService_SetTenantAddress_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *iAMServiceClient) InviteUser(ctx context.Context, in *InviteUserRequest, opts ...grpc.CallOption) (*Invitation, error) {
 	out := new(Invitation)
 	err := c.cc.Invoke(ctx, IAMService_InviteUser_FullMethodName, in, out, opts...)
@@ -349,6 +360,7 @@ type IAMServiceServer interface {
 	CreateTenant(context.Context, *CreateTenantRequest) (*Tenant, error)
 	GetTenant(context.Context, *GetTenantRequest) (*Tenant, error)
 	SuspendTenant(context.Context, *SuspendTenantRequest) (*Tenant, error)
+	SetTenantAddress(context.Context, *SetTenantAddressRequest) (*Tenant, error)
 	// --- Invitations ---
 	InviteUser(context.Context, *InviteUserRequest) (*Invitation, error)
 	AcceptInvitation(context.Context, *AcceptInvitationRequest) (*TokenPair, error)
@@ -420,6 +432,9 @@ func (UnimplementedIAMServiceServer) GetTenant(context.Context, *GetTenantReques
 }
 func (UnimplementedIAMServiceServer) SuspendTenant(context.Context, *SuspendTenantRequest) (*Tenant, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SuspendTenant not implemented")
+}
+func (UnimplementedIAMServiceServer) SetTenantAddress(context.Context, *SetTenantAddressRequest) (*Tenant, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetTenantAddress not implemented")
 }
 func (UnimplementedIAMServiceServer) InviteUser(context.Context, *InviteUserRequest) (*Invitation, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InviteUser not implemented")
@@ -791,6 +806,24 @@ func _IAMService_SuspendTenant_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IAMService_SetTenantAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetTenantAddressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMServiceServer).SetTenantAddress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IAMService_SetTenantAddress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMServiceServer).SetTenantAddress(ctx, req.(*SetTenantAddressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _IAMService_InviteUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(InviteUserRequest)
 	if err := dec(in); err != nil {
@@ -963,6 +996,10 @@ var IAMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SuspendTenant",
 			Handler:    _IAMService_SuspendTenant_Handler,
+		},
+		{
+			MethodName: "SetTenantAddress",
+			Handler:    _IAMService_SetTenantAddress_Handler,
 		},
 		{
 			MethodName: "InviteUser",

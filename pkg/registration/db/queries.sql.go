@@ -12,7 +12,7 @@ import (
 )
 
 const createTenant = `-- name: CreateTenant :one
-INSERT INTO tenants (name, slug, plan) VALUES ($1, $2, $3) RETURNING id, name, slug, plan, status, created_at, is_demo
+INSERT INTO tenants (name, slug, plan) VALUES ($1, $2, $3) RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code
 `
 
 type CreateTenantParams struct {
@@ -32,6 +32,12 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		&i.Status,
 		&i.CreatedAt,
 		&i.IsDemo,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.CountryCode,
+		&i.PostalCode,
+		&i.PrimaryCurrencyCode,
 	)
 	return i, err
 }
@@ -69,7 +75,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const getTenantByID = `-- name: GetTenantByID :one
-SELECT id, name, slug, plan, status, created_at, is_demo FROM tenants WHERE id = $1
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code FROM tenants WHERE id = $1
 `
 
 func (q *Queries) GetTenantByID(ctx context.Context, id uuid.UUID) (Tenant, error) {
@@ -83,6 +89,12 @@ func (q *Queries) GetTenantByID(ctx context.Context, id uuid.UUID) (Tenant, erro
 		&i.Status,
 		&i.CreatedAt,
 		&i.IsDemo,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.CountryCode,
+		&i.PostalCode,
+		&i.PrimaryCurrencyCode,
 	)
 	return i, err
 }

@@ -25,4 +25,11 @@ var (
 	// and the email exists in more than one tenant. The caller must retry
 	// with an explicit tenant_id.
 	ErrAmbiguousEmail = errors.New("iam: email exists in multiple tenants — supply tenant_id")
+	// ErrCountryRequired is returned by CreateTenant when country_code is
+	// empty. Onboarding must collect it for currency derivation (#61).
+	ErrCountryRequired = errors.New("iam: country_code is required")
+	// ErrUnknownCountry is returned when country_code has no currency
+	// mapping in pkg/locale. Extend the map or supply primary_currency_code
+	// explicitly.
+	ErrUnknownCountry = errors.New("iam: unknown country_code")
 )

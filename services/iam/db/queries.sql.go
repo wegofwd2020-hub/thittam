@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const acceptInvitation = `-- name: AcceptInvitation :exec
@@ -29,14 +30,19 @@ DO NOTHING
 `
 
 type AssignRoleParams struct {
-	UserID     uuid.UUID  `json:"user_id"`
-	RoleID     uuid.UUID  `json:"role_id"`
-	ProjectID  *uuid.UUID `json:"project_id"`
-	AssignedBy uuid.UUID  `json:"assigned_by"`
+	UserID     uuid.UUID   `json:"user_id"`
+	RoleID     uuid.UUID   `json:"role_id"`
+	ProjectID  pgtype.UUID `json:"project_id"`
+	AssignedBy uuid.UUID   `json:"assigned_by"`
 }
 
 func (q *Queries) AssignRole(ctx context.Context, arg AssignRoleParams) error {
-	_, err := q.db.Exec(ctx, assignRole, arg.UserID, arg.RoleID, arg.ProjectID, arg.AssignedBy)
+	_, err := q.db.Exec(ctx, assignRole,
+		arg.UserID,
+		arg.RoleID,
+		arg.ProjectID,
+		arg.AssignedBy,
+	)
 	return err
 }
 
@@ -117,18 +123,26 @@ func (q *Queries) CreateRole(ctx context.Context, arg CreateRoleParams) (Role, e
 
 const createTenant = `-- name: CreateTenant :one
 
-INSERT INTO tenants (id, name, slug, plan, status)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO tenants (
+    id, name, slug, plan, status,
+    address_line1, address_line2, city, country_code, postal_code, primary_currency_code
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (slug) DO NOTHING
-RETURNING id, name, slug, plan, status, created_at, is_demo
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code
 `
 
 type CreateTenantParams struct {
-	ID     uuid.UUID `json:"id"`
-	Name   string    `json:"name"`
-	Slug   string    `json:"slug"`
-	Plan   string    `json:"plan"`
-	Status string    `json:"status"`
+	ID                  uuid.UUID   `json:"id"`
+	Name                string      `json:"name"`
+	Slug                string      `json:"slug"`
+	Plan                string      `json:"plan"`
+	Status              string      `json:"status"`
+	AddressLine1        pgtype.Text `json:"address_line1"`
+	AddressLine2        pgtype.Text `json:"address_line2"`
+	City                pgtype.Text `json:"city"`
+	CountryCode         string      `json:"country_code"`
+	PostalCode          pgtype.Text `json:"postal_code"`
+	PrimaryCurrencyCode string      `json:"primary_currency_code"`
 }
 
 // IAM service queries.
@@ -141,6 +155,12 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		arg.Slug,
 		arg.Plan,
 		arg.Status,
+		arg.AddressLine1,
+		arg.AddressLine2,
+		arg.City,
+		arg.CountryCode,
+		arg.PostalCode,
+		arg.PrimaryCurrencyCode,
 	)
 	var i Tenant
 	err := row.Scan(
@@ -151,6 +171,12 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		&i.Status,
 		&i.CreatedAt,
 		&i.IsDemo,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.CountryCode,
+		&i.PostalCode,
+		&i.PrimaryCurrencyCode,
 	)
 	return i, err
 }
@@ -216,7 +242,7 @@ func (q *Queries) GetInvitationByToken(ctx context.Context, token string) (Invit
 }
 
 const getTenant = `-- name: GetTenant :one
-SELECT id, name, slug, plan, status, created_at, is_demo FROM tenants WHERE id = $1
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code FROM tenants WHERE id = $1
 `
 
 func (q *Queries) GetTenant(ctx context.Context, id uuid.UUID) (Tenant, error) {
@@ -230,12 +256,18 @@ func (q *Queries) GetTenant(ctx context.Context, id uuid.UUID) (Tenant, error) {
 		&i.Status,
 		&i.CreatedAt,
 		&i.IsDemo,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.CountryCode,
+		&i.PostalCode,
+		&i.PrimaryCurrencyCode,
 	)
 	return i, err
 }
 
 const getTenantBySlug = `-- name: GetTenantBySlug :one
-SELECT id, name, slug, plan, status, created_at, is_demo FROM tenants WHERE slug = $1
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code FROM tenants WHERE slug = $1
 `
 
 func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, error) {
@@ -249,6 +281,12 @@ func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, err
 		&i.Status,
 		&i.CreatedAt,
 		&i.IsDemo,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.CountryCode,
+		&i.PostalCode,
+		&i.PrimaryCurrencyCode,
 	)
 	return i, err
 }
@@ -420,8 +458,59 @@ func (q *Queries) RevokeRole(ctx context.Context, arg RevokeRoleParams) error {
 	return err
 }
 
+const updateTenantAddress = `-- name: UpdateTenantAddress :one
+UPDATE tenants SET
+    address_line1 = $2,
+    address_line2 = $3,
+    city = $4,
+    country_code = $5,
+    postal_code = $6,
+    primary_currency_code = $7
+WHERE id = $1
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code
+`
+
+type UpdateTenantAddressParams struct {
+	ID                  uuid.UUID   `json:"id"`
+	AddressLine1        pgtype.Text `json:"address_line1"`
+	AddressLine2        pgtype.Text `json:"address_line2"`
+	City                pgtype.Text `json:"city"`
+	CountryCode         string      `json:"country_code"`
+	PostalCode          pgtype.Text `json:"postal_code"`
+	PrimaryCurrencyCode string      `json:"primary_currency_code"`
+}
+
+func (q *Queries) UpdateTenantAddress(ctx context.Context, arg UpdateTenantAddressParams) (Tenant, error) {
+	row := q.db.QueryRow(ctx, updateTenantAddress,
+		arg.ID,
+		arg.AddressLine1,
+		arg.AddressLine2,
+		arg.City,
+		arg.CountryCode,
+		arg.PostalCode,
+		arg.PrimaryCurrencyCode,
+	)
+	var i Tenant
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Plan,
+		&i.Status,
+		&i.CreatedAt,
+		&i.IsDemo,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.CountryCode,
+		&i.PostalCode,
+		&i.PrimaryCurrencyCode,
+	)
+	return i, err
+}
+
 const updateTenantStatus = `-- name: UpdateTenantStatus :one
-UPDATE tenants SET status = $2 WHERE id = $1 RETURNING id, name, slug, plan, status, created_at, is_demo
+UPDATE tenants SET status = $2 WHERE id = $1 RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code
 `
 
 type UpdateTenantStatusParams struct {
@@ -440,6 +529,12 @@ func (q *Queries) UpdateTenantStatus(ctx context.Context, arg UpdateTenantStatus
 		&i.Status,
 		&i.CreatedAt,
 		&i.IsDemo,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.CountryCode,
+		&i.PostalCode,
+		&i.PrimaryCurrencyCode,
 	)
 	return i, err
 }

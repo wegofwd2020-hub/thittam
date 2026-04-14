@@ -53,6 +53,7 @@ service IAMService {
   rpc CreateTenant(CreateTenantRequest) returns (Tenant);
   rpc GetTenant(GetTenantRequest) returns (Tenant);
   rpc SuspendTenant(SuspendTenantRequest) returns (Tenant);
+  rpc SetTenantAddress(SetTenantAddressRequest) returns (Tenant);
 
   // --- Invitations ---
   rpc InviteUser(InviteUserRequest) returns (Invitation);
@@ -93,6 +94,14 @@ message Tenant {
   string status = 5; // active|suspended|deactivated
   bool is_demo = 6;
   google.protobuf.Timestamp created_at = 7;
+
+  // Company location (#61).
+  string address_line1          = 8;
+  string address_line2          = 9;
+  string city                   = 10;
+  string country_code           = 11; // ISO 3166-1 alpha-2
+  string postal_code            = 12;
+  string primary_currency_code  = 13; // ISO 4217
 }
 
 message Role {
@@ -274,6 +283,27 @@ message CreateTenantRequest {
   string name = 1;
   string plan = 2; // starter|professional|enterprise
   bool is_demo = 3;
+
+  // Company location (#61). country_code is required for currency derivation;
+  // primary_currency_code is optional — when empty the server derives it from
+  // the country. Callers in multi-currency countries should set
+  // primary_currency_code explicitly.
+  string address_line1          = 4;
+  string address_line2          = 5;
+  string city                   = 6;
+  string country_code           = 7; // ISO 3166-1 alpha-2
+  string postal_code            = 8;
+  string primary_currency_code  = 9; // ISO 4217; optional
+}
+
+message SetTenantAddressRequest {
+  string tenant_id              = 1;
+  string address_line1          = 2;
+  string address_line2          = 3;
+  string city                   = 4;
+  string country_code           = 5;
+  string postal_code            = 6;
+  string primary_currency_code  = 7; // optional; derived from country_code when empty
 }
 
 message GetTenantRequest {

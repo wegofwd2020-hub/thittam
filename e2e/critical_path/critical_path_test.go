@@ -31,9 +31,10 @@ func TestCriticalPath_TenantRegistration(t *testing.T) {
 	svc := iam.NewService(repo, stubAuthenticator{}, stubTokenIssuer{}, stubHasher{}, stubVerifier{})
 
 	tenant := &iam.Tenant{
-		ID:   fixedTenantID,
-		Name: "XYZ Productions",
-		Slug: "xyz-productions",
+		ID:          fixedTenantID,
+		Name:        "XYZ Productions",
+		Slug:        "xyz-productions",
+		CountryCode: "IN", // required since #61 — currency derived as INR
 		// Plan deliberately omitted — service should default to "starter"
 	}
 

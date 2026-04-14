@@ -49,14 +49,15 @@ type Invoice struct {
 }
 
 type PlatformImpersonationLog struct {
-	ID               uuid.UUID   `json:"id"`
-	PlatformUserID   uuid.UUID   `json:"platform_user_id"`
-	TenantID         uuid.UUID   `json:"tenant_id"`
-	ImpersonatedUser uuid.UUID   `json:"impersonated_user"`
-	Reason           string      `json:"reason"`
-	StartedAt        time.Time   `json:"started_at"`
-	ExpiresAt        time.Time   `json:"expires_at"`
-	IpAddress        pgtype.Text `json:"ip_address"`
+	ID               uuid.UUID          `json:"id"`
+	PlatformUserID   uuid.UUID          `json:"platform_user_id"`
+	TenantID         uuid.UUID          `json:"tenant_id"`
+	ImpersonatedUser uuid.UUID          `json:"impersonated_user"`
+	Reason           string             `json:"reason"`
+	StartedAt        time.Time          `json:"started_at"`
+	ExpiresAt        time.Time          `json:"expires_at"`
+	IpAddress        pgtype.Text        `json:"ip_address"`
+	EndedAt          pgtype.Timestamptz `json:"ended_at"`
 }
 
 type PlatformUser struct {
@@ -94,13 +95,19 @@ type Subscription struct {
 }
 
 type Tenant struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	Plan      string    `json:"plan"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	IsDemo    bool      `json:"is_demo"`
+	ID                  uuid.UUID   `json:"id"`
+	Name                string      `json:"name"`
+	Slug                string      `json:"slug"`
+	Plan                string      `json:"plan"`
+	Status              string      `json:"status"`
+	CreatedAt           time.Time   `json:"created_at"`
+	IsDemo              bool        `json:"is_demo"`
+	AddressLine1        pgtype.Text `json:"address_line1"`
+	AddressLine2        pgtype.Text `json:"address_line2"`
+	City                pgtype.Text `json:"city"`
+	CountryCode         string      `json:"country_code"`
+	PostalCode          pgtype.Text `json:"postal_code"`
+	PrimaryCurrencyCode string      `json:"primary_currency_code"`
 }
 
 type TenantAuthConfig struct {
@@ -139,8 +146,9 @@ type User struct {
 }
 
 type UserRole struct {
-	UserID     uuid.UUID `json:"user_id"`
-	RoleID     uuid.UUID `json:"role_id"`
-	AssignedBy uuid.UUID `json:"assigned_by"`
-	AssignedAt time.Time `json:"assigned_at"`
+	UserID     uuid.UUID   `json:"user_id"`
+	RoleID     uuid.UUID   `json:"role_id"`
+	AssignedBy uuid.UUID   `json:"assigned_by"`
+	AssignedAt time.Time   `json:"assigned_at"`
+	ProjectID  pgtype.UUID `json:"project_id"`
 }

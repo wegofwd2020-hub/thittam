@@ -331,15 +331,45 @@ func (h *Handler) AssignProjectRole(ctx context.Context, req *iamv1.AssignProjec
 
 func (h *Handler) CreateTenant(ctx context.Context, req *iamv1.CreateTenantRequest) (*iamv1.Tenant, error) {
 	tenant := &Tenant{
-		Name:   req.GetName(),
-		Plan:   req.GetPlan(),
-		IsDemo: req.GetIsDemo(),
+		Name:                req.GetName(),
+		Plan:                req.GetPlan(),
+		IsDemo:              req.GetIsDemo(),
+		AddressLine1:        req.GetAddressLine1(),
+		AddressLine2:        req.GetAddressLine2(),
+		City:                req.GetCity(),
+		CountryCode:         req.GetCountryCode(),
+		PostalCode:          req.GetPostalCode(),
+		PrimaryCurrencyCode: req.GetPrimaryCurrencyCode(),
 	}
 	created, err := h.svc.CreateTenant(ctx, tenant)
 	if err != nil {
 		return nil, grpcError(err)
 	}
 	return tenantToProto(created), nil
+}
+
+// SetTenantAddress updates the company location + currency on an existing
+// tenant. Restricted to callers with the tenant_admin role (or platform
+// admin) — a regular user should not be able to change the currency.
+func (h *Handler) SetTenantAddress(ctx context.Context, req *iamv1.SetTenantAddressRequest) (*iamv1.Tenant, error) {
+	id, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	t := &Tenant{
+		ID:                  id,
+		AddressLine1:        req.GetAddressLine1(),
+		AddressLine2:        req.GetAddressLine2(),
+		City:                req.GetCity(),
+		CountryCode:         req.GetCountryCode(),
+		PostalCode:          req.GetPostalCode(),
+		PrimaryCurrencyCode: req.GetPrimaryCurrencyCode(),
+	}
+	updated, err := h.svc.SetTenantAddress(ctx, t)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return tenantToProto(updated), nil
 }
 
 func (h *Handler) GetTenant(ctx context.Context, req *iamv1.GetTenantRequest) (*iamv1.Tenant, error) {
@@ -497,15 +527,23 @@ func userToProto(u *User) *iamv1.User {
 	}
 }
 
+// tenantToProto builds the gRPC Tenant message from the domain model,
+// including #61 address + currency fields.
 func tenantToProto(t *Tenant) *iamv1.Tenant {
 	return &iamv1.Tenant{
-		Id:        t.ID.String(),
-		Name:      t.Name,
-		Slug:      t.Slug,
-		Plan:      t.Plan,
-		Status:    t.Status,
-		IsDemo:    t.IsDemo,
-		CreatedAt: timestamppb.New(t.CreatedAt),
+		Id:                  t.ID.String(),
+		Name:                t.Name,
+		Slug:                t.Slug,
+		Plan:                t.Plan,
+		Status:              t.Status,
+		IsDemo:              t.IsDemo,
+		CreatedAt:           timestamppb.New(t.CreatedAt),
+		AddressLine1:        t.AddressLine1,
+		AddressLine2:        t.AddressLine2,
+		City:                t.City,
+		CountryCode:         t.CountryCode,
+		PostalCode:          t.PostalCode,
+		PrimaryCurrencyCode: t.PrimaryCurrencyCode,
 	}
 }
 

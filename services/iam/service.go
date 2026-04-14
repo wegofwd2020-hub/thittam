@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/pkg/crypto"
+	"github.com/wegofwd2020/thittam/pkg/locale"
 	"github.com/wegofwd2020/thittam/pkg/registration"
 )
 
@@ -397,6 +398,34 @@ func (s *Service) AssignProjectRole(ctx context.Context, tenantID, userID, roleI
 
 // --- Tenants ---
 
+// SetTenantAddress updates the address + country + currency fields on an
+// existing tenant. Currency is derived from country when the caller leaves
+// PrimaryCurrencyCode empty. Returns ErrCountryRequired / ErrUnknownCountry
+// on invalid input (#61).
+func (s *Service) SetTenantAddress(ctx context.Context, t *Tenant) (*Tenant, error) {
+	if t.CountryCode == "" {
+		return nil, ErrCountryRequired
+	}
+	t.CountryCode = strings.ToUpper(t.CountryCode)
+	if !locale.IsKnownCountry(t.CountryCode) {
+		return nil, fmt.Errorf("iam: set tenant address: %w: %q", ErrUnknownCountry, t.CountryCode)
+	}
+	if t.PrimaryCurrencyCode == "" {
+		currency, err := locale.CurrencyForCountry(t.CountryCode)
+		if err != nil {
+			return nil, fmt.Errorf("iam: derive currency: %w", err)
+		}
+		t.PrimaryCurrencyCode = currency
+	} else {
+		t.PrimaryCurrencyCode = strings.ToUpper(t.PrimaryCurrencyCode)
+	}
+	updated, err := s.repo.UpdateTenantAddress(ctx, t)
+	if err != nil {
+		return nil, fmt.Errorf("iam: update tenant address: %w", err)
+	}
+	return updated, nil
+}
+
 // CreateTenant creates a new tenant and seeds all system roles.
 func (s *Service) CreateTenant(ctx context.Context, tenant *Tenant) (*Tenant, error) {
 	if tenant.ID == uuid.Nil {
@@ -414,6 +443,29 @@ func (s *Service) CreateTenant(ctx context.Context, tenant *Tenant) (*Tenant, er
 	if !isValidPlan(tenant.Plan) {
 		return nil, ErrInvalidPlan
 	}
+
+	// Country is required; currency is derived from country when the caller
+	// doesn't supply an explicit override (#61). Callers that onboard in
+	// multi-currency countries (PR → USD not PRA) should set
+	// PrimaryCurrencyCode themselves.
+	if tenant.CountryCode == "" {
+		return nil, ErrCountryRequired
+	}
+	tenant.CountryCode = strings.ToUpper(tenant.CountryCode)
+	if !locale.IsKnownCountry(tenant.CountryCode) {
+		return nil, fmt.Errorf("iam: create tenant: %w: %q", ErrUnknownCountry, tenant.CountryCode)
+	}
+	if tenant.PrimaryCurrencyCode == "" {
+		currency, err := locale.CurrencyForCountry(tenant.CountryCode)
+		if err != nil {
+			// Unreachable given IsKnownCountry above, but keep the branch for safety.
+			return nil, fmt.Errorf("iam: derive currency: %w", err)
+		}
+		tenant.PrimaryCurrencyCode = currency
+	} else {
+		tenant.PrimaryCurrencyCode = strings.ToUpper(tenant.PrimaryCurrencyCode)
+	}
+
 	if err := s.repo.CreateTenant(ctx, tenant); err != nil {
 		return nil, fmt.Errorf("iam: create tenant: %w", err)
 	}

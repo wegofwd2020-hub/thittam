@@ -353,7 +353,13 @@ type ListFoldersParams struct {
 }
 
 func (q *Queries) ListFolders(ctx context.Context, arg ListFoldersParams) ([]Folder, error) {
-	rows, err := q.db.Query(ctx, listFolders, arg.TenantID, arg.Column2, arg.Column3, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listFolders,
+		arg.TenantID,
+		arg.Column2,
+		arg.Column3,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}

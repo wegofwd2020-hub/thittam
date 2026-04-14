@@ -42,6 +42,7 @@ type mockRepo struct {
 	createTenantFn                func(ctx context.Context, tenant *Tenant) error
 	getTenantFn                   func(ctx context.Context, id uuid.UUID) (*Tenant, error)
 	updateTenantStatusFn          func(ctx context.Context, id uuid.UUID, status string) error
+	updateTenantAddressFn         func(ctx context.Context, t *Tenant) (*Tenant, error)
 	createRoleFn                  func(ctx context.Context, role *Role) error
 	getRoleFn                     func(ctx context.Context, tenantID uuid.UUID, name string) (*Role, error)
 	getRoleByIDFn                 func(ctx context.Context, tenantID, roleID uuid.UUID) (*Role, error)
@@ -142,6 +143,12 @@ func (m *mockRepo) UpdateTenantStatus(ctx context.Context, id uuid.UUID, status 
 		return m.updateTenantStatusFn(ctx, id, status)
 	}
 	return nil
+}
+func (m *mockRepo) UpdateTenantAddress(ctx context.Context, t *Tenant) (*Tenant, error) {
+	if m.updateTenantAddressFn != nil {
+		return m.updateTenantAddressFn(ctx, t)
+	}
+	return t, nil
 }
 func (m *mockRepo) CreateRole(ctx context.Context, role *Role) error {
 	if m.createRoleFn != nil {
@@ -639,11 +646,56 @@ func TestAssignProjectRole_AllowsCustomRole(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestCreateTenant_RequiresCountry(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{})
+	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme", Plan: "starter"})
+	require.ErrorIs(t, err, ErrCountryRequired)
+}
+
+func TestCreateTenant_RejectsUnknownCountry(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{})
+	_, err := svc.CreateTenant(context.Background(), &Tenant{
+		Name: "Acme", Plan: "starter", CountryCode: "ZZ",
+	})
+	require.ErrorIs(t, err, ErrUnknownCountry)
+}
+
+func TestCreateTenant_DerivesCurrencyFromCountry(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		country, wantCurrency string
+	}{
+		{"IN", "INR"}, {"US", "USD"}, {"DE", "EUR"}, {"GB", "GBP"}, {"JP", "JPY"},
+	}
+	for _, tc := range cases {
+		svc := newTestService(&mockRepo{})
+		got, err := svc.CreateTenant(context.Background(), &Tenant{
+			Name: "Acme " + tc.country, Plan: "starter", CountryCode: tc.country,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, tc.wantCurrency, got.PrimaryCurrencyCode, "country %s", tc.country)
+	}
+}
+
+func TestCreateTenant_RespectsExplicitCurrencyOverride(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{})
+	got, err := svc.CreateTenant(context.Background(), &Tenant{
+		Name: "Acme PR", Plan: "starter",
+		CountryCode:         "US",  // US maps to USD
+		PrimaryCurrencyCode: "eur", // caller override, case-normalised
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "EUR", got.PrimaryCurrencyCode)
+}
+
 func TestCreateTenant_InvalidPlan(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{})
 
-	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme", Plan: "galaxy"})
+	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme", Plan: "galaxy", CountryCode: "IN"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrInvalidPlan)
 }
@@ -661,7 +713,7 @@ func TestCreateTenant_SeedsSystemRoles(t *testing.T) {
 		},
 	})
 
-	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme", Plan: "starter"})
+	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme", Plan: "starter", CountryCode: "IN"})
 	require.NoError(t, err)
 	assert.Len(t, seededRoles, len(systemRoles))
 	assert.Contains(t, seededRoles, "super_admin")
@@ -729,7 +781,7 @@ func TestCreateTenant_GeneratesSlugFromName(t *testing.T) {
 		},
 	})
 
-	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme Software Pvt. Ltd.", Plan: "professional"})
+	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme Software Pvt. Ltd.", Plan: "professional", CountryCode: "IN"})
 	require.NoError(t, err)
 	assert.Equal(t, "acme-software-pvt-ltd", savedTenant.Slug)
 }
@@ -1071,7 +1123,7 @@ func TestCreateTenant_DefaultPlan(t *testing.T) {
 		},
 	})
 
-	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme"})
+	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme", CountryCode: "IN"})
 	require.NoError(t, err)
 	assert.Equal(t, "starter", savedTenant.Plan)
 	assert.Equal(t, "active", savedTenant.Status)
@@ -1088,7 +1140,7 @@ func TestCreateTenant_SchemaMigratorCalled(t *testing.T) {
 	}
 	svc := newTestService(&mockRepo{}).WithSchemaMigrator(m)
 
-	tenant, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme", Plan: "starter"})
+	tenant, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme", Plan: "starter", CountryCode: "IN"})
 	require.NoError(t, err)
 	// Migrator must be called with the tenant ID that was assigned during creation.
 	assert.Equal(t, tenant.ID, migratedTenantID)
@@ -1103,7 +1155,7 @@ func TestCreateTenant_SchemaMigratorError_Propagates(t *testing.T) {
 	}
 	svc := newTestService(&mockRepo{}).WithSchemaMigrator(m)
 
-	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme", Plan: "starter"})
+	_, err := svc.CreateTenant(context.Background(), &Tenant{Name: "Acme", Plan: "starter", CountryCode: "IN"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "migrate schema")
 }
