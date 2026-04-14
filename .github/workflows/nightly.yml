@@ -67,7 +67,11 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        # action v8 (pairs with golangci-lint v2.x) ships binaries built on
+        # Go 1.25+. v4+'latest' installs a v1.x binary built on Go 1.24,
+        # which can't load a module that targets go 1.25.0. Mirrors the
+        # ci.yml fix from #55.
+        uses: golangci/golangci-lint-action@v8
         with:
           version: latest
 
