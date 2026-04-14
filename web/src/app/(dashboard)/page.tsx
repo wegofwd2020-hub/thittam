@@ -253,15 +253,15 @@ export default function DashboardPage() {
           />
 
           <KPICard
-            title="Total Budget"
-            value={`\u20B9${(TOTAL_BUDGET / 1_00_00_000).toFixed(1)} Cr`}
+            title="Total Budget [INR]"
+            value={`${(TOTAL_BUDGET / 1_00_00_000).toFixed(1)} Cr`}
             subtitle="Approved allocation"
             icon={<Wallet className="h-4 w-4" />}
           />
 
           <KPICard
-            title="Total Actual Spend"
-            value={`\u20B9${(TOTAL_ACTUAL / 1_00_00_000).toFixed(1)} Cr`}
+            title="Total Actual Spend [INR]"
+            value={`${(TOTAL_ACTUAL / 1_00_00_000).toFixed(1)} Cr`}
             subtitle={`${((TOTAL_ACTUAL / TOTAL_BUDGET) * 100).toFixed(1)}% of budget`}
             trend={{ direction: "up", value: `${spendTrendPct}% vs last month` }}
             icon={<TrendingUp className="h-4 w-4" />}

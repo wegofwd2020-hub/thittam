@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { useTheme } from "@/lib/themes/provider";
 import { getVerticalTheme } from "@/lib/themes/verticals";
+import { THEME_PRESETS } from "@/lib/themes/presets";
 import { useAccessibility } from "@/lib/accessibility/dyslexia-provider";
 import { useSaveThemeOverride, useResetThemeOverride } from "@/lib/hooks/use-theme-admin";
 
@@ -199,12 +200,81 @@ export function ThemeCustomizer() {
 
   // ── Render ────────────────────────────────────────────────────────────
 
+  const applyPreset = useCallback(
+    (presetId: string) => {
+      const preset = THEME_PRESETS.find((p) => p.id === presetId);
+      if (!preset) return;
+      setColorOverrides(preset.colors);
+      setThemeOverride({ colors: mergeColors(defaultColors, preset.colors) });
+      toast.info(`Preset "${preset.name}" applied (not saved)`);
+    },
+    [defaultColors, setThemeOverride],
+  );
+
   return (
     <div className="flex gap-8">
       {/* ================================================================= */}
       {/* Left column — Configuration form (60%)                            */}
       {/* ================================================================= */}
       <div className="flex w-[60%] min-w-0 flex-col gap-8">
+
+        {/* ── Theme Presets ──────────────────────────────────────────── */}
+        <section
+          className="rounded-xl border p-5"
+          style={{
+            backgroundColor: "var(--thittam-background, #fff)",
+            borderColor: "var(--thittam-border, #e2e8f0)",
+          }}
+        >
+          <h3
+            className="mb-3 font-heading text-sm font-semibold"
+            style={{ color: "var(--thittam-foreground, #0f172a)" }}
+          >
+            Presets
+          </h3>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {THEME_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => applyPreset(preset.id)}
+                className="flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors hover:opacity-90"
+                style={{
+                  borderColor: "var(--thittam-border, #e2e8f0)",
+                }}
+              >
+                <div className="flex gap-1">
+                  <span
+                    className="h-5 w-5 rounded-full border"
+                    style={{
+                      backgroundColor: preset.colors.primary ?? defaultColors.primary,
+                      borderColor: "var(--thittam-border, #e2e8f0)",
+                    }}
+                  />
+                  <span
+                    className="h-5 w-5 rounded-full border"
+                    style={{
+                      backgroundColor: preset.colors.accent ?? defaultColors.accent,
+                      borderColor: "var(--thittam-border, #e2e8f0)",
+                    }}
+                  />
+                </div>
+                <span
+                  className="font-heading text-sm font-medium"
+                  style={{ color: "var(--thittam-foreground, #0f172a)" }}
+                >
+                  {preset.name}
+                </span>
+                <span
+                  className="font-body text-xs"
+                  style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+                >
+                  {preset.description}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
 
         {/* ── Base Theme ─────────────────────────────────────────────── */}
         <section

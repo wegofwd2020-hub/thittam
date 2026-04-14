@@ -8,6 +8,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { PlanBadge } from "@/components/platform/plan-badge";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { InviteUserDialog } from "@/components/settings/invite-user-dialog";
 import { RolePermissionMatrix } from "@/components/settings/role-permission-matrix";
 import { OidcConfigForm } from "@/components/settings/oidc-config-form";
@@ -507,38 +510,23 @@ export default function SettingsPage() {
         icon="Settings"
       />
 
-      {/* Tab navigation */}
-      <div
-        className="mb-6 flex border-b"
-        style={{ borderColor: "var(--thittam-border, #e2e8f0)" }}
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as TabKey)}
+        className="mb-6"
       >
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2.5 text-sm font-heading font-medium transition-colors ${
-              activeTab === tab.key ? "border-b-2" : ""
-            }`}
-            style={
-              activeTab === tab.key
-                ? {
-                    borderColor: "var(--thittam-primary, #3b82f6)",
-                    color: "var(--thittam-primary, #3b82f6)",
-                  }
-                : {
-                    color: "var(--thittam-muted-foreground, #64748b)",
-                  }
-            }
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+        <TabsList variant="line" className="mb-6 w-full justify-start border-b">
+          {TABS.map((tab) => (
+            <TabsTrigger key={tab.key} value={tab.key} className="font-heading">
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
       {/* ================================================================= */}
       {/* Users Tab                                                         */}
       {/* ================================================================= */}
-      {activeTab === "users" && (
+      <TabsContent value="users">
         <div>
           <div className="mb-4 flex items-center justify-between">
             <h2
@@ -547,14 +535,13 @@ export default function SettingsPage() {
             >
               Team Members
             </h2>
-            <button
+            <Button
               onClick={() => setShowInvite(true)}
-              className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-heading font-medium text-white shadow-sm transition-colors hover:opacity-90"
-              style={{ backgroundColor: "var(--thittam-primary, #3b82f6)" }}
+              className="font-heading"
             >
               <Plus className="h-4 w-4" />
               Invite User
-            </button>
+            </Button>
           </div>
 
           <DataTable<Record<string, unknown>>
@@ -574,12 +561,12 @@ export default function SettingsPage() {
             />
           )}
         </div>
-      )}
+      </TabsContent>
 
       {/* ================================================================= */}
       {/* Roles Tab                                                         */}
       {/* ================================================================= */}
-      {activeTab === "roles" && (
+      <TabsContent value="roles">
         <div>
           <div className="mb-4">
             <h2
@@ -599,12 +586,12 @@ export default function SettingsPage() {
 
           <RolePermissionMatrix roles={mockRoles} />
         </div>
-      )}
+      </TabsContent>
 
       {/* ================================================================= */}
       {/* Authentication Tab                                                */}
       {/* ================================================================= */}
-      {activeTab === "auth" && (
+      <TabsContent value="auth">
         <div>
           <div className="mb-6">
             <h2
@@ -660,26 +647,11 @@ export default function SettingsPage() {
                 >
                   Enable OIDC
                 </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={oidcEnabled}
-                  onClick={() => setOidcEnabled(!oidcEnabled)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${
-                    oidcEnabled ? "" : "bg-gray-200"
-                  }`}
-                  style={
-                    oidcEnabled
-                      ? { backgroundColor: "var(--thittam-primary, #3b82f6)" }
-                      : {}
-                  }
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition-transform ${
-                      oidcEnabled ? "translate-x-5" : "translate-x-0.5"
-                    } mt-0.5`}
-                  />
-                </button>
+                <Switch
+                  checked={oidcEnabled}
+                  onCheckedChange={setOidcEnabled}
+                  aria-label="Enable OIDC"
+                />
               </div>
             </div>
           </div>
@@ -713,12 +685,12 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
-      )}
+      </TabsContent>
 
       {/* ================================================================= */}
       {/* Audit Log Tab                                                     */}
       {/* ================================================================= */}
-      {activeTab === "audit" && (
+      <TabsContent value="audit">
         <div>
           <div className="mb-4">
             <h2
@@ -741,12 +713,12 @@ export default function SettingsPage() {
             actors={auditActors}
           />
         </div>
-      )}
+      </TabsContent>
 
       {/* ================================================================= */}
       {/* Tenant Info Tab                                                   */}
       {/* ================================================================= */}
-      {activeTab === "tenant" && (
+      <TabsContent value="tenant">
         <div>
           <div className="mb-4">
             <h2
@@ -893,12 +865,12 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
-      )}
+      </TabsContent>
 
       {/* ================================================================= */}
       {/* Appearance Tab                                                    */}
       {/* ================================================================= */}
-      {activeTab === "appearance" && (
+      <TabsContent value="appearance">
         <div>
           <div className="mb-6">
             <h2
@@ -918,7 +890,8 @@ export default function SettingsPage() {
 
           <ThemeCustomizer />
         </div>
-      )}
+      </TabsContent>
+      </Tabs>
     </div>
   );
 }

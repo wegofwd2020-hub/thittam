@@ -1,8 +1,35 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
+/*
+ * shadcn/ui token bridge — shadcn primitives reference these names; we alias
+ * them to the existing --thittam-* tokens that the Settings ThemeCustomizer
+ * already drives at runtime. Anything not bridged falls back to a sensible
+ * default so primitives render before the ThemeProvider has hydrated.
+ */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* shadcn token aliases → --thittam-* (set by ThemeProvider on :root) */
+  --primary: var(--thittam-primary, #3b82f6);
+  --primary-foreground: var(--thittam-primary-foreground, #ffffff);
+  --secondary: var(--thittam-secondary, #f1f5f9);
+  --secondary-foreground: var(--thittam-secondary-foreground, #0f172a);
+  --accent: var(--thittam-accent, #f1f5f9);
+  --accent-foreground: var(--thittam-accent-foreground, #0f172a);
+  --muted: var(--thittam-muted, #f1f5f9);
+  --muted-foreground: var(--thittam-muted-foreground, #64748b);
+  --border: var(--thittam-border, #e2e8f0);
+  --input: var(--thittam-border, #e2e8f0);
+  --ring: var(--thittam-primary, #3b82f6);
+  --card: var(--thittam-background, #ffffff);
+  --card-foreground: var(--thittam-foreground, #0f172a);
+  --popover: var(--thittam-background, #ffffff);
+  --popover-foreground: var(--thittam-foreground, #0f172a);
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --radius: 0.5rem;
 
   /* Typography system — 3 distinct font stacks */
   --font-heading: "Inter", system-ui, sans-serif;
@@ -17,6 +44,26 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
   --font-heading: var(--font-heading);
   --font-body: var(--font-body);
   --font-mono: var(--font-mono);
