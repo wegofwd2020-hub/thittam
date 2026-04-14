@@ -477,6 +477,45 @@ func TestHandler_CreateTenant_Success(t *testing.T) {
 	assert.Equal(t, "starter", resp.GetPlan())
 }
 
+// --- SetTenantAddress ---
+
+func TestHandler_SetTenantAddress_Success(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	h := NewHandler(newTestService(&mockRepo{
+		updateTenantAddressFn: func(_ context.Context, tn *Tenant) (*Tenant, error) {
+			return tn, nil
+		},
+	}))
+
+	resp, err := h.SetTenantAddress(context.Background(), &iamv1.SetTenantAddressRequest{
+		TenantId:    tenantID.String(),
+		CountryCode: "IN",
+		City:        "Chennai",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "IN", resp.GetCountryCode())
+	assert.Equal(t, "INR", resp.GetPrimaryCurrencyCode())
+}
+
+func TestHandler_SetTenantAddress_InvalidTenantID(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().SetTenantAddress(context.Background(), &iamv1.SetTenantAddressRequest{
+		TenantId:    "not-a-uuid",
+		CountryCode: "IN",
+	})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_SetTenantAddress_MissingCountry(t *testing.T) {
+	t.Parallel()
+	h := newHandler()
+	_, err := h.SetTenantAddress(context.Background(), &iamv1.SetTenantAddressRequest{
+		TenantId: uuid.New().String(),
+	})
+	require.Error(t, err)
+}
+
 // --- GetTenant ---
 
 func TestHandler_GetTenant_Success(t *testing.T) {

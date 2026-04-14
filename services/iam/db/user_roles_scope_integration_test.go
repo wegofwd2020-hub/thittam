@@ -35,7 +35,7 @@ func seedRow(t *testing.T, tx pgx.Tx, roleName string) (tenantID, userID, roleID
 	roleID = uuid.New()
 
 	_, err := tx.Exec(ctx,
-		`INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $3)`,
+		`INSERT INTO tenants (id, name, slug, country_code, primary_currency_code) VALUES ($1, $2, $3, 'US', 'USD')`,
 		tenantID, "test-tenant-"+tenantID.String()[:8], "test-"+tenantID.String()[:8])
 	require.NoError(t, err, "insert tenant")
 
@@ -129,7 +129,7 @@ func TestUserRolesScope_CustomRoleUnconstrained(t *testing.T) {
 	roleID := uuid.New()
 
 	ctx := context.Background()
-	_, err := tx.Exec(ctx, `INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $3)`,
+	_, err := tx.Exec(ctx, `INSERT INTO tenants (id, name, slug, country_code, primary_currency_code) VALUES ($1, $2, $3, 'US', 'USD')`,
 		tenantID, "custom-"+tenantID.String()[:8], "cust-"+tenantID.String()[:8])
 	require.NoError(t, err)
 	_, err = tx.Exec(ctx,

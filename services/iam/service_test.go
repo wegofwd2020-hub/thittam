@@ -1513,3 +1513,160 @@ func TestRehashIfNeeded_NeedsRehash_HashFails(t *testing.T) {
 	// Must not panic; hash failure is swallowed.
 	svc.rehashIfNeeded(fixedTenantID, "user@example.com", "pass")
 }
+
+func TestSetTenantAddress_DerivesCurrencyFromCountry(t *testing.T) {
+	t.Parallel()
+	var saved *Tenant
+	svc := newTestService(&mockRepo{
+		updateTenantAddressFn: func(_ context.Context, tn *Tenant) (*Tenant, error) {
+			saved = tn
+			return tn, nil
+		},
+	})
+
+	out, err := svc.SetTenantAddress(context.Background(), &Tenant{
+		ID:          fixedTenantID,
+		CountryCode: "in",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "IN", out.CountryCode)
+	assert.Equal(t, "INR", out.PrimaryCurrencyCode)
+	assert.Equal(t, "IN", saved.CountryCode)
+}
+
+func TestSetTenantAddress_HonoursExplicitCurrency(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		updateTenantAddressFn: func(_ context.Context, tn *Tenant) (*Tenant, error) {
+			return tn, nil
+		},
+	})
+
+	out, err := svc.SetTenantAddress(context.Background(), &Tenant{
+		ID:                  fixedTenantID,
+		CountryCode:         "US",
+		PrimaryCurrencyCode: "eur",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "EUR", out.PrimaryCurrencyCode)
+}
+
+func TestSetTenantAddress_MissingCountry(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{})
+	_, err := svc.SetTenantAddress(context.Background(), &Tenant{ID: fixedTenantID})
+	assert.ErrorIs(t, err, ErrCountryRequired)
+}
+
+func TestSetTenantAddress_UnknownCountry(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{})
+	_, err := svc.SetTenantAddress(context.Background(), &Tenant{
+		ID:          fixedTenantID,
+		CountryCode: "ZZ",
+	})
+	assert.ErrorIs(t, err, ErrUnknownCountry)
+}
+
+func TestSetTenantAddress_RepoError(t *testing.T) {
+	t.Parallel()
+	boom := errors.New("boom")
+	svc := newTestService(&mockRepo{
+		updateTenantAddressFn: func(_ context.Context, _ *Tenant) (*Tenant, error) {
+			return nil, boom
+		},
+	})
+	_, err := svc.SetTenantAddress(context.Background(), &Tenant{
+		ID:          fixedTenantID,
+		CountryCode: "IN",
+	})
+	assert.ErrorIs(t, err, boom)
+}
+
+func TestGetCurrentUser_ReturnsUserAndTenant(t *testing.T) {
+	t.Parallel()
+	wantUser := &User{ID: fixedUserID, TenantID: fixedTenantID, Status: "active"}
+	wantTenant := &Tenant{ID: fixedTenantID, Name: "Acme", CountryCode: "IN", PrimaryCurrencyCode: "INR"}
+	svc := NewService(
+		&mockRepo{
+			getUserFn: func(_ context.Context, _, _ uuid.UUID) (*User, error) {
+				return wantUser, nil
+			},
+			getTenantFn: func(_ context.Context, _ uuid.UUID) (*Tenant, error) {
+				return wantTenant, nil
+			},
+		},
+		&mockAuthenticator{},
+		&mockTokenIssuer{
+			validateFn: func(_ context.Context, _ string) (*auth.Claims, error) {
+				return &auth.Claims{Subject: fixedUserID, TenantID: fixedTenantID}, nil
+			},
+		},
+		&mockHasher{},
+		&mockVerifier{},
+	)
+
+	user, tenant, err := svc.GetCurrentUser(context.Background(), "access-token")
+	require.NoError(t, err)
+	assert.Equal(t, wantUser, user)
+	assert.Equal(t, wantTenant, tenant)
+}
+
+func TestGetCurrentUser_InvalidToken(t *testing.T) {
+	t.Parallel()
+	svc := NewService(
+		&mockRepo{},
+		&mockAuthenticator{},
+		&mockTokenIssuer{
+			validateFn: func(_ context.Context, _ string) (*auth.Claims, error) {
+				return nil, errors.New("invalid")
+			},
+		},
+		&mockHasher{},
+		&mockVerifier{},
+	)
+	_, _, err := svc.GetCurrentUser(context.Background(), "bad")
+	require.Error(t, err)
+}
+
+func TestGetCurrentUser_UserLookupFails(t *testing.T) {
+	t.Parallel()
+	svc := NewService(
+		&mockRepo{
+			getUserFn: func(_ context.Context, _, _ uuid.UUID) (*User, error) {
+				return nil, errors.New("db down")
+			},
+		},
+		&mockAuthenticator{},
+		&mockTokenIssuer{
+			validateFn: func(_ context.Context, _ string) (*auth.Claims, error) {
+				return &auth.Claims{Subject: fixedUserID, TenantID: fixedTenantID}, nil
+			},
+		},
+		&mockHasher{},
+		&mockVerifier{},
+	)
+	_, _, err := svc.GetCurrentUser(context.Background(), "tok")
+	require.Error(t, err)
+}
+
+func TestGetCurrentUser_TenantLookupFails(t *testing.T) {
+	t.Parallel()
+	svc := NewService(
+		&mockRepo{
+			getTenantFn: func(_ context.Context, _ uuid.UUID) (*Tenant, error) {
+				return nil, errors.New("no tenant")
+			},
+		},
+		&mockAuthenticator{},
+		&mockTokenIssuer{
+			validateFn: func(_ context.Context, _ string) (*auth.Claims, error) {
+				return &auth.Claims{Subject: fixedUserID, TenantID: fixedTenantID}, nil
+			},
+		},
+		&mockHasher{},
+		&mockVerifier{},
+	)
+	_, _, err := svc.GetCurrentUser(context.Background(), "tok")
+	require.Error(t, err)
+}
