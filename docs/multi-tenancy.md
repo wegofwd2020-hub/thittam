@@ -11,8 +11,10 @@ vertical, and how to stand up a new demo tenant alongside existing ones.
 
 ## 1. Isolation model
 
-Thittam is a **multi-tenant SaaS platform**. Every row in every business-domain
-table is scoped to a `tenant_id`. The identifier flows end-to-end:
+Thittam uses a **tenant-per-schema** isolation model. Each tenant's
+business-domain tables live in a dedicated PostgreSQL schema named
+`tenant_<uuid>`; cross-tenant reads are prevented at the connection level
+rather than by query discipline. The tenant identifier flows end-to-end:
 
 1. **Login** — `iam.Login` resolves the user's `tenant_id` and embeds it as a
    JWT claim.
@@ -20,10 +22,19 @@ table is scoped to a `tenant_id`. The identifier flows end-to-end:
    an `X-Tenant-ID` header.
 3. **Interceptor** — every vertical-aware gRPC handler asserts `X-Tenant-ID`
    matches the JWT claim; mismatches return `PERMISSION_DENIED`.
-4. **Repository** — every SQL query filters by `WHERE tenant_id = $1`. Cross-
-   tenant reads are impossible by construction.
+4. **Database connection** — `pkg/tenantdb.Acquire` sets
+   `search_path = tenant_<uuid>` on the pooled connection before any query
+   runs. Unqualified table references in sqlc-generated queries resolve to
+   the current tenant's schema; reaching another tenant's rows is physically
+   impossible on that connection. A `tenant_id` column on each row provides
+   a secondary belt-and-braces check, not the primary isolation mechanism.
 5. **Cache** — Redis keys are prefixed with `tenant:<uuid>:` so no data bleeds
    between tenants at the L2 cache layer either.
+
+Shared/global tables (`tenants`, `users`, `tenant_verticals`, audit logs) live
+in the `public` schema and are always queried with explicit `WHERE tenant_id`
+filters — these are the identity-plane tables that *describe* tenants rather
+than belonging to one.
 
 Universal services (`iam`, `general-ledger`, `notifications`, `document`) do
 not require a vertical binding. Vertical-aware services (`project`, `budget`,
@@ -137,7 +148,7 @@ budget/expense/inventory tables, and all filter dropdowns.
 | - | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | 1 | `productions.status` has a CHECK constraint hardcoded to movie-production lifecycle values (`development`, `pre_production`, …, `archived`)         | Map vertical-specific stage IDs onto the existing allowed statuses in the seed (see xyz-construction plan §3). File an issue to replace with a tenant-aware validation. |
 | 2 | Cross-tenant reporting is not supported — by design. Every query is scoped by `tenant_id`.                                                          | If ever needed, introduce a `platform` scope with strict RBAC and audit logging.                 |
-| 3 | Dev DB stores all tenants in shared schemas; production isolates differently (schema-per-tenant). Behavioural differences are possible.             | Integration tests (`-tags=integration`) run against a dedicated `thittam_test` DB.               |
+| 3 | `SET search_path` is not parameterised — schema names must be interpolated into SQL. `pkg/tenantdb` is the only sanctioned path; ad-hoc interpolation elsewhere is a schema-injection vector. | Code review + `pkg/tenantdb.Acquire` enforces UUID-typed inputs (see the package doc comment).   |
 | 4 | UI "tenant switcher" does not yet exist. Multi-tenant users (platform admins) must log out to switch.                                               | Planned post-v1.                                                                                 |
 
 ## 8. Related documents
