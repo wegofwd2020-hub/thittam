@@ -6,7 +6,7 @@
         migrate-all migrate-down migrate-tenant migrate-all-tenants seed \
         dev-start dev-start-fresh dev-stop \
         run-all run-web \
-        test test-race test-cover test-integration \
+        test test-race test-cover test-integration test-e2e test-e2e-install \
         validate-verticals coverage-check \
         generate generate-proto generate-sqlc \
         lint build clean \
@@ -231,6 +231,15 @@ test-cover:
 # run all integration-tagged tests. Honours THITTAM_TEST_DSN if exported.
 test-integration: db-test-bootstrap
 	THITTAM_TEST_DSN="$(TEST_DB_URL)" go test ./... -tags=integration -race
+
+# test-e2e — Playwright UX tests against the Next.js frontend.
+# Assumes backend services are up (make dev-start) and DB is seeded (make seed).
+# Playwright auto-boots `npm run dev` on :3100 via its webServer config.
+test-e2e:
+	cd web && npm run test:e2e
+
+test-e2e-install:
+	cd web && npm install && npx playwright install --with-deps
 
 # ── Vertical schema validation ────────────────────────────────────────────────
 # Validates every *.yaml file in pkg/vertical/configs/ against the vertical
