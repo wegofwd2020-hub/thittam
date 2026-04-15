@@ -1,196 +1,187 @@
-[![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/golang-migrate/migrate/ci.yaml?branch=master)](https://github.com/golang-migrate/migrate/actions/workflows/ci.yaml?query=branch%3Amaster)
-[![GoDoc](https://pkg.go.dev/badge/github.com/golang-migrate/migrate)](https://pkg.go.dev/github.com/golang-migrate/migrate/v4)
-[![Coverage Status](https://img.shields.io/coveralls/github/golang-migrate/migrate/master.svg)](https://coveralls.io/github/golang-migrate/migrate?branch=master)
-[![packagecloud.io](https://img.shields.io/badge/deb-packagecloud.io-844fec.svg)](https://packagecloud.io/golang-migrate/migrate?filter=debs)
-[![Docker Pulls](https://img.shields.io/docker/pulls/migrate/migrate.svg)](https://hub.docker.com/r/migrate/migrate/)
-![Supported Go Versions](https://img.shields.io/badge/Go-1.21%2C%201.22-lightgrey.svg)
-[![GitHub Release](https://img.shields.io/github/release/golang-migrate/migrate.svg)](https://github.com/golang-migrate/migrate/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/golang-migrate/migrate/v4)](https://goreportcard.com/report/github.com/golang-migrate/migrate/v4)
+# Thittam (திட்டம்)
 
-# migrate
+**Thittam** — Tamil for "plan" — is a multi-tenant SaaS platform for
+production management. One codebase, many verticals: film productions,
+construction projects, software delivery, live events. Each tenant's industry
+is captured declaratively in a YAML "vertical" file; services read the config
+at request time and adapt entity names, phase graphs, budget categories, and
+workflows to match the domain.
 
-__Database migrations written in Go. Use as [CLI](#cli-usage) or import as [library](#use-in-your-go-project).__
+This repository contains the **application code** (Go microservices + a
+Next.js frontend). Architecture docs, ADRs, and API specs live in the
+companion docs repo:
+[`github.com/wegofwd2020-hub/thittam_docs`](https://github.com/wegofwd2020-hub/thittam_docs).
 
-* Migrate reads migrations from [sources](#migration-sources)
-   and applies them in correct order to a [database](#databases).
-* Drivers are "dumb", migrate glues everything together and makes sure the logic is bulletproof.
-   (Keeps the drivers lightweight, too.)
-* Database drivers don't assume things or try to correct user input. When in doubt, fail.
+**Company:** WeGoFwd2020
 
-Forked from [mattes/migrate](https://github.com/mattes/migrate)
+---
 
-## Databases
+## Architecture
 
-Database drivers run migrations. [Add a new database?](database/driver.go)
+Nine Go microservices on gRPC (sync) + NATS JetStream (async), fronted by Kong
+API Gateway for REST/JSON consumers. PostgreSQL for durable state; Redis for
+caching and rate limiting; MinIO for object storage.
 
-* [PostgreSQL](database/postgres)
-* [PGX v4](database/pgx)
-* [PGX v5](database/pgx/v5)
-* [Redshift](database/redshift)
-* [Ql](database/ql)
-* [Cassandra / ScyllaDB](database/cassandra)
-* [SQLite](database/sqlite)
-* [SQLite3](database/sqlite3) ([todo #165](https://github.com/mattes/migrate/issues/165))
-* [SQLCipher](database/sqlcipher)
-* [MySQL / MariaDB](database/mysql)
-* [Neo4j](database/neo4j)
-* [MongoDB](database/mongodb)
-* [CrateDB](database/crate) ([todo #170](https://github.com/mattes/migrate/issues/170))
-* [Shell](database/shell) ([todo #171](https://github.com/mattes/migrate/issues/171))
-* [Google Cloud Spanner](database/spanner)
-* [CockroachDB](database/cockroachdb)
-* [YugabyteDB](database/yugabytedb)
-* [ClickHouse](database/clickhouse)
-* [Firebird](database/firebird)
-* [MS SQL Server](database/sqlserver)
-* [rqlite](database/rqlite)
+| Service                 | Port | Role                                            |
+| ----------------------- | ---- | ----------------------------------------------- |
+| project-management      | 8080 | Productions / projects, phases, crew, schedules |
+| budget-planning         | 8081 | Budget versions, line items, approvals          |
+| expense-tracking        | 8082 | POs, receipts, petty cash                       |
+| general-ledger          | 8083 | Double-entry accounting                         |
+| inventory-management    | 8084 | Equipment, props, locations                     |
+| reporting-analytics     | 8085 | Cross-service reports (read-only)               |
+| iam                     | 8086 | Identity, auth, RBAC, tenancy                   |
+| notifications           | 8087 | Email, SMS, push, in-app                        |
+| document                | 8088 | File storage, versioning, e-signatures          |
 
-### Database URLs
+Data isolation is **tenant-per-schema**: each tenant's tables live in a
+dedicated `tenant_<uuid>` PostgreSQL schema, routed via `SET search_path` on
+the pooled connection (see [`pkg/tenantdb`](pkg/tenantdb/tenantdb.go)). The
+full model — including the vertical plugin system, per-vertical UI
+adaptation, and the runbook for adding new tenants — is documented in
+[`docs/multi-tenancy.md`](docs/multi-tenancy.md).
 
-Database connection strings are specified via URLs. The URL format is driver dependent but generally has the form: `dbdriver://username:password@host:port/dbname?param1=true&param2=false`
+## Repository layout
 
-Any [reserved URL characters](https://en.wikipedia.org/wiki/Percent-encoding#Percent-encoding_reserved_characters) need to be escaped. Note, the `%` character also [needs to be escaped](https://en.wikipedia.org/wiki/Percent-encoding#Percent-encoding_the_percent_character)
-
-Explicitly, the following characters need to be escaped:
-`!`, `#`, `$`, `%`, `&`, `'`, `(`, `)`, `*`, `+`, `,`, `/`, `:`, `;`, `=`, `?`, `@`, `[`, `]`
-
-It's easiest to always run the URL parts of your DB connection URL (e.g. username, password, etc) through an URL encoder. See the example Python snippets below:
-
-```bash
-$ python3 -c 'import urllib.parse; print(urllib.parse.quote(input("String to encode: "), ""))'
-String to encode: FAKEpassword!#$%&'()*+,/:;=?@[]
-FAKEpassword%21%23%24%25%26%27%28%29%2A%2B%2C%2F%3A%3B%3D%3F%40%5B%5D
-$ python2 -c 'import urllib; print urllib.quote(raw_input("String to encode: "), "")'
-String to encode: FAKEpassword!#$%&'()*+,/:;=?@[]
-FAKEpassword%21%23%24%25%26%27%28%29%2A%2B%2C%2F%3A%3B%3D%3F%40%5B%5D
-$
 ```
-
-## Migration Sources
-
-Source drivers read migrations from local or remote sources. [Add a new source?](source/driver.go)
-
-* [Filesystem](source/file) - read from filesystem
-* [io/fs](source/iofs) - read from a Go [io/fs](https://pkg.go.dev/io/fs#FS)
-* [Go-Bindata](source/go_bindata) - read from embedded binary data ([jteeuwen/go-bindata](https://github.com/jteeuwen/go-bindata))
-* [pkger](source/pkger) - read from embedded binary data ([markbates/pkger](https://github.com/markbates/pkger))
-* [GitHub](source/github) - read from remote GitHub repositories
-* [GitHub Enterprise](source/github_ee) - read from remote GitHub Enterprise repositories
-* [Bitbucket](source/bitbucket) - read from remote Bitbucket repositories
-* [Gitlab](source/gitlab) - read from remote Gitlab repositories
-* [AWS S3](source/aws_s3) - read from Amazon Web Services S3
-* [Google Cloud Storage](source/google_cloud_storage) - read from Google Cloud Platform Storage
-
-## CLI usage
-
-* Simple wrapper around this library.
-* Handles ctrl+c (SIGINT) gracefully.
-* No config search paths, no config files, no magic ENV var injections.
-
-__[CLI Documentation](cmd/migrate)__
-
-### Basic usage
-
-```bash
-$ migrate -source file://path/to/migrations -database postgres://localhost:5432/database up 2
-```
-
-### Docker usage
-
-```bash
-$ docker run -v {{ migration dir }}:/migrations --network host migrate/migrate
-    -path=/migrations/ -database postgres://localhost:5432/database up 2
-```
-
-## Use in your Go project
-
-* API is stable and frozen for this release (v3 & v4).
-* Uses [Go modules](https://golang.org/cmd/go/#hdr-Modules__module_versions__and_more) to manage dependencies.
-* To help prevent database corruptions, it supports graceful stops via `GracefulStop chan bool`.
-* Bring your own logger.
-* Uses `io.Reader` streams internally for low memory overhead.
-* Thread-safe and no goroutine leaks.
-
-__[Go Documentation](https://pkg.go.dev/github.com/golang-migrate/migrate/v4)__
-
-```go
-import (
-    "github.com/golang-migrate/migrate/v4"
-    _ "github.com/golang-migrate/migrate/v4/database/postgres"
-    _ "github.com/golang-migrate/migrate/v4/source/github"
-)
-
-func main() {
-    m, err := migrate.New(
-        "github://mattes:personal-access-token@mattes/migrate_test",
-        "postgres://localhost:5432/database?sslmode=enable")
-    m.Steps(2)
-}
-```
-
-Want to use an existing database client?
-
-```go
-import (
-    "database/sql"
-    _ "github.com/lib/pq"
-    "github.com/golang-migrate/migrate/v4"
-    "github.com/golang-migrate/migrate/v4/database/postgres"
-    _ "github.com/golang-migrate/migrate/v4/source/file"
-)
-
-func main() {
-    db, err := sql.Open("postgres", "postgres://localhost:5432/database?sslmode=enable")
-    driver, err := postgres.WithInstance(db, &postgres.Config{})
-    m, err := migrate.NewWithDatabaseInstance(
-        "file:///migrations",
-        "postgres", driver)
-    m.Up() // or m.Step(2) if you want to explicitly set the number of migrations to run
-}
+├── cmd/                      # main.go entry points per service
+├── services/                 # service-local code (handlers, repos, tests)
+│   ├── iam/  budget/  expense/  ledger/  project/  inventory/
+│   ├── reporting/  notifications/  document/  billing/
+├── proto/                    # protobuf + gRPC definitions
+├── gen/                      # generated buf / grpc-gateway output
+├── migrations/               # SQL migrations per service
+├── pkg/                      # shared packages
+│   ├── tenant/  tenantdb/    # tenant context + schema-routed connections
+│   ├── vertical/             # vertical YAML loader, config types, interceptors
+│   ├── secrets/              # Vault + file-based secret sources
+│   └── ...
+├── seeds/demo/               # per-tenant demo fixtures
+│   ├── xyz-cba/              # XYZ_CBA Productions (movie vertical, INR) — seeded
+│   └── xyz-construction/     # XYZ Construction LLC (construction, USD) — scaffolded
+├── web/                      # Next.js frontend (port 3100)
+├── e2e/critical_path/        # in-process Go E2E tests (no Docker)
+├── load-tests/               # k6 scenarios + chaos tests
+├── infra/local/              # docker-compose for Redis / NATS / MinIO
+├── docs/                     # repo-local docs (multi-tenancy, operations, verticals)
+└── Makefile                  # developer entry point — run `make help`
 ```
 
 ## Getting started
 
-Go to [getting started](GETTING_STARTED.md)
+### Prerequisites
 
-## Tutorials
+- Go 1.22+ (CI pins `1.25.9`)
+- Node.js 20+ (for the `web/` frontend)
+- PostgreSQL 16 on `localhost:5433`, or Docker (`make infra-up-full`)
+- Docker + docker-compose (for Redis, NATS, MinIO)
+- [`tmuxinator`](https://github.com/tmuxinator/tmuxinator) (optional, for `make run-all`)
+- Tooling: `buf`, `sqlc`, `golangci-lint`, `migrate`, `govulncheck`,
+  `gitleaks` — install per `tools/`
 
-* [CockroachDB](database/cockroachdb/TUTORIAL.md)
-* [PostgreSQL](database/postgres/TUTORIAL.md)
-
-(more tutorials to come)
-
-## Migration files
-
-Each migration has an up and down migration. [Why?](FAQ.md#why-two-separate-files-up-and-down-for-a-migration)
+### First-run setup
 
 ```bash
-1481574547_create_users_table.up.sql
-1481574547_create_users_table.down.sql
+# 1. Start Docker middleware (Redis, NATS, MinIO)
+make infra-up
+
+# 2. Create the local Postgres role + database + run every migration
+make db-bootstrap WITH_SEED=1   # seeds XYZ_CBA demo tenant
+
+# 3. Generate local JWT / OIDC keys (gitignored)
+make dev-keys
+
+# 4. Start all backend services (9 windows via tmuxinator)
+make dev-start
+
+# 5. In a separate terminal, start the frontend
+make run-web                     # Next.js on :3100
 ```
 
-[Best practices: How to write migrations.](MIGRATIONS.md)
+Log in at <http://localhost:3100/login> as `rajesh.kumar@xyzcba.com` /
+`demo1234`. See
+[`seeds/demo/xyz-cba/README.md`](seeds/demo/xyz-cba/README.md) for the full
+user roster and fixture details.
 
-## Coming from another db migration tool?
+### Common commands
 
-Check out [migradaptor](https://github.com/musinit/migradaptor/).
-*Note: migradaptor is not affiliated or supported by this project*
+```bash
+make help                     # show every Makefile target with a short description
+make migrate-all              # run DB migrations
+make seed                     # load XYZ_CBA demo data
+make run-all                  # start all 9 services via tmuxinator
+make test                     # unit tests (-short)
+make test-race                # unit tests with -race
+make test-integration         # integration tests against thittam_test DB
+make test-e2e                 # Playwright UX suite (see web/tests/e2e/README.md)
+make validate-verticals       # validate every vertical YAML
+make coverage-check           # enforce per-package coverage thresholds (CI parity)
+make lint                     # golangci-lint
+make generate                 # buf + sqlc code generation
+```
 
-## Versions
+## Testing
 
-Version | Supported? | Import | Notes
---------|------------|--------|------
-**master** | :white_check_mark: | `import "github.com/golang-migrate/migrate/v4"` | New features and bug fixes arrive here first |
-**v4** | :white_check_mark: | `import "github.com/golang-migrate/migrate/v4"` | Used for stable releases |
-**v3** | :x: | `import "github.com/golang-migrate/migrate"` (with package manager) or `import "gopkg.in/golang-migrate/migrate.v3"` (not recommended) | **DO NOT USE** - No longer supported |
+- **Unit tests** — `go test ./... -short`. Coverage thresholds: `iam` /
+  `general-ledger` ≥ 85%, `budget` / `expense` ≥ 80%, others ≥ 75%. Enforced
+  in CI; run `make coverage-check` locally for parity.
+- **Integration tests** — `go test ./... -tags=integration -race`. Uses a
+  dedicated `thittam_test` database (`make db-test-bootstrap`).
+- **E2E (Go)** — `e2e/critical_path/` runs in-process with stubbed deps, no
+  Docker. Target: ≤ 5 minutes.
+- **E2E (UI)** — Playwright in `web/tests/e2e/`. Five projects: `smoke`
+  (unauthenticated), `setup` (logs in once), and `chromium` / `firefox` /
+  `webkit` (reuse storageState). See
+  [`web/tests/e2e/README.md`](web/tests/e2e/README.md).
 
-## Development and Contributing
+## Verticals
 
-Yes, please! [`Makefile`](Makefile) is your friend,
-read the [development guide](CONTRIBUTING.md).
+Each vertical is a YAML file in
+[`pkg/vertical/configs/`](pkg/vertical/configs/) that defines entity labels,
+phase graphs, budget categories, expense types, and inventory buckets.
+Shipped today:
 
-Also have a look at the [FAQ](FAQ.md).
+- `movie-production` (in use by xyz-cba)
+- `construction` (ready; xyz-construction demo seed pending)
+- `software-development`
+- `events-management`
 
----
+Schema reference: [`docs/verticals/schema.md`](docs/verticals/schema.md).
 
-Looking for alternatives? [https://awesome-go.com/#database](https://awesome-go.com/#database).
+## Conventions
+
+- **Branching:** trunk-based; short-lived `feat/` / `fix/` / `chore/` /
+  `docs/` / `hotfix/` branches with ticket IDs.
+- **Commits:** Conventional Commits — `<type>(<scope>): <summary>`. Scopes
+  include `iam`, `budget`, `expense`, `ledger`, `inventory`, `reporting`,
+  `notifications`, `document`, `project`, `billing`, `proto`, `infra`, `api`,
+  `ui`, `seed`.
+- **Merge strategy:** squash-and-merge.
+- **Review:** 2 approvals required; a senior engineer must review changes
+  to `iam`, `general-ledger`, or anything security-sensitive.
+- **Money:** `decimal.Decimal` (shopspring), `NUMERIC(14,2)`, never `float64`.
+  JSON serialises as a 2-decimal-place string.
+- **SQL:** parameterised via sqlc or pgx named params — no string
+  interpolation, ever.
+- **Secrets:** T1 (JWT keys, DB passwords) from Vault; T2 from env via K8s
+  Secret; never hardcoded. Full tiering in
+  [`~/coding-standards/CODING_RULES.md`](https://github.com/wegofwd2020-hub/coding-standards).
+- **Logging:** structured via `slog`; no PII or secrets.
+
+## Documentation
+
+- **Architecture / ADRs / API specs:**
+  [`wegofwd2020-hub/thittam_docs`](https://github.com/wegofwd2020-hub/thittam_docs)
+- **Repo-local docs:** [`docs/`](docs/)
+  - [`multi-tenancy.md`](docs/multi-tenancy.md) — isolation model and runbook
+  - [`verticals/schema.md`](docs/verticals/schema.md) — vertical YAML schema
+  - [`operations/nats-dlq.md`](docs/operations/nats-dlq.md) — NATS DLQ strategy
+  - [`demo-xyz-construction-plan.md`](docs/demo-xyz-construction-plan.md) —
+    rollout plan for the construction demo tenant
+- **Frontend:** [`web/README.md`](web/README.md) and
+  [`web/tests/e2e/README.md`](web/tests/e2e/README.md)
+- **Load / chaos:** [`load-tests/README.md`](load-tests/README.md)
+
+## License
+
+Proprietary. © WeGoFwd2020. All rights reserved.
