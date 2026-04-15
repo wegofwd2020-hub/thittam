@@ -22,8 +22,10 @@
 --   Project 5  status=locked      ~20 items, ~91% consumed
 --   Project 6  status=locked      ~20 items, actual ≈ budgeted (100% complete)
 --
--- Budget ID prefix:    d2200000-…-XXX
--- Line-item ID prefix: d2210000-…-XXX
+-- Budgets share the cross-tenant d3000000-... namespace (one budget per
+-- project; second-tenant offset -201 through -206 matches the project
+-- suffix so it's trivial to grep for "this project's budget").
+-- Line items live in d4000000-... — second-tenant range -201 onwards.
 --
 -- Decimal columns: NUMERIC(14,2) — use string literals like '4800000.00'.
 
@@ -31,24 +33,24 @@
 --     id, tenant_id, production_id, label, status, currency,
 --     total_amount, created_by, created_at
 -- ) VALUES
---     ('d2200000-0000-0000-0000-000000000001',
+--     ('d3000000-0000-0000-0000-000000000201',
 --      'd0000000-0000-0000-0000-000000000002',
---      'd2100000-0000-0000-0000-000000000001',
+--      'd2000000-0000-0000-0000-000000000201',     -- Oakwood Medical Plaza
 --      'Oakwood Medical Plaza V1',
 --      'draft', 'USD',
 --      '4800000.00',
---      'd2000000-0000-0000-0000-000000000003',
+--      'd1000000-0000-0000-0000-000000000203',     -- created_by = Ethan Choi
 --      '2026-04-01'),
---     -- … 5 more …
+--     -- … 5 more (-202 through -206) …
 -- ON CONFLICT (id) DO NOTHING;
 --
 -- INSERT INTO budget_line_items (
 --     id, budget_id, tenant_id, category_id, description, account_code,
 --     budgeted_amount, actual_amount, committed_amount, is_locked
 -- ) VALUES
---     -- Project 2: Riverbend Logistics Hub line items
---     ('d2210000-0000-0000-0000-000000000201',
---      'd2200000-0000-0000-0000-000000000002',
+--     -- Project 2: Riverbend Logistics Hub line items (d4000000-...-2XX)
+--     ('d4000000-0000-0000-0000-000000000201',
+--      'd3000000-0000-0000-0000-000000000202',
 --      'd0000000-0000-0000-0000-000000000002',
 --      'preliminaries',
 --      'Site mobilisation',

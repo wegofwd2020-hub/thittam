@@ -6,18 +6,19 @@
 
 -- TODO(seed): author 6 user rows mirroring seeds/demo/xyz-cba/002_users.sql.
 --
--- User ID prefix: d2000000-0000-0000-0000-000000000XXX
+-- Users share the cross-tenant d1000000-... namespace documented in
+-- xyz-cba's README. This tenant uses the -2XX offset to remain distinct
+-- from xyz-cba's -00X range:
 --
--- User roster (see README.md for full detail):
---   001  Miles Sullivan     miles.sullivan@xyzconstruction.com     Owner / Super Admin
---   002  Dana Reyes         dana.reyes@xyzconstruction.com         Project Director
---   003  Ethan Choi         ethan.choi@xyzconstruction.com         Estimator
---   004  Nora Patel         nora.patel@xyzconstruction.com         Site Supervisor
---   005  Raj Menon          raj.menon@xyzconstruction.com          Finance Controller
---   006  Kim Alvarez        kim.alvarez@xyzconstruction.com        Procurement
+--   d1000000-0000-0000-0000-000000000201  Miles Sullivan     Owner / Super Admin
+--   d1000000-0000-0000-0000-000000000202  Dana Reyes         Project Director
+--   d1000000-0000-0000-0000-000000000203  Ethan Choi         Estimator
+--   d1000000-0000-0000-0000-000000000204  Nora Patel         Site Supervisor
+--   d1000000-0000-0000-0000-000000000205  Raj Menon          Finance Controller
+--   d1000000-0000-0000-0000-000000000206  Kim Alvarez        Procurement
 --
 -- INSERT INTO users (id, tenant_id, email, display_name, password_hash, status) VALUES
---     ('d2000000-0000-0000-0000-000000000001',
+--     ('d1000000-0000-0000-0000-000000000201',
 --      'd0000000-0000-0000-0000-000000000002',
 --      'miles.sullivan@xyzconstruction.com',
 --      'Miles Sullivan',

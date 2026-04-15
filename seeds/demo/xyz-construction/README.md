@@ -20,12 +20,21 @@ All users share password: `demo1234` (same bcrypt hash as xyz-cba).
 
 | Name              | Email                                    | Role                   | ID         |
 | ----------------- | ---------------------------------------- | ---------------------- | ---------- |
-| Miles Sullivan    | miles.sullivan@xyzconstruction.com       | Owner / Super Admin    | `d2..001`  |
-| Dana Reyes        | dana.reyes@xyzconstruction.com           | Project Director       | `d2..002`  |
-| Ethan Choi        | ethan.choi@xyzconstruction.com           | Estimator              | `d2..003`  |
-| Nora Patel        | nora.patel@xyzconstruction.com           | Site Supervisor        | `d2..004`  |
-| Raj Menon         | raj.menon@xyzconstruction.com            | Finance Controller     | `d2..005`  |
-| Kim Alvarez       | kim.alvarez@xyzconstruction.com          | Procurement            | `d2..006`  |
+| Miles Sullivan    | miles.sullivan@xyzconstruction.com       | Owner / Super Admin    | `d1..201`  |
+| Dana Reyes        | dana.reyes@xyzconstruction.com           | Project Director       | `d1..202`  |
+| Ethan Choi        | ethan.choi@xyzconstruction.com           | Estimator              | `d1..203`  |
+| Nora Patel        | nora.patel@xyzconstruction.com           | Site Supervisor        | `d1..204`  |
+| Raj Menon         | raj.menon@xyzconstruction.com            | Finance Controller     | `d1..205`  |
+| Kim Alvarez       | kim.alvarez@xyzconstruction.com          | Procurement            | `d1..206`  |
+
+**UUID convention.** This tenant reuses the cross-tenant scheme documented
+in `seeds/demo/xyz-cba/README.md` — users in the `d1000000-...` namespace,
+projects in `d2000000-...`, budgets in `d3000000-...`, line items in
+`d4000000-...`, expenses in `d5000000-...`. Second-tenant entities use the
+`...-2XX` offset (`...-201` onwards) to stay distinct from xyz-cba's
+`...-00X` range. Tenants live in separate schemas, so there is no
+database-level collision either way; the offset is purely for human
+readability when grepping across seed files.
 
 ## Projects
 

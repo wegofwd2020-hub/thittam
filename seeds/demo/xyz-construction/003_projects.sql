@@ -14,28 +14,30 @@
 --
 -- Status: PLACEHOLDER — to be authored in Phase A.
 
--- TODO(seed): 6 INSERT rows. Project ID prefix: d2100000-…-0000000000XX
+-- TODO(seed): 6 INSERT rows.
 --
--- Project roster:
---   01  Oakwood Medical Plaza                  Ann Arbor, MI       $4.8M   Tender         → development
---   02  Riverbend Logistics Hub                Toledo, OH          $12.5M  Mobilisation   → pre_production
---   03  Cedar Park Townhomes (Phase I)         Novi, MI            $8.2M   Construction  → production (early)
---   04  Great Lakes Brewery Expansion          Grand Rapids, MI    $3.1M   Construction  → production (mid, overrun)
---   05  Huron Valley Water Treatment Retrofit  Milford, MI         $6.7M   Commissioning → post_production
---   06  Midtown Office Renovation              Detroit, MI         $2.4M   Handover      → released
+-- Projects share the cross-tenant d2000000-... namespace (see xyz-cba
+-- README). This tenant uses the -2XX offset:
+--
+--   d2000000-0000-0000-0000-000000000201  Oakwood Medical Plaza                  Ann Arbor, MI       $4.8M   Tender         → development
+--   d2000000-0000-0000-0000-000000000202  Riverbend Logistics Hub                Toledo, OH          $12.5M  Mobilisation   → pre_production
+--   d2000000-0000-0000-0000-000000000203  Cedar Park Townhomes (Phase I)         Novi, MI            $8.2M   Construction  → production (early)
+--   d2000000-0000-0000-0000-000000000204  Great Lakes Brewery Expansion          Grand Rapids, MI    $3.1M   Construction  → production (mid, overrun)
+--   d2000000-0000-0000-0000-000000000205  Huron Valley Water Treatment Retrofit  Milford, MI         $6.7M   Commissioning → post_production
+--   d2000000-0000-0000-0000-000000000206  Midtown Office Renovation              Detroit, MI         $2.4M   Handover      → released
 --
 -- INSERT INTO productions (
 --     id, tenant_id, title, slug, description, status,
 --     start_date, end_date, created_by
 -- ) VALUES
---     ('d2100000-0000-0000-0000-000000000001',
+--     ('d2000000-0000-0000-0000-000000000201',
 --      'd0000000-0000-0000-0000-000000000002',
 --      'Oakwood Medical Plaza', 'oakwood-medical-plaza',
 --      '3-storey medical office building, 48000 sqft, Ann Arbor MI',
 --      'development',
 --      '2026-06-01', '2027-10-30',
---      'd2000000-0000-0000-0000-000000000003'),
---     -- … 5 more …
+--      'd1000000-0000-0000-0000-000000000203'),    -- created_by = Ethan Choi (Estimator)
+--     -- … 5 more (-202 through -206) …
 -- ON CONFLICT (id) DO NOTHING;
 
 SELECT 'xyz-construction 003_projects.sql: placeholder — no rows inserted' AS status;

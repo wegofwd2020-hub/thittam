@@ -27,11 +27,11 @@
 -- )
 -- ON CONFLICT (id) DO NOTHING;
 --
--- -- Bind tenant to construction vertical
+-- -- Bind tenant to construction vertical (registered_by = Miles Sullivan)
 -- INSERT INTO tenant_verticals (tenant_id, vertical_id, registered_by) VALUES
 --     ('d0000000-0000-0000-0000-000000000002',
 --      'construction',
---      'd2000000-0000-0000-0000-000000000001')
+--      'd1000000-0000-0000-0000-000000000201')
 -- ON CONFLICT (tenant_id) DO NOTHING;
 
 SELECT 'xyz-construction 001_tenant.sql: placeholder — no rows inserted' AS status;
