@@ -1,0 +1,37 @@
+-- 001_tenant.sql — XYZ Construction LLC demo tenant
+-- Vertical: construction | Plan: professional
+-- Address: 123 Main Street, Milford, MI 48381, USA | Currency: USD
+--
+-- Status: PLACEHOLDER — to be authored in Phase A (see
+-- docs/demo-xyz-construction-plan.md §5). Running this file in its current
+-- state is a no-op: the INSERT below is commented out.
+
+-- TODO(seed): uncomment once Phase A is approved.
+--
+-- INSERT INTO tenants (
+--     id, name, slug, plan, status,
+--     address_line1, address_line2, city, country_code, postal_code,
+--     primary_currency_code
+-- ) VALUES (
+--     'd0000000-0000-0000-0000-000000000002',
+--     'XYZ Construction LLC',
+--     'xyz-construction',
+--     'professional',
+--     'active',
+--     '123 Main Street',
+--     NULL,
+--     'Milford',
+--     'US',
+--     '48381',
+--     'USD'
+-- )
+-- ON CONFLICT (id) DO NOTHING;
+--
+-- -- Bind tenant to construction vertical
+-- INSERT INTO tenant_verticals (tenant_id, vertical_id, registered_by) VALUES
+--     ('d0000000-0000-0000-0000-000000000002',
+--      'construction',
+--      'd2000000-0000-0000-0000-000000000001')
+-- ON CONFLICT (tenant_id) DO NOTHING;
+
+SELECT 'xyz-construction 001_tenant.sql: placeholder — no rows inserted' AS status;

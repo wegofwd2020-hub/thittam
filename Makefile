@@ -3,7 +3,7 @@
         nats-provision \
         db-init db-drop db-reset db-bootstrap \
         db-test-bootstrap db-test-reset \
-        migrate-all migrate-down migrate-tenant migrate-all-tenants seed \
+        migrate-all migrate-down migrate-tenant migrate-all-tenants seed seed-construction \
         dev-start dev-start-fresh dev-stop \
         run-all run-web \
         test test-race test-cover test-integration test-e2e test-e2e-install \
@@ -187,6 +187,18 @@ migrate-down:
 seed:
 	@echo "==> Loading XYZ_CBA demo seed data..."
 	@for f in seeds/demo/xyz-cba/*.sql; do \
+		echo "  Loading $$f"; \
+		psql "$(DB_URL)" -f "$$f" || exit 1; \
+	done
+	@echo "==> Seed complete."
+
+# seed-construction — loads the XYZ Construction demo tenant. Independent of
+# `make seed` so either tenant's fixtures can be reloaded in isolation. The
+# SQL files currently contain TODO markers only; see
+# docs/demo-xyz-construction-plan.md for Phase A authoring scope.
+seed-construction:
+	@echo "==> Loading XYZ Construction demo seed data..."
+	@for f in seeds/demo/xyz-construction/*.sql; do \
 		echo "  Loading $$f"; \
 		psql "$(DB_URL)" -f "$$f" || exit 1; \
 	done

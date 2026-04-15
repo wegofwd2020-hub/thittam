@@ -1,0 +1,60 @@
+-- 004_budgets.sql — One budget version per project + line items
+-- 6 rows in `budgets`, ~70–100 rows in `budget_line_items`.
+--
+-- Budget categories (from pkg/vertical/configs/construction.yaml):
+--   preliminaries       (6–8%)   5050
+--   materials           (30–40%) 5100
+--   labour              (15–20%) 5200
+--   subcontract         (20–25%) 5300
+--   plant_equipment     (5–8%)   5400
+--   contingency         (5–10%)  5500  (account codes illustrative)
+--
+-- Status: PLACEHOLDER — to be authored in Phase A.
+
+-- TODO(seed): 6 budget rows + line items per project.
+--
+-- Per-project status + story:
+--   Project 1  status=draft       no line items (or top-line only)
+--   Project 2  status=submitted   ~15 line items, awaiting approval
+--   Project 3  status=approved    ~18 items, actual+committed ≈ 25% of budgeted
+--   Project 4  status=approved    ~18 items, Materials actual > budgeted
+--                                 Contingency partial draw      ← MONEY SHOT
+--   Project 5  status=locked      ~20 items, ~91% consumed
+--   Project 6  status=locked      ~20 items, actual ≈ budgeted (100% complete)
+--
+-- Budget ID prefix:    d2200000-…-XXX
+-- Line-item ID prefix: d2210000-…-XXX
+--
+-- Decimal columns: NUMERIC(14,2) — use string literals like '4800000.00'.
+
+-- INSERT INTO budgets (
+--     id, tenant_id, production_id, label, status, currency,
+--     total_amount, created_by, created_at
+-- ) VALUES
+--     ('d2200000-0000-0000-0000-000000000001',
+--      'd0000000-0000-0000-0000-000000000002',
+--      'd2100000-0000-0000-0000-000000000001',
+--      'Oakwood Medical Plaza V1',
+--      'draft', 'USD',
+--      '4800000.00',
+--      'd2000000-0000-0000-0000-000000000003',
+--      '2026-04-01'),
+--     -- … 5 more …
+-- ON CONFLICT (id) DO NOTHING;
+--
+-- INSERT INTO budget_line_items (
+--     id, budget_id, tenant_id, category_id, description, account_code,
+--     budgeted_amount, actual_amount, committed_amount, is_locked
+-- ) VALUES
+--     -- Project 2: Riverbend Logistics Hub line items
+--     ('d2210000-0000-0000-0000-000000000201',
+--      'd2200000-0000-0000-0000-000000000002',
+--      'd0000000-0000-0000-0000-000000000002',
+--      'preliminaries',
+--      'Site mobilisation',
+--      '5050',
+--      '600000.00', '0.00', '0.00', false),
+--     -- … many more …
+-- ON CONFLICT (id) DO NOTHING;
+
+SELECT 'xyz-construction 004_budgets.sql: placeholder — no rows inserted' AS status;

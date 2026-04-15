@@ -1,0 +1,41 @@
+-- 003_projects.sql — XYZ Construction LLC projects (in `productions` table)
+-- Target: 6 projects at varying stages.
+--
+-- IMPORTANT: `productions.status` has a CHECK constraint hardcoded to
+-- movie-production lifecycle values. Use this stage→status map for the seed
+-- (see docs/multi-tenancy.md §7):
+--
+--   Tender         → development
+--   Mobilisation   → pre_production
+--   Construction   → production
+--   Commissioning  → post_production
+--   Handover       → released
+--   Completed      → archived
+--
+-- Status: PLACEHOLDER — to be authored in Phase A.
+
+-- TODO(seed): 6 INSERT rows. Project ID prefix: d2100000-…-0000000000XX
+--
+-- Project roster:
+--   01  Oakwood Medical Plaza                  Ann Arbor, MI       $4.8M   Tender         → development
+--   02  Riverbend Logistics Hub                Toledo, OH          $12.5M  Mobilisation   → pre_production
+--   03  Cedar Park Townhomes (Phase I)         Novi, MI            $8.2M   Construction  → production (early)
+--   04  Great Lakes Brewery Expansion          Grand Rapids, MI    $3.1M   Construction  → production (mid, overrun)
+--   05  Huron Valley Water Treatment Retrofit  Milford, MI         $6.7M   Commissioning → post_production
+--   06  Midtown Office Renovation              Detroit, MI         $2.4M   Handover      → released
+--
+-- INSERT INTO productions (
+--     id, tenant_id, title, slug, description, status,
+--     start_date, end_date, created_by
+-- ) VALUES
+--     ('d2100000-0000-0000-0000-000000000001',
+--      'd0000000-0000-0000-0000-000000000002',
+--      'Oakwood Medical Plaza', 'oakwood-medical-plaza',
+--      '3-storey medical office building, 48000 sqft, Ann Arbor MI',
+--      'development',
+--      '2026-06-01', '2027-10-30',
+--      'd2000000-0000-0000-0000-000000000003'),
+--     -- … 5 more …
+-- ON CONFLICT (id) DO NOTHING;
+
+SELECT 'xyz-construction 003_projects.sql: placeholder — no rows inserted' AS status;
