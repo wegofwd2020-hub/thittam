@@ -1,0 +1,54 @@
+name: UI E2E
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/ui-e2e.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/ui-e2e.yml"
+
+jobs:
+  playwright-smoke:
+    name: Playwright Smoke (unauthenticated)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        # --with-deps installs OS libs chromium needs on ubuntu-latest.
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke tests
+        # Only the `smoke` project — does not require backend services.
+        # The full authenticated suite (chromium/firefox/webkit projects)
+        # needs iam + postgres + seed data and should run in a separate
+        # job once the stack is containerised end-to-end.
+        run: npx playwright test --project=smoke
+        env:
+          CI: "true"
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 14
