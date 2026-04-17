@@ -1,7 +1,8 @@
 # XYZ Construction LLC — Demo Seed Data
 
-**Status:** 🚧 Scaffold only — SQL files contain TODO markers, not live data.
-**Phase A (fixture authoring) tracked in:** `docs/demo-xyz-construction-plan.md`
+**Status:** ✅ Phase A authored — seed loads 1 tenant, 6 users, 6 projects,
+6 budgets, 83 line items, 28 expenses.
+**Plan document:** `docs/demo-xyz-construction-plan.md`
 
 ## Company Profile
 
@@ -107,8 +108,8 @@ tenants coexist in the same dev DB — see `docs/multi-tenancy.md` §3.
 
 | File                      | Purpose                                        | Status           |
 | ------------------------- | ---------------------------------------------- | ---------------- |
-| `001_tenant.sql`          | Tenant row + vertical binding                  | 🚧 Placeholder   |
-| `002_users.sql`           | 6 demo users with bcrypt(`demo1234`)           | 🚧 Placeholder   |
-| `003_projects.sql`        | 6 rows in `productions` table                  | 🚧 Placeholder   |
-| `004_budgets.sql`         | 6 budget versions + line items                 | 🚧 Placeholder   |
-| `005_expenses.sql`        | Actuals driving Project 4's overrun narrative  | 🚧 Placeholder   |
+| `001_tenant.sql`          | Tenant row + vertical binding                  | ✅ Authored      |
+| `002_users.sql`           | 6 demo users with bcrypt(`demo1234`)           | ✅ Authored      |
+| `003_projects.sql`        | 6 rows in `productions` table                  | ✅ Authored      |
+| `004_budgets.sql`         | 6 budget versions + 83 line items              | ✅ Authored      |
+| `005_expenses.sql`        | 28 expenses, concentrated on Project 4 overrun | ✅ Authored      |

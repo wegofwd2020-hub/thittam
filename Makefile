@@ -193,9 +193,7 @@ seed:
 	@echo "==> Seed complete."
 
 # seed-construction — loads the XYZ Construction demo tenant. Independent of
-# `make seed` so either tenant's fixtures can be reloaded in isolation. The
-# SQL files currently contain TODO markers only; see
-# docs/demo-xyz-construction-plan.md for Phase A authoring scope.
+# `make seed` so either tenant's fixtures can be reloaded in isolation.
 seed-construction:
 	@echo "==> Loading XYZ Construction demo seed data..."
 	@for f in seeds/demo/xyz-construction/*.sql; do \

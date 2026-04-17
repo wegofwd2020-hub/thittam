@@ -1,9 +1,9 @@
 -- 003_projects.sql — XYZ Construction LLC projects (in `productions` table)
--- Target: 6 projects at varying stages.
+-- 6 projects at varying construction stages.
 --
--- IMPORTANT: `productions.status` has a CHECK constraint hardcoded to
--- movie-production lifecycle values. Use this stage→status map for the seed
--- (see docs/multi-tenancy.md §7):
+-- `productions.status` has a CHECK constraint hardcoded to the movie-production
+-- lifecycle. Construction stages are mapped onto those values until the
+-- constraint is relaxed (see docs/multi-tenancy.md §7):
 --
 --   Tender         → development
 --   Mobilisation   → pre_production
@@ -11,33 +11,76 @@
 --   Commissioning  → post_production
 --   Handover       → released
 --   Completed      → archived
---
--- Status: PLACEHOLDER — to be authored in Phase A.
 
--- TODO(seed): 6 INSERT rows.
---
--- Projects share the cross-tenant d2000000-... namespace (see xyz-cba
--- README). This tenant uses the -2XX offset:
---
---   d2000000-0000-0000-0000-000000000201  Oakwood Medical Plaza                  Ann Arbor, MI       $4.8M   Tender         → development
---   d2000000-0000-0000-0000-000000000202  Riverbend Logistics Hub                Toledo, OH          $12.5M  Mobilisation   → pre_production
---   d2000000-0000-0000-0000-000000000203  Cedar Park Townhomes (Phase I)         Novi, MI            $8.2M   Construction  → production (early)
---   d2000000-0000-0000-0000-000000000204  Great Lakes Brewery Expansion          Grand Rapids, MI    $3.1M   Construction  → production (mid, overrun)
---   d2000000-0000-0000-0000-000000000205  Huron Valley Water Treatment Retrofit  Milford, MI         $6.7M   Commissioning → post_production
---   d2000000-0000-0000-0000-000000000206  Midtown Office Renovation              Detroit, MI         $2.4M   Handover      → released
---
--- INSERT INTO productions (
---     id, tenant_id, title, slug, description, status,
---     start_date, end_date, created_by
--- ) VALUES
---     ('d2000000-0000-0000-0000-000000000201',
---      'd0000000-0000-0000-0000-000000000002',
---      'Oakwood Medical Plaza', 'oakwood-medical-plaza',
---      '3-storey medical office building, 48000 sqft, Ann Arbor MI',
---      'development',
---      '2026-06-01', '2027-10-30',
---      'd1000000-0000-0000-0000-000000000203'),    -- created_by = Ethan Choi (Estimator)
---     -- … 5 more (-202 through -206) …
--- ON CONFLICT (id) DO NOTHING;
+INSERT INTO productions (
+    id, tenant_id, title, slug, description, status,
+    start_date, end_date, created_by, created_at
+) VALUES
 
-SELECT 'xyz-construction 003_projects.sql: placeholder — no rows inserted' AS status;
+-- 1. Oakwood Medical Plaza — Tender (draft budget)
+('d2000000-0000-0000-0000-000000000201',
+ 'd0000000-0000-0000-0000-000000000002',
+ 'Oakwood Medical Plaza',
+ 'oakwood-medical-plaza',
+ '3-storey medical office building, 48,000 sqft. Ann Arbor, MI. Tender phase — bid package under preparation.',
+ 'development',
+ '2026-06-01', '2027-10-30',
+ 'd1000000-0000-0000-0000-000000000203',  -- Ethan Choi (Estimator)
+ '2026-03-10T09:00:00Z'),
+
+-- 2. Riverbend Logistics Hub — Mobilisation (budget submitted)
+('d2000000-0000-0000-0000-000000000202',
+ 'd0000000-0000-0000-0000-000000000002',
+ 'Riverbend Logistics Hub',
+ 'riverbend-logistics-hub',
+ '250,000 sqft tilt-up logistics warehouse with 40 dock doors. Toledo, OH. Mobilisation underway; budget awaiting Director approval.',
+ 'pre_production',
+ '2026-02-15', '2027-08-31',
+ 'd1000000-0000-0000-0000-000000000203',  -- Ethan Choi
+ '2026-01-20T09:00:00Z'),
+
+-- 3. Cedar Park Townhomes (Phase I) — Early Construction (approved, healthy)
+('d2000000-0000-0000-0000-000000000203',
+ 'd0000000-0000-0000-0000-000000000002',
+ 'Cedar Park Townhomes (Phase I)',
+ 'cedar-park-townhomes-phase-i',
+ '24-unit townhome development, wood-frame over podium. Novi, MI. Framing in progress; ~25% committed.',
+ 'production',
+ '2025-11-01', '2026-12-20',
+ 'd1000000-0000-0000-0000-000000000203',
+ '2025-10-05T09:00:00Z'),
+
+-- 4. Great Lakes Brewery Expansion — Mid Construction (approved, MATERIALS OVERRUN)
+('d2000000-0000-0000-0000-000000000204',
+ 'd0000000-0000-0000-0000-000000000002',
+ 'Great Lakes Brewery Expansion',
+ 'great-lakes-brewery-expansion',
+ 'Production floor expansion + tank farm, process-piping heavy. Grand Rapids, MI. Materials line 8% over budget; Contingency partial draw in progress.',
+ 'production',
+ '2025-09-01', '2026-09-30',
+ 'd1000000-0000-0000-0000-000000000203',
+ '2025-08-10T09:00:00Z'),
+
+-- 5. Huron Valley Water Treatment Retrofit — Commissioning (locked, ~91%)
+('d2000000-0000-0000-0000-000000000205',
+ 'd0000000-0000-0000-0000-000000000002',
+ 'Huron Valley Water Treatment Retrofit',
+ 'huron-valley-water-treatment-retrofit',
+ 'Filtration and UV upgrade at municipal WTP. Milford, MI. Construction complete; equipment commissioning + punchlist.',
+ 'post_production',
+ '2025-04-01', '2026-05-31',
+ 'd1000000-0000-0000-0000-000000000203',
+ '2025-03-05T09:00:00Z'),
+
+-- 6. Midtown Office Renovation — Handover (locked, complete)
+('d2000000-0000-0000-0000-000000000206',
+ 'd0000000-0000-0000-0000-000000000002',
+ 'Midtown Office Renovation',
+ 'midtown-office-renovation',
+ '18,000 sqft Class-A office fit-out, 4th and 5th floors. Detroit, MI. Substantial completion reached; final reconciliation.',
+ 'released',
+ '2025-02-01', '2026-02-28',
+ 'd1000000-0000-0000-0000-000000000203',
+ '2025-01-12T09:00:00Z')
+
+ON CONFLICT (id) DO NOTHING;
