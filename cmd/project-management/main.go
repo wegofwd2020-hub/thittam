@@ -9,13 +9,18 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/cors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	projectv1 "github.com/wegofwd2020/thittam/gen/project/v1"
 	"github.com/wegofwd2020/thittam/pkg/events"
@@ -106,6 +111,62 @@ func main() {
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
 	srv.RegisterHealthChecker("nats", &natsChecker{nc: nc})
 	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
+
+	// --- REST gateway (grpc-gateway, ADR-014 follow-up #60) ---
+	// UI calls REST endpoints like GET /api/v1/productions. The generated mux
+	// lives on :9080 — a dedicated port parallel to IAM's 9086 pattern. The
+	// original 9090 slot is taken by a neighbouring process on this host
+	// (see Port=8090 comment above for the same 8080→8090 rationale).
+	go func() {
+		// IncomingHeaderMatcher forwards X-Tenant-Id (and caller identity
+		// headers Kong normally injects) as gRPC metadata with the lower-
+		// cased name, which is what pkg/interceptor.UnaryCallerInterceptor
+		// reads via metadata.FromIncomingContext. Without this, tenant
+		// context never reaches the handler and every RPC 401s on
+		// "tenant ID not found in context".
+		headerMatcher := func(key string) (string, bool) {
+			switch key {
+			case "X-Tenant-Id", "X-Caller-Id", "X-Caller-Email", "X-Caller-Role", "X-Project-Id":
+				return key, true
+			}
+			return runtime.DefaultHeaderMatcher(key)
+		}
+		gwMux := runtime.NewServeMux(
+			runtime.WithIncomingHeaderMatcher(headerMatcher),
+			runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
+				MarshalOptions: protojson.MarshalOptions{
+					UseProtoNames:   true,
+					EmitUnpopulated: true,
+				},
+				UnmarshalOptions: protojson.UnmarshalOptions{
+					DiscardUnknown: true,
+				},
+			}),
+		)
+		opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+		if err := projectv1.RegisterProjectServiceHandlerFromEndpoint(ctx, gwMux, "localhost:8090", opts); err != nil {
+			log.Fatalf("project-management: register gateway: %v", err)
+		}
+		corsHandler := cors.New(cors.Options{
+			AllowedOrigins: []string{
+				"http://localhost:3100",
+				"http://localhost:3000",
+			},
+			AllowedMethods: []string{
+				http.MethodGet, http.MethodPost, http.MethodPut,
+				http.MethodPatch, http.MethodDelete, http.MethodOptions,
+			},
+			AllowedHeaders: []string{
+				"Content-Type", "Authorization",
+				"X-Tenant-Id", "X-Project-Id", "X-Caller-Id",
+			},
+			AllowCredentials: true,
+		}).Handler(gwMux)
+		log.Printf("project-management REST gateway ready on :9080 (CORS allow-list: localhost:3100, localhost:3000)")
+		if err := http.ListenAndServe(":9080", corsHandler); err != nil {
+			log.Fatalf("project-management: gateway listen: %v", err)
+		}
+	}()
 
 	log.Printf("project-management service ready on :8090")
 	if err := srv.Run(); err != nil {

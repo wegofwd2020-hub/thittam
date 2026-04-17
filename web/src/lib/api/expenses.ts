@@ -1,5 +1,4 @@
 import { api } from "./client";
-import type { ApiListResponse, ApiResponse } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -133,35 +132,31 @@ const BASE = "/api/v1/expenses";
 export async function listExpenses(
   productionId: string,
   params?: { status?: string; limit?: number; after?: string },
-): Promise<ApiListResponse<Expense>> {
-  return api.getList<Expense>(
+): Promise<Expense[]> {
+  return api.getList<Expense[]>(
     `${BASE}${qs({ production_id: productionId, ...params })}`,
   );
 }
 
 export async function getExpense(id: string): Promise<Expense> {
-  const res = await api.get<Expense>(`${BASE}/${id}`);
-  return res.data;
+  return api.get<Expense>(`${BASE}/${id}`);
 }
 
 export async function submitExpense(
   data: SubmitExpenseInput,
 ): Promise<Expense> {
-  const res = await api.post<Expense>(BASE, data);
-  return res.data;
+  return api.post<Expense>(BASE, data);
 }
 
 export async function approveExpense(id: string): Promise<Expense> {
-  const res = await api.post<Expense>(`${BASE}/${id}/approve`, {});
-  return res.data;
+  return api.post<Expense>(`${BASE}/${id}/approve`, {});
 }
 
 export async function rejectExpense(
   id: string,
   reason: string,
 ): Promise<Expense> {
-  const res = await api.post<Expense>(`${BASE}/${id}/reject`, { reason });
-  return res.data;
+  return api.post<Expense>(`${BASE}/${id}/reject`, { reason });
 }
 
 // ---------------------------------------------------------------------------
@@ -173,8 +168,8 @@ const PO_BASE = "/api/v1/purchase-orders";
 export async function listPurchaseOrders(
   productionId: string,
   params?: { status?: string; limit?: number; after?: string },
-): Promise<ApiListResponse<PurchaseOrder>> {
-  return api.getList<PurchaseOrder>(
+): Promise<PurchaseOrder[]> {
+  return api.getList<PurchaseOrder[]>(
     `${PO_BASE}${qs({ production_id: productionId, ...params })}`,
   );
 }
@@ -182,15 +177,13 @@ export async function listPurchaseOrders(
 export async function createPurchaseOrder(
   data: CreatePurchaseOrderInput,
 ): Promise<PurchaseOrder> {
-  const res = await api.post<PurchaseOrder>(PO_BASE, data);
-  return res.data;
+  return api.post<PurchaseOrder>(PO_BASE, data);
 }
 
 export async function approvePurchaseOrder(
   id: string,
 ): Promise<PurchaseOrder> {
-  const res = await api.post<PurchaseOrder>(`${PO_BASE}/${id}/approve`, {});
-  return res.data;
+  return api.post<PurchaseOrder>(`${PO_BASE}/${id}/approve`, {});
 }
 
 // ---------------------------------------------------------------------------
@@ -202,8 +195,8 @@ const PETTY_BASE = "/api/v1/petty-cash";
 export async function listPettyCash(
   productionId: string,
   params?: { status?: string; limit?: number; after?: string },
-): Promise<ApiListResponse<PettyCashAdvance>> {
-  return api.getList<PettyCashAdvance>(
+): Promise<PettyCashAdvance[]> {
+  return api.getList<PettyCashAdvance[]>(
     `${PETTY_BASE}${qs({ production_id: productionId, ...params })}`,
   );
 }
@@ -211,19 +204,17 @@ export async function listPettyCash(
 export async function createPettyCash(
   data: CreatePettyCashInput,
 ): Promise<PettyCashAdvance> {
-  const res = await api.post<PettyCashAdvance>(PETTY_BASE, data);
-  return res.data;
+  return api.post<PettyCashAdvance>(PETTY_BASE, data);
 }
 
 export async function settlePettyCash(
   id: string,
   data: SettlePettyCashInput,
 ): Promise<PettyCashAdvance> {
-  const res = await api.post<PettyCashAdvance>(
+  return api.post<PettyCashAdvance>(
     `${PETTY_BASE}/${id}/settle`,
     data,
   );
-  return res.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -231,15 +222,13 @@ export async function settlePettyCash(
 // ---------------------------------------------------------------------------
 
 export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
-  const res = await api.getList<ExpenseCategory>(
+  return api.getList<ExpenseCategory[]>(
     "/api/v1/config/expense-categories",
   );
-  return res.data;
 }
 
 export async function getApprovalLimits(): Promise<ApprovalWorkflow> {
-  const res = await api.get<ApprovalWorkflow>(
+  return api.get<ApprovalWorkflow>(
     "/api/v1/config/approval-workflow",
   );
-  return res.data;
 }

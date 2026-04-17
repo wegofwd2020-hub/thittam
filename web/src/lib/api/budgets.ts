@@ -1,5 +1,4 @@
 import { api } from "./client";
-import type { ApiListResponse, ApiResponse } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -112,42 +111,57 @@ function qs(params?: Record<string, string | number | undefined>): string {
 
 const BASE = "/api/v1/budgets";
 
+// grpc-gateway returns list RPCs with the plural field name as the root key
+// (ListBudgetsResponse.budgets, not a generic {data: []} envelope). Single-
+// entity RPCs return the entity fields flat at the root.
+
+export interface ListBudgetsResponse {
+  budgets: Budget[];
+}
+
+export interface ListLineItemsResponse {
+  line_items: BudgetLineItem[];
+}
+
+export interface GetBudgetCategoriesResponse {
+  categories: BudgetCategory[];
+}
+
+export interface GetBudgetTemplatesResponse {
+  templates: BudgetTemplate[];
+}
+
 export async function listBudgets(
   productionId: string,
   params?: { status?: string; limit?: number; after?: string },
-): Promise<ApiListResponse<Budget>> {
-  return api.getList<Budget>(
+): Promise<ListBudgetsResponse> {
+  return api.getList<ListBudgetsResponse>(
     `${BASE}${qs({ production_id: productionId, ...params })}`,
   );
 }
 
 export async function getBudget(id: string): Promise<Budget> {
-  const res = await api.get<Budget>(`${BASE}/${id}`);
-  return res.data;
+  return api.get<Budget>(`${BASE}/${id}`);
 }
 
 export async function createBudget(
   data: CreateBudgetInput,
 ): Promise<Budget> {
-  const res = await api.post<Budget>(BASE, data);
-  return res.data;
+  return api.post<Budget>(BASE, data);
 }
 
 export async function createBudgetFromTemplate(
   data: CreateBudgetFromTemplateInput,
 ): Promise<Budget> {
-  const res = await api.post<Budget>(`${BASE}/from-template`, data);
-  return res.data;
+  return api.post<Budget>(`${BASE}/from-template`, data);
 }
 
 export async function submitBudget(id: string): Promise<Budget> {
-  const res = await api.post<Budget>(`${BASE}/${id}/submit`, {});
-  return res.data;
+  return api.post<Budget>(`${BASE}/${id}/submit`, {});
 }
 
 export async function approveBudget(id: string): Promise<Budget> {
-  const res = await api.post<Budget>(`${BASE}/${id}/approve`, {});
-  return res.data;
+  return api.post<Budget>(`${BASE}/${id}/approve`, {});
 }
 
 // ---------------------------------------------------------------------------
@@ -157,32 +171,24 @@ export async function approveBudget(id: string): Promise<Budget> {
 export async function listLineItems(
   budgetId: string,
 ): Promise<BudgetLineItem[]> {
-  const res = await api.getList<BudgetLineItem>(
+  const res = await api.getList<ListLineItemsResponse>(
     `${BASE}/${budgetId}/line-items`,
   );
-  return res.data;
+  return res.line_items ?? [];
 }
 
 export async function createLineItem(
   budgetId: string,
   data: CreateLineItemInput,
 ): Promise<BudgetLineItem> {
-  const res = await api.post<BudgetLineItem>(
-    `${BASE}/${budgetId}/line-items`,
-    data,
-  );
-  return res.data;
+  return api.post<BudgetLineItem>(`${BASE}/${budgetId}/line-items`, data);
 }
 
 export async function updateLineItem(
   id: string,
   data: UpdateLineItemInput,
 ): Promise<BudgetLineItem> {
-  const res = await api.patch<BudgetLineItem>(
-    `/api/v1/line-items/${id}`,
-    data,
-  );
-  return res.data;
+  return api.patch<BudgetLineItem>(`/api/v1/line-items/${id}`, data);
 }
 
 export async function deleteLineItem(id: string): Promise<void> {
@@ -192,10 +198,9 @@ export async function deleteLineItem(id: string): Promise<void> {
 export async function checkLineAvailability(
   lineId: string,
 ): Promise<LineItemAvailability> {
-  const res = await api.get<LineItemAvailability>(
+  return api.get<LineItemAvailability>(
     `/api/v1/line-items/${lineId}/availability`,
   );
-  return res.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -203,15 +208,15 @@ export async function checkLineAvailability(
 // ---------------------------------------------------------------------------
 
 export async function getBudgetCategories(): Promise<BudgetCategory[]> {
-  const res = await api.getList<BudgetCategory>(
+  const res = await api.getList<GetBudgetCategoriesResponse>(
     "/api/v1/config/budget-categories",
   );
-  return res.data;
+  return res.categories ?? [];
 }
 
 export async function getBudgetTemplates(): Promise<BudgetTemplate[]> {
-  const res = await api.getList<BudgetTemplate>(
+  const res = await api.getList<GetBudgetTemplatesResponse>(
     "/api/v1/config/budget-templates",
   );
-  return res.data;
+  return res.templates ?? [];
 }

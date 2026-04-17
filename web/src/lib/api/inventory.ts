@@ -1,5 +1,4 @@
 import { api } from "./client";
-import type { ApiListResponse, ApiResponse } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,18 +95,16 @@ const BASE = "/api/v1/assets";
 
 export async function listAssets(
   params?: { status?: string; category_id?: string; search?: string; limit?: number; after?: string },
-): Promise<ApiListResponse<Asset>> {
-  return api.getList<Asset>(`${BASE}${qs(params)}`);
+): Promise<Asset[]> {
+  return api.getList<Asset[]>(`${BASE}${qs(params)}`);
 }
 
 export async function getAsset(id: string): Promise<Asset> {
-  const res = await api.get<Asset>(`${BASE}/${id}`);
-  return res.data;
+  return api.get<Asset>(`${BASE}/${id}`);
 }
 
 export async function createAsset(data: CreateAssetInput): Promise<Asset> {
-  const res = await api.post<Asset>(BASE, data);
-  return res.data;
+  return api.post<Asset>(BASE, data);
 }
 
 // ---------------------------------------------------------------------------
@@ -117,8 +114,8 @@ export async function createAsset(data: CreateAssetInput): Promise<Asset> {
 export async function listCheckouts(
   assetId: string,
   params?: { limit?: number; after?: string },
-): Promise<ApiListResponse<AssetCheckout>> {
-  return api.getList<AssetCheckout>(
+): Promise<AssetCheckout[]> {
+  return api.getList<AssetCheckout[]>(
     `${BASE}/${assetId}/checkouts${qs(params)}`,
   );
 }
@@ -127,22 +124,20 @@ export async function checkOutAsset(
   assetId: string,
   data: CheckOutAssetInput,
 ): Promise<AssetCheckout> {
-  const res = await api.post<AssetCheckout>(
+  return api.post<AssetCheckout>(
     `${BASE}/${assetId}/check-out`,
     data,
   );
-  return res.data;
 }
 
 export async function checkInAsset(
   assetId: string,
   data: CheckInAssetInput,
 ): Promise<AssetCheckout> {
-  const res = await api.post<AssetCheckout>(
+  return api.post<AssetCheckout>(
     `${BASE}/${assetId}/check-in`,
     data,
   );
-  return res.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,8 +145,7 @@ export async function checkInAsset(
 // ---------------------------------------------------------------------------
 
 export async function getInventoryCategories(): Promise<InventoryCategory[]> {
-  const res = await api.getList<InventoryCategory>(
+  return api.getList<InventoryCategory[]>(
     "/api/v1/config/inventory-categories",
   );
-  return res.data;
 }
