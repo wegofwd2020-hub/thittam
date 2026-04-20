@@ -9,9 +9,13 @@ export interface Production {
   status: string;
   description: string;
   genre: string;
-  currentPhase: string;
-  budgetHealth: "on_track" | "at_risk" | "over_budget";
-  startDate: string;
+  // currentPhase and budgetHealth are derived from phases + budget actuals.
+  // Neither is included in the Production API response; callers compute them
+  // when available. Undefined means "not yet computed" — the card hides the
+  // dot rather than rendering an unknown-health placeholder.
+  currentPhase?: string;
+  budgetHealth?: "on_track" | "at_risk" | "over_budget";
+  startDate?: string;
   endDate?: string;
 }
 
@@ -73,22 +77,23 @@ export function ProductionCard({ production }: ProductionCardProps) {
           {production.genre}
         </span>
 
-        {/* Budget health indicator */}
-        <div className="flex items-center gap-1.5">
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{
-              backgroundColor:
-                healthDotColor[production.budgetHealth] ?? "#94a3b8",
-            }}
-          />
-          <span
-            className="text-[11px] font-heading"
-            style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
-          >
-            {healthLabel[production.budgetHealth] ?? "Unknown"}
-          </span>
-        </div>
+        {production.budgetHealth && (
+          <div className="flex items-center gap-1.5">
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{
+                backgroundColor:
+                  healthDotColor[production.budgetHealth] ?? "#94a3b8",
+              }}
+            />
+            <span
+              className="text-[11px] font-heading"
+              style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+            >
+              {healthLabel[production.budgetHealth] ?? "Unknown"}
+            </span>
+          </div>
+        )}
       </div>
     </Link>
   );
