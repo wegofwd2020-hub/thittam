@@ -1,0 +1,94 @@
+name: Glossary Drift Check
+
+# Flags ALLCAPS acronyms that appear in thittam_docs prose but aren't defined
+# in the glossary. Same issue-on-drift pattern as doc-drift.
+
+on:
+  schedule:
+    - cron: "0 5 * * *" # 05:00 UTC — after nightly-api-docs (04:30) and StudyBuddy glossary (04:45)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    env:
+      DOCS_TOKEN_PRESENT: ${{ secrets.DOCS_REPO_TOKEN != '' }}
+    steps:
+      - name: Skip if DOCS_REPO_TOKEN not configured
+        if: env.DOCS_TOKEN_PRESENT == 'false'
+        run: |
+          echo "::warning::DOCS_REPO_TOKEN not set — glossary drift check skipped."
+          exit 0
+
+      - name: Checkout application repo
+        if: env.DOCS_TOKEN_PRESENT == 'true'
+        uses: actions/checkout@v4
+        with:
+          path: app
+
+      - name: Checkout docs repo
+        if: env.DOCS_TOKEN_PRESENT == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: wegofwd2020-hub/thittam_docs
+          token: ${{ secrets.DOCS_REPO_TOKEN }}
+          path: docs
+
+      - name: Set up Python
+        if: env.DOCS_TOKEN_PRESENT == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run glossary-drift scanner
+        if: env.DOCS_TOKEN_PRESENT == 'true'
+        id: drift
+        run: |
+          set +e
+          python3 app/scripts/check_glossary_drift.py \
+            --glossary docs/docs/architecture/glossary.md \
+            --docs docs \
+            --out glossary-drift-report.md \
+            --project "Thittam"
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Upsert glossary-drift issue
+        if: env.DOCS_TOKEN_PRESENT == 'true' && steps.drift.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: app
+        run: |
+          gh label create glossary-drift --color 8A2BE2 --description "Acronyms in docs not defined in the glossary" 2>/dev/null || true
+
+          body=$(cat ../glossary-drift-report.md)
+          existing=$(gh issue list --label glossary-drift --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body "$body"
+          else
+            gh issue create \
+              --title "Glossary drift detected ($(date -u +%F))" \
+              --label glossary-drift \
+              --body "$body"
+          fi
+
+      - name: Close glossary-drift issue if clean
+        if: env.DOCS_TOKEN_PRESENT == 'true' && steps.drift.outputs.exit_code == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: app
+        run: |
+          for n in $(gh issue list --label glossary-drift --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Glossary drift resolved as of $(date -u +%F)."
+          done
+
+      - name: Upload report artifact
+        if: env.DOCS_TOKEN_PRESENT == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: glossary-drift-report
+          path: glossary-drift-report.md
+          retention-days: 14
