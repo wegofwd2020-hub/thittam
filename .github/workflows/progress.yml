@@ -1,0 +1,40 @@
+name: Progress Chart
+
+on:
+  schedule:
+    - cron: "0 2 * * *" # 02:00 UTC = 21:00 EST (22:00 EDT in summer)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate PROGRESS.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/generate_progress.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet docs/PROGRESS.md; then
+            echo "No changes to PROGRESS.md"
+            exit 0
+          fi
+          git add docs/PROGRESS.md
+          git commit -m "chore(progress): nightly update of docs/PROGRESS.md"
+          git push
