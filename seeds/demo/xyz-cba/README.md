@@ -101,3 +101,11 @@ All demo UUIDs follow a predictable pattern for easy cross-referencing:
 | Line Items | `d4000000-...-0XX` | `d4000000-0000-0000-0000-000000000001` |
 | Expenses | `d5000000-...-0XX` | `d5000000-0000-0000-0000-000000000001` |
 | Assets | `d6000000-...-00X` | `d6000000-0000-0000-0000-000000000001` |
+
+## See Also
+
+- [`seeds/demo/xyz-construction/`](../xyz-construction/README.md) —
+  second demo tenant (XYZ Construction LLC, Milford MI, USD, construction
+  vertical). Scaffolded; fixture authoring pending in Phase A.
+- [`docs/multi-tenancy.md`](../../../docs/multi-tenancy.md) —
+  isolation model, tenant inventory, and runbook for adding new tenants.
