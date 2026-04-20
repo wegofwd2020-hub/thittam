@@ -1,0 +1,124 @@
+name: Nightly Documentation Drift Check
+
+# Complements the PR-time doc-drift job in ci.yml. A scheduled run catches
+# drift introduced by merges that didn't touch Go files (e.g. doc-repo-only
+# renames, or main merges that bypassed the PR check path). Fires an issue
+# instead of just a red checkmark that nobody sees.
+
+on:
+  schedule:
+    - cron: "30 3 * * *" # 03:30 UTC = 22:30 EST (23:30 EDT) — staggered after StudyBuddy 03:00
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    env:
+      DOCS_TOKEN_PRESENT: ${{ secrets.DOCS_REPO_TOKEN != '' }}
+    steps:
+      - name: Skip if DOCS_REPO_TOKEN not configured
+        if: env.DOCS_TOKEN_PRESENT == 'false'
+        run: |
+          echo "::warning::DOCS_REPO_TOKEN not set — drift check skipped."
+          exit 0
+
+      - name: Checkout application repo
+        if: env.DOCS_TOKEN_PRESENT == 'true'
+        uses: actions/checkout@v4
+        with:
+          path: app
+
+      - name: Checkout docs repo
+        if: env.DOCS_TOKEN_PRESENT == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: wegofwd2020-hub/thittam_docs
+          token: ${{ secrets.DOCS_REPO_TOKEN }}
+          path: docs
+
+      - uses: actions/setup-go@v5
+        if: env.DOCS_TOKEN_PRESENT == 'true'
+        with:
+          go-version: "1.25.9"
+          cache: true
+          cache-dependency-path: app/go.sum
+
+      - name: Run drift check
+        if: env.DOCS_TOKEN_PRESENT == 'true'
+        id: drift
+        working-directory: app
+        run: |
+          set +e
+          go run ./tools/check-doc-drift \
+            --docs ../docs \
+            --app  . \
+            > ../drift-raw.txt 2>&1
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          cat ../drift-raw.txt
+
+      - name: Build report markdown
+        if: env.DOCS_TOKEN_PRESENT == 'true'
+        run: |
+          {
+            echo "# Documentation Drift — Thittam"
+            echo
+            echo "_Nightly scan: $(date -u +%FT%TZ)_"
+            echo
+            echo "Source: \`tools/check-doc-drift\` against \`thittam_docs\` on default branches."
+            echo
+            if [ "${{ steps.drift.outputs.exit_code }}" = "0" ]; then
+              echo "✅ **No drift detected.**"
+            else
+              echo "## Drift output"
+              echo
+              echo '```'
+              cat drift-raw.txt
+              echo '```'
+              echo
+              echo "---"
+              echo "To silence a false positive: add \`<!-- drift:ignore -->\` on the line immediately before the code fence in the docs repo."
+            fi
+          } > drift-report.md
+
+      - name: Upsert drift issue
+        if: env.DOCS_TOKEN_PRESENT == 'true' && steps.drift.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: app
+        run: |
+          gh label create doc-drift --color FFA500 --description "Documentation references that no longer exist in source" 2>/dev/null || true
+
+          body=$(cat ../drift-report.md)
+          existing=$(gh issue list --label doc-drift --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body "$body"
+            echo "Updated existing drift issue #$existing"
+          else
+            gh issue create \
+              --title "Documentation drift detected ($(date -u +%F))" \
+              --label doc-drift \
+              --body "$body"
+          fi
+
+      - name: Close drift issue if clean
+        if: env.DOCS_TOKEN_PRESENT == 'true' && steps.drift.outputs.exit_code == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: app
+        run: |
+          for n in $(gh issue list --label doc-drift --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Drift resolved as of $(date -u +%F)."
+          done
+
+      - name: Upload report artifact
+        if: env.DOCS_TOKEN_PRESENT == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: drift-report.md
+          retention-days: 14
