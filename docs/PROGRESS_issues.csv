@@ -1,0 +1,63 @@
+issue_number,title,state,commit_count,first,last,span_days,scopes
+60,feat(api): REST→gRPC bridge — grpc-gateway in services + Kong in local stack,OPEN,8,2026-04-13,2026-04-13,0,iam; iam-gateway; web
+61,feat(onboarding): capture company address + country-driven primary currency,OPEN,3,2026-04-14,2026-04-14,0,iam; seed
+23,[P2] Add load and chaos testing for the double-entry ledger and concurrent expense approvals,CLOSED,3,2026-04-04,2026-04-11,7,chaos; frontend; load
+19,[P1] Document NATS JetStream dead-letter strategy for financial events,CLOSED,3,2026-04-04,2026-04-11,7,events; infra
+17,[P1] Raise test coverage targets: 800+ tests with per-service thresholds,CLOSED,3,2026-04-04,2026-04-11,7,coverage; services
+16,[P1] Add CI test suite for vertical plugin YAML schema validation,CLOSED,3,2026-04-04,2026-04-10,6,iam; vertical
+55,ci(lint): golangci-lint binary built on Go 1.24 fails on Go 1.25 target,CLOSED,2,2026-04-13,2026-04-14,1,lint; nightly
+58,ci(lint): fix 49 findings exposed by golangci-lint v2 (errcheck + staticcheck + unused),CLOSED,2,2026-04-13,2026-04-13,0,lint
+57,ci(doc-drift): Documentation Drift Check fails to checkout thittam_docs (404),CLOSED,2,2026-04-13,2026-04-13,0,doc-drift
+47,feat(rbac): expand RequirePermission coverage to all mutating RPCs in project-scoped services,CLOSED,2,2026-04-13,2026-04-13,0,project; rbac
+52,verify(rbac): end-to-end dev rollout verification of PROJECT_SCOPED_RBAC,CLOSED,2,2026-04-13,2026-04-13,0,rbac; server
+46,feat(rbac): wire IAM client into project-scoped services + PROJECT_SCOPED_RBAC rollout (ADR-014 Phase 2),CLOSED,2,2026-04-13,2026-04-13,0,rbac
+44,chore(dev): separate DB lifecycle from app startup; add per-test DB scaffold,CLOSED,2,2026-04-13,2026-04-13,0,dev
+28,[P3] Set MinIO presigned URL window dynamically based on file size,CLOSED,2,2026-04-04,2026-04-11,7,document; frontend
+27,"[P3] Define and document impersonation session lifecycle, maximum duration, and revocation policy",CLOSED,2,2026-04-04,2026-04-11,7,frontend; platform
+26,[P3] Implement automated documentation drift detection in CI (Rule #16),CLOSED,2,2026-04-04,2026-04-11,7,drift; frontend
+25,[P3] Replace bcrypt with argon2id or add per-IP rate limiting on auth endpoints,CLOSED,2,2026-04-04,2026-04-11,7,frontend; iam
+31,feat(infra): Prometheus alert rules for all services,CLOSED,2,2026-04-04,2026-04-11,7,frontend; infra
+30,feat(frontend): notifications inbox UI — in-app notification centre,CLOSED,2,2026-04-04,2026-04-11,7,frontend
+24,[P2] Verify and document Istio DestinationRule ROUND_ROBIN load balancing for all gRPC service pairs,CLOSED,2,2026-04-04,2026-04-10,6,frontend; infra
+22,[P2] Evaluate tenant-per-schema scalability ceiling and document decision for 500+ tenants,CLOSED,2,2026-04-04,2026-04-10,6,frontend; migrate
+21,[P2] Implement and ship the billing service,CLOSED,2,2026-04-04,2026-04-10,6,billing; frontend
+20,[P2] Document vertical plugin YAML schema (JSON Schema or protobuf),CLOSED,2,2026-04-04,2026-04-10,6,vertical
+18,"[P1] Run critical-path E2E tests on every PR, not just nightly",CLOSED,2,2026-04-04,2026-04-10,6,ci; iam
+14,[P0] Design and implement saga pattern for the 9-step tenant registration pipeline,CLOSED,2,2026-04-04,2026-04-10,6,registration; reporting
+88,feat(seed): add seeds/template/new-tenant/ scaffold,MERGED,1,2026-04-20,2026-04-20,0,seed
+78,feat(ui): wire productions pages onto live API (Phase C),MERGED,1,2026-04-20,2026-04-20,0,ui
+66,feat(payments): ADR + Gateway interface design (no driver yet),CLOSED,1,2026-04-20,2026-04-20,0,payments
+76,feat(payments): Gateway interface + stub driver (#66),MERGED,1,2026-04-20,2026-04-20,0,payments
+77,fix(ci): fetch full history for proto breaking-change job,MERGED,1,2026-04-20,2026-04-20,0,ci
+68,docs(readme): replace upstream golang-migrate README with Thittam overview,MERGED,1,2026-04-20,2026-04-20,0,readme
+67,feat(seed): add XYZ Construction demo tenant,MERGED,1,2026-04-20,2026-04-20,0,seed
+69,feat(budget): wire REST gateways + live /budgets pages (Phase B),MERGED,1,2026-04-20,2026-04-20,0,budget
+75,chore(tooling): Phase 1 — Claude Code workflow (spec-first + slash commands),MERGED,1,2026-04-20,2026-04-20,0,
+70,chore(tooling): Phase 1 — Claude Code workflow improvements (epic),OPEN,1,2026-04-20,2026-04-20,0,tooling
+71,chore(tooling): §1.1 /spec-first slash command,CLOSED,1,2026-04-20,2026-04-20,0,tooling
+72,chore(tooling): §1.2 plan-mode discipline for multi-file changes,OPEN,1,2026-04-20,2026-04-20,0,tooling
+73,chore(tooling): §1.3 sub-agent fleet defaults,OPEN,1,2026-04-20,2026-04-20,0,tooling
+74,chore(tooling): §2.2 Thittam slash commands for repeated workflows,OPEN,1,2026-04-20,2026-04-20,0,tooling
+65,feat(ui): adopt shadcn/ui as themeable foundation,OPEN,1,2026-04-14,2026-04-14,0,ui
+59,ci(deps): bump grpc + go-redis to fix remaining vuln-scan findings; document N/A vulns,CLOSED,1,2026-04-13,2026-04-13,0,deps
+54,ci: vuln-scan failing on Go 1.25 stdlib CVEs (GO-2026-*),CLOSED,1,2026-04-13,2026-04-13,0,
+56,ci(buf): RPC response naming warnings break the buf lint job,CLOSED,1,2026-04-13,2026-04-13,0,buf
+53,ci: Test & Coverage job fails with 'no such tool covdata' on Go 1.22 toolchain,CLOSED,1,2026-04-13,2026-04-13,0,
+48,test(crypto): make TestDecrypt_Tampered deterministic,CLOSED,1,2026-04-13,2026-04-13,0,
+49,chore(repo): gitignore service binaries left at repo root by go build,CLOSED,1,2026-04-13,2026-04-13,0,
+50,chore(proto): fix buf config so 'buf breaking' compares correctly,CLOSED,1,2026-04-13,2026-04-13,0,
+51,ci: run 'make test-integration' on every PR,CLOSED,1,2026-04-13,2026-04-13,0,
+45,chore(rbac): ADR-014 cross-cutting role-name cleanup (Phase 1 leftover),CLOSED,1,2026-04-13,2026-04-13,0,rbac
+33,feat(iam): rename system roles to generic names (ADR-014 Phase 1),CLOSED,1,2026-04-13,2026-04-13,0,iam
+43,feat(services): wire project_id into permission checks across project-scoped services (ADR-014 Phase 2),CLOSED,1,2026-04-13,2026-04-13,0,iam
+1,chore(proto): Run buf generate and sqlc generate — shared prep work,CLOSED,1,2026-04-11,2026-04-11,0,proto
+32,"feat(infra): K8s manifests — Deployments, Services, HPA, ConfigMaps, NetworkPolicy for all 10 services",CLOSED,1,2026-04-11,2026-04-11,0,infra
+29,"feat(frontend): document management UI — file browser, upload, versioning, e-signatures",CLOSED,1,2026-04-11,2026-04-11,0,frontend
+15,[P1] Document and implement reporting-analytics read model strategy,CLOSED,1,2026-04-10,2026-04-10,0,reporting
+2,"feat(iam): Build IAM service — identity, auth, RBAC, tenancy",CLOSED,1,2026-04-10,2026-04-10,0,secrets
+7,feat(ledger): Build general-ledger service — double-entry accounting,CLOSED,1,2026-04-04,2026-04-04,0,
+6,"feat(inventory): Complete inventory-management service — repository, gRPC wiring, main.go",CLOSED,1,2026-04-04,2026-04-04,0,vertical
+5,"feat(expense): Complete expense-tracking service — repository, gRPC wiring, main.go",CLOSED,1,2026-04-04,2026-04-04,0,cli
+13,[P0] Resolve contradiction between Rule #2 (env vars) and security doc (Vault for T1 secrets),CLOSED,1,2026-04-04,2026-04-04,0,
+4,"feat(budget): Complete budget-planning service — repository, gRPC wiring, main.go",CLOSED,1,2026-04-04,2026-04-04,0,
+3,"feat(project): Complete project-management service — repository, gRPC wiring, main.go",CLOSED,1,2026-04-04,2026-04-04,0,iam

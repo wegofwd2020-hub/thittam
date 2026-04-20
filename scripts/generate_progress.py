@@ -9,6 +9,7 @@ A feature (issue) appearing in 2+ commits is counted as iterated/redesigned.
 """
 from __future__ import annotations
 
+import csv
 import json
 import re
 import subprocess
@@ -18,6 +19,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 OUTPUT = REPO / "docs" / "PROGRESS.md"
+OUTPUT_SCOPES_CSV = REPO / "docs" / "PROGRESS_scopes.csv"
+OUTPUT_ISSUES_CSV = REPO / "docs" / "PROGRESS_issues.csv"
 GH_REPO = "wegofwd2020-hub/thittam"
 
 ISSUE_RE = re.compile(r"#(\d+)")
@@ -188,12 +191,63 @@ def render(issues: dict[int, dict], commits: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def write_csvs(issues: dict[int, dict], commits: list[dict]) -> None:
+    """Write PROGRESS_scopes.csv + PROGRESS_issues.csv for spreadsheet analysis.
+
+    Same data as the markdown tables, flattened to CSV so it can be pulled
+    into Google Sheets via `=IMPORTDATA(...)` or imported manually.
+    """
+    per_issue: dict[int, list[dict]] = defaultdict(list)
+    per_scope: dict[str, list[dict]] = defaultdict(list)
+    issue_scopes: dict[int, set[str]] = defaultdict(set)
+    for c in commits:
+        for n in c["issues"]:
+            per_issue[n].append(c)
+            if c["scope"]:
+                issue_scopes[n].add(c["scope"])
+        if c["scope"]:
+            per_scope[c["scope"]].append(c)
+
+    # Scopes sheet — one row per scope.
+    with OUTPUT_SCOPES_CSV.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow([
+            "scope", "commit_count", "first", "last", "issue_count",
+        ])
+        for scope in sorted(per_scope, key=lambda k: -len(per_scope[k])):
+            cs = per_scope[scope]
+            ds = sorted(c["date"] for c in cs)
+            issues_here = {n for c in cs for n in c["issues"]}
+            w.writerow([scope, len(cs), ds[0], ds[-1], len(issues_here)])
+
+    # Issues sheet — one row per GitHub issue/PR referenced in commits.
+    with OUTPUT_ISSUES_CSV.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow([
+            "issue_number", "title", "state",
+            "commit_count", "first", "last", "span_days", "scopes",
+        ])
+        for num, cs in sorted(per_issue.items(), key=lambda kv: -len(kv[1])):
+            meta = issues.get(num, {})
+            title = meta.get("title", "(not found on GitHub)")
+            state = meta.get("state", "")
+            ds = sorted(c["date"] for c in cs)
+            span = (
+                datetime.fromisoformat(ds[-1]).date()
+                - datetime.fromisoformat(ds[0]).date()
+            ).days
+            scopes_str = "; ".join(sorted(issue_scopes[num]))
+            w.writerow([num, title, state, len(cs), ds[0], ds[-1], span, scopes_str])
+
+
 def main() -> None:
     issues = fetch_issues()
     commits = get_commits()
     OUTPUT.write_text(render(issues, commits))
+    write_csvs(issues, commits)
     print(
-        f"Wrote {OUTPUT} — {len(issues)} issues/PRs, {len(commits)} commits scanned."
+        f"Wrote {OUTPUT} + {OUTPUT_SCOPES_CSV.name} + {OUTPUT_ISSUES_CSV.name} "
+        f"— {len(issues)} issues/PRs, {len(commits)} commits scanned."
     )
 
 
