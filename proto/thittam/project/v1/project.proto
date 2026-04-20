@@ -9,11 +9,16 @@ package thittam.project.v1;
 option go_package = "github.com/wegofwd2020/thittam/gen/project/v1;projectv1";
 
 import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
 
 service ProjectService {
   rpc CreateProduction(CreateProductionRequest) returns (Production);
-  rpc GetProduction(GetProductionRequest) returns (Production);
-  rpc ListProductions(ListProductionsRequest) returns (ListProductionsResponse);
+  rpc GetProduction(GetProductionRequest) returns (Production) {
+    option (google.api.http) = { get: "/api/v1/productions/{id}" };
+  }
+  rpc ListProductions(ListProductionsRequest) returns (ListProductionsResponse) {
+    option (google.api.http) = { get: "/api/v1/productions" };
+  }
   rpc UpdateProduction(UpdateProductionRequest) returns (Production);
   rpc ArchiveProduction(ArchiveProductionRequest) returns (Production);
 

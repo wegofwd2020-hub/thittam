@@ -1,5 +1,4 @@
 import { api } from "./client";
-import type { ApiResponse } from "./types";
 
 // ---------------------------------------------------------------------------
 // Dashboard API — functions for the reporting-analytics service endpoints.
@@ -135,31 +134,25 @@ export interface DashboardSummary {
 const BASE = "/v1/reports/dashboard";
 
 export async function getPortfolioOverview(): Promise<PortfolioOverview> {
-  const res = await api.get<PortfolioOverview>(`${BASE}/portfolio`);
-  return (res as ApiResponse<PortfolioOverview>).data;
+  return api.get<PortfolioOverview>(`${BASE}/portfolio`);
 }
 
 export async function getFinancialSummary(): Promise<FinancialSummary> {
-  const res = await api.get<FinancialSummary>(`${BASE}/financial`);
-  return (res as ApiResponse<FinancialSummary>).data;
+  return api.get<FinancialSummary>(`${BASE}/financial`);
 }
 
 export async function getApprovalPipeline(): Promise<ApprovalPipeline> {
-  const res = await api.get<ApprovalPipeline>(`${BASE}/approvals`);
-  return (res as ApiResponse<ApprovalPipeline>).data;
+  return api.get<ApprovalPipeline>(`${BASE}/approvals`);
 }
 
 export async function getTeamUtilization(): Promise<TeamUtilization> {
-  const res = await api.get<TeamUtilization>(`${BASE}/team`);
-  return (res as ApiResponse<TeamUtilization>).data;
+  return api.get<TeamUtilization>(`${BASE}/team`);
 }
 
 export async function getComplianceStatus(): Promise<ComplianceStatus> {
-  const res = await api.get<ComplianceStatus>(`${BASE}/compliance`);
-  return (res as ApiResponse<ComplianceStatus>).data;
+  return api.get<ComplianceStatus>(`${BASE}/compliance`);
 }
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {
-  const res = await api.get<DashboardSummary>(`${BASE}/summary`);
-  return (res as ApiResponse<DashboardSummary>).data;
+  return api.get<DashboardSummary>(`${BASE}/summary`);
 }

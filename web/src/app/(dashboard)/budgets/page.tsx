@@ -1,88 +1,30 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueries } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useTheme } from "@/lib/themes/provider";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AmountDisplay } from "@/components/ui/amount-display";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { useProductions } from "@/lib/hooks/use-productions";
+import { budgetKeys } from "@/lib/hooks/use-budgets";
+import { listBudgets, type Budget } from "@/lib/api/budgets";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-interface Budget {
+interface BudgetRow {
   id: string;
   label: string;
   productionId: string;
   productionTitle: string;
-  status: "draft" | "submitted" | "approved" | "locked";
+  status: string;
   totalAmount: string;
   currency: string;
   createdAt: string;
 }
 
-// ---------------------------------------------------------------------------
-// Mock data — matches XYZ_CBA seed pattern
-// ---------------------------------------------------------------------------
-const mockBudgets: Budget[] = [
-  {
-    id: "b1",
-    label: "The Last Horizon V1",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    status: "approved",
-    totalAmount: "85000000.00",
-    currency: "INR",
-    createdAt: "2026-01-20",
-  },
-  {
-    id: "b2",
-    label: "The Last Horizon V2",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    status: "draft",
-    totalAmount: "92000000.00",
-    currency: "INR",
-    createdAt: "2026-03-10",
-  },
-  {
-    id: "b3",
-    label: "Midnight Express V1",
-    productionId: "2",
-    productionTitle: "Midnight Express Reboot",
-    status: "locked",
-    totalAmount: "120000000.00",
-    currency: "INR",
-    createdAt: "2025-06-15",
-  },
-  {
-    id: "b4",
-    label: "Midnight Express V2",
-    productionId: "2",
-    productionTitle: "Midnight Express Reboot",
-    status: "submitted",
-    totalAmount: "125000000.00",
-    currency: "INR",
-    createdAt: "2025-12-01",
-  },
-  {
-    id: "b5",
-    label: "Project Starfall V1",
-    productionId: "3",
-    productionTitle: "Project Starfall",
-    status: "draft",
-    totalAmount: "40000000.00",
-    currency: "INR",
-    createdAt: "2026-03-05",
-  },
-];
-
-// ---------------------------------------------------------------------------
-// Filter chip definitions
-// ---------------------------------------------------------------------------
 const FILTER_OPTIONS = [
   { key: "all", label: "All" },
   { key: "draft", label: "Draft" },
@@ -93,34 +35,68 @@ const FILTER_OPTIONS = [
 
 type FilterKey = (typeof FILTER_OPTIONS)[number]["key"];
 
-// Unique productions for the filter dropdown
-const PRODUCTION_OPTIONS = [
-  { id: "all", title: "All Productions" },
-  ...Array.from(
-    new Map(
-      mockBudgets.map((b) => [b.productionId, { id: b.productionId, title: b.productionTitle }])
-    ).values()
-  ),
-];
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
 export default function BudgetsPage() {
   const { entityLabels } = useTheme();
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<FilterKey>("all");
   const [productionFilter, setProductionFilter] = useState("all");
 
+  const productionsQuery = useProductions();
+  const productions = productionsQuery.data?.productions ?? [];
+
+  // Fan out: one useBudgets query per production. There is no tenant-wide
+  // list endpoint (#60 follow-up); the per-production endpoint is what the
+  // backend exposes today.
+  const budgetQueries = useQueries({
+    queries: productions.map((p) => ({
+      queryKey: budgetKeys.list(p.id),
+      queryFn: () => listBudgets(p.id),
+      enabled: !!p.id,
+    })),
+  });
+
+  const rows: BudgetRow[] = useMemo(() => {
+    const byId = new Map(productions.map((p) => [p.id, p.title]));
+    const flat: BudgetRow[] = [];
+    for (const q of budgetQueries) {
+      const budgets = (q.data?.budgets ?? []) as Budget[];
+      for (const b of budgets) {
+        flat.push({
+          id: b.id,
+          label: b.label,
+          productionId: b.production_id,
+          productionTitle: byId.get(b.production_id) ?? "—",
+          status: b.status,
+          totalAmount: b.total_amount,
+          currency: b.currency,
+          createdAt: b.created_at.slice(0, 10),
+        });
+      }
+    }
+    return flat;
+  }, [productions, budgetQueries]);
+
   const filtered = useMemo(() => {
-    return mockBudgets.filter((b) => {
+    return rows.filter((b) => {
       if (statusFilter !== "all" && b.status !== statusFilter) return false;
       if (productionFilter !== "all" && b.productionId !== productionFilter) return false;
       return true;
     });
-  }, [statusFilter, productionFilter]);
+  }, [rows, statusFilter, productionFilter]);
 
-  const columns: Column<Budget>[] = [
+  const productionOptions = useMemo(
+    () => [
+      { id: "all", title: "All Productions" },
+      ...productions.map((p) => ({ id: p.id, title: p.title })),
+    ],
+    [productions],
+  );
+
+  const isLoading =
+    productionsQuery.isLoading || budgetQueries.some((q) => q.isLoading);
+  const errored = productionsQuery.error ?? budgetQueries.find((q) => q.error)?.error;
+
+  const columns: Column<BudgetRow>[] = [
     {
       key: "label",
       header: "Label",
@@ -184,6 +160,12 @@ export default function BudgetsPage() {
     },
   ];
 
+  const emptyMessage = errored
+    ? `Failed to load budgets: ${errored.message}`
+    : isLoading
+      ? "Loading budgets…"
+      : "No budgets match the selected filters.";
+
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
@@ -202,9 +184,7 @@ export default function BudgetsPage() {
         }
       />
 
-      {/* Filters row */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {/* Status filter chips */}
         <div className="flex flex-wrap gap-2">
           {FILTER_OPTIONS.map((opt) => (
             <button
@@ -227,7 +207,6 @@ export default function BudgetsPage() {
           ))}
         </div>
 
-        {/* Production filter dropdown */}
         <select
           value={productionFilter}
           onChange={(e) => setProductionFilter(e.target.value)}
@@ -238,7 +217,7 @@ export default function BudgetsPage() {
             color: "var(--thittam-foreground, #0f172a)",
           }}
         >
-          {PRODUCTION_OPTIONS.map((p) => (
+          {productionOptions.map((p) => (
             <option key={p.id} value={p.id}>
               {p.title}
             </option>
@@ -246,12 +225,11 @@ export default function BudgetsPage() {
         </select>
       </div>
 
-      {/* Budget table */}
       <DataTable<Record<string, unknown>>
         columns={columns as unknown as Column<Record<string, unknown>>[]}
         data={filtered as unknown as Record<string, unknown>[]}
-        onRowClick={(row) => router.push(`/budgets/${(row as unknown as Budget).id}`)}
-        emptyMessage="No budgets match the selected filters."
+        onRowClick={(row) => router.push(`/budgets/${(row as unknown as BudgetRow).id}`)}
+        emptyMessage={emptyMessage}
       />
     </div>
   );

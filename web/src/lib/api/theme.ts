@@ -1,5 +1,4 @@
 import { api } from "./client";
-import type { ApiResponse } from "./types";
 import type { ThemeColors } from "@/lib/themes/types";
 
 // ---------------------------------------------------------------------------
@@ -27,8 +26,7 @@ const THEME_BASE = "/api/v1/settings/theme";
 
 export async function getThemeOverride(): Promise<ThemeOverride | null> {
   try {
-    const res = await api.get<ThemeOverride>(THEME_BASE);
-    return res.data;
+    return api.get<ThemeOverride>(THEME_BASE);
   } catch {
     // 404 means no override saved yet
     return null;
@@ -69,8 +67,8 @@ async function uploadFile(
     throw new Error(`Upload failed: ${res.statusText}`);
   }
 
-  const json = (await res.json()) as ApiResponse<UploadResult>;
-  return json.data;
+  const json = (await res.json()) as UploadResult;
+  return json;
 }
 
 export async function uploadLogo(file: File): Promise<UploadResult> {

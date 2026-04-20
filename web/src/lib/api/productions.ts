@@ -1,5 +1,4 @@
 import { api } from "./client";
-import type { ApiListResponse, ApiResponse } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -95,30 +94,43 @@ function qs(params?: Record<string, string | number | undefined>): string {
 
 const BASE = "/api/v1/productions";
 
+export interface ListProductionsResponse {
+  productions: Production[];
+}
+
+export interface ListPhasesResponse {
+  phases: Phase[];
+}
+
+export interface GetPhaseTypesResponse {
+  phase_types: PhaseType[];
+}
+
+export interface ListCrewMembersResponse {
+  members: CrewMember[];
+}
+
 export async function listProductions(
   params?: { status?: string; limit?: number; after?: string },
-): Promise<ApiListResponse<Production>> {
-  return api.getList<Production>(`${BASE}${qs(params)}`);
+): Promise<ListProductionsResponse> {
+  return api.getList<ListProductionsResponse>(`${BASE}${qs(params)}`);
 }
 
 export async function getProduction(id: string): Promise<Production> {
-  const res = await api.get<Production>(`${BASE}/${id}`);
-  return res.data;
+  return api.get<Production>(`${BASE}/${id}`);
 }
 
 export async function createProduction(
   data: CreateProductionInput,
 ): Promise<Production> {
-  const res = await api.post<Production>(BASE, data);
-  return res.data;
+  return api.post<Production>(BASE, data);
 }
 
 export async function updateProduction(
   id: string,
   data: Partial<Production>,
 ): Promise<Production> {
-  const res = await api.patch<Production>(`${BASE}/${id}`, data);
-  return res.data;
+  return api.patch<Production>(`${BASE}/${id}`, data);
 }
 
 export async function archiveProduction(id: string): Promise<void> {
@@ -130,26 +142,26 @@ export async function archiveProduction(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function listPhases(productionId: string): Promise<Phase[]> {
-  const res = await api.getList<Phase>(`${BASE}/${productionId}/phases`);
-  return res.data;
+  const res = await api.getList<ListPhasesResponse>(
+    `${BASE}/${productionId}/phases`,
+  );
+  return res.phases ?? [];
 }
 
 export async function createPhase(
   productionId: string,
   data: { phase_type: string },
 ): Promise<Phase> {
-  const res = await api.post<Phase>(`${BASE}/${productionId}/phases`, data);
-  return res.data;
+  return api.post<Phase>(`${BASE}/${productionId}/phases`, data);
 }
 
 export async function updatePhaseStatus(
   phaseId: string,
   newPhaseType: string,
 ): Promise<Phase> {
-  const res = await api.patch<Phase>(`/api/v1/phases/${phaseId}`, {
+  return api.patch<Phase>(`/api/v1/phases/${phaseId}`, {
     status: newPhaseType,
   });
-  return res.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,13 +169,14 @@ export async function updatePhaseStatus(
 // ---------------------------------------------------------------------------
 
 export async function getPhaseTypes(): Promise<PhaseType[]> {
-  const res = await api.getList<PhaseType>("/api/v1/config/phase-types");
-  return res.data;
+  const res = await api.getList<GetPhaseTypesResponse>(
+    "/api/v1/config/phase-types",
+  );
+  return res.phase_types ?? [];
 }
 
 export async function getEntityLabels(): Promise<EntityLabels> {
-  const res = await api.get<EntityLabels>("/api/v1/config/entity-labels");
-  return res.data;
+  return api.get<EntityLabels>("/api/v1/config/entity-labels");
 }
 
 // ---------------------------------------------------------------------------
@@ -173,21 +186,17 @@ export async function getEntityLabels(): Promise<EntityLabels> {
 export async function listCrewMembers(
   productionId: string,
 ): Promise<CrewMember[]> {
-  const res = await api.getList<CrewMember>(
+  const res = await api.getList<ListCrewMembersResponse>(
     `${BASE}/${productionId}/crew`,
   );
-  return res.data;
+  return res.members ?? [];
 }
 
 export async function addCrewMember(
   productionId: string,
   data: AddCrewMemberInput,
 ): Promise<CrewMember> {
-  const res = await api.post<CrewMember>(
-    `${BASE}/${productionId}/crew`,
-    data,
-  );
-  return res.data;
+  return api.post<CrewMember>(`${BASE}/${productionId}/crew`, data);
 }
 
 export async function removeCrewMember(id: string): Promise<void> {

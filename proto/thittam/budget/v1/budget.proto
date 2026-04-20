@@ -9,17 +9,30 @@ package thittam.budget.v1;
 option go_package = "github.com/wegofwd2020/thittam/gen/budget/v1;budgetv1";
 
 import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
 
 service BudgetService {
   rpc CreateBudget(CreateBudgetRequest) returns (Budget);
-  rpc GetBudget(GetBudgetRequest) returns (Budget);
-  rpc ListBudgets(ListBudgetsRequest) returns (ListBudgetsResponse);
-  rpc SubmitBudget(SubmitBudgetRequest) returns (Budget);
-  rpc ApproveBudget(ApproveBudgetRequest) returns (Budget);
+  rpc GetBudget(GetBudgetRequest) returns (Budget) {
+    option (google.api.http) = { get: "/api/v1/budgets/{id}" };
+  }
+  rpc ListBudgets(ListBudgetsRequest) returns (ListBudgetsResponse) {
+    option (google.api.http) = { get: "/api/v1/budgets" };
+  }
+  rpc SubmitBudget(SubmitBudgetRequest) returns (Budget) {
+    option (google.api.http) = { post: "/api/v1/budgets/{id}/submit" body: "*" };
+  }
+  rpc ApproveBudget(ApproveBudgetRequest) returns (Budget) {
+    option (google.api.http) = { post: "/api/v1/budgets/{id}/approve" body: "*" };
+  }
 
-  rpc CreateLineItem(CreateLineItemRequest) returns (BudgetLineItem);
+  rpc CreateLineItem(CreateLineItemRequest) returns (BudgetLineItem) {
+    option (google.api.http) = { post: "/api/v1/budgets/{budget_id}/line-items" body: "*" };
+  }
   rpc GetLineItem(GetLineItemRequest) returns (BudgetLineItem);
-  rpc ListLineItems(ListLineItemsRequest) returns (ListLineItemsResponse);
+  rpc ListLineItems(ListLineItemsRequest) returns (ListLineItemsResponse) {
+    option (google.api.http) = { get: "/api/v1/budgets/{budget_id}/line-items" };
+  }
   rpc UpdateLineItemActuals(UpdateLineItemActualsRequest) returns (BudgetLineItem);
   rpc CheckLineAvailability(CheckLineAvailabilityRequest) returns (CheckLineAvailabilityResponse);
 

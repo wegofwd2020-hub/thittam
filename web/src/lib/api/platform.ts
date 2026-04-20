@@ -1,5 +1,4 @@
 import { api } from "./client";
-import type { ApiListResponse, ApiResponse } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -103,12 +102,11 @@ export async function generateDemoPreview(
   companyName?: string,
   plan?: string,
 ): Promise<DemoPreview> {
-  const res = await api.post<DemoPreview>(`${PLATFORM_BASE}/demo/preview`, {
+  return api.post<DemoPreview>(`${PLATFORM_BASE}/demo/preview`, {
     vertical_id: verticalId,
     company_name: companyName,
     plan,
   });
-  return res.data;
 }
 
 export async function provisionDemo(
@@ -117,18 +115,16 @@ export async function provisionDemo(
   companyName: string,
   plan: string,
 ): Promise<ProvisionResult> {
-  const res = await api.post<ProvisionResult>(`${PLATFORM_BASE}/demo/provision`, {
+  return api.post<ProvisionResult>(`${PLATFORM_BASE}/demo/provision`, {
     preview_token: previewToken,
     vertical_id: verticalId,
     company_name: companyName,
     plan,
   });
-  return res.data;
 }
 
 export async function listDemoTenants(): Promise<DemoTenantInfo[]> {
-  const res = await api.getList<DemoTenantInfo>(`${PLATFORM_BASE}/demo/tenants`);
-  return res.data;
+  return api.getList<DemoTenantInfo[]>(`${PLATFORM_BASE}/demo/tenants`);
 }
 
 export async function teardownDemoTenant(tenantId: string): Promise<void> {
@@ -140,35 +136,31 @@ export async function teardownDemoTenant(tenantId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function listTenants(): Promise<TenantSummary[]> {
-  const res = await api.getList<TenantSummary>(`${PLATFORM_BASE}/tenants`);
-  return res.data;
+  return api.getList<TenantSummary[]>(`${PLATFORM_BASE}/tenants`);
 }
 
 export async function suspendTenant(id: string): Promise<TenantSummary> {
-  const res = await api.post<TenantSummary>(
+  return api.post<TenantSummary>(
     `${PLATFORM_BASE}/tenants/${id}/suspend`,
     {},
   );
-  return res.data;
 }
 
 export async function reactivateTenant(id: string): Promise<TenantSummary> {
-  const res = await api.post<TenantSummary>(
+  return api.post<TenantSummary>(
     `${PLATFORM_BASE}/tenants/${id}/reactivate`,
     {},
   );
-  return res.data;
 }
 
 export async function upgradePlan(
   id: string,
   plan: string,
 ): Promise<TenantSummary> {
-  const res = await api.post<TenantSummary>(
+  return api.post<TenantSummary>(
     `${PLATFORM_BASE}/tenants/${id}/upgrade`,
     { plan },
   );
-  return res.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -176,14 +168,12 @@ export async function upgradePlan(
 // ---------------------------------------------------------------------------
 
 export async function listVerticals(): Promise<VerticalSummary[]> {
-  const res = await api.getList<VerticalSummary>(`${PLATFORM_BASE}/verticals`);
-  return res.data;
+  return api.getList<VerticalSummary[]>(`${PLATFORM_BASE}/verticals`);
 }
 
 export async function deprecateVertical(id: string): Promise<VerticalSummary> {
-  const res = await api.post<VerticalSummary>(
+  return api.post<VerticalSummary>(
     `${PLATFORM_BASE}/verticals/${id}/deprecate`,
     {},
   );
-  return res.data;
 }

@@ -81,6 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearTokens();
     api.setToken(null);
     api.setTenantId(null);
+    api.setCaller(null);
     setUser(null);
     setTenant(null);
   }, []);
@@ -97,6 +98,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(me.user);
         setTenant(me.tenant);
         api.setTenantId(me.tenant.id);
+        api.setCaller({
+          id: me.user.id,
+          email: me.user.email,
+          role: me.user.roles[0] ?? "",
+        });
         localStorage.setItem(TENANT_ID_KEY, me.tenant.id);
       } catch {
         // Token might be expired -- try refresh
@@ -112,6 +118,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(me.user);
             setTenant(me.tenant);
             api.setTenantId(me.tenant.id);
+            api.setCaller({
+              id: me.user.id,
+              email: me.user.email,
+              role: me.user.roles[0] ?? "",
+            });
             localStorage.setItem(TENANT_ID_KEY, me.tenant.id);
           } catch {
             clearAuth();
@@ -147,6 +158,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(me.user);
       setTenant(me.tenant);
       api.setTenantId(me.tenant.id);
+      api.setCaller({
+        id: me.user.id,
+        email: me.user.email,
+        role: me.user.roles[0] ?? "",
+      });
       localStorage.setItem(TENANT_ID_KEY, me.tenant.id);
     },
     []

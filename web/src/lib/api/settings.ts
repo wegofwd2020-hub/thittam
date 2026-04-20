@@ -1,5 +1,4 @@
 import { api } from "./client";
-import type { ApiListResponse, ApiResponse } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -118,31 +117,27 @@ function qs(params?: Record<string, string | number | undefined>): string {
 
 const USERS_BASE = "/api/v1/users";
 
-export async function listUsers(): Promise<ApiListResponse<User>> {
-  return api.getList<User>(USERS_BASE);
+export async function listUsers(): Promise<User[]> {
+  return api.getList<User[]>(USERS_BASE);
 }
 
 export async function getUser(id: string): Promise<User> {
-  const res = await api.get<User>(`${USERS_BASE}/${id}`);
-  return res.data;
+  return api.get<User>(`${USERS_BASE}/${id}`);
 }
 
 export async function inviteUser(data: InviteUserInput): Promise<User> {
-  const res = await api.post<User>(`${USERS_BASE}/invite`, data);
-  return res.data;
+  return api.post<User>(`${USERS_BASE}/invite`, data);
 }
 
 export async function updateUserRole(
   id: string,
   data: UpdateUserRoleInput,
 ): Promise<User> {
-  const res = await api.patch<User>(`${USERS_BASE}/${id}/role`, data);
-  return res.data;
+  return api.patch<User>(`${USERS_BASE}/${id}/role`, data);
 }
 
 export async function deactivateUser(id: string): Promise<User> {
-  const res = await api.post<User>(`${USERS_BASE}/${id}/deactivate`, {});
-  return res.data;
+  return api.post<User>(`${USERS_BASE}/${id}/deactivate`, {});
 }
 
 // ---------------------------------------------------------------------------
@@ -151,8 +146,8 @@ export async function deactivateUser(id: string): Promise<User> {
 
 const ROLES_BASE = "/api/v1/roles";
 
-export async function listRoles(): Promise<ApiListResponse<Role>> {
-  return api.getList<Role>(ROLES_BASE);
+export async function listRoles(): Promise<Role[]> {
+  return api.getList<Role[]>(ROLES_BASE);
 }
 
 // ---------------------------------------------------------------------------
@@ -162,15 +157,13 @@ export async function listRoles(): Promise<ApiListResponse<Role>> {
 const AUTH_BASE = "/api/v1/settings/auth";
 
 export async function getAuthConfig(): Promise<AuthConfig> {
-  const res = await api.get<AuthConfig>(AUTH_BASE);
-  return res.data;
+  return api.get<AuthConfig>(AUTH_BASE);
 }
 
 export async function updateAuthConfig(
   data: UpdateAuthConfigInput,
 ): Promise<AuthConfig> {
-  const res = await api.patch<AuthConfig>(AUTH_BASE, data);
-  return res.data;
+  return api.patch<AuthConfig>(AUTH_BASE, data);
 }
 
 // ---------------------------------------------------------------------------
@@ -181,8 +174,8 @@ const AUDIT_BASE = "/api/v1/audit-log";
 
 export async function queryAuditLog(
   params?: AuditLogQuery,
-): Promise<ApiListResponse<AuditLogEntry>> {
-  return api.getList<AuditLogEntry>(`${AUDIT_BASE}${qs(params as Record<string, string | number | undefined>)}`);
+): Promise<AuditLogEntry[]> {
+  return api.getList<AuditLogEntry[]>(`${AUDIT_BASE}${qs(params as Record<string, string | number | undefined>)}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -192,6 +185,5 @@ export async function queryAuditLog(
 const TENANT_BASE = "/api/v1/settings/tenant";
 
 export async function getTenantSettings(): Promise<TenantSettings> {
-  const res = await api.get<TenantSettings>(TENANT_BASE);
-  return res.data;
+  return api.get<TenantSettings>(TENANT_BASE);
 }

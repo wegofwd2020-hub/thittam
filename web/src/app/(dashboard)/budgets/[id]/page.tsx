@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -15,169 +15,110 @@ import {
 import { useTheme } from "@/lib/themes/provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AmountDisplay } from "@/components/ui/amount-display";
+import {
+  useBudget,
+  useLineItems,
+  useSubmitBudget,
+  useApproveBudget,
+  useCreateLineItem,
+} from "@/lib/hooks/use-budgets";
+import { useProduction } from "@/lib/hooks/use-productions";
+import type { BudgetLineItem } from "@/lib/api/budgets";
 
 // ---------------------------------------------------------------------------
-// Types
+// Category label translation — category_id comes back as a short machine
+// identifier (e.g. "preliminaries"). Title-case it for display; when a
+// vertical-config lookup lands (getBudgetCategories) this can be replaced
+// with the real label.
 // ---------------------------------------------------------------------------
-type BudgetStatus = "draft" | "submitted" | "approved" | "locked";
-
-interface LineItem {
-  id: string;
-  category: string;
-  description: string;
-  accountCode: string;
-  budgetedAmount: string;
+function formatCategory(id: string): string {
+  return id
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
-interface BudgetDetail {
-  id: string;
-  label: string;
-  productionId: string;
-  productionTitle: string;
-  status: BudgetStatus;
-  totalAmount: string;
-  currency: string;
-  createdAt: string;
-  lineItems: LineItem[];
-}
-
-// ---------------------------------------------------------------------------
-// Mock data — "The Last Horizon V1" with 13 line items matching XYZ_CBA seed
-// ---------------------------------------------------------------------------
-const mockBudgets: Record<string, BudgetDetail> = {
-  b1: {
-    id: "b1",
-    label: "The Last Horizon V1",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    status: "approved",
-    totalAmount: "85000000.00",
-    currency: "INR",
-    createdAt: "2026-01-20",
-    lineItems: [
-      { id: "li-01", category: "Above the Line", description: "Director", accountCode: "1100", budgetedAmount: "15000000.00" },
-      { id: "li-02", category: "Above the Line", description: "Lead Actor", accountCode: "1200", budgetedAmount: "20000000.00" },
-      { id: "li-03", category: "Above the Line", description: "Lead Actress", accountCode: "1201", budgetedAmount: "12000000.00" },
-      { id: "li-04", category: "Above the Line", description: "Screenwriter", accountCode: "1300", budgetedAmount: "3000000.00" },
-      { id: "li-05", category: "Below the Line", description: "Cinematographer", accountCode: "2100", budgetedAmount: "5000000.00" },
-      { id: "li-06", category: "Below the Line", description: "Art Director", accountCode: "2200", budgetedAmount: "3500000.00" },
-      { id: "li-07", category: "Below the Line", description: "Camera Equipment", accountCode: "2300", budgetedAmount: "4500000.00" },
-      { id: "li-08", category: "Below the Line", description: "Locations", accountCode: "2400", budgetedAmount: "6000000.00" },
-      { id: "li-09", category: "Below the Line", description: "Crew", accountCode: "2500", budgetedAmount: "8000000.00" },
-      { id: "li-10", category: "Below the Line", description: "Transport", accountCode: "2600", budgetedAmount: "2000000.00" },
-      { id: "li-11", category: "Post Production", description: "VFX", accountCode: "3100", budgetedAmount: "4000000.00" },
-      { id: "li-12", category: "Post Production", description: "Sound Design", accountCode: "3200", budgetedAmount: "1500000.00" },
-      { id: "li-13", category: "Post Production", description: "Music & Score", accountCode: "3300", budgetedAmount: "500000.00" },
-    ],
-  },
-  b2: {
-    id: "b2",
-    label: "The Last Horizon V2",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    status: "draft",
-    totalAmount: "92000000.00",
-    currency: "INR",
-    createdAt: "2026-03-10",
-    lineItems: [
-      { id: "li-21", category: "Above the Line", description: "Director", accountCode: "1100", budgetedAmount: "15000000.00" },
-      { id: "li-22", category: "Above the Line", description: "Lead Actor", accountCode: "1200", budgetedAmount: "22000000.00" },
-      { id: "li-23", category: "Post Production", description: "VFX (Revised)", accountCode: "3100", budgetedAmount: "8000000.00" },
-    ],
-  },
-  b3: {
-    id: "b3",
-    label: "Midnight Express V1",
-    productionId: "2",
-    productionTitle: "Midnight Express Reboot",
-    status: "locked",
-    totalAmount: "120000000.00",
-    currency: "INR",
-    createdAt: "2025-06-15",
-    lineItems: [
-      { id: "li-31", category: "Above the Line", description: "Director", accountCode: "1100", budgetedAmount: "18000000.00" },
-      { id: "li-32", category: "Below the Line", description: "Crew & Equipment", accountCode: "2100", budgetedAmount: "45000000.00" },
-    ],
-  },
-  b4: {
-    id: "b4",
-    label: "Midnight Express V2",
-    productionId: "2",
-    productionTitle: "Midnight Express Reboot",
-    status: "submitted",
-    totalAmount: "125000000.00",
-    currency: "INR",
-    createdAt: "2025-12-01",
-    lineItems: [
-      { id: "li-41", category: "Above the Line", description: "Director", accountCode: "1100", budgetedAmount: "18000000.00" },
-      { id: "li-42", category: "Below the Line", description: "Crew & Equipment", accountCode: "2100", budgetedAmount: "48000000.00" },
-    ],
-  },
-  b5: {
-    id: "b5",
-    label: "Project Starfall V1",
-    productionId: "3",
-    productionTitle: "Project Starfall",
-    status: "draft",
-    totalAmount: "40000000.00",
-    currency: "INR",
-    createdAt: "2026-03-05",
-    lineItems: [
-      { id: "li-51", category: "Above the Line", description: "Director", accountCode: "1100", budgetedAmount: "8000000.00" },
-      { id: "li-52", category: "Below the Line", description: "Animation Team", accountCode: "2100", budgetedAmount: "20000000.00" },
-    ],
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Budget categories for add line item form
-// ---------------------------------------------------------------------------
+// Display fallback for when the "Add line item" form hasn't been wired
+// to a full vertical-aware category list yet. Still covers the six
+// construction categories from construction.yaml.
 const BUDGET_CATEGORIES = [
-  { name: "Above the Line", defaultCode: "1100" },
-  { name: "Below the Line", defaultCode: "2100" },
-  { name: "Post Production", defaultCode: "3100" },
-  { name: "Marketing & Distribution", defaultCode: "4100" },
-  { name: "Insurance & Legal", defaultCode: "5100" },
-  { name: "Contingency", defaultCode: "9100" },
+  { id: "preliminaries", label: "Preliminaries", defaultCode: "5500" },
+  { id: "materials", label: "Materials", defaultCode: "5100" },
+  { id: "labour", label: "Labour", defaultCode: "5200" },
+  { id: "subcontract", label: "Subcontract", defaultCode: "5300" },
+  { id: "plant_equipment", label: "Plant & Equipment", defaultCode: "5400" },
+  { id: "contingency", label: "Contingency", defaultCode: "5600" },
 ];
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
 export default function BudgetDetailPage() {
   const { entityLabels } = useTheme();
   const params = useParams<{ id: string }>();
+  const budgetId = params.id;
 
-  const [budget, setBudget] = useState<BudgetDetail | null>(
-    () => mockBudgets[params.id] ?? null
-  );
+  const budgetQuery = useBudget(budgetId);
+  const lineItemsQuery = useLineItems(budgetId);
+
+  const productionId = budgetQuery.data?.production_id ?? "";
+  const productionQuery = useProduction(productionId);
+
+  const submitMutation = useSubmitBudget();
+  const approveMutation = useApproveBudget();
+  const createLineItem = useCreateLineItem(budgetId);
+
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [approvalAction, setApprovalAction] = useState<"approve" | "reject">("approve");
   const [approvalNote, setApprovalNote] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
 
-  // Add line item form state
-  const [newCategory, setNewCategory] = useState(BUDGET_CATEGORIES[0].name);
+  const [newCategory, setNewCategory] = useState(BUDGET_CATEGORIES[0].id);
   const [newDescription, setNewDescription] = useState("");
   const [newAccountCode, setNewAccountCode] = useState(BUDGET_CATEGORIES[0].defaultCode);
   const [newAmount, setNewAmount] = useState("");
 
-  // Computed totals by category
+  const budget = budgetQuery.data;
+  const lineItems: BudgetLineItem[] = lineItemsQuery.data ?? [];
+
   const categoryTotals = useMemo(() => {
-    if (!budget) return {};
     const totals: Record<string, number> = {};
-    for (const li of budget.lineItems) {
-      totals[li.category] = (totals[li.category] ?? 0) + parseFloat(li.budgetedAmount);
+    for (const li of lineItems) {
+      const key = formatCategory(li.category_id);
+      totals[key] = (totals[key] ?? 0) + parseFloat(li.budgeted_amount);
     }
     return totals;
-  }, [budget]);
+  }, [lineItems]);
 
-  const grandTotal = useMemo(() => {
-    if (!budget) return 0;
-    return budget.lineItems.reduce((sum, li) => sum + parseFloat(li.budgetedAmount), 0);
-  }, [budget]);
+  const grandTotal = useMemo(
+    () => lineItems.reduce((sum, li) => sum + parseFloat(li.budgeted_amount), 0),
+    [lineItems],
+  );
 
-  if (!budget) {
+  // Group line items by category for display
+  const categories = useMemo(() => {
+    const map = new Map<string, BudgetLineItem[]>();
+    for (const li of lineItems) {
+      const key = formatCategory(li.category_id);
+      const items = map.get(key) ?? [];
+      items.push(li);
+      map.set(key, items);
+    }
+    return Array.from(map.entries());
+  }, [lineItems]);
+
+  // ── Loading / not-found states ────────────────────────────────────────
+  if (budgetQuery.isLoading) {
+    return (
+      <div className="mx-auto max-w-4xl py-12 text-center">
+        <p
+          className="font-body text-sm"
+          style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+        >
+          Loading budget…
+        </p>
+      </div>
+    );
+  }
+
+  if (budgetQuery.error || !budget) {
     return (
       <div className="mx-auto max-w-4xl py-12 text-center">
         <h1
@@ -190,7 +131,8 @@ export default function BudgetDetailPage() {
           className="mt-2 font-body text-sm"
           style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
         >
-          The budget you are looking for does not exist or has been removed.
+          {budgetQuery.error?.message ??
+            "The budget you are looking for does not exist or has been removed."}
         </p>
         <Link
           href="/budgets"
@@ -209,55 +151,35 @@ export default function BudgetDetailPage() {
   const isApproved = budget.status === "approved";
   const isLocked = budget.status === "locked";
 
-  function handleStatusChange(newStatus: BudgetStatus) {
-    setBudget((prev) => (prev ? { ...prev, status: newStatus } : prev));
-    setShowApprovalDialog(false);
-    setApprovalNote("");
-  }
-
   function handleAddLineItem(e: React.FormEvent) {
     e.preventDefault();
     if (!newDescription.trim() || !newAmount.trim()) return;
 
-    const newItem: LineItem = {
-      id: `li-new-${Date.now()}`,
-      category: newCategory,
-      description: newDescription,
-      accountCode: newAccountCode,
-      budgetedAmount: (parseFloat(newAmount) * 100).toFixed(2), // Treat input as "in lakhs" -> store as raw
-    };
-
-    // Store the raw amount entered (no multiplication — user enters full amount in rupees)
-    newItem.budgetedAmount = parseFloat(newAmount).toFixed(2);
-
-    setBudget((prev) =>
-      prev ? { ...prev, lineItems: [...prev.lineItems, newItem] } : prev
+    createLineItem.mutate(
+      {
+        category_id: newCategory,
+        description: newDescription,
+        account_code: newAccountCode,
+        budgeted_amount: parseFloat(newAmount).toFixed(2),
+      },
+      {
+        onSuccess: () => {
+          setNewDescription("");
+          setNewAmount("");
+          setShowAddForm(false);
+        },
+      },
     );
-    setNewDescription("");
-    setNewAmount("");
-    setShowAddForm(false);
   }
 
-  function handleCategoryChange(cat: string) {
-    setNewCategory(cat);
-    const match = BUDGET_CATEGORIES.find((c) => c.name === cat);
+  function handleCategoryChange(catId: string) {
+    setNewCategory(catId);
+    const match = BUDGET_CATEGORIES.find((c) => c.id === catId);
     if (match) setNewAccountCode(match.defaultCode);
   }
 
-  // Group line items by category for display
-  const categories = useMemo(() => {
-    const map = new Map<string, LineItem[]>();
-    for (const li of budget.lineItems) {
-      const items = map.get(li.category) ?? [];
-      items.push(li);
-      map.set(li.category, items);
-    }
-    return Array.from(map.entries());
-  }, [budget.lineItems]);
-
   return (
     <div className="mx-auto max-w-5xl">
-      {/* Back link */}
       <Link
         href="/budgets"
         className="mb-4 inline-flex items-center gap-1.5 text-sm font-heading font-medium transition-colors hover:opacity-80"
@@ -267,7 +189,6 @@ export default function BudgetDetailPage() {
         Budgets
       </Link>
 
-      {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <h1
@@ -279,16 +200,16 @@ export default function BudgetDetailPage() {
           <StatusBadge status={budget.status} variant="budget" />
         </div>
 
-        {/* Action buttons based on status */}
         <div className="flex items-center gap-2">
           {isDraft && (
             <button
-              onClick={() => handleStatusChange("submitted")}
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-heading font-medium text-white transition-colors hover:opacity-90"
+              onClick={() => submitMutation.mutate(budget.id)}
+              disabled={submitMutation.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-heading font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: "var(--thittam-primary, #3b82f6)" }}
             >
               <Send className="h-4 w-4" />
-              Submit for Approval
+              {submitMutation.isPending ? "Submitting…" : "Submit for Approval"}
             </button>
           )}
           {isSubmitted && (
@@ -318,17 +239,16 @@ export default function BudgetDetailPage() {
             </>
           )}
           {isApproved && (
-            <button
-              onClick={() => handleStatusChange("locked")}
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-heading font-medium transition-colors hover:bg-gray-100"
+            <span
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-heading font-medium"
               style={{
-                color: "var(--thittam-foreground, #0f172a)",
-                border: "1px solid var(--thittam-border, #e2e8f0)",
+                backgroundColor: "var(--thittam-muted, #f1f5f9)",
+                color: "var(--thittam-muted-foreground, #64748b)",
               }}
             >
-              <Lock className="h-4 w-4" />
-              Lock Budget
-            </button>
+              <Lock className="h-3.5 w-3.5" />
+              Approved — lock action not yet available via API
+            </span>
           )}
           {isLocked && (
             <span
@@ -345,7 +265,6 @@ export default function BudgetDetailPage() {
         </div>
       </div>
 
-      {/* Meta info row */}
       <div
         className="mb-6 flex flex-wrap gap-6 rounded-xl p-4"
         style={{
@@ -360,11 +279,11 @@ export default function BudgetDetailPage() {
             {entityLabels.project}
           </span>
           <Link
-            href={`/productions/${budget.productionId}`}
+            href={`/productions/${budget.production_id}`}
             className="text-sm font-body hover:underline"
             style={{ color: "var(--thittam-primary, #3b82f6)" }}
           >
-            {budget.productionTitle}
+            {productionQuery.data?.title ?? budget.production_id}
           </Link>
         </div>
         <div>
@@ -378,7 +297,7 @@ export default function BudgetDetailPage() {
             className="text-sm font-mono tabular-nums"
             style={{ color: "var(--thittam-foreground, #0f172a)" }}
           >
-            {budget.createdAt}
+            {budget.created_at.slice(0, 10)}
           </span>
         </div>
         <div>
@@ -397,7 +316,6 @@ export default function BudgetDetailPage() {
         </div>
       </div>
 
-      {/* Budget summary card */}
       <div
         className="mb-6 rounded-xl p-5"
         style={{
@@ -440,7 +358,6 @@ export default function BudgetDetailPage() {
         </div>
       </div>
 
-      {/* Line items table */}
       <div
         className="rounded-xl p-5"
         style={{
@@ -453,7 +370,7 @@ export default function BudgetDetailPage() {
             className="font-heading text-sm font-semibold"
             style={{ color: "var(--thittam-foreground, #0f172a)" }}
           >
-            Line Items ({budget.lineItems.length})
+            Line Items ({lineItems.length})
           </h2>
           {isDraft && (
             <button
@@ -467,106 +384,141 @@ export default function BudgetDetailPage() {
           )}
         </div>
 
-        {/* Grouped by category */}
-        <div className="flex flex-col gap-4">
-          {categories.map(([category, items]) => (
-            <div key={category}>
-              <h3
-                className="mb-2 text-xs font-heading font-semibold uppercase tracking-wider"
-                style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
-              >
-                {category}
-              </h3>
-              <div
-                className="overflow-x-auto rounded-lg border"
-                style={{ borderColor: "var(--thittam-border, #e2e8f0)" }}
-              >
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr
-                      style={{
-                        backgroundColor: "var(--thittam-muted, #f1f5f9)",
-                        borderBottom: "1px solid var(--thittam-border, #e2e8f0)",
-                      }}
-                    >
-                      <th
-                        className="px-4 py-2.5 text-left text-xs font-heading font-semibold uppercase tracking-wider"
-                        style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
-                      >
-                        Description
-                      </th>
-                      <th
-                        className="px-4 py-2.5 text-left text-xs font-heading font-semibold uppercase tracking-wider"
-                        style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
-                      >
-                        Account Code
-                      </th>
-                      <th
-                        className="px-4 py-2.5 text-right text-xs font-heading font-semibold uppercase tracking-wider"
-                        style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
-                      >
-                        Budgeted Amount
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((li) => (
+        {lineItemsQuery.isLoading ? (
+          <p
+            className="py-8 text-center font-body text-sm"
+            style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+          >
+            Loading line items…
+          </p>
+        ) : lineItems.length === 0 ? (
+          <p
+            className="py-8 text-center font-body text-sm"
+            style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+          >
+            No line items yet.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {categories.map(([category, items]) => (
+              <div key={category}>
+                <h3
+                  className="mb-2 text-xs font-heading font-semibold uppercase tracking-wider"
+                  style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+                >
+                  {category}
+                </h3>
+                <div
+                  className="overflow-x-auto rounded-lg border"
+                  style={{ borderColor: "var(--thittam-border, #e2e8f0)" }}
+                >
+                  <table className="w-full text-sm">
+                    <thead>
                       <tr
-                        key={li.id}
                         style={{
+                          backgroundColor: "var(--thittam-muted, #f1f5f9)",
                           borderBottom: "1px solid var(--thittam-border, #e2e8f0)",
                         }}
                       >
-                        <td
-                          className="px-4 py-2.5 font-body"
-                          style={{ color: "var(--thittam-foreground, #0f172a)" }}
+                        <th
+                          className="px-4 py-2.5 text-left text-xs font-heading font-semibold uppercase tracking-wider"
+                          style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
                         >
-                          {li.description}
-                        </td>
-                        <td
-                          className="px-4 py-2.5 font-mono tabular-nums text-sm"
-                          style={{ color: "var(--thittam-foreground, #0f172a)" }}
+                          Description
+                        </th>
+                        <th
+                          className="px-4 py-2.5 text-left text-xs font-heading font-semibold uppercase tracking-wider"
+                          style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
                         >
-                          {li.accountCode}
+                          Account Code
+                        </th>
+                        <th
+                          className="px-4 py-2.5 text-right text-xs font-heading font-semibold uppercase tracking-wider"
+                          style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+                        >
+                          Budgeted
+                        </th>
+                        <th
+                          className="px-4 py-2.5 text-right text-xs font-heading font-semibold uppercase tracking-wider"
+                          style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+                        >
+                          Actual
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((li) => (
+                        <tr
+                          key={li.id}
+                          style={{
+                            borderBottom: "1px solid var(--thittam-border, #e2e8f0)",
+                          }}
+                        >
+                          <td
+                            className="px-4 py-2.5 font-body"
+                            style={{ color: "var(--thittam-foreground, #0f172a)" }}
+                          >
+                            {li.description}
+                          </td>
+                          <td
+                            className="px-4 py-2.5 font-mono tabular-nums text-sm"
+                            style={{ color: "var(--thittam-foreground, #0f172a)" }}
+                          >
+                            {li.account_code}
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            <AmountDisplay
+                              amount={li.budgeted_amount}
+                              currency={budget.currency}
+                              size="sm"
+                            />
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            <AmountDisplay
+                              amount={li.actual_amount}
+                              currency={budget.currency}
+                              size="sm"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                      <tr
+                        style={{
+                          backgroundColor: "var(--thittam-muted, #f1f5f9)",
+                        }}
+                      >
+                        <td
+                          colSpan={2}
+                          className="px-4 py-2 text-right text-xs font-heading font-semibold uppercase"
+                          style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+                        >
+                          Subtotal
                         </td>
-                        <td className="px-4 py-2.5 text-right">
+                        <td className="px-4 py-2 text-right">
                           <AmountDisplay
-                            amount={li.budgetedAmount}
+                            amount={(categoryTotals[category] ?? 0).toFixed(2)}
+                            currency={budget.currency}
+                            size="sm"
+                          />
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <AmountDisplay
+                            amount={items
+                              .reduce((s, it) => s + parseFloat(it.actual_amount), 0)
+                              .toFixed(2)}
                             currency={budget.currency}
                             size="sm"
                           />
                         </td>
                       </tr>
-                    ))}
-                    {/* Category subtotal */}
-                    <tr
-                      style={{
-                        backgroundColor: "var(--thittam-muted, #f1f5f9)",
-                      }}
-                    >
-                      <td
-                        colSpan={2}
-                        className="px-4 py-2 text-right text-xs font-heading font-semibold uppercase"
-                        style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
-                      >
-                        Subtotal
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        <AmountDisplay
-                          amount={(categoryTotals[category] ?? 0).toFixed(2)}
-                          currency={budget.currency}
-                          size="sm"
-                        />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
-        {/* Grand total row */}
         <div
           className="mt-4 flex items-center justify-between rounded-lg p-4"
           style={{
@@ -583,15 +535,12 @@ export default function BudgetDetailPage() {
         </div>
       </div>
 
-      {/* ── Add Line Item slide-out ─────────────────────────────────────── */}
       {showAddForm && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/30"
             onClick={() => setShowAddForm(false)}
           />
-          {/* Panel */}
           <div
             className="relative w-full max-w-md overflow-y-auto p-6"
             style={{ backgroundColor: "var(--thittam-background, #fff)" }}
@@ -612,7 +561,6 @@ export default function BudgetDetailPage() {
             </div>
 
             <form onSubmit={handleAddLineItem} className="flex flex-col gap-5">
-              {/* Category */}
               <div>
                 <label
                   htmlFor="add-category"
@@ -633,14 +581,13 @@ export default function BudgetDetailPage() {
                   }}
                 >
                   {BUDGET_CATEGORIES.map((c) => (
-                    <option key={c.name} value={c.name}>
-                      {c.name}
+                    <option key={c.id} value={c.id}>
+                      {c.label}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Description */}
               <div>
                 <label
                   htmlFor="add-description"
@@ -654,7 +601,7 @@ export default function BudgetDetailPage() {
                   type="text"
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="e.g. Stunt Coordinator"
+                  placeholder="e.g. Site setup"
                   className="w-full rounded-lg px-3 py-2 text-sm font-body"
                   style={{
                     backgroundColor: "var(--thittam-background, #fff)",
@@ -664,7 +611,6 @@ export default function BudgetDetailPage() {
                 />
               </div>
 
-              {/* Account code */}
               <div>
                 <label
                   htmlFor="add-account"
@@ -685,15 +631,8 @@ export default function BudgetDetailPage() {
                     color: "var(--thittam-foreground, #0f172a)",
                   }}
                 />
-                <p
-                  className="mt-1 text-xs font-body"
-                  style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
-                >
-                  Auto-filled from category default. You can override it.
-                </p>
               </div>
 
-              {/* Budgeted amount */}
               <div>
                 <label
                   htmlFor="add-amount"
@@ -718,7 +657,6 @@ export default function BudgetDetailPage() {
                 />
               </div>
 
-              {/* Actions */}
               <div className="mt-4 flex items-center justify-end gap-3">
                 <button
                   type="button"
@@ -733,11 +671,15 @@ export default function BudgetDetailPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!newDescription.trim() || !newAmount.trim()}
+                  disabled={
+                    !newDescription.trim() ||
+                    !newAmount.trim() ||
+                    createLineItem.isPending
+                  }
                   className="rounded-lg px-4 py-2 text-sm font-heading font-medium text-white shadow-sm transition-colors hover:opacity-90 disabled:opacity-50"
                   style={{ backgroundColor: "var(--thittam-primary, #3b82f6)" }}
                 >
-                  Add Item
+                  {createLineItem.isPending ? "Adding…" : "Add Item"}
                 </button>
               </div>
             </form>
@@ -745,15 +687,12 @@ export default function BudgetDetailPage() {
         </div>
       )}
 
-      {/* ── Approval Dialog ─────────────────────────────────────────────── */}
       {showApprovalDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/30"
             onClick={() => setShowApprovalDialog(false)}
           />
-          {/* Dialog */}
           <div
             className="relative w-full max-w-md rounded-xl p-6 shadow-xl"
             style={{ backgroundColor: "var(--thittam-background, #fff)" }}
@@ -778,8 +717,8 @@ export default function BudgetDetailPage() {
               style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
             >
               {approvalAction === "approve"
-                ? `You are about to approve "${budget.label}". This will allow the budget to be locked for execution.`
-                : `You are about to reject "${budget.label}". The budget will return to draft status for revision.`}
+                ? `You are about to approve "${budget.label}".`
+                : `Reject is not yet wired to the backend — the approve API will be called instead. This dialog remains for UX continuity.`}
             </p>
 
             <div className="mb-4">
@@ -818,11 +757,12 @@ export default function BudgetDetailPage() {
               </button>
               <button
                 onClick={() =>
-                  handleStatusChange(
-                    approvalAction === "approve" ? "approved" : "draft"
-                  )
+                  approveMutation.mutate(budget.id, {
+                    onSuccess: () => setShowApprovalDialog(false),
+                  })
                 }
-                className="rounded-lg px-4 py-2 text-sm font-heading font-medium text-white shadow-sm transition-colors hover:opacity-90"
+                disabled={approveMutation.isPending}
+                className="rounded-lg px-4 py-2 text-sm font-heading font-medium text-white shadow-sm transition-colors hover:opacity-90 disabled:opacity-50"
                 style={{
                   backgroundColor:
                     approvalAction === "approve"
@@ -830,7 +770,11 @@ export default function BudgetDetailPage() {
                       : "var(--thittam-status-over-budget, #DC2626)",
                 }}
               >
-                {approvalAction === "approve" ? "Approve" : "Reject"}
+                {approveMutation.isPending
+                  ? "Approving…"
+                  : approvalAction === "approve"
+                    ? "Approve"
+                    : "Approve Anyway"}
               </button>
             </div>
           </div>

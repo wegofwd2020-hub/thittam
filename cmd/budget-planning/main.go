@@ -9,13 +9,18 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/cors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	budgetv1 "github.com/wegofwd2020/thittam/gen/budget/v1"
 	"github.com/wegofwd2020/thittam/pkg/events"
@@ -106,6 +111,59 @@ func main() {
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
 	srv.RegisterHealthChecker("nats", &natsChecker{nc: nc})
 	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
+
+	// --- REST gateway (grpc-gateway, ADR-014 follow-up #60) ---
+	// UI calls REST endpoints like GET /api/v1/budgets. The generated mux
+	// lives on :9081 (grpc port 8081 + 1000, parallel to IAM's 8086/9086).
+	go func() {
+		// Forward Kong-style identity headers as gRPC metadata so
+		// pkg/interceptor.UnaryCallerInterceptor can populate tenant and
+		// caller context. Without this the handlers 401 on "tenant ID not
+		// found in context" because grpc-gateway strips custom headers by
+		// default.
+		headerMatcher := func(key string) (string, bool) {
+			switch key {
+			case "X-Tenant-Id", "X-Caller-Id", "X-Caller-Email", "X-Caller-Role", "X-Project-Id":
+				return key, true
+			}
+			return runtime.DefaultHeaderMatcher(key)
+		}
+		gwMux := runtime.NewServeMux(
+			runtime.WithIncomingHeaderMatcher(headerMatcher),
+			runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
+				MarshalOptions: protojson.MarshalOptions{
+					UseProtoNames:   true,
+					EmitUnpopulated: true,
+				},
+				UnmarshalOptions: protojson.UnmarshalOptions{
+					DiscardUnknown: true,
+				},
+			}),
+		)
+		opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+		if err := budgetv1.RegisterBudgetServiceHandlerFromEndpoint(ctx, gwMux, "localhost:8081", opts); err != nil {
+			log.Fatalf("budget-planning: register gateway: %v", err)
+		}
+		corsHandler := cors.New(cors.Options{
+			AllowedOrigins: []string{
+				"http://localhost:3100",
+				"http://localhost:3000",
+			},
+			AllowedMethods: []string{
+				http.MethodGet, http.MethodPost, http.MethodPut,
+				http.MethodPatch, http.MethodDelete, http.MethodOptions,
+			},
+			AllowedHeaders: []string{
+				"Content-Type", "Authorization",
+				"X-Tenant-Id", "X-Project-Id", "X-Caller-Id",
+			},
+			AllowCredentials: true,
+		}).Handler(gwMux)
+		log.Printf("budget-planning REST gateway ready on :9081 (CORS allow-list: localhost:3100, localhost:3000)")
+		if err := http.ListenAndServe(":9081", corsHandler); err != nil {
+			log.Fatalf("budget-planning: gateway listen: %v", err)
+		}
+	}()
 
 	log.Printf("budget-planning service ready on :8081")
 	if err := srv.Run(); err != nil {
