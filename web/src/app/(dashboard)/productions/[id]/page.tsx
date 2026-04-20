@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, Archive } from "lucide-react";
 import { useTheme } from "@/lib/themes/provider";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { AmountDisplay } from "@/components/ui/amount-display";
 import {
   PhaseTimeline,
   type Phase as UIPhase,
@@ -24,11 +25,24 @@ import {
   useAddCrewMember,
   useRemoveCrewMember,
 } from "@/lib/hooks/use-productions";
+import {
+  useProductionBudgetSummary,
+  type ProductionBudgetSummary,
+} from "@/lib/hooks/use-production-budget-summary";
 import type {
   Phase as ApiPhase,
   PhaseType,
   CrewMember as ApiCrewMember,
 } from "@/lib/api/productions";
+
+const HEALTH_BAR_COLOR: Record<
+  ProductionBudgetSummary["health"],
+  string
+> = {
+  on_track: "var(--thittam-status-on-track, #16A34A)",
+  at_risk: "var(--thittam-status-at-risk, #F59E0B)",
+  over_budget: "var(--thittam-status-over-budget, #DC2626)",
+};
 
 const TABS = ["Overview", "Phases", "Crew", "Budget"] as const;
 type Tab = (typeof TABS)[number];
@@ -107,6 +121,265 @@ function toUICrew(m: ApiCrewMember): UICrewMember {
   };
 }
 
+interface BudgetSummaryProps {
+  summary: ProductionBudgetSummary | null;
+  hasBudget: boolean;
+  isLoading: boolean;
+  error: Error | null;
+}
+
+function BudgetSummaryCard({
+  summary,
+  hasBudget,
+  isLoading,
+  error,
+}: BudgetSummaryProps) {
+  if (isLoading) {
+    return (
+      <p
+        className="font-body text-sm"
+        style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+      >
+        Loading budget…
+      </p>
+    );
+  }
+  if (error) {
+    return (
+      <p
+        className="font-body text-sm"
+        style={{ color: "var(--thittam-destructive, #DC2626)" }}
+      >
+        Failed to load: {error.message}
+      </p>
+    );
+  }
+  if (!hasBudget || !summary) {
+    return (
+      <p
+        className="font-body text-sm"
+        style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+      >
+        No budget yet.{" "}
+        <Link
+          href="/budgets/new"
+          className="font-heading font-medium"
+          style={{ color: "var(--thittam-primary, #3b82f6)" }}
+        >
+          Create one
+        </Link>
+        .
+      </p>
+    );
+  }
+
+  const pct = Math.round(summary.utilizationPct);
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <span className="font-heading text-xs text-gray-500">Total Budget</span>
+        <p
+          className="font-mono text-lg font-semibold"
+          style={{ color: "var(--thittam-foreground, #0f172a)" }}
+        >
+          <AmountDisplay
+            amount={summary.totalBudgeted}
+            currency={summary.currency}
+            size="lg"
+          />
+        </p>
+      </div>
+      <div>
+        <span className="font-heading text-xs text-gray-500">Spent</span>
+        <p
+          className="font-mono text-lg font-semibold"
+          style={{ color: "var(--thittam-foreground, #0f172a)" }}
+        >
+          <AmountDisplay
+            amount={summary.totalActual}
+            currency={summary.currency}
+            size="lg"
+          />
+        </p>
+      </div>
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="font-heading text-xs text-gray-500">Utilization</span>
+          <span className="font-mono text-xs font-medium">{pct}%</span>
+        </div>
+        <div
+          className="h-2 w-full overflow-hidden rounded-full"
+          style={{ backgroundColor: "var(--thittam-muted, #f1f5f9)" }}
+        >
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${Math.min(pct, 100)}%`,
+              backgroundColor: HEALTH_BAR_COLOR[summary.health],
+            }}
+          />
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <StatusBadge status={summary.health} variant="health" />
+        <Link
+          href={`/budgets/${summary.budget.id}`}
+          className="text-xs font-heading font-medium"
+          style={{ color: "var(--thittam-primary, #3b82f6)" }}
+        >
+          View {summary.budget.label} →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function BudgetTabPanel({
+  summary,
+  hasBudget,
+  isLoading,
+  error,
+}: BudgetSummaryProps) {
+  if (isLoading) {
+    return (
+      <p
+        className="font-body text-sm"
+        style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+      >
+        Loading budget details…
+      </p>
+    );
+  }
+  if (error) {
+    return (
+      <p
+        className="font-body text-sm"
+        style={{ color: "var(--thittam-destructive, #DC2626)" }}
+      >
+        Failed to load: {error.message}
+      </p>
+    );
+  }
+  if (!hasBudget || !summary) {
+    return (
+      <div
+        className="rounded-lg border-dashed p-8 text-center"
+        style={{ border: "2px dashed var(--thittam-border, #e2e8f0)" }}
+      >
+        <p
+          className="text-sm font-body"
+          style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+        >
+          No budget has been created for this production yet.
+        </p>
+        <Link
+          href="/budgets/new"
+          className="mt-4 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-heading font-medium text-white"
+          style={{ backgroundColor: "var(--thittam-primary, #3b82f6)" }}
+        >
+          Create Budget
+        </Link>
+      </div>
+    );
+  }
+
+  const pct = Math.round(summary.utilizationPct);
+  return (
+    <div>
+      {/* Header row: label + version status + link to the full budget page */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h2
+            className="font-heading text-sm font-semibold"
+            style={{ color: "var(--thittam-foreground, #0f172a)" }}
+          >
+            {summary.budget.label}
+          </h2>
+          <StatusBadge status={summary.budget.status} variant="budget" />
+        </div>
+        <Link
+          href={`/budgets/${summary.budget.id}`}
+          className="text-xs font-heading font-medium"
+          style={{ color: "var(--thittam-primary, #3b82f6)" }}
+        >
+          View full budget →
+        </Link>
+      </div>
+
+      {/* KPI grid: budgeted / actual / committed / remaining */}
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiCell
+          label="Total Budget"
+          amount={summary.totalBudgeted}
+          currency={summary.currency}
+        />
+        <KpiCell
+          label="Spent"
+          amount={summary.totalActual}
+          currency={summary.currency}
+        />
+        <KpiCell
+          label="Committed"
+          amount={summary.totalCommitted}
+          currency={summary.currency}
+        />
+        <KpiCell
+          label="Remaining"
+          amount={summary.remaining}
+          currency={summary.currency}
+        />
+      </div>
+
+      {/* Utilization bar */}
+      <div className="mb-4">
+        <div className="mb-1 flex items-center justify-between">
+          <span className="font-heading text-xs text-gray-500">Utilization</span>
+          <span className="font-mono text-xs font-medium">{pct}%</span>
+        </div>
+        <div
+          className="h-3 w-full overflow-hidden rounded-full"
+          style={{ backgroundColor: "var(--thittam-muted, #f1f5f9)" }}
+        >
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${Math.min(pct, 100)}%`,
+              backgroundColor: HEALTH_BAR_COLOR[summary.health],
+            }}
+          />
+        </div>
+      </div>
+
+      <StatusBadge status={summary.health} variant="health" />
+    </div>
+  );
+}
+
+function KpiCell({
+  label,
+  amount,
+  currency,
+}: {
+  label: string;
+  amount: number;
+  currency: string;
+}) {
+  return (
+    <div
+      className="rounded-lg p-3"
+      style={{ backgroundColor: "var(--thittam-muted, #f8fafc)" }}
+    >
+      <span className="font-heading text-xs text-gray-500">{label}</span>
+      <p
+        className="mt-1 font-mono text-base font-semibold"
+        style={{ color: "var(--thittam-foreground, #0f172a)" }}
+      >
+        <AmountDisplay amount={amount} currency={currency} size="md" />
+      </p>
+    </div>
+  );
+}
+
 export default function ProductionDetailPage() {
   const { entityLabels } = useTheme();
   const params = useParams<{ id: string }>();
@@ -117,6 +390,7 @@ export default function ProductionDetailPage() {
   const phasesQuery = usePhases(params.id);
   const phaseTypesQuery = usePhaseTypes();
   const crewQuery = useCrewMembers(params.id);
+  const budgetSummary = useProductionBudgetSummary(params.id);
 
   const archive = useArchiveProduction();
   const updatePhase = useUpdatePhaseStatus();
@@ -342,28 +616,12 @@ export default function ProductionDetailPage() {
             >
               Budget Summary
             </h2>
-            <div
-              className="rounded-lg border-dashed p-6 text-center"
-              style={{ border: "2px dashed var(--thittam-border, #e2e8f0)" }}
-            >
-              <p
-                className="text-sm font-body"
-                style={{
-                  color: "var(--thittam-muted-foreground, #64748b)",
-                }}
-              >
-                Per-production budget aggregation is a separate ticket.
-                See{" "}
-                <Link
-                  href="/budgets"
-                  className="font-heading font-medium"
-                  style={{ color: "var(--thittam-primary, #3b82f6)" }}
-                >
-                  Budgets
-                </Link>{" "}
-                for the live data.
-              </p>
-            </div>
+            <BudgetSummaryCard
+              summary={budgetSummary.data}
+              hasBudget={budgetSummary.hasBudget}
+              isLoading={budgetSummary.isLoading}
+              error={budgetSummary.error}
+            />
           </div>
 
           <div
@@ -488,34 +746,12 @@ export default function ProductionDetailPage() {
             border: "1px solid var(--thittam-border, #e2e8f0)",
           }}
         >
-          <h2
-            className="mb-4 font-heading text-sm font-semibold"
-            style={{ color: "var(--thittam-foreground, #0f172a)" }}
-          >
-            Budget Details
-          </h2>
-          <div
-            className="rounded-lg border-dashed p-8 text-center"
-            style={{ border: "2px dashed var(--thittam-border, #e2e8f0)" }}
-          >
-            <p
-              className="text-sm font-body"
-              style={{
-                color: "var(--thittam-muted-foreground, #64748b)",
-              }}
-            >
-              Per-production budget aggregation is a separate ticket. See
-              the{" "}
-              <Link
-                href="/budgets"
-                className="font-heading font-medium"
-                style={{ color: "var(--thittam-primary, #3b82f6)" }}
-              >
-                Budgets
-              </Link>{" "}
-              page for the live budget list.
-            </p>
-          </div>
+          <BudgetTabPanel
+            summary={budgetSummary.data}
+            hasBudget={budgetSummary.hasBudget}
+            isLoading={budgetSummary.isLoading}
+            error={budgetSummary.error}
+          />
         </div>
       )}
     </div>
