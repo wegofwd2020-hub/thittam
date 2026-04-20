@@ -68,8 +68,17 @@ in. Here is the full list with guidance:
 - `<TENANT_UUID>` — generate one with `uuidgen` (or `SELECT gen_random_uuid()`).
   Reuse the same UUID everywhere the files reference `<TENANT_UUID>`.
 - `<TENANT_NAME>` — legal company name, e.g. `Acme Construction LLC`.
+  **Must be unique across the platform** — per the uniqueness policy in
+  `thittam_docs/docs/operations/tenant-onboarding.md` §1.1a. Before
+  loading, verify no existing row collides:
+  ```bash
+  psql "${DB_URL}" -c "SELECT name FROM tenants WHERE lower(name) = lower('<TENANT_NAME>');"
+  ```
+  The query must return zero rows. A DB-level UNIQUE constraint is
+  tracked as a follow-up; until it lands, this check is the only guard.
 - `<TENANT_SLUG>` — lowercase, hyphen-separated. The service normally
-  derives this; pick something the URL-friendly form of `<TENANT_NAME>`.
+  derives this; pick the URL-friendly form of `<TENANT_NAME>`. `slug`
+  is already UNIQUE at the DB level, so a collision will fail loudly.
 - `<TENANT_PLAN>` — `starter` · `professional` · `enterprise`.
 
 ### Address (required for billing / currency derivation per #61)

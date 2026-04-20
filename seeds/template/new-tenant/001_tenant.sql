@@ -3,6 +3,12 @@
 -- Address: <ADDRESS_LINE1>, <CITY>, <POSTAL_CODE>, <COUNTRY_CODE>
 -- Currency: <PRIMARY_CURRENCY>
 --
+-- NOTE: <TENANT_NAME> must be unique across the platform. Run the
+-- case-insensitive precheck documented in
+-- thittam_docs/docs/operations/tenant-onboarding.md §1.1a before loading:
+--   SELECT name FROM tenants WHERE lower(name) = lower('<TENANT_NAME>');
+-- No DB-level UNIQUE on tenants.name yet; the precheck is the only guard.
+--
 -- See seeds/template/new-tenant/README.md for what each <PLACEHOLDER>
 -- means and how to fill it in. This file scaffolds:
 --
