@@ -1,0 +1,100 @@
+name: Nightly Vulnerability Scan
+
+# Complements the PR-time govulncheck job in ci.yml. A scheduled run against
+# latest main catches CVEs disclosed *after* a PR merged — the PR check only
+# runs at merge time, so a CVE disclosed the next day goes unnoticed until
+# the next PR touches the affected package.
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC — after StudyBuddy vuln scan (05:30)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.9"
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
+      - name: Run govulncheck
+        id: audit
+        run: |
+          set +e
+          govulncheck -show verbose ./... > audit-raw.txt 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          cat audit-raw.txt
+
+      - name: Build report markdown
+        run: |
+          {
+            echo "# Vulnerability scan — Thittam"
+            echo
+            echo "_Nightly \`govulncheck\` scan: $(date -u +%FT%TZ)_"
+            echo
+            echo "Source: \`go.mod\` audited against the Go vulnerability DB."
+            echo "Only vulnerabilities in *reachable* code are reported."
+            echo
+            if [ "${{ steps.audit.outputs.exit_code }}" = "0" ]; then
+              echo "✅ **No vulnerabilities found.**"
+            else
+              echo "## Findings"
+              echo
+              echo '```'
+              cat audit-raw.txt
+              echo '```'
+              echo
+              echo "---"
+              echo
+              echo "**Next steps:** for each finding, check whether to upgrade,"
+              echo "pin a patched minor version, or justify ignoring (unreachable"
+              echo "callpath). The PR-time govulncheck job in \`ci.yml\` will"
+              echo "gate subsequent merges until this is resolved."
+            fi
+          } > vuln-report.md
+
+      - name: Upsert vuln-scan issue
+        if: steps.audit.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create vuln-scan --color FF0000 --description "CVEs detected in dependencies" 2>/dev/null || true
+
+          body=$(cat vuln-report.md)
+          existing=$(gh issue list --label vuln-scan --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body "$body"
+          else
+            gh issue create \
+              --title "Vulnerabilities detected in dependencies ($(date -u +%F))" \
+              --label vuln-scan \
+              --body "$body"
+          fi
+
+      - name: Close vuln-scan issue if clean
+        if: steps.audit.outputs.exit_code == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for n in $(gh issue list --label vuln-scan --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Vuln scan clean as of $(date -u +%F)."
+          done
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuln-report
+          path: vuln-report.md
+          retention-days: 30
