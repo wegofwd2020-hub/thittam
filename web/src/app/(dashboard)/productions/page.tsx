@@ -1,78 +1,16 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Plus, Search, LayoutGrid, List } from "lucide-react";
 import { useTheme } from "@/lib/themes/provider";
 import {
   ProductionCard,
-  type Production,
+  type Production as CardProduction,
 } from "@/components/productions/production-card";
 import { StatusBadge } from "@/components/ui/status-badge";
-
-// ---------------------------------------------------------------------------
-// Mock data — will be replaced by API calls when the backend is ready
-// ---------------------------------------------------------------------------
-const mockProductions: Production[] = [
-  {
-    id: "1",
-    title: "The Last Horizon",
-    status: "production",
-    description:
-      "A sci-fi thriller following a crew of astronauts who discover an anomaly at the edge of the solar system that challenges everything they know about reality.",
-    genre: "Sci-Fi",
-    currentPhase: "production",
-    budgetHealth: "on_track",
-    startDate: "2026-01-15",
-    endDate: "2026-08-30",
-  },
-  {
-    id: "2",
-    title: "Midnight Express Reboot",
-    status: "post_production",
-    description:
-      "A modern reimagining of the classic thriller, set in contemporary Istanbul with a focus on digital-age surveillance and personal freedom.",
-    genre: "Thriller",
-    currentPhase: "post_production",
-    budgetHealth: "at_risk",
-    startDate: "2025-06-01",
-    endDate: "2026-03-15",
-  },
-  {
-    id: "3",
-    title: "Project Starfall",
-    status: "development",
-    description:
-      "An animated feature exploring a young girl's journey through a world where fallen stars grant wishes — but at a hidden cost.",
-    genre: "Animation",
-    currentPhase: "development",
-    budgetHealth: "on_track",
-    startDate: "2026-03-01",
-  },
-  {
-    id: "4",
-    title: "Urban Legends: Season 2",
-    status: "pre_production",
-    description:
-      "The second season of the hit anthology series. Each episode brings a different urban legend to life with a fresh directorial voice.",
-    genre: "Horror",
-    currentPhase: "pre_production",
-    budgetHealth: "on_track",
-    startDate: "2026-04-10",
-  },
-  {
-    id: "5",
-    title: "The Color of Sound",
-    status: "archived",
-    description:
-      "A documentary exploring the phenomenon of synesthesia through the eyes of five musicians who see color when they hear music.",
-    genre: "Documentary",
-    currentPhase: "released",
-    budgetHealth: "over_budget",
-    startDate: "2024-09-01",
-    endDate: "2025-11-20",
-  },
-];
+import { useProductions } from "@/lib/hooks/use-productions";
+import type { Production as ApiProduction } from "@/lib/api/productions";
 
 // ---------------------------------------------------------------------------
 // Filter chip definitions
@@ -89,15 +27,27 @@ const FILTER_OPTIONS = [
 
 type FilterKey = (typeof FILTER_OPTIONS)[number]["key"];
 
-function matchesFilter(production: Production, filter: FilterKey): boolean {
+function matchesFilter(production: ApiProduction, filter: FilterKey): boolean {
   if (filter === "all") return true;
   if (filter === "active") return production.status !== "archived";
   return production.status === filter;
 }
 
-// ---------------------------------------------------------------------------
-// Loading skeleton
-// ---------------------------------------------------------------------------
+// Adapt the API shape onto the card's view-model. budgetHealth / currentPhase
+// are derived data (phases + budgets) — intentionally omitted here; the card
+// hides those indicators rather than guessing.
+function toCardProduction(p: ApiProduction): CardProduction {
+  return {
+    id: p.id,
+    title: p.title,
+    status: p.status,
+    description: p.description,
+    genre: p.genre,
+    startDate: p.start_date ?? undefined,
+    endDate: p.end_date ?? undefined,
+  };
+}
+
 function CardSkeleton() {
   return (
     <div
@@ -121,29 +71,28 @@ function CardSkeleton() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
 export default function ProductionsPage() {
   const { entityLabels } = useTheme();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
-  const [isLoading] = useState(false); // Toggle to true to preview skeleton
+
+  const query = useProductions();
+  const productions = query.data?.productions ?? [];
 
   const filtered = useMemo(() => {
-    return mockProductions.filter((p) => {
+    return productions.filter((p) => {
       if (!matchesFilter(p, filter)) return false;
-      if (
-        search &&
-        !p.title.toLowerCase().includes(search.toLowerCase()) &&
-        !p.description.toLowerCase().includes(search.toLowerCase())
-      ) {
-        return false;
+      if (search) {
+        const hay = `${p.title} ${p.description}`.toLowerCase();
+        if (!hay.includes(search.toLowerCase())) return false;
       }
       return true;
     });
-  }, [search, filter]);
+  }, [productions, search, filter]);
+
+  const isLoading = query.isLoading;
+  const errored = query.error;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -195,7 +144,8 @@ export default function ProductionsPage() {
           />
         </div>
 
-        <div className="flex items-center gap-1 rounded-lg p-0.5"
+        <div
+          className="flex items-center gap-1 rounded-lg p-0.5"
           style={{ backgroundColor: "var(--thittam-muted, #f1f5f9)" }}
         >
           <button
@@ -205,7 +155,10 @@ export default function ProductionsPage() {
             }`}
             title="Grid view"
           >
-            <LayoutGrid className="h-4 w-4" style={{ color: "var(--thittam-muted-foreground, #64748b)" }} />
+            <LayoutGrid
+              className="h-4 w-4"
+              style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+            />
           </button>
           <button
             onClick={() => setViewMode("table")}
@@ -214,7 +167,10 @@ export default function ProductionsPage() {
             }`}
             title="Table view"
           >
-            <List className="h-4 w-4" style={{ color: "var(--thittam-muted-foreground, #64748b)" }} />
+            <List
+              className="h-4 w-4"
+              style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+            />
           </button>
         </div>
       </div>
@@ -249,6 +205,27 @@ export default function ProductionsPage() {
             <CardSkeleton key={i} />
           ))}
         </div>
+      ) : errored ? (
+        <div
+          className="rounded-xl p-8 text-center"
+          style={{
+            backgroundColor: "var(--thittam-background, #fff)",
+            border: "1px solid var(--thittam-border, #e2e8f0)",
+          }}
+        >
+          <p
+            className="font-heading text-sm font-medium"
+            style={{ color: "var(--thittam-destructive, #DC2626)" }}
+          >
+            Failed to load {entityLabels.projectPlural.toLowerCase()}
+          </p>
+          <p
+            className="mt-1 font-body text-sm"
+            style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+          >
+            {errored.message}
+          </p>
+        </div>
       ) : filtered.length === 0 ? (
         /* Empty state */
         <div
@@ -265,11 +242,11 @@ export default function ProductionsPage() {
             className="mt-1 font-body text-sm"
             style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
           >
-            {search
+            {search || filter !== "all"
               ? "Try adjusting your search or filters."
               : `Get started by creating your first ${entityLabels.project.toLowerCase()}.`}
           </p>
-          {!search && (
+          {!search && filter === "all" && (
             <Link
               href="/productions/new"
               className="mt-4 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-heading font-medium text-white"
@@ -283,7 +260,7 @@ export default function ProductionsPage() {
       ) : viewMode === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((p) => (
-            <ProductionCard key={p.id} production={p} />
+            <ProductionCard key={p.id} production={toCardProduction(p)} />
           ))}
         </div>
       ) : (
@@ -291,7 +268,11 @@ export default function ProductionsPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr style={{ borderBottom: "1px solid var(--thittam-border, #e2e8f0)" }}>
+              <tr
+                style={{
+                  borderBottom: "1px solid var(--thittam-border, #e2e8f0)",
+                }}
+              >
                 <th className="pb-2 pr-4 font-heading text-xs font-medium text-gray-500">
                   Title
                 </th>
@@ -302,10 +283,10 @@ export default function ProductionsPage() {
                   Genre
                 </th>
                 <th className="pb-2 pr-4 font-heading text-xs font-medium text-gray-500">
-                  Phase
+                  Start
                 </th>
                 <th className="pb-2 font-heading text-xs font-medium text-gray-500">
-                  Budget
+                  End
                 </th>
               </tr>
             </thead>
@@ -314,13 +295,17 @@ export default function ProductionsPage() {
                 <tr
                   key={p.id}
                   className="group cursor-pointer hover:bg-gray-50/50"
-                  style={{ borderBottom: "1px solid var(--thittam-border, #e2e8f0)" }}
+                  style={{
+                    borderBottom: "1px solid var(--thittam-border, #e2e8f0)",
+                  }}
                 >
                   <td className="py-3 pr-4">
                     <Link
                       href={`/productions/${p.id}`}
                       className="font-heading text-sm font-medium hover:underline"
-                      style={{ color: "var(--thittam-foreground, #0f172a)" }}
+                      style={{
+                        color: "var(--thittam-foreground, #0f172a)",
+                      }}
                     >
                       {p.title}
                     </Link>
@@ -330,15 +315,27 @@ export default function ProductionsPage() {
                   </td>
                   <td
                     className="py-3 pr-4 font-body text-sm"
-                    style={{ color: "var(--thittam-muted-foreground, #64748b)" }}
+                    style={{
+                      color: "var(--thittam-muted-foreground, #64748b)",
+                    }}
                   >
                     {p.genre}
                   </td>
-                  <td className="py-3 pr-4">
-                    <StatusBadge status={p.currentPhase} variant="phase" />
+                  <td
+                    className="py-3 pr-4 font-mono text-xs"
+                    style={{
+                      color: "var(--thittam-muted-foreground, #64748b)",
+                    }}
+                  >
+                    {p.start_date ?? "—"}
                   </td>
-                  <td className="py-3">
-                    <StatusBadge status={p.budgetHealth} variant="health" />
+                  <td
+                    className="py-3 font-mono text-xs"
+                    style={{
+                      color: "var(--thittam-muted-foreground, #64748b)",
+                    }}
+                  >
+                    {p.end_date ?? "—"}
                   </td>
                 </tr>
               ))}
