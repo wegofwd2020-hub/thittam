@@ -22,16 +22,32 @@ service ProjectService {
   rpc UpdateProduction(UpdateProductionRequest) returns (Production);
   rpc ArchiveProduction(ArchiveProductionRequest) returns (Production);
 
-  rpc CreatePhase(CreatePhaseRequest) returns (Phase);
-  rpc ListPhases(ListPhasesRequest) returns (ListPhasesResponse);
-  rpc UpdatePhaseStatus(UpdatePhaseStatusRequest) returns (Phase);
+  rpc CreatePhase(CreatePhaseRequest) returns (Phase) {
+    option (google.api.http) = { post: "/api/v1/productions/{production_id}/phases" body: "*" };
+  }
+  rpc ListPhases(ListPhasesRequest) returns (ListPhasesResponse) {
+    option (google.api.http) = { get: "/api/v1/productions/{production_id}/phases" };
+  }
+  rpc UpdatePhaseStatus(UpdatePhaseStatusRequest) returns (Phase) {
+    option (google.api.http) = { patch: "/api/v1/phases/{phase_id}" body: "*" };
+  }
 
-  rpc AddCrewMember(AddCrewMemberRequest) returns (CrewMember);
-  rpc ListCrewMembers(ListCrewMembersRequest) returns (ListCrewMembersResponse);
-  rpc RemoveCrewMember(RemoveCrewMemberRequest) returns (RemoveCrewMemberResponse);
+  rpc AddCrewMember(AddCrewMemberRequest) returns (CrewMember) {
+    option (google.api.http) = { post: "/api/v1/productions/{production_id}/crew" body: "*" };
+  }
+  rpc ListCrewMembers(ListCrewMembersRequest) returns (ListCrewMembersResponse) {
+    option (google.api.http) = { get: "/api/v1/productions/{production_id}/crew" };
+  }
+  rpc RemoveCrewMember(RemoveCrewMemberRequest) returns (RemoveCrewMemberResponse) {
+    option (google.api.http) = { delete: "/api/v1/crew/{id}" };
+  }
 
-  rpc GetEntityLabels(GetEntityLabelsRequest) returns (EntityLabels);
-  rpc GetPhaseTypes(GetPhaseTypesRequest) returns (GetPhaseTypesResponse);
+  rpc GetEntityLabels(GetEntityLabelsRequest) returns (EntityLabels) {
+    option (google.api.http) = { get: "/api/v1/config/entity-labels" };
+  }
+  rpc GetPhaseTypes(GetPhaseTypesRequest) returns (GetPhaseTypesResponse) {
+    option (google.api.http) = { get: "/api/v1/config/phase-types" };
+  }
 }
 
 message Production {

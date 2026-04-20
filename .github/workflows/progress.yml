@@ -22,19 +22,68 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Generate PROGRESS.md
+      - name: Generate PROGRESS.md + CSVs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/generate_progress.py
+
+      - name: Write step summary (Option C per docs/PROGRESS_consumption.md)
+        run: |
+          python3 << 'PYEOF' >> "$GITHUB_STEP_SUMMARY"
+          import csv
+
+          scopes  = list(csv.DictReader(open("docs/PROGRESS_scopes.csv")))
+          issues  = list(csv.DictReader(open("docs/PROGRESS_issues.csv")))
+
+          hot_issues = sorted(
+              (i for i in issues if int(i["commit_count"]) >= 2),
+              key=lambda i: -int(i["commit_count"]),
+          )
+          total_commits = sum(int(s["commit_count"]) for s in scopes)
+
+          print("## 🗂️ Progress Chart — Thittam")
+          print()
+          print(f"- **{len(scopes)} scopes** active, **{len(issues)} issues** referenced, **{total_commits} commits** attributed")
+          print(f"- **{len(hot_issues)} issues** with 2+ commits (iteration / rework candidates)")
+          print()
+
+          if hot_issues:
+              print("### 🔥 Top iteration hot-spots")
+              print()
+              print("| Issue | Title | State | Commits | Span (days) |")
+              print("|---|---|---|---|---|")
+              for i in hot_issues[:10]:
+                  title = i["title"][:55].replace("|", "\\|")
+                  print(f"| [#{i['issue_number']}](../../issues/{i['issue_number']}) | {title} | {i['state']} | {i['commit_count']} | {i['span_days']} |")
+              print()
+
+          top_scopes = sorted(scopes, key=lambda s: -int(s["commit_count"]))[:5]
+          if top_scopes:
+              print("### 📊 Most active scopes (top 5)")
+              print()
+              print("| Scope | Commits | Issues touched | First | Last |")
+              print("|---|---|---|---|---|")
+              for s in top_scopes:
+                  print(f"| `{s['scope']}` | {s['commit_count']} | {s['issue_count']} | {s['first']} | {s['last']} |")
+              print()
+
+          print("### 📄 Generated artifacts")
+          print()
+          print("- [`docs/PROGRESS.md`](../blob/main/docs/PROGRESS.md) — full report")
+          print("- [`docs/PROGRESS_scopes.csv`](../blob/main/docs/PROGRESS_scopes.csv) — spreadsheet rows by scope")
+          print("- [`docs/PROGRESS_issues.csv`](../blob/main/docs/PROGRESS_issues.csv) — spreadsheet rows by issue")
+          print()
+          print("_See `docs/PROGRESS_consumption.md` for all dashboard options._")
+          PYEOF
 
       - name: Commit and push if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet docs/PROGRESS.md; then
-            echo "No changes to PROGRESS.md"
+          git add docs/PROGRESS.md docs/PROGRESS_scopes.csv docs/PROGRESS_issues.csv
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
             exit 0
           fi
-          git add docs/PROGRESS.md
-          git commit -m "chore(progress): nightly update of docs/PROGRESS.md"
+          git commit -m "chore(progress): nightly update of docs/PROGRESS.md + CSVs"
           git push
