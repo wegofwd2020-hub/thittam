@@ -303,6 +303,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # buf breaking compares against `.git#branch=main,subdir=proto`,
+          # which needs the `main` ref in the local clone. The default
+          # shallow checkout (depth 1) fails with "couldn't find remote
+          # ref main". Fetch-depth 0 pulls the full history so the
+          # comparison resolves.
+          fetch-depth: 0
 
       - name: Install buf
         uses: bufbuild/buf-setup-action@v1
