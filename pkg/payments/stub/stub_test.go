@@ -113,18 +113,30 @@ func TestHandleWebhook_ValidEvent(t *testing.T) {
 		ID:   "evt_123",
 		Type: payments.EventIntentSucceeded,
 	})
-	got, err := d.HandleWebhook(context.Background(), body, "sig_ok")
+	got, err := d.HandleWebhook(context.Background(), payments.ProviderStub, body, "sig_ok")
 	require.NoError(t, err)
 	assert.Equal(t, payments.EventIntentSucceeded, got.Type)
 	assert.Equal(t, payments.ProviderStub, got.ProviderName)
 	assert.False(t, got.ReceivedAt.IsZero())
 }
 
+func TestHandleWebhook_RecordsProviderFromParam(t *testing.T) {
+	t.Parallel()
+	// The stub must stamp the Event with whatever provider the caller
+	// supplied — the shared dispatcher pattern depends on it (a single
+	// webhook endpoint multiplexing multiple PSPs).
+	d := New()
+	body, _ := json.Marshal(payments.Event{ID: "evt_dispatch", Type: payments.EventIntentSucceeded})
+	got, err := d.HandleWebhook(context.Background(), payments.ProviderStripe, body, "sig")
+	require.NoError(t, err)
+	assert.Equal(t, payments.ProviderStripe, got.ProviderName)
+}
+
 func TestHandleWebhook_EmptySignatureRejected(t *testing.T) {
 	t.Parallel()
 	d := New()
 	body, _ := json.Marshal(payments.Event{ID: "evt_sig", Type: payments.EventIntentFailed})
-	_, err := d.HandleWebhook(context.Background(), body, "")
+	_, err := d.HandleWebhook(context.Background(), payments.ProviderStub, body, "")
 	assert.ErrorIs(t, err, payments.ErrInvalidSignature)
 }
 
@@ -135,9 +147,9 @@ func TestHandleWebhook_DuplicateEventRejected(t *testing.T) {
 		ID:   "evt_replay",
 		Type: payments.EventIntentSucceeded,
 	})
-	_, err := d.HandleWebhook(context.Background(), body, "sig")
+	_, err := d.HandleWebhook(context.Background(), payments.ProviderStub, body, "sig")
 	require.NoError(t, err)
-	_, err = d.HandleWebhook(context.Background(), body, "sig")
+	_, err = d.HandleWebhook(context.Background(), payments.ProviderStub, body, "sig")
 	assert.ErrorIs(t, err, payments.ErrDuplicateEvent)
 }
 
@@ -152,9 +164,32 @@ func TestHandleWebhook_CustomSignatureValidator(t *testing.T) {
 	})
 	body, _ := json.Marshal(payments.Event{ID: "evt_custom", Type: payments.EventIntentSucceeded})
 
-	_, err := d.HandleWebhook(context.Background(), body, "wrong")
+	_, err := d.HandleWebhook(context.Background(), payments.ProviderStub, body, "wrong")
 	assert.ErrorIs(t, err, payments.ErrInvalidSignature)
 
-	_, err = d.HandleWebhook(context.Background(), body, "expected-sig")
+	_, err = d.HandleWebhook(context.Background(), payments.ProviderStub, body, "expected-sig")
 	assert.NoError(t, err)
+}
+
+func TestGetPayout(t *testing.T) {
+	t.Parallel()
+	d := New()
+	p := payments.Payout{
+		TenantID:       uuid.New(),
+		Amount:         decimal.RequireFromString("500.00"),
+		Currency:       "INR",
+		Method:         payments.MethodUPI,
+		IdempotencyKey: "payout-get-1",
+		RecipientToken: "tok_recipient_xyz",
+	}
+	created, err := d.CapturePayout(context.Background(), p)
+	require.NoError(t, err)
+
+	got, err := d.GetPayout(context.Background(), created.ProviderPayoutID)
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, got.ID)
+	assert.Equal(t, payments.StatusProcessing, got.Status)
+
+	_, err = d.GetPayout(context.Background(), "stub_payout_nonexistent")
+	assert.ErrorIs(t, err, payments.ErrNotFound)
 }

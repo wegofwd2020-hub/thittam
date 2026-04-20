@@ -71,6 +71,16 @@ func TestToMinorUnits_Rejects(t *testing.T) {
 	}
 }
 
+func TestToMinorUnits_Overflow(t *testing.T) {
+	t.Parallel()
+	// int64 max ≈ 9.22e18. At 2dp INR, any major amount > 9.22e16 overflows.
+	// 1e17 × 100 = 1e19 > int64 max — must be rejected, not silently wrapped.
+	huge := decimal.RequireFromString("100000000000000000")
+	_, err := ToMinorUnits(huge, "INR")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidAmount)
+}
+
 func TestFromMinorUnits(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

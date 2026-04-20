@@ -28,6 +28,7 @@ type Driver struct {
 	mu             sync.Mutex
 	intentsByID    map[string]*payments.Intent // keyed by ProviderIntentID
 	intentsByIdem  map[string]*payments.Intent // keyed by IdempotencyKey
+	payoutsByID    map[string]*payments.Payout // keyed by ProviderPayoutID
 	payoutsByIdem  map[string]*payments.Payout
 	events         map[string]struct{} // dedup for webhook replay tests
 
@@ -42,6 +43,7 @@ func New() *Driver {
 	return &Driver{
 		intentsByID:   make(map[string]*payments.Intent),
 		intentsByIdem: make(map[string]*payments.Intent),
+		payoutsByID:   make(map[string]*payments.Payout),
 		payoutsByIdem: make(map[string]*payments.Payout),
 		events:        make(map[string]struct{}),
 		signatureValidator: func(_ []byte, sig string) error {
@@ -93,8 +95,8 @@ func (d *Driver) GetIntent(_ context.Context, providerIntentID string) (*payment
 	if !ok {
 		return nil, payments.ErrNotFound
 	}
-	copy := *i
-	return &copy, nil
+	cp := *i
+	return &cp, nil
 }
 
 // CapturePayout creates a new Payout, honouring IdempotencyKey.
@@ -120,14 +122,29 @@ func (d *Driver) CapturePayout(_ context.Context, p payments.Payout) (*payments.
 
 	payout := p
 	d.payoutsByIdem[p.IdempotencyKey] = &payout
+	d.payoutsByID[p.ProviderPayoutID] = &payout
 	out := payout
 	return &out, nil
 }
 
+// GetPayout returns the current state of a stub payout.
+func (d *Driver) GetPayout(_ context.Context, providerPayoutID string) (*payments.Payout, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	p, ok := d.payoutsByID[providerPayoutID]
+	if !ok {
+		return nil, payments.ErrNotFound
+	}
+	cp := *p
+	return &cp, nil
+}
+
 // HandleWebhook verifies the signature (stub: non-empty) and dedups on
 // the embedded event ID. Tests drive this directly by calling EmitEvent,
-// which crafts a signed payload this accepts.
-func (d *Driver) HandleWebhook(_ context.Context, body []byte, signature string) (*payments.Event, error) {
+// which crafts a signed payload this accepts. The provider parameter is
+// recorded on the returned Event so tests can exercise multi-provider
+// dispatch paths.
+func (d *Driver) HandleWebhook(_ context.Context, provider payments.ProviderName, body []byte, signature string) (*payments.Event, error) {
 	if err := d.signatureValidator(body, signature); err != nil {
 		return nil, err
 	}
@@ -138,7 +155,7 @@ func (d *Driver) HandleWebhook(_ context.Context, body []byte, signature string)
 	if evt.ID == "" {
 		return nil, fmt.Errorf("payments/stub: event.id required")
 	}
-	evt.ProviderName = payments.ProviderStub
+	evt.ProviderName = provider
 	evt.ReceivedAt = time.Now().UTC()
 
 	d.mu.Lock()

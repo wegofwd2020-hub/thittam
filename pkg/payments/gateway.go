@@ -210,15 +210,27 @@ type Gateway interface {
 	// idempotent on IdempotencyKey.
 	CapturePayout(ctx context.Context, payout Payout) (*Payout, error)
 
+	// GetPayout fetches the latest state of an outbound payment from the
+	// PSP. Mirror of GetIntent for payouts — used by the reconciliation
+	// sweep so a lost payout.succeeded / payout.failed webhook does not
+	// strand a Payout in StatusProcessing indefinitely.
+	GetPayout(ctx context.Context, providerPayoutID string) (*Payout, error)
+
 	// HandleWebhook verifies the signature against body, parses the event,
 	// and returns a normalised Event. Callers MUST NOT act on the event
 	// until this returns without error — a signature failure means the
 	// request is forged or replayed.
 	//
+	// provider identifies which PSP the webhook originated from, as
+	// determined by the caller (e.g. from the URL path or a routing
+	// header). A shared dispatcher can multiplex webhooks from multiple
+	// PSPs onto a single endpoint; per-provider drivers may validate that
+	// it matches their Name().
+	//
 	// signature format is provider-specific (Stripe header
 	// `Stripe-Signature`, Razorpay header `X-Razorpay-Signature`, etc.).
 	// The caller passes it verbatim.
-	HandleWebhook(ctx context.Context, body []byte, signature string) (*Event, error)
+	HandleWebhook(ctx context.Context, provider ProviderName, body []byte, signature string) (*Event, error)
 }
 
 // --- Sentinel errors ---

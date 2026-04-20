@@ -52,14 +52,18 @@ func ToMinorUnits(amount decimal.Decimal, currency string) (int64, error) {
 		return 0, fmt.Errorf("%w: %s has more than %d decimal places for %s",
 			ErrInvalidAmount, amount.String(), decimals, currency)
 	}
+	// Scale to minor units and verify the result fits in int64 BEFORE
+	// truncation. decimal.IntPart silently wraps on overflow (it delegates
+	// to big.Int.Int64, which returns the low bits of an over-range value),
+	// so comparing the post-truncation int back to `scaled` is not a safe
+	// guard. BigInt().IsInt64() is the correct range check.
 	scaled := amount.Shift(decimals)
-	n := scaled.IntPart()
-	// Guard against overflow on tiny (improbable) currencies at huge amounts.
-	if scaled.Cmp(decimal.NewFromInt(n)) != 0 {
+	bigN := scaled.BigInt()
+	if !bigN.IsInt64() {
 		return 0, fmt.Errorf("%w: amount %s overflows int64 minor units",
 			ErrInvalidAmount, amount.String())
 	}
-	return n, nil
+	return bigN.Int64(), nil
 }
 
 // FromMinorUnits is the inverse of ToMinorUnits.
