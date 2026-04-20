@@ -531,13 +531,12 @@ function VersionTimeline({ versions }: { versions: DocumentVersion[] }) {
         <li key={v.version} className="mb-6 ml-6 last:mb-0">
           {/* Dot */}
           <span
-            className="absolute -left-2.5 flex h-5 w-5 items-center justify-center rounded-full ring-4"
+            className="absolute -left-2.5 flex h-5 w-5 items-center justify-center rounded-full ring-4 ring-white"
             style={{
               backgroundColor:
                 idx === 0
                   ? "var(--thittam-primary, #3b82f6)"
                   : "var(--thittam-muted, #f1f5f9)",
-              ringColor: "var(--thittam-background, #fff)",
             }}
           >
             <FileText
