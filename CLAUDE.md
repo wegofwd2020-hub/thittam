@@ -73,3 +73,53 @@ sqlc generate                   # SQL query codegen
 - **SQL:** All queries parameterized via sqlc or pgx named params, no string interpolation
 - **Logging:** Structured via `slog`, no PII or secrets
 - **Coverage thresholds:** iam/general-ledger ≥ 85%, budget/expense ≥ 80%, others ≥ 75%
+
+## Claude Code Workflow
+
+### Plan-mode triggers
+
+Before editing any files, enter plan mode for:
+
+- Any change touching ≥ 3 files
+- Any change crossing a service boundary (`services/<a>` → `services/<b>`)
+- New DB migrations
+- New gRPC methods (proto changes)
+- New vertical plugins
+- Refactors that rename exported identifiers
+
+Trigger phrases that should force plan mode:
+- "Add a new service…"
+- "Refactor X to support Y…"
+- "Migrate from A to B…"
+- "Add a new vertical for…"
+- "Replace the current X implementation…"
+
+Rationale: an explicit file-by-file plan surfaces design issues before code exists — the cheapest point to fix them.
+
+### Sub-agent defaults
+
+Delegate instead of doing it on the main thread:
+
+| Situation | Delegate to |
+|---|---|
+| Reading > 3 files for context | `Explore` |
+| Designing a non-trivial change | `Plan` |
+| Pre-merge review of any PR | `code-reviewer` + `security-review` in parallel |
+| Research question ("how does X work in this codebase?") | `Explore` |
+| Independent sub-tasks (tests + docs + refactor) | Parallel sub-agent calls, not sequential |
+
+Anti-pattern: "search the codebase for all usages of X, then refactor them" on the main thread. Delegate the search; act on the summary.
+
+### Project slash commands
+
+Stored under `.claude/commands/`:
+
+| Command | Use for |
+|---|---|
+| `/spec-first <task>` | Draft failing test + API contract + acceptance checklist before any implementation |
+| `/new-service <name>` | Scaffold the 6-file service layout |
+| `/new-vertical <name>` | YAML config + icon set + seed for a new industry vertical |
+| `/new-proto <service>` | Add proto + regenerate + scaffold handler stub |
+| `/new-adr <title>` | New ADR in `../thittam_docs/docs/adr/` with auto-incremented number |
+| `/check-doc-drift` | Run `tools/check-doc-drift` against the docs repo |
+| `/audit-money` | Find Rule #1 violations (float in monetary context) |
