@@ -159,8 +159,11 @@ export async function updatePhaseStatus(
   phaseId: string,
   newPhaseType: string,
 ): Promise<Phase> {
+  // Body field matches the proto (UpdatePhaseStatusRequest.new_phase_type),
+  // which the grpc-gateway decoder maps using UseProtoNames. Sending
+  // `status` here would be silently dropped.
   return api.patch<Phase>(`/api/v1/phases/${phaseId}`, {
-    status: newPhaseType,
+    new_phase_type: newPhaseType,
   });
 }
 
