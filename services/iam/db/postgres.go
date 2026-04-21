@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/wegofwd2020/thittam/pkg/auth"
@@ -319,6 +320,12 @@ func (p *Postgres) CreateTenant(ctx context.Context, t *iam.Tenant) error {
 		PrimaryCurrencyCode: t.PrimaryCurrencyCode,
 	})
 	if err != nil {
+		// Slug collisions are absorbed by ON CONFLICT (slug) DO NOTHING above,
+		// but name collisions have no ON CONFLICT target and surface here as
+		// PgError 23505 on tenants_name_ci_unique (see migration 015).
+		if isUniqueViolationOn(err, "tenants_name_ci_unique") {
+			return iam.ErrTenantNameTaken
+		}
 		return fmt.Errorf("iam/db: create tenant: %w", err)
 	}
 	if row.ID == uuid.Nil {
@@ -327,6 +334,16 @@ func (p *Postgres) CreateTenant(ctx context.Context, t *iam.Tenant) error {
 	t.CreatedAt = row.CreatedAt
 	t.IsDemo = row.IsDemo
 	return nil
+}
+
+// isUniqueViolationOn reports whether err is a Postgres unique_violation (23505)
+// on the named constraint/index.
+func isUniqueViolationOn(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	return pgErr.Code == "23505" && pgErr.ConstraintName == constraint
 }
 
 // UpdateTenantAddress replaces the address + country + currency on an

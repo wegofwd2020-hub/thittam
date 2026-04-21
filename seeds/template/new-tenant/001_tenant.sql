@@ -3,11 +3,13 @@
 -- Address: <ADDRESS_LINE1>, <CITY>, <POSTAL_CODE>, <COUNTRY_CODE>
 -- Currency: <PRIMARY_CURRENCY>
 --
--- NOTE: <TENANT_NAME> must be unique across the platform. Run the
--- case-insensitive precheck documented in
--- thittam_docs/docs/operations/tenant-onboarding.md §1.1a before loading:
---   SELECT name FROM tenants WHERE lower(name) = lower('<TENANT_NAME>');
--- No DB-level UNIQUE on tenants.name yet; the precheck is the only guard.
+-- NOTE: <TENANT_NAME> must be unique across the platform. Since migration
+-- 015 a case-insensitive UNIQUE index (tenants_name_ci_unique) enforces
+-- this at the DB layer, so duplicate loads fail fast with
+-- "duplicate key value violates unique constraint". The precheck below
+-- stays in place as defense in depth — it gives a clearer error before
+-- a long seed transaction starts:
+--   SELECT name FROM tenants WHERE lower(trim(name)) = lower(trim('<TENANT_NAME>'));
 --
 -- See seeds/template/new-tenant/README.md for what each <PLACEHOLDER>
 -- means and how to fill it in. This file scaffolds:

@@ -17,6 +17,10 @@ var (
 	ErrInvitationExpired  = errors.New("iam: invitation has expired")
 	ErrInvitationAccepted = errors.New("iam: invitation already accepted")
 	ErrTenantSlugTaken    = errors.New("iam: tenant slug already taken")
+	// ErrTenantNameTaken is returned by CreateTenant when another tenant
+	// already exists with the same name (case-insensitive, whitespace-collapsed).
+	// Enforced by the tenants_name_ci_unique index added in migration 015.
+	ErrTenantNameTaken    = errors.New("iam: tenant name already taken")
 	ErrInvalidPlan        = errors.New("iam: invalid plan; must be starter, professional, or enterprise")
 	// ErrRoleNotProjectScoped is returned by AssignProjectRole when the caller
 	// supplies a role that must be tenant-wide (e.g. super_admin, manager).

@@ -629,7 +629,8 @@ func grpcError(err error) error {
 		return status.Error(codes.FailedPrecondition, err.Error())
 
 	case errors.Is(err, ErrUserAlreadyExists),
-		errors.Is(err, ErrTenantSlugTaken):
+		errors.Is(err, ErrTenantSlugTaken),
+		errors.Is(err, ErrTenantNameTaken):
 		return status.Error(codes.AlreadyExists, err.Error())
 
 	case errors.Is(err, ErrInvitationExpired),

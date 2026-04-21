@@ -428,6 +428,11 @@ func (s *Service) SetTenantAddress(ctx context.Context, t *Tenant) (*Tenant, err
 
 // CreateTenant creates a new tenant and seeds all system roles.
 func (s *Service) CreateTenant(ctx context.Context, tenant *Tenant) (*Tenant, error) {
+	// Canonicalise the name: trim and collapse internal whitespace runs to a
+	// single space. Casing is preserved. Uniqueness is enforced at the DB
+	// layer on lower(trim(name)); this normalisation ensures stored names
+	// don't carry stray double-spaces into invoices and audit logs (#91).
+	tenant.Name = strings.Join(strings.Fields(tenant.Name), " ")
 	if tenant.ID == uuid.Nil {
 		tenant.ID = uuid.New()
 	}
