@@ -1,6 +1,6 @@
 # Thittam — Progress Chart
 
-_Auto-generated 2026-04-20T16:18:47+00:00. Regenerated nightly at 21:00 EST._
+_Auto-generated 2026-04-21T04:52:34+00:00. Regenerated nightly at 21:00 EST._
 
 Features are GitHub issues/PRs from [`wegofwd2020-hub/thittam`](https://github.com/wegofwd2020-hub/thittam). Areas are conventional-commit scopes. Script: `scripts/generate_progress.py`.
 
@@ -69,12 +69,13 @@ gantt
 | `iam` | 14 | 2026-04-04 | 2026-04-14 | 8 |
 | `infra` | 14 | 2026-04-10 | 2026-04-13 | 4 |
 | `frontend` | 14 | 2026-04-04 | 2026-04-11 | 11 |
+| `ui` | 5 | 2026-04-14 | 2026-04-20 | 4 |
+| `ci` | 5 | 2026-04-10 | 2026-04-20 | 3 |
 | `vertical` | 5 | 2026-04-03 | 2026-04-10 | 3 |
-| `ci` | 4 | 2026-04-10 | 2026-04-20 | 2 |
 | `lint` | 4 | 2026-04-13 | 2026-04-13 | 2 |
 | `rbac` | 4 | 2026-04-13 | 2026-04-13 | 4 |
+| `progress` | 3 | 2026-04-20 | 2026-04-20 | 0 |
 | `seed` | 3 | 2026-04-14 | 2026-04-20 | 3 |
-| `ui` | 3 | 2026-04-14 | 2026-04-20 | 2 |
 | `web` | 3 | 2026-04-13 | 2026-04-13 | 1 |
 | `dev-start` | 3 | 2026-04-13 | 2026-04-13 | 0 |
 | `verify-rbac` | 3 | 2026-04-13 | 2026-04-13 | 0 |
@@ -89,7 +90,6 @@ gantt
 | `payments` | 1 | 2026-04-20 | 2026-04-20 | 2 |
 | `readme` | 1 | 2026-04-20 | 2026-04-20 | 1 |
 | `budget` | 1 | 2026-04-20 | 2026-04-20 | 1 |
-| `progress` | 1 | 2026-04-20 | 2026-04-20 | 0 |
 | `tooling` | 1 | 2026-04-20 | 2026-04-20 | 5 |
 | `nightly` | 1 | 2026-04-14 | 2026-04-14 | 1 |
 | `iam-gateway` | 1 | 2026-04-13 | 2026-04-13 | 1 |
@@ -145,6 +145,10 @@ gantt
 | [#20](https://github.com/wegofwd2020-hub/thittam/issues/20) | [P2] Document vertical plugin YAML schema (JSON Schema or protobuf) | CLOSED | 2 | 2026-04-04 | 2026-04-10 | vertical |
 | [#18](https://github.com/wegofwd2020-hub/thittam/issues/18) | [P1] Run critical-path E2E tests on every PR, not just nightly | CLOSED | 2 | 2026-04-04 | 2026-04-10 | ci, iam |
 | [#14](https://github.com/wegofwd2020-hub/thittam/issues/14) | [P0] Design and implement saga pattern for the 9-step tenant registrat | CLOSED | 2 | 2026-04-04 | 2026-04-10 | registration, reporting |
+| [#96](https://github.com/wegofwd2020-hub/thittam/issues/96) | feat(ui): per-production budget aggregation on detail page | MERGED | 1 | 2026-04-20 | 2026-04-20 | ui |
+| [#95](https://github.com/wegofwd2020-hub/thittam/issues/95) | fix(ui): replace invalid ringColor CSS prop with ring-white Tailwind c | MERGED | 1 | 2026-04-20 | 2026-04-20 | ui |
+| [#94](https://github.com/wegofwd2020-hub/thittam/issues/94) | fix(ci): create local main ref so buf breaking actually finds it | MERGED | 1 | 2026-04-20 | 2026-04-20 | ci |
+| [#93](https://github.com/wegofwd2020-hub/thittam/issues/93) | feat(project,ui): wire Phases + Crew tabs onto live API (Phase C part  | MERGED | 1 | 2026-04-20 | 2026-04-20 | — |
 | [#88](https://github.com/wegofwd2020-hub/thittam/issues/88) | feat(seed): add seeds/template/new-tenant/ scaffold | MERGED | 1 | 2026-04-20 | 2026-04-20 | seed |
 | [#78](https://github.com/wegofwd2020-hub/thittam/issues/78) | feat(ui): wire productions pages onto live API (Phase C) | MERGED | 1 | 2026-04-20 | 2026-04-20 | ui |
 | [#77](https://github.com/wegofwd2020-hub/thittam/issues/77) | fix(ci): fetch full history for proto breaking-change job | MERGED | 1 | 2026-04-20 | 2026-04-20 | ci |
@@ -255,10 +259,11 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `ci`
 
-- **Commits:** 4
-- **Issues referenced (2):**
+- **Commits:** 5
+- **Issues referenced (3):**
   - [#18](https://github.com/wegofwd2020-hub/thittam/issues/18) — [P1] Run critical-path E2E tests on every PR, not just nightly
   - [#77](https://github.com/wegofwd2020-hub/thittam/issues/77) — fix(ci): fetch full history for proto breaking-change job
+  - [#94](https://github.com/wegofwd2020-hub/thittam/issues/94) — fix(ci): create local main ref so buf breaking actually finds it
 
 ### `cli`
 
@@ -412,7 +417,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `progress`
 
-- **Commits:** 1
+- **Commits:** 3
 
 ### `project`
 
@@ -500,10 +505,12 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `ui`
 
-- **Commits:** 3
-- **Issues referenced (2):**
+- **Commits:** 5
+- **Issues referenced (4):**
   - [#65](https://github.com/wegofwd2020-hub/thittam/issues/65) — feat(ui): adopt shadcn/ui as themeable foundation
   - [#78](https://github.com/wegofwd2020-hub/thittam/issues/78) — feat(ui): wire productions pages onto live API (Phase C)
+  - [#95](https://github.com/wegofwd2020-hub/thittam/issues/95) — fix(ui): replace invalid ringColor CSS prop with ring-white Tailwind class
+  - [#96](https://github.com/wegofwd2020-hub/thittam/issues/96) — feat(ui): per-production budget aggregation on detail page
 
 ### `verify-rbac`
 

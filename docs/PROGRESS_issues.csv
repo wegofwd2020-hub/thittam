@@ -24,6 +24,10 @@ issue_number,title,state,commit_count,first,last,span_days,scopes
 20,[P2] Document vertical plugin YAML schema (JSON Schema or protobuf),CLOSED,2,2026-04-04,2026-04-10,6,vertical
 18,"[P1] Run critical-path E2E tests on every PR, not just nightly",CLOSED,2,2026-04-04,2026-04-10,6,ci; iam
 14,[P0] Design and implement saga pattern for the 9-step tenant registration pipeline,CLOSED,2,2026-04-04,2026-04-10,6,registration; reporting
+96,feat(ui): per-production budget aggregation on detail page,MERGED,1,2026-04-20,2026-04-20,0,ui
+95,fix(ui): replace invalid ringColor CSS prop with ring-white Tailwind class,MERGED,1,2026-04-20,2026-04-20,0,ui
+94,fix(ci): create local main ref so buf breaking actually finds it,MERGED,1,2026-04-20,2026-04-20,0,ci
+93,"feat(project,ui): wire Phases + Crew tabs onto live API (Phase C part 2)",MERGED,1,2026-04-20,2026-04-20,0,
 88,feat(seed): add seeds/template/new-tenant/ scaffold,MERGED,1,2026-04-20,2026-04-20,0,seed
 78,feat(ui): wire productions pages onto live API (Phase C),MERGED,1,2026-04-20,2026-04-20,0,ui
 66,feat(payments): ADR + Gateway interface design (no driver yet),CLOSED,1,2026-04-20,2026-04-20,0,payments
