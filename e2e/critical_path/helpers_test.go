@@ -188,6 +188,18 @@ func (r *iamRepo) UpdateTenantAddress(_ context.Context, t *iam.Tenant) (*iam.Te
 	existing.PrimaryCurrencyCode = t.PrimaryCurrencyCode
 	return existing, nil
 }
+func (r *iamRepo) TransitionTenantStatus(_ context.Context, id uuid.UUID, from, to string) (*iam.Tenant, bool, error) {
+	t, ok := r.tenants[id]
+	if !ok || t.Status != from {
+		return nil, false, nil
+	}
+	t.Status = to
+	return t, true, nil
+}
+func (r *iamRepo) ListTenantsDueForLifecycle(_ context.Context, _ time.Time, _ int) ([]*iam.Tenant, error) {
+	// Critical-path e2e does not exercise the retention sweeper.
+	return nil, nil
+}
 
 // Roles
 func (r *iamRepo) CreateRole(_ context.Context, role *iam.Role) error {

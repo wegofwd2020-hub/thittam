@@ -411,6 +411,55 @@ func (p *Postgres) UpdateTenantStatus(ctx context.Context, id uuid.UUID, newStat
 	return nil
 }
 
+// TransitionTenantStatus performs a conditional transition guarded by the
+// current status. Returns (tenant, true, nil) on successful transition,
+// (nil, false, nil) when another worker already advanced the row (the
+// WHERE status = from clause didn't match), and a non-nil error otherwise.
+// Backing SQL sets suspended_at / deactivated_at on first entry (#92).
+func (p *Postgres) TransitionTenantStatus(
+	ctx context.Context,
+	id uuid.UUID,
+	from, to string,
+) (*iam.Tenant, bool, error) {
+	row, err := p.q.TransitionTenantStatus(ctx, TransitionTenantStatusParams{
+		ID:         id,
+		FromStatus: from,
+		ToStatus:   to,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Either the tenant doesn't exist, or its current status differs
+			// from `from`. Distinguishing the two requires an extra lookup;
+			// callers treat "no transition" as the idempotent outcome.
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("iam/db: transition tenant status: %w", err)
+	}
+	return dbTenantToDomain(row), true, nil
+}
+
+// ListTenantsDueForLifecycle returns tenants whose next lifecycle
+// transition is due at or before `now`. Backed by partial indexes on
+// suspended_at (for suspended/grace) and purge_after (for deactivated).
+func (p *Postgres) ListTenantsDueForLifecycle(
+	ctx context.Context,
+	now time.Time,
+	limit int,
+) ([]*iam.Tenant, error) {
+	rows, err := p.q.ListTenantsDueForLifecycle(ctx, ListTenantsDueForLifecycleParams{
+		Column1: now.UTC(),
+		Limit:   int32(limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("iam/db: list due-for-lifecycle: %w", err)
+	}
+	out := make([]*iam.Tenant, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, dbTenantToDomain(row))
+	}
+	return out, nil
+}
+
 // --- iam.Repository: Roles ---
 
 func (p *Postgres) CreateRole(ctx context.Context, r *iam.Role) error {
@@ -842,5 +891,17 @@ func dbTenantToDomain(t Tenant) *iam.Tenant {
 		CountryCode:         t.CountryCode,
 		PostalCode:          pgTextToString(t.PostalCode),
 		PrimaryCurrencyCode: t.PrimaryCurrencyCode,
+		SuspendedAt:         pgTimestamptzToTimePtr(t.SuspendedAt),
+		DeactivatedAt:       pgTimestamptzToTimePtr(t.DeactivatedAt),
 	}
+}
+
+// pgTimestamptzToTimePtr returns a pointer to time.Time or nil when the
+// column is NULL. Used for optional lifecycle timestamps (#92).
+func pgTimestamptzToTimePtr(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	v := t.Time
+	return &v
 }

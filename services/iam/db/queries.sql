@@ -28,7 +28,39 @@ SELECT * FROM tenants WHERE id = $1;
 SELECT * FROM tenants WHERE slug = $1;
 
 -- name: UpdateTenantStatus :one
-UPDATE tenants SET status = $2 WHERE id = $1 RETURNING *;
+-- Sets the tenant's status and stamps the appropriate lifecycle timestamp
+-- on first entry (#92). Repeat calls preserve the original timestamp so
+-- the grace / deactivation clocks keep ticking from the real transition.
+UPDATE tenants SET
+    status         = $2,
+    suspended_at   = CASE WHEN $2 = 'suspended'   AND suspended_at   IS NULL THEN now() ELSE suspended_at   END,
+    deactivated_at = CASE WHEN $2 = 'deactivated' AND deactivated_at IS NULL THEN now() ELSE deactivated_at END
+WHERE id = $1
+RETURNING *;
+
+-- name: TransitionTenantStatus :one
+-- Idempotent lifecycle transition for the retention sweeper. The WHERE
+-- clause guards against concurrent sweepers double-advancing a tenant;
+-- callers that get ID = uuid.Nil in the returned row know someone else
+-- moved the tenant first (#92).
+UPDATE tenants SET
+    status         = @to_status,
+    suspended_at   = CASE WHEN @to_status::text = 'suspended'   AND suspended_at   IS NULL THEN now() ELSE suspended_at   END,
+    deactivated_at = CASE WHEN @to_status::text = 'deactivated' AND deactivated_at IS NULL THEN now() ELSE deactivated_at END
+WHERE id = @id AND status = @from_status
+RETURNING *;
+
+-- name: ListTenantsDueForLifecycle :many
+-- Surfaces tenants whose next automatic lifecycle transition is due at or
+-- before $1 (the sweeper's "now"). Each WHERE branch is backed by a
+-- partial index created in migration 016, so the query is cheap even
+-- with many active tenants.
+SELECT * FROM tenants
+ WHERE (status = 'suspended'   AND suspended_at   <= $1 - INTERVAL '30 days')
+    OR (status = 'grace'       AND suspended_at   <= $1 - INTERVAL '90 days')
+    OR (status = 'deactivated' AND deactivated_at <= $1 - INTERVAL '180 days')
+ ORDER BY COALESCE(deactivated_at, suspended_at) NULLS LAST
+ LIMIT $2;
 
 -- name: CreateUser :one
 INSERT INTO users (id, tenant_id, email, display_name, password_hash, status)

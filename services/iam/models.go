@@ -24,7 +24,7 @@ type Tenant struct {
 	Name      string    `json:"name"`
 	Slug      string    `json:"slug"`
 	Plan      string    `json:"plan"`   // starter, professional, enterprise
-	Status    string    `json:"status"` // active, suspended, deactivated
+	Status    string    `json:"status"` // active, suspended, grace, deactivated, purge_eligible
 	IsDemo    bool      `json:"is_demo"`
 	CreatedAt time.Time `json:"created_at"`
 
@@ -37,6 +37,14 @@ type Tenant struct {
 	CountryCode         string `json:"country_code"`          // ISO 3166-1 alpha-2
 	PostalCode          string `json:"postal_code,omitempty"`
 	PrimaryCurrencyCode string `json:"primary_currency_code"` // ISO 4217
+
+	// Lifecycle timestamps (#92). SuspendedAt is set when the billing
+	// webhook or SuspendTenant RPC moves the tenant into 'suspended'.
+	// DeactivatedAt is set when the retention sweeper moves the tenant
+	// from 'grace' into 'deactivated'. The implied purge deadline is
+	// DeactivatedAt + 180 days; computed by callers rather than stored.
+	SuspendedAt   *time.Time `json:"suspended_at,omitempty"`
+	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
 }
 
 // Role is a named collection of permissions scoped to a tenant.
