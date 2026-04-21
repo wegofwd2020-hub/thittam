@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/wegofwd2020/thittam/pkg/auth"
@@ -42,6 +43,18 @@ type Repository interface {
 	// on an existing tenant. Other fields (name, plan, status) are not
 	// touched. Returns ErrTenantNotFound if the row is missing.
 	UpdateTenantAddress(ctx context.Context, tenant *Tenant) (*Tenant, error)
+	// TransitionTenantStatus performs a conditional status update guarded
+	// by the current status — `UPDATE ... WHERE status = from`. Returns
+	// (tenant, true) on successful transition, or (nil, false, nil) when
+	// the current status did not match `from` (idempotency: another
+	// worker already advanced the tenant). Used by the retention
+	// sweeper (#92).
+	TransitionTenantStatus(ctx context.Context, id uuid.UUID, from, to string) (*Tenant, bool, error)
+	// ListTenantsDueForLifecycle returns tenants in a transient lifecycle
+	// state whose next automatic transition is due at or before `now`.
+	// Limit caps the number of rows; callers typically page by re-running
+	// with the same `now` until an empty batch is returned (#92).
+	ListTenantsDueForLifecycle(ctx context.Context, now time.Time, limit int) ([]*Tenant, error)
 
 	// Roles
 	CreateRole(ctx context.Context, role *Role) error

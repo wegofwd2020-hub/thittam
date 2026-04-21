@@ -43,6 +43,8 @@ type mockRepo struct {
 	getTenantFn                   func(ctx context.Context, id uuid.UUID) (*Tenant, error)
 	updateTenantStatusFn          func(ctx context.Context, id uuid.UUID, status string) error
 	updateTenantAddressFn         func(ctx context.Context, t *Tenant) (*Tenant, error)
+	transitionTenantStatusFn      func(ctx context.Context, id uuid.UUID, from, to string) (*Tenant, bool, error)
+	listTenantsDueForLifecycleFn  func(ctx context.Context, now time.Time, limit int) ([]*Tenant, error)
 	createRoleFn                  func(ctx context.Context, role *Role) error
 	getRoleFn                     func(ctx context.Context, tenantID uuid.UUID, name string) (*Role, error)
 	getRoleByIDFn                 func(ctx context.Context, tenantID, roleID uuid.UUID) (*Role, error)
@@ -149,6 +151,18 @@ func (m *mockRepo) UpdateTenantAddress(ctx context.Context, t *Tenant) (*Tenant,
 		return m.updateTenantAddressFn(ctx, t)
 	}
 	return t, nil
+}
+func (m *mockRepo) TransitionTenantStatus(ctx context.Context, id uuid.UUID, from, to string) (*Tenant, bool, error) {
+	if m.transitionTenantStatusFn != nil {
+		return m.transitionTenantStatusFn(ctx, id, from, to)
+	}
+	return &Tenant{ID: id, Status: to}, true, nil
+}
+func (m *mockRepo) ListTenantsDueForLifecycle(ctx context.Context, now time.Time, limit int) ([]*Tenant, error) {
+	if m.listTenantsDueForLifecycleFn != nil {
+		return m.listTenantsDueForLifecycleFn(ctx, now, limit)
+	}
+	return nil, nil
 }
 func (m *mockRepo) CreateRole(ctx context.Context, role *Role) error {
 	if m.createRoleFn != nil {

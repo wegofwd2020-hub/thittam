@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/wegofwd2020/thittam/pkg/audit"
 	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/pkg/crypto"
 	"github.com/wegofwd2020/thittam/pkg/locale"
@@ -98,6 +99,7 @@ type Service struct {
 	verifier auth.PasswordVerifier
 	oidcKey  []byte          // AES-256-GCM key for OIDC client secret encryption; set by WithOIDCEncryptionKey
 	migrator SchemaMigrator  // nil when no schema init is required (e.g. tests that don't exercise CreateTenant)
+	audit    *audit.Logger   // optional; set by WithAuditLogger — used by lifecycle transitions (#92)
 }
 
 // WithOIDCEncryptionKey sets the AES-256-GCM key used to encrypt and decrypt

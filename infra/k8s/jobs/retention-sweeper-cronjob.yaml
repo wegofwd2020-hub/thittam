@@ -1,0 +1,98 @@
+# retention-sweeper — daily CronJob that advances tenants through the
+# retention lifecycle (#92).
+#
+# The sweeper inspects tenants in transient states (suspended / grace /
+# deactivated) and transitions those whose clocks have elapsed.
+# Hard-delete is out of scope — this job only sets status=purge_eligible.
+#
+# Schedule: 02:15 UTC daily. Outside business hours in every timezone we
+# support, and well after the nightly billing cron (02:00) that may set
+# tenants into 'suspended' in the first place.
+#
+# Concurrency: Forbid — a previous run that hasn't finished within 24h
+# should be the only signal that something's wrong; overlapping runs
+# would race each other on the status-guarded UPDATE, but the loser
+# simply no-ops. Still prefer the loud signal over silent pile-up.
+#
+# Failure policy: Never restart the same pod on failure. Kubernetes
+# retains the last 3 successful and last 1 failed pod for post-mortem.
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: retention-sweeper
+  namespace: thittam
+  labels:
+    app: retention-sweeper
+    app.kubernetes.io/name: retention-sweeper
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: job
+spec:
+  schedule: "15 2 * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app: retention-sweeper
+            app.kubernetes.io/name: retention-sweeper
+            app.kubernetes.io/part-of: thittam
+          annotations:
+            # Short-lived pods won't survive a normal scrape interval,
+            # so metrics are surfaced via structured slog (see
+            # retention_sweep_* fields). Revisit once a Pushgateway or
+            # equivalent is available in-cluster.
+            prometheus.io/scrape: "false"
+        spec:
+          serviceAccountName: retention-sweeper
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            fsGroup: 65534
+          containers:
+            - name: retention-sweeper
+              image: ghcr.io/wegofwd2020-hub/thittam/retention-sweeper:latest
+              imagePullPolicy: IfNotPresent
+              args:
+                - "-batch"
+                - "500"
+                - "-max-batches"
+                - "100"
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: thittam-db
+                      key: url
+              envFrom:
+                - configMapRef:
+                    name: thittam-common
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: retention-sweeper
+  namespace: thittam
+  labels:
+    app: retention-sweeper
+    app.kubernetes.io/part-of: thittam

@@ -95,19 +95,21 @@ type Subscription struct {
 }
 
 type Tenant struct {
-	ID                  uuid.UUID   `json:"id"`
-	Name                string      `json:"name"`
-	Slug                string      `json:"slug"`
-	Plan                string      `json:"plan"`
-	Status              string      `json:"status"`
-	CreatedAt           time.Time   `json:"created_at"`
-	IsDemo              bool        `json:"is_demo"`
-	AddressLine1        pgtype.Text `json:"address_line1"`
-	AddressLine2        pgtype.Text `json:"address_line2"`
-	City                pgtype.Text `json:"city"`
-	CountryCode         string      `json:"country_code"`
-	PostalCode          pgtype.Text `json:"postal_code"`
-	PrimaryCurrencyCode string      `json:"primary_currency_code"`
+	ID                  uuid.UUID          `json:"id"`
+	Name                string             `json:"name"`
+	Slug                string             `json:"slug"`
+	Plan                string             `json:"plan"`
+	Status              string             `json:"status"`
+	CreatedAt           time.Time          `json:"created_at"`
+	IsDemo              bool               `json:"is_demo"`
+	AddressLine1        pgtype.Text        `json:"address_line1"`
+	AddressLine2        pgtype.Text        `json:"address_line2"`
+	City                pgtype.Text        `json:"city"`
+	CountryCode         string             `json:"country_code"`
+	PostalCode          pgtype.Text        `json:"postal_code"`
+	PrimaryCurrencyCode string             `json:"primary_currency_code"`
+	SuspendedAt         pgtype.Timestamptz `json:"suspended_at"`
+	DeactivatedAt       pgtype.Timestamptz `json:"deactivated_at"`
 }
 
 type TenantAuthConfig struct {

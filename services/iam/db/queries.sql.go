@@ -128,7 +128,7 @@ INSERT INTO tenants (
     address_line1, address_line2, city, country_code, postal_code, primary_currency_code
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (slug) DO NOTHING
-RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at
 `
 
 type CreateTenantParams struct {
@@ -177,6 +177,8 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		&i.CountryCode,
 		&i.PostalCode,
 		&i.PrimaryCurrencyCode,
+		&i.SuspendedAt,
+		&i.DeactivatedAt,
 	)
 	return i, err
 }
@@ -242,7 +244,7 @@ func (q *Queries) GetInvitationByToken(ctx context.Context, token string) (Invit
 }
 
 const getTenant = `-- name: GetTenant :one
-SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code FROM tenants WHERE id = $1
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at FROM tenants WHERE id = $1
 `
 
 func (q *Queries) GetTenant(ctx context.Context, id uuid.UUID) (Tenant, error) {
@@ -262,12 +264,14 @@ func (q *Queries) GetTenant(ctx context.Context, id uuid.UUID) (Tenant, error) {
 		&i.CountryCode,
 		&i.PostalCode,
 		&i.PrimaryCurrencyCode,
+		&i.SuspendedAt,
+		&i.DeactivatedAt,
 	)
 	return i, err
 }
 
 const getTenantBySlug = `-- name: GetTenantBySlug :one
-SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code FROM tenants WHERE slug = $1
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at FROM tenants WHERE slug = $1
 `
 
 func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, error) {
@@ -287,6 +291,8 @@ func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, err
 		&i.CountryCode,
 		&i.PostalCode,
 		&i.PrimaryCurrencyCode,
+		&i.SuspendedAt,
+		&i.DeactivatedAt,
 	)
 	return i, err
 }
@@ -353,6 +359,60 @@ func (q *Queries) ListRoles(ctx context.Context, tenantID uuid.UUID) ([]Role, er
 			&i.Name,
 			&i.Permissions,
 			&i.IsSystem,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTenantsDueForLifecycle = `-- name: ListTenantsDueForLifecycle :many
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at FROM tenants
+ WHERE (status = 'suspended'   AND suspended_at   <= $1 - INTERVAL '30 days')
+    OR (status = 'grace'       AND suspended_at   <= $1 - INTERVAL '90 days')
+    OR (status = 'deactivated' AND deactivated_at <= $1 - INTERVAL '180 days')
+ ORDER BY COALESCE(deactivated_at, suspended_at) NULLS LAST
+ LIMIT $2
+`
+
+type ListTenantsDueForLifecycleParams struct {
+	Column1 interface{} `json:"column_1"`
+	Limit   int32       `json:"limit"`
+}
+
+// Surfaces tenants whose next automatic lifecycle transition is due at or
+// before $1 (the sweeper's "now"). Each WHERE branch is backed by a
+// partial index created in migration 016, so the query is cheap even
+// with many active tenants.
+func (q *Queries) ListTenantsDueForLifecycle(ctx context.Context, arg ListTenantsDueForLifecycleParams) ([]Tenant, error) {
+	rows, err := q.db.Query(ctx, listTenantsDueForLifecycle, arg.Column1, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Tenant{}
+	for rows.Next() {
+		var i Tenant
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Plan,
+			&i.Status,
+			&i.CreatedAt,
+			&i.IsDemo,
+			&i.AddressLine1,
+			&i.AddressLine2,
+			&i.City,
+			&i.CountryCode,
+			&i.PostalCode,
+			&i.PrimaryCurrencyCode,
+			&i.SuspendedAt,
+			&i.DeactivatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -458,6 +518,48 @@ func (q *Queries) RevokeRole(ctx context.Context, arg RevokeRoleParams) error {
 	return err
 }
 
+const transitionTenantStatus = `-- name: TransitionTenantStatus :one
+UPDATE tenants SET
+    status         = $1,
+    suspended_at   = CASE WHEN $1::text = 'suspended'   AND suspended_at   IS NULL THEN now() ELSE suspended_at   END,
+    deactivated_at = CASE WHEN $1::text = 'deactivated' AND deactivated_at IS NULL THEN now() ELSE deactivated_at END
+WHERE id = $2 AND status = $3
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at
+`
+
+type TransitionTenantStatusParams struct {
+	ToStatus   string    `json:"to_status"`
+	ID         uuid.UUID `json:"id"`
+	FromStatus string    `json:"from_status"`
+}
+
+// Idempotent lifecycle transition for the retention sweeper. The WHERE
+// clause guards against concurrent sweepers double-advancing a tenant;
+// callers that get ID = uuid.Nil in the returned row know someone else
+// moved the tenant first (#92).
+func (q *Queries) TransitionTenantStatus(ctx context.Context, arg TransitionTenantStatusParams) (Tenant, error) {
+	row := q.db.QueryRow(ctx, transitionTenantStatus, arg.ToStatus, arg.ID, arg.FromStatus)
+	var i Tenant
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Plan,
+		&i.Status,
+		&i.CreatedAt,
+		&i.IsDemo,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.CountryCode,
+		&i.PostalCode,
+		&i.PrimaryCurrencyCode,
+		&i.SuspendedAt,
+		&i.DeactivatedAt,
+	)
+	return i, err
+}
+
 const updateTenantAddress = `-- name: UpdateTenantAddress :one
 UPDATE tenants SET
     address_line1 = $2,
@@ -467,7 +569,7 @@ UPDATE tenants SET
     postal_code = $6,
     primary_currency_code = $7
 WHERE id = $1
-RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at
 `
 
 type UpdateTenantAddressParams struct {
@@ -505,12 +607,19 @@ func (q *Queries) UpdateTenantAddress(ctx context.Context, arg UpdateTenantAddre
 		&i.CountryCode,
 		&i.PostalCode,
 		&i.PrimaryCurrencyCode,
+		&i.SuspendedAt,
+		&i.DeactivatedAt,
 	)
 	return i, err
 }
 
 const updateTenantStatus = `-- name: UpdateTenantStatus :one
-UPDATE tenants SET status = $2 WHERE id = $1 RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code
+UPDATE tenants SET
+    status         = $2,
+    suspended_at   = CASE WHEN $2 = 'suspended'   AND suspended_at   IS NULL THEN now() ELSE suspended_at   END,
+    deactivated_at = CASE WHEN $2 = 'deactivated' AND deactivated_at IS NULL THEN now() ELSE deactivated_at END
+WHERE id = $1
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at
 `
 
 type UpdateTenantStatusParams struct {
@@ -518,6 +627,9 @@ type UpdateTenantStatusParams struct {
 	Status string    `json:"status"`
 }
 
+// Sets the tenant's status and stamps the appropriate lifecycle timestamp
+// on first entry (#92). Repeat calls preserve the original timestamp so
+// the grace / deactivation clocks keep ticking from the real transition.
 func (q *Queries) UpdateTenantStatus(ctx context.Context, arg UpdateTenantStatusParams) (Tenant, error) {
 	row := q.db.QueryRow(ctx, updateTenantStatus, arg.ID, arg.Status)
 	var i Tenant
@@ -535,6 +647,8 @@ func (q *Queries) UpdateTenantStatus(ctx context.Context, arg UpdateTenantStatus
 		&i.CountryCode,
 		&i.PostalCode,
 		&i.PrimaryCurrencyCode,
+		&i.SuspendedAt,
+		&i.DeactivatedAt,
 	)
 	return i, err
 }
