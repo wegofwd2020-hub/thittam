@@ -3,13 +3,49 @@ package iam
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/wegofwd2020/thittam/pkg/audit"
 )
+
+// memoryAuditStore captures events for assertion inside tests.
+// Append-only, thread-safe — audit.Logger flushes from its own goroutine.
+type memoryAuditStore struct {
+	mu     sync.Mutex
+	events []audit.Event
+}
+
+func (s *memoryAuditStore) Insert(_ context.Context, e audit.Event) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append(s.events, e)
+	return nil
+}
+
+func (s *memoryAuditStore) InsertBatch(_ context.Context, es []audit.Event) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append(s.events, es...)
+	return nil
+}
+
+func (s *memoryAuditStore) Query(_ context.Context, _ audit.QueryFilter) ([]audit.Event, error) {
+	return nil, nil
+}
+
+func (s *memoryAuditStore) snapshot() []audit.Event {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]audit.Event, len(s.events))
+	copy(out, s.events)
+	return out
+}
 
 // Deterministic fixtures (Rule #9: deterministic IDs, fixed timestamps).
 var (
@@ -225,4 +261,77 @@ func TestAdvanceTenantLifecycle_GetTenantError_Propagated(t *testing.T) {
 	assert.Nil(t, trans)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, sentinel)
+}
+
+func TestAdvanceTenantLifecycle_AuditEventEmitted(t *testing.T) {
+	// Not t.Parallel() — waits on audit flush with a fixed deadline.
+	day := 24 * time.Hour
+	suspended := t0(31 * day)
+
+	repo := &mockRepo{
+		getTenantFn: func(ctx context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Name: "Acme", Status: TenantStatusSuspended, SuspendedAt: suspended}, nil
+		},
+		transitionTenantStatusFn: func(ctx context.Context, id uuid.UUID, from, to string) (*Tenant, bool, error) {
+			return &Tenant{ID: id, Name: "Acme", Status: to, SuspendedAt: suspended}, true, nil
+		},
+	}
+
+	store := &memoryAuditStore{}
+	logger := audit.NewLogger(store, audit.LoggerConfig{
+		BufferSize:    10,
+		FlushInterval: 10 * time.Millisecond,
+		BatchSize:     10,
+	}, nil)
+
+	s := (&Service{repo: repo}).WithAuditLogger(logger)
+	trans, err := s.AdvanceTenantLifecycle(context.Background(), lifecycleTenantID, lifecycleNow)
+	require.NoError(t, err)
+	require.NotNil(t, trans)
+
+	// Give the async flusher time to drain.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	require.NoError(t, logger.Close(ctx))
+
+	events := store.snapshot()
+	require.Len(t, events, 1, "exactly one audit event expected")
+	e := events[0]
+	assert.Equal(t, lifecycleTenantID, e.TenantID)
+	assert.Equal(t, uuid.Nil, e.ActorID)
+	assert.Equal(t, SystemActorRetentionSweeper, e.ActorEmail)
+	assert.Equal(t, audit.ActionStatusChanged, e.Action)
+	assert.Equal(t, audit.ResourceTenant, e.ResourceType)
+	assert.JSONEq(t, `{"status":"suspended"}`, string(e.OldState))
+	assert.JSONEq(t, `{"status":"grace"}`, string(e.NewState))
+}
+
+func TestListTenantsDueForLifecycle_PassthroughAndDefaultLimit(t *testing.T) {
+	t.Parallel()
+
+	var gotLimit int
+	now := lifecycleNow
+	repo := &mockRepo{
+		listTenantsDueForLifecycleFn: func(ctx context.Context, _ time.Time, limit int) ([]*Tenant, error) {
+			gotLimit = limit
+			return []*Tenant{{ID: lifecycleTenantID}}, nil
+		},
+	}
+
+	s := &Service{repo: repo}
+
+	// Explicit limit is honoured.
+	out, err := s.ListTenantsDueForLifecycle(context.Background(), now, 50)
+	require.NoError(t, err)
+	assert.Len(t, out, 1)
+	assert.Equal(t, 50, gotLimit)
+
+	// Non-positive limit falls back to the 500 default.
+	_, err = s.ListTenantsDueForLifecycle(context.Background(), now, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 500, gotLimit)
+
+	_, err = s.ListTenantsDueForLifecycle(context.Background(), now, -1)
+	require.NoError(t, err)
+	assert.Equal(t, 500, gotLimit)
 }
