@@ -28,6 +28,16 @@ ADR title: **$ARGUMENTS**
 
    <The forces at play — business AND technical. What is the problem we're solving, and what constraints bind the answer?>
 
+   <!-- If a diagram clarifies the context, use Mermaid (default per Rule #17 / ADR-017).
+        System-level diagrams should follow C4 structure (context → container → component).
+        Example: -->
+
+   ```mermaid
+   graph LR
+       A[Client] -->|gRPC| B[Service]
+       B -->|publish| C[(NATS)]
+   ```
+
    ## Decision
 
    <The choice, stated as a single declarative sentence, followed by the rationale.>
