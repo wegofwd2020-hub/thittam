@@ -1,5 +1,7 @@
 # Thittam (திட்டம்)
 
+*Plan the work. Work the plan.*
+
 **Thittam** — Tamil for "plan" — is a multi-tenant SaaS platform for
 production management. One codebase, many verticals: film productions,
 construction projects, software delivery, live events. Each tenant's industry
