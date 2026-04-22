@@ -24,6 +24,11 @@ issue_number,title,state,commit_count,first,last,span_days,scopes
 20,[P2] Document vertical plugin YAML schema (JSON Schema or protobuf),CLOSED,2,2026-04-04,2026-04-10,6,vertical
 18,"[P1] Run critical-path E2E tests on every PR, not just nightly",CLOSED,2,2026-04-04,2026-04-10,6,ci; iam
 14,[P0] Design and implement saga pattern for the 9-step tenant registration pipeline,CLOSED,2,2026-04-04,2026-04-10,6,registration; reporting
+92,feat(iam): scheduled tenant retention sweeper (suspended → deactivated → purge),OPEN,1,2026-04-21,2026-04-21,0,iam
+100,feat(iam): tenant retention lifecycle sweeper (Stages 1+2 of #92),MERGED,1,2026-04-21,2026-04-21,0,iam
+99,feat(iam): UNIQUE constraint on tenants.name (case-insensitive),MERGED,1,2026-04-21,2026-04-21,0,iam
+97,chore(demo): preflight smoke-test for local dev stack,MERGED,1,2026-04-21,2026-04-21,0,demo
+98,docs(commands): add Mermaid example to /new-adr template,MERGED,1,2026-04-21,2026-04-21,0,commands
 96,feat(ui): per-production budget aggregation on detail page,MERGED,1,2026-04-20,2026-04-20,0,ui
 95,fix(ui): replace invalid ringColor CSS prop with ring-white Tailwind class,MERGED,1,2026-04-20,2026-04-20,0,ui
 94,fix(ci): create local main ref so buf breaking actually finds it,MERGED,1,2026-04-20,2026-04-20,0,ci

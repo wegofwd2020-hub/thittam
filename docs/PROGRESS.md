@@ -1,6 +1,6 @@
 # Thittam — Progress Chart
 
-_Auto-generated 2026-04-21T04:52:34+00:00. Regenerated nightly at 21:00 EST._
+_Auto-generated 2026-04-22T04:50:44+00:00. Regenerated nightly at 21:00 EST._
 
 Features are GitHub issues/PRs from [`wegofwd2020-hub/thittam`](https://github.com/wegofwd2020-hub/thittam). Areas are conventional-commit scopes. Script: `scripts/generate_progress.py`.
 
@@ -20,8 +20,10 @@ gantt
     chaos              :active, s_chaos, 2026-04-11, 2026-04-12
     ci                 :active, s_ci, 2026-04-10, 2026-04-20
     cli                :active, s_cli, 2026-04-04, 2026-04-05
+    commands           :active, s_commands, 2026-04-21, 2026-04-22
     coverage           :active, s_coverage, 2026-04-10, 2026-04-13
     database           :active, s_database, 2026-04-04, 2026-04-05
+    demo               :active, s_demo, 2026-04-21, 2026-04-22
     deps               :active, s_deps, 2026-04-13, 2026-04-14
     dev                :active, s_dev, 2026-04-13, 2026-04-14
     dev-start          :active, s_dev_start, 2026-04-13, 2026-04-14
@@ -31,7 +33,7 @@ gantt
     events             :active, s_events, 2026-04-11, 2026-04-12
     frontend           :active, s_frontend, 2026-04-04, 2026-04-11
     glossary           :active, s_glossary, 2026-04-20, 2026-04-21
-    iam                :active, s_iam, 2026-04-04, 2026-04-14
+    iam                :active, s_iam, 2026-04-04, 2026-04-21
     iam-gateway        :active, s_iam_gateway, 2026-04-13, 2026-04-14
     iam-handler        :active, s_iam_handler, 2026-04-13, 2026-04-14
     infra              :active, s_infra, 2026-04-10, 2026-04-13
@@ -66,29 +68,31 @@ gantt
 
 | Scope | Commits | First | Last | Issues touched |
 |---|---|---|---|---|
-| `iam` | 14 | 2026-04-04 | 2026-04-14 | 8 |
+| `iam` | 16 | 2026-04-04 | 2026-04-21 | 11 |
 | `infra` | 14 | 2026-04-10 | 2026-04-13 | 4 |
 | `frontend` | 14 | 2026-04-04 | 2026-04-11 | 11 |
 | `ui` | 5 | 2026-04-14 | 2026-04-20 | 4 |
 | `ci` | 5 | 2026-04-10 | 2026-04-20 | 3 |
 | `vertical` | 5 | 2026-04-03 | 2026-04-10 | 3 |
+| `progress` | 4 | 2026-04-20 | 2026-04-21 | 0 |
 | `lint` | 4 | 2026-04-13 | 2026-04-13 | 2 |
 | `rbac` | 4 | 2026-04-13 | 2026-04-13 | 4 |
-| `progress` | 3 | 2026-04-20 | 2026-04-20 | 0 |
 | `seed` | 3 | 2026-04-14 | 2026-04-20 | 3 |
 | `web` | 3 | 2026-04-13 | 2026-04-13 | 1 |
 | `dev-start` | 3 | 2026-04-13 | 2026-04-13 | 0 |
 | `verify-rbac` | 3 | 2026-04-13 | 2026-04-13 | 0 |
 | `billing` | 3 | 2026-04-10 | 2026-04-12 | 1 |
+| `readme` | 2 | 2026-04-20 | 2026-04-21 | 1 |
 | `doc-drift` | 2 | 2026-04-13 | 2026-04-13 | 1 |
 | `coverage` | 2 | 2026-04-10 | 2026-04-13 | 1 |
 | `platform` | 2 | 2026-04-11 | 2026-04-12 | 1 |
 | `proto` | 2 | 2026-04-10 | 2026-04-11 | 1 |
 | `reporting` | 2 | 2026-04-04 | 2026-04-10 | 2 |
+| `demo` | 1 | 2026-04-21 | 2026-04-21 | 1 |
+| `commands` | 1 | 2026-04-21 | 2026-04-21 | 1 |
 | `glossary` | 1 | 2026-04-20 | 2026-04-20 | 0 |
 | `api-docs` | 1 | 2026-04-20 | 2026-04-20 | 0 |
 | `payments` | 1 | 2026-04-20 | 2026-04-20 | 2 |
-| `readme` | 1 | 2026-04-20 | 2026-04-20 | 1 |
 | `budget` | 1 | 2026-04-20 | 2026-04-20 | 1 |
 | `tooling` | 1 | 2026-04-20 | 2026-04-20 | 5 |
 | `nightly` | 1 | 2026-04-14 | 2026-04-14 | 1 |
@@ -145,10 +149,15 @@ gantt
 | [#20](https://github.com/wegofwd2020-hub/thittam/issues/20) | [P2] Document vertical plugin YAML schema (JSON Schema or protobuf) | CLOSED | 2 | 2026-04-04 | 2026-04-10 | vertical |
 | [#18](https://github.com/wegofwd2020-hub/thittam/issues/18) | [P1] Run critical-path E2E tests on every PR, not just nightly | CLOSED | 2 | 2026-04-04 | 2026-04-10 | ci, iam |
 | [#14](https://github.com/wegofwd2020-hub/thittam/issues/14) | [P0] Design and implement saga pattern for the 9-step tenant registrat | CLOSED | 2 | 2026-04-04 | 2026-04-10 | registration, reporting |
+| [#100](https://github.com/wegofwd2020-hub/thittam/issues/100) | feat(iam): tenant retention lifecycle sweeper (Stages 1+2 of #92) | MERGED | 1 | 2026-04-21 | 2026-04-21 | iam |
+| [#99](https://github.com/wegofwd2020-hub/thittam/issues/99) | feat(iam): UNIQUE constraint on tenants.name (case-insensitive) | MERGED | 1 | 2026-04-21 | 2026-04-21 | iam |
+| [#98](https://github.com/wegofwd2020-hub/thittam/issues/98) | docs(commands): add Mermaid example to /new-adr template | MERGED | 1 | 2026-04-21 | 2026-04-21 | commands |
+| [#97](https://github.com/wegofwd2020-hub/thittam/issues/97) | chore(demo): preflight smoke-test for local dev stack | MERGED | 1 | 2026-04-21 | 2026-04-21 | demo |
 | [#96](https://github.com/wegofwd2020-hub/thittam/issues/96) | feat(ui): per-production budget aggregation on detail page | MERGED | 1 | 2026-04-20 | 2026-04-20 | ui |
 | [#95](https://github.com/wegofwd2020-hub/thittam/issues/95) | fix(ui): replace invalid ringColor CSS prop with ring-white Tailwind c | MERGED | 1 | 2026-04-20 | 2026-04-20 | ui |
 | [#94](https://github.com/wegofwd2020-hub/thittam/issues/94) | fix(ci): create local main ref so buf breaking actually finds it | MERGED | 1 | 2026-04-20 | 2026-04-20 | ci |
 | [#93](https://github.com/wegofwd2020-hub/thittam/issues/93) | feat(project,ui): wire Phases + Crew tabs onto live API (Phase C part  | MERGED | 1 | 2026-04-20 | 2026-04-20 | — |
+| [#92](https://github.com/wegofwd2020-hub/thittam/issues/92) | feat(iam): scheduled tenant retention sweeper (suspended → deactivated | OPEN | 1 | 2026-04-21 | 2026-04-21 | iam |
 | [#88](https://github.com/wegofwd2020-hub/thittam/issues/88) | feat(seed): add seeds/template/new-tenant/ scaffold | MERGED | 1 | 2026-04-20 | 2026-04-20 | seed |
 | [#78](https://github.com/wegofwd2020-hub/thittam/issues/78) | feat(ui): wire productions pages onto live API (Phase C) | MERGED | 1 | 2026-04-20 | 2026-04-20 | ui |
 | [#77](https://github.com/wegofwd2020-hub/thittam/issues/77) | fix(ci): fetch full history for proto breaking-change job | MERGED | 1 | 2026-04-20 | 2026-04-20 | ci |
@@ -271,6 +280,12 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 - **Issues referenced (1):**
   - [#5](https://github.com/wegofwd2020-hub/thittam/issues/5) — feat(expense): Complete expense-tracking service — repository, gRPC wiring, main
 
+### `commands`
+
+- **Commits:** 1
+- **Issues referenced (1):**
+  - [#98](https://github.com/wegofwd2020-hub/thittam/issues/98) — docs(commands): add Mermaid example to /new-adr template
+
 ### `coverage`
 
 - **Commits:** 2
@@ -280,6 +295,12 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 ### `database`
 
 - **Commits:** 1
+
+### `demo`
+
+- **Commits:** 1
+- **Issues referenced (1):**
+  - [#97](https://github.com/wegofwd2020-hub/thittam/issues/97) — chore(demo): preflight smoke-test for local dev stack
 
 ### `deps`
 
@@ -343,8 +364,8 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `iam`
 
-- **Commits:** 14
-- **Issues referenced (8):**
+- **Commits:** 16
+- **Issues referenced (11):**
   - [#3](https://github.com/wegofwd2020-hub/thittam/issues/3) — feat(project): Complete project-management service — repository, gRPC wiring, ma
   - [#16](https://github.com/wegofwd2020-hub/thittam/issues/16) — [P1] Add CI test suite for vertical plugin YAML schema validation
   - [#18](https://github.com/wegofwd2020-hub/thittam/issues/18) — [P1] Run critical-path E2E tests on every PR, not just nightly
@@ -353,6 +374,9 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
   - [#43](https://github.com/wegofwd2020-hub/thittam/issues/43) — feat(services): wire project_id into permission checks across project-scoped ser
   - [#60](https://github.com/wegofwd2020-hub/thittam/issues/60) — feat(api): REST→gRPC bridge — grpc-gateway in services + Kong in local stack
   - [#61](https://github.com/wegofwd2020-hub/thittam/issues/61) — feat(onboarding): capture company address + country-driven primary currency
+  - [#92](https://github.com/wegofwd2020-hub/thittam/issues/92) — feat(iam): scheduled tenant retention sweeper (suspended → deactivated → purge)
+  - [#99](https://github.com/wegofwd2020-hub/thittam/issues/99) — feat(iam): UNIQUE constraint on tenants.name (case-insensitive)
+  - [#100](https://github.com/wegofwd2020-hub/thittam/issues/100) — feat(iam): tenant retention lifecycle sweeper (Stages 1+2 of #92)
 
 ### `iam-gateway`
 
@@ -417,7 +441,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `progress`
 
-- **Commits:** 3
+- **Commits:** 4
 
 ### `project`
 
@@ -442,7 +466,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `readme`
 
-- **Commits:** 1
+- **Commits:** 2
 - **Issues referenced (1):**
   - [#68](https://github.com/wegofwd2020-hub/thittam/issues/68) — docs(readme): replace upstream golang-migrate README with Thittam overview
 
