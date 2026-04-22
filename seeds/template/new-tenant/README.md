@@ -8,7 +8,7 @@ and nothing more.
 > **Not for production tenants.** Seed SQL bypasses the `CreateTenant`
 > RPC's validation (plan enum, country code, role seeding logic) and
 > duplicates behaviour the service already performs. For real tenants
-> follow `thittam_docs/docs/operations/tenant-onboarding.md` §2 (gRPC
+> follow `thittam_docs/docs/developers/operations/tenant-onboarding.md` §2 (gRPC
 > path). Use this template for development, reviewer environments, and
 > demo tenants only.
 
@@ -69,7 +69,7 @@ in. Here is the full list with guidance:
   Reuse the same UUID everywhere the files reference `<TENANT_UUID>`.
 - `<TENANT_NAME>` — legal company name, e.g. `Acme Construction LLC`.
   **Must be unique across the platform** — per the uniqueness policy in
-  `thittam_docs/docs/operations/tenant-onboarding.md` §1.1a. Since
+  `thittam_docs/docs/developers/operations/tenant-onboarding.md` §1.1a. Since
   migration 015 a case-insensitive UNIQUE index
   (`tenants_name_ci_unique`) enforces this at the DB. The precheck is
   still worth running — it surfaces the collision before the seed

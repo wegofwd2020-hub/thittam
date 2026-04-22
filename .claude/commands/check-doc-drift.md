@@ -32,6 +32,6 @@ Plain markdown table:
 
 | Severity | Doc file:line | Identifier | Action |
 |---|---|---|---|
-| must | docs/api/budgets.md:42 | `SubmitBudgetRequest` | renamed to `CreateBudgetRequest` — update doc |
+| must | docs/developers/api/budgets.md:42 | `SubmitBudgetRequest` | renamed to `CreateBudgetRequest` — update doc |
 
 End with a one-line summary: `N must-fix, M should-fix, K consider`.

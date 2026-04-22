@@ -43,7 +43,7 @@ groups:
             panic in application startup code.
             Check: `kubectl describe pod {{ $labels.pod }} -n {{ $labels.namespace }}`
             and:   `kubectl logs {{ $labels.pod }} -n {{ $labels.namespace }} --previous`
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#pod-crash-loop"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#pod-crash-loop"
 
       # ── OOMKill ─────────────────────────────────────────────────────────
       # Any OOMKill requires immediate attention — a container hitting its
@@ -69,7 +69,7 @@ groups:
             investigate a memory leak with a heap profile.
             Check recent resource consumption:
             `kubectl top pods -n {{ $labels.namespace }} --sort-by=memory`
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#oom-kill"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#oom-kill"
 
   # ── Persistent volume capacity ────────────────────────────────────────────
   #
@@ -107,7 +107,7 @@ groups:
             writes will begin failing.
             Resize: `kubectl patch pvc {{ $labels.persistentvolumeclaim }} -n {{ $labels.namespace }}
             -p '{"spec":{"resources":{"requests":{"storage":"<new-size>"}}}}'`
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#pvc-full"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#pvc-full"
 
       # ── PVC usage critical ───────────────────────────────────────────────
       # At 95% the volume is about to fill. For PostgreSQL this means
@@ -133,7 +133,7 @@ groups:
             imminently. For PostgreSQL PVCs: new transactions will fail and the
             database may need to be put in read-only mode to allow a resize.
             Expand immediately.
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#pvc-full"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#pvc-full"
 
   # ── Redis memory ─────────────────────────────────────────────────────────
   #
@@ -172,7 +172,7 @@ groups:
             entries. This increases DB load as cache misses route to PostgreSQL.
             Consider increasing maxmemory in the Redis config or reducing TTLs
             for lower-priority cache keys (e.g. reporting data vs. vertical configs).
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#redis-memory"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#redis-memory"
 
       # ── Redis eviction rate ──────────────────────────────────────────────
       # Non-zero evictions mean cache entries are being forcibly removed
@@ -197,7 +197,7 @@ groups:
             An evicted vertical config will be reloaded from PostgreSQL on the
             next request, but an evicted session token will cause a 401.
             Reduce maxmemory pressure or increase the Redis memory limit.
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#redis-memory"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#redis-memory"
 
       # ── Redis unreachable ────────────────────────────────────────────────
       - alert: RedisDown
@@ -217,4 +217,4 @@ groups:
             All services perform a Redis health check in /readyz — they will
             report degraded but continue serving from DB.
             Check: `docker compose -f infra/local/docker-compose.infra.yml ps redis`
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#redis-down"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#redis-down"

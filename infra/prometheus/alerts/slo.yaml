@@ -50,7 +50,7 @@ groups:
             {{ $value | humanizePercentage }} over the last 5 minutes.
             Investigate service logs for upstream errors, dependency failures,
             or validation regressions. Check /readyz for dependency health.
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#high-grpc-error-rate"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#high-grpc-error-rate"
 
       # ── gRPC error rate: critical ─────────────────────────────────────────
       # At 5%+ error rate the service is substantially degraded. Tenants will
@@ -83,7 +83,7 @@ groups:
             This indicates a significant production incident. Tenants will be
             experiencing failures for operations handled by this service.
             Escalate immediately per the incident severity matrix (P1/P0).
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#high-grpc-error-rate"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#high-grpc-error-rate"
 
   - name: thittam_slo_latency
     interval: 30s
@@ -114,7 +114,7 @@ groups:
             Common causes: slow DB queries (check pg_stat_activity), Redis cache
             misses, or a saturated connection pool.
             Run `make logs svc={{ $labels.job }}` for recent log context.
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#high-grpc-latency"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#high-grpc-latency"
 
       # ── gRPC p99 latency: critical ────────────────────────────────────────
       # 2 s p99 means most complex operations (multi-step transactions,
@@ -139,7 +139,7 @@ groups:
             {{ $value | humanizeDuration }}. At this latency clients are likely
             experiencing timeouts. Check for DB lock contention, a missing
             index on a hot query, or a downstream service cascade.
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#high-grpc-latency"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#high-grpc-latency"
 
   - name: thittam_slo_availability
     interval: 30s
@@ -164,7 +164,7 @@ groups:
             or the pod was evicted.
             Check `kubectl get pods -n thittam -l app={{ $labels.job }}` and
             `kubectl logs -n thittam -l app={{ $labels.job }} --tail=50`.
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#service-down"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#service-down"
 
       # ── IAM / general-ledger tighter SLO: error rate warning at 0.5% ─────
       # These services are on the critical financial path. A lower warning
@@ -194,4 +194,4 @@ groups:
             An error rate above 0.5% on IAM means authentication or RBAC checks
             are failing; on general-ledger it means double-entry postings may
             be incomplete. Investigate immediately.
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#financial-service-errors"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#financial-service-errors"

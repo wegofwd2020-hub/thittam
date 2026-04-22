@@ -46,7 +46,7 @@ groups:
             DB write latency has spiked, or the consumer is stuck waiting on
             an upstream dependency.
             Check `kubectl logs -n thittam -l app=<consumer-service> --tail=100`.
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#nats-consumer-lag"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#nats-consumer-lag"
 
       # ── Consumer lag: critical ───────────────────────────────────────────
       # 10,000 pending messages means the consumer is severely behind.
@@ -72,7 +72,7 @@ groups:
             and dashboards may be stale or incorrect.
             Escalate as P1. Consider pausing writes if the lag is not
             recovering to prevent unbounded queue growth.
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#nats-consumer-lag"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#nats-consumer-lag"
 
       # ── NATS server unreachable ──────────────────────────────────────────
       # If Prometheus cannot scrape the NATS exporter the JetStream state
@@ -94,4 +94,4 @@ groups:
             unreachable.
             Without NATS metrics, DLQ and consumer lag alerts are also blind.
             Check `docker compose -f infra/local/docker-compose.infra.yml ps nats`.
-          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/runbook.md#nats-down"
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#nats-down"

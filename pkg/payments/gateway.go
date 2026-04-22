@@ -2,7 +2,7 @@
 // (Intent) and making (Payout) payments through Payment Service Providers
 // like Stripe and Razorpay.
 //
-// See ADR-015 (docs/adr/ADR-015-payment-gateway-abstraction.md in the
+// See ADR-015 (docs/developers/adr/ADR-015-payment-gateway-abstraction.md in the
 // thittam_docs repo) for the architecture rationale. Key points:
 //
 //   - One Gateway interface; each PSP is a separate driver satisfying it.

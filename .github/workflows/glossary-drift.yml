@@ -50,7 +50,7 @@ jobs:
         run: |
           set +e
           python3 app/scripts/check_glossary_drift.py \
-            --glossary docs/docs/architecture/glossary.md \
+            --glossary docs/docs/developers/architecture/glossary.md \
             --docs docs \
             --out glossary-drift-report.md \
             --project "Thittam"

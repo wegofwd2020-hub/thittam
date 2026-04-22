@@ -86,7 +86,7 @@ done
 ```
 
 For detailed testing instructions see:
-[`thittam_docs/docs/operations/local-testing-guide.md`](https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/operations/local-testing-guide.md)
+[`thittam_docs/docs/developers/operations/local-testing-guide.md`](https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/local-testing-guide.md)
 
 ## UUID Convention
 

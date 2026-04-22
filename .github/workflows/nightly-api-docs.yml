@@ -2,7 +2,7 @@ name: Nightly API Docs Regeneration
 
 # Regenerates the proto reference from all services' .proto files via
 # buf.gen.docs.yaml (using buf.build/community/pseudomuto-doc) and pushes
-# the output to thittam_docs/docs/api/generated/PROTO_REFERENCE.md.
+# the output to thittam_docs/docs/developers/api/generated/PROTO_REFERENCE.md.
 
 on:
   schedule:
@@ -54,8 +54,8 @@ jobs:
       - name: Copy into docs repo
         if: env.DOCS_WRITE_TOKEN_PRESENT == 'true'
         run: |
-          mkdir -p docs/docs/api/generated
-          cp app/generated-docs/PROTO_REFERENCE.md docs/docs/api/generated/PROTO_REFERENCE.md
+          mkdir -p docs/docs/developers/api/generated
+          cp app/generated-docs/PROTO_REFERENCE.md docs/docs/developers/api/generated/PROTO_REFERENCE.md
 
       - name: Commit and push to docs repo if changed
         if: env.DOCS_WRITE_TOKEN_PRESENT == 'true'
@@ -63,7 +63,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/api/generated/PROTO_REFERENCE.md
+          git add docs/developers/api/generated/PROTO_REFERENCE.md
           if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 0

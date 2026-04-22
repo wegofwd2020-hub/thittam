@@ -31,7 +31,7 @@ If SQL queries are needed, add a `db/` subdirectory with sqlc query files — mi
 ## Cross-cutting
 
 - Register in `cmd/<service>/main.go` with the standard observability stack (`/healthz`, `/readyz`, `/metrics`).
-- Add to the service table in root `CLAUDE.md` and to the service table in `thittam_docs/docs/services/`.
+- Add to the service table in root `CLAUDE.md` and to the service table in `thittam_docs/docs/developers/services/`.
 - Add proto under `proto/thittam/$ARGUMENTS/v1/` — then suggest running `/new-proto $ARGUMENTS` next.
 
 ## Output

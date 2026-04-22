@@ -12,7 +12,7 @@ import (
 )
 
 // Lifecycle timings driven by the retention policy in
-// thittam_docs/docs/operations/tenant-onboarding.md §1.3a (#92).
+// thittam_docs/docs/developers/operations/tenant-onboarding.md §1.3a (#92).
 const (
 	// SuspensionGracePeriod is how long a tenant stays in 'suspended'
 	// (no access, full data retained) before the sweeper transitions it

@@ -120,6 +120,6 @@ Stored under `.claude/commands/`:
 | `/new-service <name>` | Scaffold the 6-file service layout |
 | `/new-vertical <name>` | YAML config + icon set + seed for a new industry vertical |
 | `/new-proto <service>` | Add proto + regenerate + scaffold handler stub |
-| `/new-adr <title>` | New ADR in `../thittam_docs/docs/adr/` with auto-incremented number |
+| `/new-adr <title>` | New ADR in `../thittam_docs/docs/developers/adr/` with auto-incremented number |
 | `/check-doc-drift` | Run `tools/check-doc-drift` against the docs repo |
 | `/audit-money` | Find Rule #1 violations (float in monetary context) |

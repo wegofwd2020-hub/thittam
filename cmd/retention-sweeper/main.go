@@ -1,7 +1,7 @@
 // retention-sweeper is the batch CLI entry point for the tenant retention
 // state machine introduced in #92. It runs as a Kubernetes CronJob (daily)
 // and advances tenants through the lifecycle defined in
-// thittam_docs/docs/operations/tenant-onboarding.md §1.3a:
+// thittam_docs/docs/developers/operations/tenant-onboarding.md §1.3a:
 //
 //	suspended    → grace           after 30 days
 //	grace        → deactivated     after 90 days (measured from suspended_at)

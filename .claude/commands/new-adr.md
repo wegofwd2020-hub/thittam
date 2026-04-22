@@ -2,15 +2,15 @@
 description: Create a new Architecture Decision Record in thittam_docs with auto-incremented number
 ---
 
-Create a new ADR in the sibling docs repo (`../thittam_docs/docs/adr/`).
+Create a new ADR in the sibling docs repo (`../thittam_docs/docs/developers/adr/`).
 
 ADR title: **$ARGUMENTS**
 
 ## Steps
 
-1. List existing ADRs: `ls ../thittam_docs/docs/adr/ | sort` to find the highest existing `ADR-NNN` number. Use `highest + 1` — do not fill gaps in the numbering (gaps are intentional, usually withdrawn proposals).
+1. List existing ADRs: `ls ../thittam_docs/docs/developers/adr/ | sort` to find the highest existing `ADR-NNN` number. Use `highest + 1` — do not fill gaps in the numbering (gaps are intentional, usually withdrawn proposals).
 2. Generate a slug from the title: lowercase, hyphen-separated, 3-6 words. Strip "the", "a", articles.
-3. Create `../thittam_docs/docs/adr/ADR-NNN-<slug>.md` with this template:
+3. Create `../thittam_docs/docs/developers/adr/ADR-NNN-<slug>.md` with this template:
 
    ```markdown
    # ADR-NNN — <Title>
@@ -70,7 +70,7 @@ ADR title: **$ARGUMENTS**
    <Optional — links to tracking issues, migration plans, rollout order.>
    ```
 
-4. **Do not** auto-generate an index entry — there is no ADR index file yet. If one exists in a future run (check for `index.md` or `README.md` in `docs/adr/`), update it.
+4. **Do not** auto-generate an index entry — there is no ADR index file yet. If one exists in a future run (check for `index.md` or `README.md` in `docs/developers/adr/`), update it.
 
 5. Show me the draft before I commit. The draft should be substantive — if you don't know the context or alternatives, ask me rather than hand-waving.
 

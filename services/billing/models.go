@@ -94,7 +94,7 @@ type PlanLimits struct {
 }
 
 // PlanLimitsByName is the authoritative map of plan → resource limits.
-// Amounts must match the pricing table in docs/services/billing.md.
+// Amounts must match the pricing table in docs/developers/services/billing.md.
 var PlanLimitsByName = map[string]PlanLimits{
 	"starter":      {MaxActiveProductions: 2, MaxUsers: 10, MaxStorageGB: 5},
 	"professional": {MaxActiveProductions: 10, MaxUsers: 50, MaxStorageGB: 50},

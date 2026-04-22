@@ -229,6 +229,6 @@ To change the delivery policy, update `config.go` and re-run `provision.sh`.
 ## Linked diagrams
 
 - **Event Schemas diagram** (Architecture Diagram #10): see
-  `thittam_docs/docs/architecture/10-event-schemas.md`
+  `thittam_docs/docs/developers/architecture/10-event-schemas.md`
 - **Sequence Diagrams** (Architecture Diagram #7): the expense approval flow
   shows where `thittam.expense.approved` is published and consumed.

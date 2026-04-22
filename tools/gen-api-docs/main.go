@@ -5,7 +5,7 @@
 //
 // Usage (from thittam repo root):
 //
-//	go run ./tools/gen-api-docs -proto proto -out ../thittam_docs/docs/api/generated
+//	go run ./tools/gen-api-docs -proto proto -out ../thittam_docs/docs/developers/api/generated
 //
 // Flags:
 //

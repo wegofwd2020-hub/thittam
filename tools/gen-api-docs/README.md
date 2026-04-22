@@ -16,7 +16,7 @@ that workflow opens a PR against `thittam_docs` when anything drifts.
 # From thittam repo root, writing into the sibling thittam_docs checkout:
 go run ./tools/gen-api-docs \
   -proto proto \
-  -out ../thittam_docs/docs/api/generated \
+  -out ../thittam_docs/docs/developers/api/generated \
   -source-ref "$(git rev-parse --short HEAD)"
 ```
 
