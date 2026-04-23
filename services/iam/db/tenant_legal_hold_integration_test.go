@@ -159,6 +159,33 @@ func TestClearTenantLegalHold_RestoresSweeperListing(t *testing.T) {
 	assert.True(t, containsTenant(rows, id), "cleared tenant must be listable for lifecycle again")
 }
 
+func TestCountTenantsOnHold(t *testing.T) {
+	// Baseline 0, then one held tenant bumps the count to 1.
+	// Exercises the sweeper's per-run gauge query (#92 Stage 5).
+	pool := testdb.Open(t)
+	tx := testdb.NewTx(t, pool)
+	q := iamdb.New(tx)
+
+	// Baseline: transaction is fresh + rollback-isolated, so any
+	// pre-existing held tenants in the DB are invisible here.
+	n, err := q.CountTenantsOnHold(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), n, "baseline should be zero inside a fresh tx")
+
+	reason := "SEC litigation"
+	insertSuspendedTenant(t, tx, "Held Studios", nil, &reason)
+
+	n, err = q.CountTenantsOnHold(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), n)
+
+	// A second tenant with no hold does not bump the count.
+	insertSuspendedTenant(t, tx, "Free Studios", nil, nil)
+	n, err = q.CountTenantsOnHold(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), n)
+}
+
 func TestClearTenantLegalHold_NoHold_Idempotent(t *testing.T) {
 	// Clearing a tenant that has no hold succeeds silently and returns
 	// the row unchanged — the service layer's "quiet on no-op" audit

@@ -12,6 +12,7 @@
 /iam
 /notifications
 /check-doc-drift
+/retention-sweeper
 
 # IDE
 .idea/

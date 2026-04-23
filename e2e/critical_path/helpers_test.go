@@ -194,6 +194,15 @@ func (r *iamRepo) ClearTenantLegalHold(_ context.Context, id uuid.UUID) (*iam.Te
 	t.FreezeReason = nil
 	return t, nil
 }
+func (r *iamRepo) CountTenantsOnHold(_ context.Context) (int64, error) {
+	var n int64
+	for _, t := range r.tenants {
+		if t.FreezeReason != nil {
+			n++
+		}
+	}
+	return n, nil
+}
 func (r *iamRepo) UpdateTenantAddress(_ context.Context, t *iam.Tenant) (*iam.Tenant, error) {
 	existing, ok := r.tenants[t.ID]
 	if !ok {

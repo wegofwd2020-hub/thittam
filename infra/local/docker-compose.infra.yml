@@ -40,6 +40,29 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Pushgateway accepts pushes from short-lived batch jobs (#92 Stage 5)
+  # — the retention-sweeper CronJob pushes its metrics here at end of
+  # run and Prometheus scrapes Pushgateway on the normal interval.
+  # Default retention: metrics persist until overwritten by a newer
+  # push with the same {job, instance} grouping.
+  pushgateway:
+    image: prom/pushgateway:v1.9.0
+    ports:
+      # Host port 9391 avoids collision with budget-planning's /metrics
+      # on :9091 (see prometheus.yml scrape configs). Inside Docker,
+      # Pushgateway still listens on 9091 — Prometheus scrapes it via
+      # `pushgateway:9091` on the compose network.
+      - "9391:9091"
+    # Pushgateway is intentionally ephemeral: we don't mount a volume,
+    # so a restart clears all pushed metrics. That's fine — the
+    # sweeper re-pushes on every run, and Prometheus has the historical
+    # time series already.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9091/-/healthy | grep -q OK"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     ports:

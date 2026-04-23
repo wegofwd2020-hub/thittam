@@ -44,10 +44,10 @@ spec:
             app.kubernetes.io/name: retention-sweeper
             app.kubernetes.io/part-of: thittam
           annotations:
-            # Short-lived pods won't survive a normal scrape interval,
-            # so metrics are surfaced via structured slog (see
-            # retention_sweep_* fields). Revisit once a Pushgateway or
-            # equivalent is available in-cluster.
+            # Short-lived pod — Prometheus scraping is handled via
+            # Pushgateway instead (#92 Stage 5). The sweeper pushes
+            # metrics at end of run to the URL in PUSHGATEWAY_URL
+            # below, which Prometheus scrapes on its normal interval.
             prometheus.io/scrape: "false"
         spec:
           serviceAccountName: retention-sweeper
@@ -71,6 +71,23 @@ spec:
                     secretKeyRef:
                       name: thittam-db
                       key: url
+                # POD_NAME populates the pushgateway `instance` label
+                # so concurrent sweeper pods (if ever scaled out)
+                # don't overwrite each other's pushes.
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                # PUSHGATEWAY_URL — unset means "skip push" (useful
+                # during cluster bring-up before Pushgateway is deployed).
+                # Set via the common config map so all batch jobs share
+                # the same target.
+                - name: PUSHGATEWAY_URL
+                  valueFrom:
+                    configMapKeyRef:
+                      name: thittam-common
+                      key: pushgateway_url
+                      optional: true
               envFrom:
                 - configMapRef:
                     name: thittam-common

@@ -44,6 +44,14 @@ UPDATE tenants SET
 WHERE id = @id
 RETURNING *;
 
+-- name: CountTenantsOnHold :one
+-- Counts tenants currently on legal hold (#92 Stage 5). Used by the
+-- retention sweeper to export a thittam_retention_tenants_on_hold
+-- gauge per run. Counts ALL tenants with freeze_reason set,
+-- regardless of status — an 'active' tenant under a precautionary
+-- hold is still a held tenant.
+SELECT COUNT(*) FROM tenants WHERE freeze_reason IS NOT NULL;
+
 -- name: ClearTenantLegalHold :one
 -- Unconditionally clears the two legal-hold columns on a tenant,
 -- releasing the retention-sweeper pause applied via SuspendTenant

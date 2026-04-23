@@ -426,6 +426,17 @@ func (p *Postgres) UpdateTenantStatus(
 	return nil
 }
 
+// CountTenantsOnHold returns the number of tenants whose
+// freeze_reason is set (#92 Stage 5). Cheap even without an index
+// because the held set is expected to be tiny.
+func (p *Postgres) CountTenantsOnHold(ctx context.Context) (int64, error) {
+	n, err := p.q.CountTenantsOnHold(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("iam/db: count tenants on hold: %w", err)
+	}
+	return n, nil
+}
+
 // ClearTenantLegalHold resets hold_until and freeze_reason to NULL
 // and returns the updated tenant (#92 Stage 4 pair). Idempotent —
 // the UPDATE runs unconditionally, so a tenant with no active hold

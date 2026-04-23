@@ -44,6 +44,7 @@ type mockRepo struct {
 	getTenantFn                   func(ctx context.Context, id uuid.UUID) (*Tenant, error)
 	updateTenantStatusFn          func(ctx context.Context, id uuid.UUID, status string, holdUntil *time.Time, freezeReason *string) error
 	clearTenantLegalHoldFn        func(ctx context.Context, id uuid.UUID) (*Tenant, error)
+	countTenantsOnHoldFn          func(ctx context.Context) (int64, error)
 	updateTenantAddressFn         func(ctx context.Context, t *Tenant) (*Tenant, error)
 	transitionTenantStatusFn      func(ctx context.Context, id uuid.UUID, from, to string) (*Tenant, bool, error)
 	listTenantsDueForLifecycleFn  func(ctx context.Context, now time.Time, limit int) ([]*Tenant, error)
@@ -153,6 +154,12 @@ func (m *mockRepo) ClearTenantLegalHold(ctx context.Context, id uuid.UUID) (*Ten
 		return m.clearTenantLegalHoldFn(ctx, id)
 	}
 	return &Tenant{ID: id, Status: TenantStatusSuspended}, nil
+}
+func (m *mockRepo) CountTenantsOnHold(ctx context.Context) (int64, error) {
+	if m.countTenantsOnHoldFn != nil {
+		return m.countTenantsOnHoldFn(ctx)
+	}
+	return 0, nil
 }
 func (m *mockRepo) UpdateTenantAddress(ctx context.Context, t *Tenant) (*Tenant, error) {
 	if m.updateTenantAddressFn != nil {

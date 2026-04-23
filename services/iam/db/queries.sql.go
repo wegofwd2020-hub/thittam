@@ -89,6 +89,22 @@ func (q *Queries) ClearTenantLegalHold(ctx context.Context, id uuid.UUID) (Tenan
 	return i, err
 }
 
+const countTenantsOnHold = `-- name: CountTenantsOnHold :one
+SELECT COUNT(*) FROM tenants WHERE freeze_reason IS NOT NULL
+`
+
+// Counts tenants currently on legal hold (#92 Stage 5). Used by the
+// retention sweeper to export a thittam_retention_tenants_on_hold
+// gauge per run. Counts ALL tenants with freeze_reason set,
+// regardless of status — an 'active' tenant under a precautionary
+// hold is still a held tenant.
+func (q *Queries) CountTenantsOnHold(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countTenantsOnHold)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createInvitation = `-- name: CreateInvitation :one
 INSERT INTO invitations (id, tenant_id, email, invited_by, token, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6)

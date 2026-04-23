@@ -156,3 +156,17 @@ scrape_configs:
     relabel_configs:
       - target_label: service
         replacement: redis
+
+  # ── Pushgateway (batch jobs) ──────────────────────────────────────────────
+  # Short-lived batch jobs (the retention-sweeper CronJob, #92 Stage 5)
+  # push their metrics here at end of run. Prometheus scrapes Pushgateway
+  # on the normal 15s interval.
+  #
+  # honor_labels: true preserves the {job, instance} labels set by the
+  # pusher rather than overwriting them with Prometheus's own target
+  # labels. Without this, every metric would end up labeled as job=
+  # "pushgateway" and the per-batch-job time series would collapse.
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]

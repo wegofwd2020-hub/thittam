@@ -66,6 +66,11 @@ type Repository interface {
 	// Limit caps the number of rows; callers typically page by re-running
 	// with the same `now` until an empty batch is returned (#92).
 	ListTenantsDueForLifecycle(ctx context.Context, now time.Time, limit int) ([]*Tenant, error)
+	// CountTenantsOnHold returns the number of tenants whose
+	// freeze_reason is set — i.e. currently on legal hold regardless
+	// of their lifecycle status. Used by the retention sweeper to
+	// export a gauge per run (#92 Stage 5).
+	CountTenantsOnHold(ctx context.Context) (int64, error)
 
 	// Roles
 	CreateRole(ctx context.Context, role *Role) error

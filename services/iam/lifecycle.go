@@ -141,6 +141,13 @@ func (s *Service) ListTenantsDueForLifecycle(
 	return s.repo.ListTenantsDueForLifecycle(ctx, now, limit)
 }
 
+// CountTenantsOnHold returns the number of tenants currently on
+// legal hold (freeze_reason IS NOT NULL, any status). The retention
+// sweeper calls this once per run to export a gauge (#92 Stage 5).
+func (s *Service) CountTenantsOnHold(ctx context.Context) (int64, error) {
+	return s.repo.CountTenantsOnHold(ctx)
+}
+
 // nextLifecycleStatus returns the status the tenant should move to
 // given `now`, or (_, false) when no transition is due. Pure function
 // of the tenant row + time — no side effects, trivially unit-testable.

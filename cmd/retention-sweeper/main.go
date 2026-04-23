@@ -20,8 +20,13 @@
 //   1 — configuration error (missing DATABASE_URL, bad flags)
 //   2 — unrecoverable runtime error (DB down, repeated transition failure)
 //
-// Metrics are emitted as structured slog lines so ops can build queries
-// against Loki without a Pushgateway (tracked for follow-up).
+// Metrics are emitted in two ways (#92 Stage 5):
+//   - Structured slog lines, for Loki-based queries and human-readable
+//     run summaries.
+//   - Prometheus metrics pushed to Pushgateway, for Grafana dashboards
+//     and alerting. Push target is controlled by the PUSHGATEWAY_URL
+//     environment variable; unset means "skip push" (local-dev runs
+//     don't need a Pushgateway deployed).
 package main
 
 import (
@@ -71,31 +76,59 @@ func main() {
 	repo := iamdb.NewPostgres(pool)
 	svc := iam.NewService(repo, nil, nil, nil, nil)
 
-	if err := runSweep(ctx, svc, logger, *batchSize, *maxBatches); err != nil {
+	metrics := newSweeperMetrics()
+	pushURL := os.Getenv("PUSHGATEWAY_URL")
+	instance := pushInstance()
+
+	err = runSweep(ctx, svc, logger, metrics, *batchSize, *maxBatches)
+
+	// Push metrics unconditionally — even on failure, so the error
+	// counter actually surfaces in Prometheus. A silent error-exit
+	// with no push is invisible on the dashboard.
+	pushMetrics(ctx, logger, pushURL, instance, metrics.registry)
+
+	if err != nil {
 		logger.Error("sweep failed", "error", err)
 		os.Exit(2)
 	}
 }
 
 // runSweep pages through tenants due for lifecycle transition and advances
-// each one. Summary metrics are logged at the end of the pass.
+// each one. Summary metrics are logged at the end of the pass and also
+// materialized on the Prometheus registry attached to `m` for push.
 func runSweep(
 	ctx context.Context,
 	svc *iam.Service,
 	logger *slog.Logger,
+	m *sweeperMetrics,
 	batchSize int,
 	maxBatches int,
 ) error {
 	now := time.Now().UTC()
 	start := time.Now()
 
-	transitions := map[string]int{} // from→to counter
+	transitions := map[string]int{} // from→to counter (for slog summary)
 	var seen, failed int
 	var oldestPending time.Duration
+
+	// Query the legal-hold gauge once at the start of the run. Cheap
+	// (indexed predicate on a tiny row set) and gives the dashboard a
+	// "tenants currently on hold" data point even on runs that had
+	// no other work to do.
+	if onHold, err := svc.CountTenantsOnHold(ctx); err != nil {
+		// Log and continue — the hold gauge is observability data, not
+		// a correctness dependency. A stale or missing value is better
+		// than refusing to run the sweep.
+		logger.Warn("count tenants on hold failed — gauge will stay 0", "error", err)
+	} else {
+		m.tenantsOnHold.Set(float64(onHold))
+	}
 
 	for batch := 0; batch < maxBatches; batch++ {
 		due, err := svc.ListTenantsDueForLifecycle(ctx, now, batchSize)
 		if err != nil {
+			m.runsTotal.WithLabelValues("error").Inc()
+			m.durationSeconds.Set(time.Since(start).Seconds())
 			return fmt.Errorf("list due tenants: %w", err)
 		}
 		if len(due) == 0 {
@@ -104,6 +137,7 @@ func runSweep(
 
 		for _, t := range due {
 			seen++
+			m.tenantsSeenTotal.Inc()
 			if age := pendingAge(t, now); age > oldestPending {
 				oldestPending = age
 			}
@@ -111,6 +145,14 @@ func runSweep(
 			trans, err := svc.AdvanceTenantLifecycle(ctx, t.ID, now)
 			if err != nil {
 				failed++
+				// Label failures by the status the tenant was in when the
+				// sweeper tried to advance it, and the status it would
+				// have moved to. Lets alerts target a specific transition.
+				if nextStatus, ok := nextStatusFor(t.Status); ok {
+					m.failuresTotal.WithLabelValues(t.Status, nextStatus).Inc()
+				} else {
+					m.failuresTotal.WithLabelValues(t.Status, "unknown").Inc()
+				}
 				logger.Error("advance lifecycle",
 					"tenant_id", t.ID,
 					"status", t.Status,
@@ -126,6 +168,7 @@ func runSweep(
 			}
 			key := trans.FromStatus + "→" + trans.ToStatus
 			transitions[key]++
+			m.transitionsTotal.WithLabelValues(trans.FromStatus, trans.ToStatus).Inc()
 			logger.Info("tenant advanced",
 				"tenant_id", trans.TenantID,
 				"tenant_name", trans.TenantName,
@@ -141,11 +184,15 @@ func runSweep(
 		}
 	}
 
+	duration := time.Since(start)
+	m.durationSeconds.Set(duration.Seconds())
+	m.oldestPendingSeconds.Set(oldestPending.Seconds())
+
 	// Summary metrics — structured so Loki/Grafana can extract them.
 	attrs := []any{
 		"retention_sweep_seen", seen,
 		"retention_sweep_failed", failed,
-		"retention_sweep_duration_ms", time.Since(start).Milliseconds(),
+		"retention_sweep_duration_ms", duration.Milliseconds(),
 		"retention_oldest_pending_seconds", int(oldestPending.Seconds()),
 	}
 	for key, n := range transitions {
@@ -154,9 +201,28 @@ func runSweep(
 	logger.Info("retention sweep complete", attrs...)
 
 	if failed > 0 {
+		m.runsTotal.WithLabelValues("error").Inc()
 		return errors.New("one or more tenants failed to advance (see earlier logs)")
 	}
+	m.runsTotal.WithLabelValues("success").Inc()
+	m.lastSuccessTimestamp.SetToCurrentTime()
 	return nil
+}
+
+// nextStatusFor maps a tenant's current lifecycle status to the status
+// it would transition to. Used only for labeling failures — so alerts
+// can say "grace→deactivated transitions are flaky". Returns ("", false)
+// for terminal or unexpected states.
+func nextStatusFor(from string) (string, bool) {
+	switch from {
+	case iam.TenantStatusSuspended:
+		return iam.TenantStatusGrace, true
+	case iam.TenantStatusGrace:
+		return iam.TenantStatusDeactivated, true
+	case iam.TenantStatusDeactivated:
+		return iam.TenantStatusPurgeEligible, true
+	}
+	return "", false
 }
 
 // pendingAge reports how overdue the tenant is for its next transition.
