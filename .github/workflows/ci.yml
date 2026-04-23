@@ -315,8 +315,13 @@ jobs:
         # on PR checkouts; `buf breaking ... --against '.git#branch=main'`
         # specifically resolves `refs/heads/main`, so without this step the
         # compare aborts with "couldn't find remote ref main" even after
-        # fetch-depth: 0. `-f` makes it a no-op on a push to main itself
-        # (where the ref already exists).
+        # fetch-depth: 0.
+        #
+        # Skip on push-to-main: checkout already has `main` checked out in
+        # the worktree, and `git branch -f` refuses to force-update a branch
+        # held by a worktree ("cannot force update the branch 'main' used
+        # by worktree").
+        if: github.event_name == 'pull_request'
         run: git branch -f main origin/main
 
       - name: Install buf
