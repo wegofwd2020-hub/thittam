@@ -11,6 +11,8 @@
 #     host.docker.internal to reach their /metrics ports (9090-9098).
 #   - extra_hosts adds host-gateway so Linux resolves host.docker.internal.
 #   - Open http://localhost:9300 for the Prometheus UI.
+#   - Open http://localhost:3130 for Grafana (admin/admin in dev).
+#   - Open http://localhost:9391 for Pushgateway (batch-job metrics).
 
 # Resolve host.docker.internal on Linux (macOS/Windows handle this natively).
 x-host-gateway: &host-gateway
@@ -45,6 +47,51 @@ services:
   # run and Prometheus scrapes Pushgateway on the normal interval.
   # Default retention: metrics persist until overwritten by a newer
   # push with the same {job, instance} grouping.
+  # Grafana renders the retention-sweeper dashboard (#92 Stage 5b) and
+  # any future dashboards (SLO, Redis, NATS). Datasource + dashboard
+  # provisioning is file-based so the config lives in-tree and the
+  # running container is stateless (restarting clears nothing operator
+  # would miss — all definitions are re-provisioned from the mounts).
+  grafana:
+    image: grafana/grafana:10.4.2
+    ports:
+      # Host port 3130 — Thittam's Next.js web app takes 3100, and
+      # StudyBuddy takes 3000. 3130 sits in Thittam's 3100-series
+      # (same mental model for operators) and the +30 offset is a
+      # soft hint back at Grafana's default :3000 for anyone
+      # debugging. Internal container port stays 3000.
+      - "3130:3000"
+    environment:
+      # Local dev only — suppress the first-login password prompt by
+      # pinning admin/admin. Obviously never replicate to prod, where
+      # Grafana should be behind the same SSO as the rest of the ops
+      # console.
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      # Disable signup and anonymous access — only the admin login works.
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Shorten log noise.
+      GF_LOG_LEVEL: warn
+    volumes:
+      # File-based provisioning: Grafana reads these directories at
+      # startup and on config reload.
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/etc/grafana/dashboards:ro
+      # Persist Grafana's own state (user prefs, API keys, alert-rule
+      # history). Dashboards are provisioned from disk so this volume
+      # does NOT hold dashboard JSON — editing a dashboard in the UI
+      # won't persist across a restart; edit the JSON file instead.
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q ok"]
+      interval: 10s
+      retries: 10
+    restart: unless-stopped
+
   pushgateway:
     image: prom/pushgateway:v1.9.0
     ports:
@@ -117,3 +164,4 @@ services:
 volumes:
   minio_data:
   prometheus_data:
+  grafana_data:

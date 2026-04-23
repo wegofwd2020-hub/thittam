@@ -1,0 +1,75 @@
+groups:
+  # ── Retention-sweeper alerts (#92 Stage 5) ───────────────────────────────
+  #
+  # The sweeper is a daily Kubernetes CronJob that advances tenants through
+  # the retention lifecycle (suspended → grace → deactivated → purge_eligible)
+  # per the policy in tenant-onboarding.md §1.3a. It's short-lived, so metrics
+  # arrive via Pushgateway rather than direct scrape; these alerts query
+  # against the pushgateway job (honor_labels: true in prometheus.yml means
+  # the pushed {job, instance} labels survive scraping).
+  #
+  # The `exported_job` re-label isn't in play here because the sweeper is the
+  # only batch-push producer so far — once a second batch job lands, we may
+  # need to scope these alerts to `{job="retention-sweeper"}` more tightly.
+
+  - name: thittam_retention_sweeper
+    interval: 30s
+    rules:
+
+      # ── Sweeper overdue ───────────────────────────────────────────────────
+      # Fires when the most recent successful sweep is more than 36 hours
+      # old. Schedule is 02:15 UTC daily, so a healthy system never exceeds
+      # ~24h + jitter. 36h gives one missed run of headroom before paging.
+      #
+      # `last_success_timestamp` stays pinned by Pushgateway between runs —
+      # a push gives Pushgateway a new value, and the scrape continues to
+      # surface the last pushed value on every interval until the next push
+      # overwrites it. That's the behavior this expression depends on.
+      - alert: RetentionSweeperOverdue
+        expr: |
+          (time() - thittam_retention_sweep_last_success_timestamp_seconds) > 36 * 3600
+        for: 1h
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Retention sweeper last succeeded {{ $value | humanizeDuration }} ago (> 36h)"
+          description: >
+            The retention-sweeper CronJob has not logged a successful run in
+            over 36 hours. The retention lifecycle (suspended → grace →
+            deactivated → purge_eligible) is paused until it resumes.
+            Compliance with the retention SLA in tenant-onboarding.md §1.3a
+            depends on daily progression.
+            Check `kubectl get cronjob -n thittam retention-sweeper` and the
+            most recent failed pod's logs.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/retention-sweeper.md#sweeper-overdue"
+
+      # ── Transition failures ───────────────────────────────────────────────
+      # Fires when any tenant's lifecycle transition returned an error in the
+      # last 2 hours. The `for: 30m` delay avoids paging on a single blip
+      # that the next daily run resolves; sustained failures indicate a real
+      # problem (DB schema drift, status-guard CHECK constraint broken,
+      # corrupt timestamp columns).
+      #
+      # Expression uses increase over 2h so a failure at 02:15 UTC still
+      # fires through the next 1h55m — long enough for the 30m `for` delay
+      # to elapse before the metric ages out of the window.
+      - alert: RetentionSweeperTransitionFailures
+        expr: |
+          sum by (from, to) (increase(thittam_retention_failures_total[2h])) > 0
+        for: 30m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Retention sweeper: {{ $value }} failure(s) on {{ $labels.from }} → {{ $labels.to }}"
+          description: >
+            The retention sweeper recorded {{ $value }} failed attempt(s) to
+            transition tenants from '{{ $labels.from }}' to '{{ $labels.to }}'
+            in the last 2 hours. Failures per-transition usually mean a
+            schema/CHECK-constraint mismatch, a broken audit write, or a
+            concurrent status update on the tenant row.
+            Inspect the sweeper's structured logs for the tenant_id that
+            failed and query the audit log for its most recent status_changed
+            events.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/retention-sweeper.md#transition-failures"

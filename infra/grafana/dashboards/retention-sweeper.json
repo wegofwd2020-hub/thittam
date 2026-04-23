@@ -1,0 +1,297 @@
+{
+  "uid": "thittam-retention-sweeper",
+  "title": "Retention Sweeper",
+  "tags": ["thittam", "iam", "retention", "issue-92"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Time since last successful sweep",
+      "description": "How long since thittam_retention_sweep_last_success_timestamp was last updated. Red when > 36h — daily cron should complete well inside that window.",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 5},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "time() - thittam_retention_sweep_last_success_timestamp_seconds",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 86400},
+              {"color": "red", "value": 129600}
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Tenants currently on legal hold",
+      "description": "thittam_retention_tenants_on_hold — tenants with freeze_reason set (any status). Queried once per sweep run.",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 5},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "thittam_retention_tenants_on_hold",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Oldest pending (overdue by)",
+      "description": "thittam_retention_oldest_pending_seconds — how overdue the oldest examined tenant was for its next transition at the end of the most recent sweep.",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 5},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "thittam_retention_oldest_pending_seconds",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 86400},
+              {"color": "red", "value": 604800}
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "background",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Last run duration",
+      "description": "thittam_retention_sweep_duration_seconds — wall-clock duration of the most recent sweep. A sustained climb indicates growing backlog.",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 5},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "thittam_retention_sweep_duration_seconds",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 300},
+              {"color": "red", "value": 1500}
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 5,
+      "type": "barchart",
+      "title": "Transitions in last 24h",
+      "description": "increase(thittam_retention_transitions_total[24h]) by from/to. One bar per transition type (suspended→grace, grace→deactivated, deactivated→purge_eligible).",
+      "gridPos": {"x": 0, "y": 5, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (from, to) (increase(thittam_retention_transitions_total[24h]))",
+          "refId": "A",
+          "legendFormat": "{{from}} → {{to}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "axisPlacement": "auto",
+            "orientation": "horizontal"
+          }
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "legend": {"displayMode": "hidden"}
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Tenants seen per sweep (7d)",
+      "description": "increase(thittam_retention_tenants_seen_total[1d]) — how many candidates the sweeper examined per daily run.",
+      "gridPos": {"x": 12, "y": 5, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "increase(thittam_retention_tenants_seen_total[1d])",
+          "refId": "A",
+          "legendFormat": "tenants seen (1d)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineInterpolation": "stepBefore"
+          }
+        }
+      },
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 7,
+      "type": "piechart",
+      "title": "Run outcomes (7d)",
+      "description": "increase(thittam_retention_sweep_runs_total[7d]) by outcome. All-green over the window means every daily run succeeded.",
+      "gridPos": {"x": 0, "y": 13, "w": 8, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (outcome) (increase(thittam_retention_sweep_runs_total[7d]))",
+          "refId": "A",
+          "legendFormat": "{{outcome}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [],
+          "custom": {
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false}
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "success"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "error"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+          }
+        ]
+      },
+      "options": {
+        "pieType": "donut",
+        "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]}
+      }
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Transition failures (7d)",
+      "description": "increase(thittam_retention_failures_total[7d]) broken out by from → to. A non-empty table is the trigger for deeper investigation.",
+      "gridPos": {"x": 8, "y": 13, "w": 16, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (from, to) (increase(thittam_retention_failures_total[7d]))",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "from": "From",
+              "to": "To",
+              "Value": "Failures (7d)"
+            },
+            "indexByName": {"from": 0, "to": 1, "Value": 2}
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"align": "left"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "red", "value": 1}
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Failures (7d)"},
+            "properties": [
+              {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      }
+    }
+  ],
+  "templating": {"list": []},
+  "annotations": {"list": []}
+}

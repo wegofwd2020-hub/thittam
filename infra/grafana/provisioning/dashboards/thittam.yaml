@@ -1,0 +1,20 @@
+# Grafana dashboard provisioning (#92 Stage 5b).
+#
+# Tells Grafana where to read dashboard JSON files. updateIntervalSeconds
+# sets how often Grafana re-scans the directory — useful in dev, where
+# editing a JSON file should surface in the UI within seconds. In prod,
+# dashboards ship immutable in the image and the reload is unnecessary.
+
+apiVersion: 1
+
+providers:
+  - name: thittam
+    orgId: 1
+    folder: Thittam
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false

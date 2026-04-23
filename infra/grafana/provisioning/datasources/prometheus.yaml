@@ -1,0 +1,23 @@
+# Grafana datasource provisioning (#92 Stage 5b).
+#
+# Points at the Prometheus instance in the same docker-compose network.
+# `prometheus:9090` is the Docker-internal address — operators who
+# connect directly to Prometheus from the host go through port 9300,
+# but Grafana shares the compose network with Prometheus so it uses
+# the internal port.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    # Pinned UID so dashboard JSON (`datasource.uid: prometheus`)
+    # resolves to this datasource across rebuilds. Without the pin,
+    # Grafana generates a random UID at first provisioning and
+    # dashboards shipped with `uid: prometheus` show "Datasource
+    # not found" errors.
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
