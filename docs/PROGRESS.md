@@ -1,6 +1,6 @@
 # Thittam — Progress Chart
 
-_Auto-generated 2026-04-22T04:50:44+00:00. Regenerated nightly at 21:00 EST._
+_Auto-generated 2026-04-23T04:54:34+00:00. Regenerated nightly at 21:00 EST._
 
 Features are GitHub issues/PRs from [`wegofwd2020-hub/thittam`](https://github.com/wegofwd2020-hub/thittam). Areas are conventional-commit scopes. Script: `scripts/generate_progress.py`.
 
@@ -11,6 +11,7 @@ gantt
     title Thittam — Activity Windows by Scope
     dateFormat YYYY-MM-DD
     axisFormat %Y-%m
+    api                :active, s_api, 2026-04-22, 2026-04-23
     api-docs           :active, s_api_docs, 2026-04-20, 2026-04-21
     auth               :active, s_auth, 2026-04-11, 2026-04-12
     backend            :active, s_backend, 2026-04-06, 2026-04-07
@@ -28,6 +29,7 @@ gantt
     dev                :active, s_dev, 2026-04-13, 2026-04-14
     dev-start          :active, s_dev_start, 2026-04-13, 2026-04-14
     doc-drift          :active, s_doc_drift, 2026-04-13, 2026-04-14
+    docs               :active, s_docs, 2026-04-22, 2026-04-23
     document           :active, s_document, 2026-04-11, 2026-04-12
     drift              :active, s_drift, 2026-04-11, 2026-04-12
     events             :active, s_events, 2026-04-11, 2026-04-12
@@ -44,7 +46,7 @@ gantt
     payments           :active, s_payments, 2026-04-20, 2026-04-21
     platform           :active, s_platform, 2026-04-11, 2026-04-12
     ports              :active, s_ports, 2026-04-13, 2026-04-14
-    progress           :active, s_progress, 2026-04-20, 2026-04-21
+    progress           :active, s_progress, 2026-04-20, 2026-04-22
     project            :active, s_project, 2026-04-13, 2026-04-14
     proto              :active, s_proto, 2026-04-10, 2026-04-11
     rbac               :active, s_rbac, 2026-04-13, 2026-04-14
@@ -71,10 +73,10 @@ gantt
 | `iam` | 16 | 2026-04-04 | 2026-04-21 | 11 |
 | `infra` | 14 | 2026-04-10 | 2026-04-13 | 4 |
 | `frontend` | 14 | 2026-04-04 | 2026-04-11 | 11 |
+| `progress` | 5 | 2026-04-20 | 2026-04-22 | 0 |
 | `ui` | 5 | 2026-04-14 | 2026-04-20 | 4 |
 | `ci` | 5 | 2026-04-10 | 2026-04-20 | 3 |
 | `vertical` | 5 | 2026-04-03 | 2026-04-10 | 3 |
-| `progress` | 4 | 2026-04-20 | 2026-04-21 | 0 |
 | `lint` | 4 | 2026-04-13 | 2026-04-13 | 2 |
 | `rbac` | 4 | 2026-04-13 | 2026-04-13 | 4 |
 | `seed` | 3 | 2026-04-14 | 2026-04-20 | 3 |
@@ -88,6 +90,8 @@ gantt
 | `platform` | 2 | 2026-04-11 | 2026-04-12 | 1 |
 | `proto` | 2 | 2026-04-10 | 2026-04-11 | 1 |
 | `reporting` | 2 | 2026-04-04 | 2026-04-10 | 2 |
+| `docs` | 1 | 2026-04-22 | 2026-04-22 | 0 |
+| `api` | 1 | 2026-04-22 | 2026-04-22 | 0 |
 | `demo` | 1 | 2026-04-21 | 2026-04-21 | 1 |
 | `commands` | 1 | 2026-04-21 | 2026-04-21 | 1 |
 | `glossary` | 1 | 2026-04-20 | 2026-04-20 | 0 |
@@ -230,6 +234,10 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ## Per-scope detail
 
+### `api`
+
+- **Commits:** 1
+
 ### `api-docs`
 
 - **Commits:** 1
@@ -323,6 +331,10 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 - **Commits:** 2
 - **Issues referenced (1):**
   - [#57](https://github.com/wegofwd2020-hub/thittam/issues/57) — ci(doc-drift): Documentation Drift Check fails to checkout thittam_docs (404)
+
+### `docs`
+
+- **Commits:** 1
 
 ### `document`
 
@@ -441,7 +453,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `progress`
 
-- **Commits:** 4
+- **Commits:** 5
 
 ### `project`
 
