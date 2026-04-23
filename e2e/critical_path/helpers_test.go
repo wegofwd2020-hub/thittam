@@ -168,12 +168,22 @@ func (r *iamRepo) GetTenant(_ context.Context, id uuid.UUID) (*iam.Tenant, error
 	}
 	return nil, iam.ErrTenantNotFound
 }
-func (r *iamRepo) UpdateTenantStatus(_ context.Context, id uuid.UUID, status string) error {
-	if t, ok := r.tenants[id]; ok {
-		t.Status = status
-		return nil
+func (r *iamRepo) UpdateTenantStatus(_ context.Context, id uuid.UUID, status string, holdUntil *time.Time, freezeReason *string) error {
+	t, ok := r.tenants[id]
+	if !ok {
+		return iam.ErrTenantNotFound
 	}
-	return iam.ErrTenantNotFound
+	t.Status = status
+	// Mirror the SQL COALESCE semantics: nil pointer preserves existing.
+	if holdUntil != nil {
+		v := *holdUntil
+		t.HoldUntil = &v
+	}
+	if freezeReason != nil {
+		v := *freezeReason
+		t.FreezeReason = &v
+	}
+	return nil
 }
 func (r *iamRepo) UpdateTenantAddress(_ context.Context, t *iam.Tenant) (*iam.Tenant, error) {
 	existing, ok := r.tenants[t.ID]

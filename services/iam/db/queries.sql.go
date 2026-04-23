@@ -128,7 +128,7 @@ INSERT INTO tenants (
     address_line1, address_line2, city, country_code, postal_code, primary_currency_code
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (slug) DO NOTHING
-RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
 `
 
 type CreateTenantParams struct {
@@ -179,6 +179,8 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		&i.PrimaryCurrencyCode,
 		&i.SuspendedAt,
 		&i.DeactivatedAt,
+		&i.HoldUntil,
+		&i.FreezeReason,
 	)
 	return i, err
 }
@@ -244,7 +246,7 @@ func (q *Queries) GetInvitationByToken(ctx context.Context, token string) (Invit
 }
 
 const getTenant = `-- name: GetTenant :one
-SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at FROM tenants WHERE id = $1
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason FROM tenants WHERE id = $1
 `
 
 func (q *Queries) GetTenant(ctx context.Context, id uuid.UUID) (Tenant, error) {
@@ -266,12 +268,14 @@ func (q *Queries) GetTenant(ctx context.Context, id uuid.UUID) (Tenant, error) {
 		&i.PrimaryCurrencyCode,
 		&i.SuspendedAt,
 		&i.DeactivatedAt,
+		&i.HoldUntil,
+		&i.FreezeReason,
 	)
 	return i, err
 }
 
 const getTenantBySlug = `-- name: GetTenantBySlug :one
-SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at FROM tenants WHERE slug = $1
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason FROM tenants WHERE slug = $1
 `
 
 func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, error) {
@@ -293,6 +297,8 @@ func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, err
 		&i.PrimaryCurrencyCode,
 		&i.SuspendedAt,
 		&i.DeactivatedAt,
+		&i.HoldUntil,
+		&i.FreezeReason,
 	)
 	return i, err
 }
@@ -371,23 +377,37 @@ func (q *Queries) ListRoles(ctx context.Context, tenantID uuid.UUID) ([]Role, er
 }
 
 const listTenantsDueForLifecycle = `-- name: ListTenantsDueForLifecycle :many
-SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at FROM tenants
- WHERE (status = 'suspended'   AND suspended_at   <= $1 - INTERVAL '30 days')
-    OR (status = 'grace'       AND suspended_at   <= $1 - INTERVAL '90 days')
-    OR (status = 'deactivated' AND deactivated_at <= $1 - INTERVAL '180 days')
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason FROM tenants
+ WHERE ((status = 'suspended'   AND suspended_at   <= $1::timestamptz - INTERVAL '30 days')
+     OR (status = 'grace'       AND suspended_at   <= $1::timestamptz - INTERVAL '90 days')
+     OR (status = 'deactivated' AND deactivated_at <= $1::timestamptz - INTERVAL '180 days'))
+   AND (freeze_reason IS NULL
+        OR (hold_until IS NOT NULL AND hold_until <= $1::timestamptz))
  ORDER BY COALESCE(deactivated_at, suspended_at) NULLS LAST
  LIMIT $2
 `
 
 type ListTenantsDueForLifecycleParams struct {
-	Column1 interface{} `json:"column_1"`
-	Limit   int32       `json:"limit"`
+	Column1 time.Time `json:"column_1"`
+	Limit   int32     `json:"limit"`
 }
 
 // Surfaces tenants whose next automatic lifecycle transition is due at or
-// before $1 (the sweeper's "now"). Each WHERE branch is backed by a
+// before @now (the sweeper's "now"). Each WHERE branch is backed by a
 // partial index created in migration 016, so the query is cheap even
 // with many active tenants.
+//
+// Legal-hold filter (#92 Stage 4): a tenant with freeze_reason set is on
+// legal hold. An indefinite hold (hold_until NULL) pins the tenant in its
+// current state forever; a time-bounded hold releases once hold_until has
+// passed. Active holds are filtered out here so the sweeper never
+// advances a tenant under litigation / regulatory freeze.
+//
+// @now is cast to timestamptz explicitly. Without the cast, the parser
+// saw @now used both as `@now - INTERVAL` (where it could be interval)
+// and as `hold_until <= @now` (where it must be timestamptz) and failed
+// to unify — sqlc then emits interface{} for the param and Postgres
+// rejects the timestamp-compare at runtime.
 func (q *Queries) ListTenantsDueForLifecycle(ctx context.Context, arg ListTenantsDueForLifecycleParams) ([]Tenant, error) {
 	rows, err := q.db.Query(ctx, listTenantsDueForLifecycle, arg.Column1, arg.Limit)
 	if err != nil {
@@ -413,6 +433,8 @@ func (q *Queries) ListTenantsDueForLifecycle(ctx context.Context, arg ListTenant
 			&i.PrimaryCurrencyCode,
 			&i.SuspendedAt,
 			&i.DeactivatedAt,
+			&i.HoldUntil,
+			&i.FreezeReason,
 		); err != nil {
 			return nil, err
 		}
@@ -524,7 +546,7 @@ UPDATE tenants SET
     suspended_at   = CASE WHEN $1::text = 'suspended'   AND suspended_at   IS NULL THEN now() ELSE suspended_at   END,
     deactivated_at = CASE WHEN $1::text = 'deactivated' AND deactivated_at IS NULL THEN now() ELSE deactivated_at END
 WHERE id = $2 AND status = $3
-RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
 `
 
 type TransitionTenantStatusParams struct {
@@ -556,6 +578,8 @@ func (q *Queries) TransitionTenantStatus(ctx context.Context, arg TransitionTena
 		&i.PrimaryCurrencyCode,
 		&i.SuspendedAt,
 		&i.DeactivatedAt,
+		&i.HoldUntil,
+		&i.FreezeReason,
 	)
 	return i, err
 }
@@ -569,7 +593,7 @@ UPDATE tenants SET
     postal_code = $6,
     primary_currency_code = $7
 WHERE id = $1
-RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
 `
 
 type UpdateTenantAddressParams struct {
@@ -609,29 +633,44 @@ func (q *Queries) UpdateTenantAddress(ctx context.Context, arg UpdateTenantAddre
 		&i.PrimaryCurrencyCode,
 		&i.SuspendedAt,
 		&i.DeactivatedAt,
+		&i.HoldUntil,
+		&i.FreezeReason,
 	)
 	return i, err
 }
 
 const updateTenantStatus = `-- name: UpdateTenantStatus :one
 UPDATE tenants SET
-    status         = $2,
-    suspended_at   = CASE WHEN $2 = 'suspended'   AND suspended_at   IS NULL THEN now() ELSE suspended_at   END,
-    deactivated_at = CASE WHEN $2 = 'deactivated' AND deactivated_at IS NULL THEN now() ELSE deactivated_at END
-WHERE id = $1
-RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at
+    status         = $1::text,
+    suspended_at   = CASE WHEN $1::text = 'suspended'   AND suspended_at   IS NULL THEN now() ELSE suspended_at   END,
+    deactivated_at = CASE WHEN $1::text = 'deactivated' AND deactivated_at IS NULL THEN now() ELSE deactivated_at END,
+    hold_until     = COALESCE($2,    hold_until),
+    freeze_reason  = COALESCE($3, freeze_reason)
+WHERE id = $4
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
 `
 
 type UpdateTenantStatusParams struct {
-	ID     uuid.UUID `json:"id"`
-	Status string    `json:"status"`
+	Status       string             `json:"status"`
+	HoldUntil    pgtype.Timestamptz `json:"hold_until"`
+	FreezeReason pgtype.Text        `json:"freeze_reason"`
+	ID           uuid.UUID          `json:"id"`
 }
 
 // Sets the tenant's status and stamps the appropriate lifecycle timestamp
 // on first entry (#92). Repeat calls preserve the original timestamp so
 // the grace / deactivation clocks keep ticking from the real transition.
+//
+// Legal-hold columns (#92 Stage 4) use COALESCE so SuspendTenant callers
+// that don't supply hold fields do not clobber an active hold. Clearing
+// a hold is a separate admin operation (not in this RPC).
 func (q *Queries) UpdateTenantStatus(ctx context.Context, arg UpdateTenantStatusParams) (Tenant, error) {
-	row := q.db.QueryRow(ctx, updateTenantStatus, arg.ID, arg.Status)
+	row := q.db.QueryRow(ctx, updateTenantStatus,
+		arg.Status,
+		arg.HoldUntil,
+		arg.FreezeReason,
+		arg.ID,
+	)
 	var i Tenant
 	err := row.Scan(
 		&i.ID,
@@ -649,6 +688,8 @@ func (q *Queries) UpdateTenantStatus(ctx context.Context, arg UpdateTenantStatus
 		&i.PrimaryCurrencyCode,
 		&i.SuspendedAt,
 		&i.DeactivatedAt,
+		&i.HoldUntil,
+		&i.FreezeReason,
 	)
 	return i, err
 }

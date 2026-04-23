@@ -88,6 +88,8 @@ type Tenant struct {
 	PrimaryCurrencyCode string             `json:"primary_currency_code"`
 	SuspendedAt         pgtype.Timestamptz `json:"suspended_at"`
 	DeactivatedAt       pgtype.Timestamptz `json:"deactivated_at"`
+	HoldUntil           pgtype.Timestamptz `json:"hold_until"`
+	FreezeReason        pgtype.Text        `json:"freeze_reason"`
 }
 
 type TenantAuthConfig struct {

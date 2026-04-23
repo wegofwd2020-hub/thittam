@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/wegofwd2020/thittam/pkg/audit"
 	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/pkg/crypto"
 )
@@ -41,7 +42,7 @@ type mockRepo struct {
 	deactivateUserFn              func(ctx context.Context, tenantID, id uuid.UUID) error
 	createTenantFn                func(ctx context.Context, tenant *Tenant) error
 	getTenantFn                   func(ctx context.Context, id uuid.UUID) (*Tenant, error)
-	updateTenantStatusFn          func(ctx context.Context, id uuid.UUID, status string) error
+	updateTenantStatusFn          func(ctx context.Context, id uuid.UUID, status string, holdUntil *time.Time, freezeReason *string) error
 	updateTenantAddressFn         func(ctx context.Context, t *Tenant) (*Tenant, error)
 	transitionTenantStatusFn      func(ctx context.Context, id uuid.UUID, from, to string) (*Tenant, bool, error)
 	listTenantsDueForLifecycleFn  func(ctx context.Context, now time.Time, limit int) ([]*Tenant, error)
@@ -140,9 +141,9 @@ func (m *mockRepo) GetTenant(ctx context.Context, id uuid.UUID) (*Tenant, error)
 	}
 	return &Tenant{ID: id, Status: "active", Plan: "starter"}, nil
 }
-func (m *mockRepo) UpdateTenantStatus(ctx context.Context, id uuid.UUID, status string) error {
+func (m *mockRepo) UpdateTenantStatus(ctx context.Context, id uuid.UUID, status string, holdUntil *time.Time, freezeReason *string) error {
 	if m.updateTenantStatusFn != nil {
-		return m.updateTenantStatusFn(ctx, id, status)
+		return m.updateTenantStatusFn(ctx, id, status, holdUntil, freezeReason)
 	}
 	return nil
 }
@@ -803,16 +804,168 @@ func TestCreateTenant_GeneratesSlugFromName(t *testing.T) {
 func TestSuspendTenant_UpdatesStatus(t *testing.T) {
 	t.Parallel()
 	var updatedStatus string
+	var gotHoldUntil *time.Time
+	var gotFreezeReason *string
 	svc := newTestService(&mockRepo{
-		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, status string) error {
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, status string, holdUntil *time.Time, freezeReason *string) error {
 			updatedStatus = status
+			gotHoldUntil = holdUntil
+			gotFreezeReason = freezeReason
 			return nil
 		},
 	})
 
-	_, err := svc.SuspendTenant(context.Background(), fixedTenantID)
+	_, err := svc.SuspendTenant(context.Background(), fixedTenantID, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "suspended", updatedStatus)
+	// Bare SuspendTenant (no hold params) plumbs nil pointers — the SQL
+	// COALESCE layer then preserves any existing hold on the row.
+	assert.Nil(t, gotHoldUntil)
+	assert.Nil(t, gotFreezeReason)
+}
+
+func TestSuspendTenant_LegalHold_PlumbsFieldsToRepo(t *testing.T) {
+	t.Parallel()
+	holdUntil := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	reason := "SEC litigation 2026-CV-123"
+
+	var gotHoldUntil *time.Time
+	var gotFreezeReason *string
+	svc := newTestService(&mockRepo{
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string, holdUntil *time.Time, freezeReason *string) error {
+			gotHoldUntil = holdUntil
+			gotFreezeReason = freezeReason
+			return nil
+		},
+	})
+
+	_, err := svc.SuspendTenant(context.Background(), fixedTenantID, &holdUntil, &reason)
+	require.NoError(t, err)
+	require.NotNil(t, gotHoldUntil)
+	assert.Equal(t, holdUntil, *gotHoldUntil)
+	require.NotNil(t, gotFreezeReason)
+	assert.Equal(t, reason, *gotFreezeReason)
+}
+
+func TestSuspendTenant_IndefiniteHold_NilHoldUntilReachesRepo(t *testing.T) {
+	t.Parallel()
+	// Indefinite hold: reason set, hold_until nil. The repo must receive
+	// a nil holdUntil so the COALESCE keeps whatever NULL column value is
+	// already there (i.e. stays NULL — pinning the tenant indefinitely).
+	reason := "GDPR discovery — indefinite"
+
+	var gotHoldUntil *time.Time
+	var gotFreezeReason *string
+	svc := newTestService(&mockRepo{
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string, holdUntil *time.Time, freezeReason *string) error {
+			gotHoldUntil = holdUntil
+			gotFreezeReason = freezeReason
+			return nil
+		},
+	})
+
+	_, err := svc.SuspendTenant(context.Background(), fixedTenantID, nil, &reason)
+	require.NoError(t, err)
+	assert.Nil(t, gotHoldUntil, "indefinite hold must plumb nil holdUntil")
+	require.NotNil(t, gotFreezeReason)
+	assert.Equal(t, reason, *gotFreezeReason)
+}
+
+func TestSuspendTenant_EmitsLegalHoldAuditEvent(t *testing.T) {
+	// Not t.Parallel() — waits on audit flush.
+	holdUntil := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	reason := "regulatory freeze"
+
+	after := &Tenant{
+		ID:           fixedTenantID,
+		Name:         "Acme",
+		Status:       TenantStatusSuspended,
+		HoldUntil:    &holdUntil,
+		FreezeReason: &reason,
+	}
+	before := &Tenant{ID: fixedTenantID, Name: "Acme", Status: TenantStatusActive}
+
+	getCall := 0
+	repo := &mockRepo{
+		getTenantFn: func(_ context.Context, _ uuid.UUID) (*Tenant, error) {
+			getCall++
+			if getCall == 1 {
+				return before, nil
+			}
+			return after, nil
+		},
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string, _ *time.Time, _ *string) error {
+			return nil
+		},
+	}
+
+	store := &memoryAuditStore{}
+	logger := audit.NewLogger(store, audit.LoggerConfig{
+		BufferSize:    10,
+		FlushInterval: 10 * time.Millisecond,
+		BatchSize:     10,
+	}, nil)
+	svc := newTestService(repo).WithAuditLogger(logger)
+
+	actorID := uuid.MustParse("a1000000-0000-0000-0000-000000000092")
+	ctx := audit.WithActor(context.Background(), audit.ActorInfo{
+		UserID: actorID,
+		Email:  "admin@xyzcba.com",
+		IP:     "10.0.0.1",
+	})
+
+	_, err := svc.SuspendTenant(ctx, fixedTenantID, &holdUntil, &reason)
+	require.NoError(t, err)
+
+	flushCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	require.NoError(t, logger.Close(flushCtx))
+
+	events := store.snapshot()
+	require.Len(t, events, 1)
+	e := events[0]
+	assert.Equal(t, fixedTenantID, e.TenantID)
+	assert.Equal(t, actorID, e.ActorID, "actor identity from context")
+	assert.Equal(t, "admin@xyzcba.com", e.ActorEmail)
+	assert.Equal(t, "10.0.0.1", e.ActorIP)
+	assert.Equal(t, audit.ActionLegalHoldApplied, e.Action)
+	assert.Equal(t, audit.ResourceTenant, e.ResourceType)
+	assert.JSONEq(t, `{"status":"active"}`, string(e.OldState))
+	assert.JSONEq(t,
+		`{"status":"suspended","hold_until":"2026-06-01T00:00:00Z","freeze_reason":"regulatory freeze"}`,
+		string(e.NewState),
+	)
+}
+
+func TestSuspendTenant_BareSuspend_EmitsNoLegalHoldAuditEvent(t *testing.T) {
+	// A bare SuspendTenant (no hold params) must NOT emit the
+	// legal-hold audit event. Vanilla-suspend audit is covered by the
+	// generic RPC interceptor; we do not double-log here.
+	repo := &mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Status: TenantStatusSuspended}, nil
+		},
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string, _ *time.Time, _ *string) error {
+			return nil
+		},
+	}
+
+	store := &memoryAuditStore{}
+	logger := audit.NewLogger(store, audit.LoggerConfig{
+		BufferSize:    10,
+		FlushInterval: 10 * time.Millisecond,
+		BatchSize:     10,
+	}, nil)
+	svc := newTestService(repo).WithAuditLogger(logger)
+
+	_, err := svc.SuspendTenant(context.Background(), fixedTenantID, nil, nil)
+	require.NoError(t, err)
+
+	flushCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	require.NoError(t, logger.Close(flushCtx))
+
+	assert.Empty(t, store.snapshot(), "bare suspend must not emit legal-hold audit event")
 }
 
 func TestInviteUser_SetsTokenAndExpiry(t *testing.T) {
@@ -1177,12 +1330,12 @@ func TestCreateTenant_SchemaMigratorError_Propagates(t *testing.T) {
 func TestSuspendTenant_Error(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{
-		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string) error {
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string, _ *time.Time, _ *string) error {
 			return errors.New("db error")
 		},
 	})
 
-	_, err := svc.SuspendTenant(context.Background(), fixedTenantID)
+	_, err := svc.SuspendTenant(context.Background(), fixedTenantID, nil, nil)
 	require.Error(t, err)
 }
 

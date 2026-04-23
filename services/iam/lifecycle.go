@@ -180,3 +180,22 @@ func mustMarshalStatus(status string) json.RawMessage {
 	b, _ := json.Marshal(map[string]string{"status": status})
 	return b
 }
+
+// mustMarshalHoldState serialises the subset of tenant fields relevant to
+// a legal-hold audit entry (#92 Stage 4). Nil t yields the empty object
+// "{}" — caller handles the "no prior state" case for creation events.
+func mustMarshalHoldState(t *Tenant) json.RawMessage {
+	if t == nil {
+		return json.RawMessage(`{}`)
+	}
+	payload := map[string]interface{}{"status": t.Status}
+	if t.HoldUntil != nil {
+		payload["hold_until"] = t.HoldUntil.UTC().Format(time.RFC3339)
+	}
+	if t.FreezeReason != nil {
+		payload["freeze_reason"] = *t.FreezeReason
+	}
+	// map with string keys + simple scalar/string values cannot fail.
+	b, _ := json.Marshal(payload)
+	return b
+}

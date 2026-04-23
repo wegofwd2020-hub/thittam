@@ -500,12 +500,64 @@ func (s *Service) GetTenant(ctx context.Context, id uuid.UUID) (*Tenant, error) 
 	return t, nil
 }
 
-// SuspendTenant marks a tenant suspended, blocking all logins for that tenant.
-func (s *Service) SuspendTenant(ctx context.Context, id uuid.UUID) (*Tenant, error) {
-	if err := s.repo.UpdateTenantStatus(ctx, id, "suspended"); err != nil {
+// SuspendTenant marks a tenant suspended, blocking all logins for that
+// tenant. Optional legal-hold parameters (#92 Stage 4):
+//
+//   - freezeReason non-nil flags the tenant as on legal hold; the retention
+//     sweeper will skip its automated lifecycle transitions.
+//   - holdUntil is an optional auto-release time; nil means indefinite.
+//
+// Nil pointers preserve whatever is already on the row (COALESCE in the
+// backing SQL), so a bare SuspendTenant retry does not clear an active
+// hold. Clearing is a separate admin operation.
+//
+// When a hold is applied in *this* call (freezeReason != nil) the service
+// emits an ActionLegalHoldApplied audit event with the actor identity
+// taken from the request context. A bare suspend is captured by the
+// generic audit interceptor; we do not double-log here.
+func (s *Service) SuspendTenant(
+	ctx context.Context,
+	id uuid.UUID,
+	holdUntil *time.Time,
+	freezeReason *string,
+) (*Tenant, error) {
+	// Capture pre-state only when we will emit the hold audit event —
+	// saves a read on the common bare-suspend path.
+	var before *Tenant
+	if freezeReason != nil && s.audit != nil {
+		t, err := s.repo.GetTenant(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("iam: suspend tenant %s: %w", id, err)
+		}
+		before = t
+	}
+
+	if err := s.repo.UpdateTenantStatus(ctx, id, TenantStatusSuspended, holdUntil, freezeReason); err != nil {
 		return nil, fmt.Errorf("iam: suspend tenant %s: %w", id, err)
 	}
-	return s.repo.GetTenant(ctx, id)
+
+	after, err := s.repo.GetTenant(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("iam: suspend tenant %s: %w", id, err)
+	}
+
+	if freezeReason != nil && s.audit != nil {
+		actor, _ := audit.ActorFromContext(ctx)
+		s.audit.Log(audit.Event{
+			TenantID:     id,
+			ActorID:      actor.UserID,
+			ActorEmail:   actor.Email,
+			ActorIP:      actor.IP,
+			Action:       audit.ActionLegalHoldApplied,
+			ResourceType: audit.ResourceTenant,
+			ResourceID:   id,
+			OldState:     mustMarshalHoldState(before),
+			NewState:     mustMarshalHoldState(after),
+			OccurredAt:   time.Now().UTC(),
+		})
+	}
+
+	return after, nil
 }
 
 // --- Invitations ---

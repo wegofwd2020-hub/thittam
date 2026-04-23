@@ -392,7 +392,19 @@ func (h *Handler) SuspendTenant(ctx context.Context, req *iamv1.SuspendTenantReq
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
-	tenant, err := h.svc.SuspendTenant(ctx, id)
+
+	// Optional legal-hold parameters (#92 Stage 4). Use the proto3 field
+	// presence (the raw pointer fields, not the Get* accessors) so that
+	// an unset hold_until / freeze_reason plumbs through as a nil pointer
+	// and the repo COALESCEs to preserve any existing hold.
+	var holdUntil *time.Time
+	if t := req.HoldUntil; t != nil {
+		v := t.AsTime()
+		holdUntil = &v
+	}
+	freezeReason := req.FreezeReason // already *string for optional string fields
+
+	tenant, err := h.svc.SuspendTenant(ctx, id, holdUntil, freezeReason)
 	if err != nil {
 		return nil, grpcError(err)
 	}

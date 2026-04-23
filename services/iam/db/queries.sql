@@ -31,11 +31,17 @@ SELECT * FROM tenants WHERE slug = $1;
 -- Sets the tenant's status and stamps the appropriate lifecycle timestamp
 -- on first entry (#92). Repeat calls preserve the original timestamp so
 -- the grace / deactivation clocks keep ticking from the real transition.
+--
+-- Legal-hold columns (#92 Stage 4) use COALESCE so SuspendTenant callers
+-- that don't supply hold fields do not clobber an active hold. Clearing
+-- a hold is a separate admin operation (not in this RPC).
 UPDATE tenants SET
-    status         = $2,
-    suspended_at   = CASE WHEN $2 = 'suspended'   AND suspended_at   IS NULL THEN now() ELSE suspended_at   END,
-    deactivated_at = CASE WHEN $2 = 'deactivated' AND deactivated_at IS NULL THEN now() ELSE deactivated_at END
-WHERE id = $1
+    status         = @status::text,
+    suspended_at   = CASE WHEN @status::text = 'suspended'   AND suspended_at   IS NULL THEN now() ELSE suspended_at   END,
+    deactivated_at = CASE WHEN @status::text = 'deactivated' AND deactivated_at IS NULL THEN now() ELSE deactivated_at END,
+    hold_until     = COALESCE(sqlc.narg('hold_until'),    hold_until),
+    freeze_reason  = COALESCE(sqlc.narg('freeze_reason'), freeze_reason)
+WHERE id = @id
 RETURNING *;
 
 -- name: TransitionTenantStatus :one
@@ -52,13 +58,27 @@ RETURNING *;
 
 -- name: ListTenantsDueForLifecycle :many
 -- Surfaces tenants whose next automatic lifecycle transition is due at or
--- before $1 (the sweeper's "now"). Each WHERE branch is backed by a
+-- before @now (the sweeper's "now"). Each WHERE branch is backed by a
 -- partial index created in migration 016, so the query is cheap even
 -- with many active tenants.
+--
+-- Legal-hold filter (#92 Stage 4): a tenant with freeze_reason set is on
+-- legal hold. An indefinite hold (hold_until NULL) pins the tenant in its
+-- current state forever; a time-bounded hold releases once hold_until has
+-- passed. Active holds are filtered out here so the sweeper never
+-- advances a tenant under litigation / regulatory freeze.
+--
+-- @now is cast to timestamptz explicitly. Without the cast, the parser
+-- saw @now used both as `@now - INTERVAL` (where it could be interval)
+-- and as `hold_until <= @now` (where it must be timestamptz) and failed
+-- to unify — sqlc then emits interface{} for the param and Postgres
+-- rejects the timestamp-compare at runtime.
 SELECT * FROM tenants
- WHERE (status = 'suspended'   AND suspended_at   <= $1 - INTERVAL '30 days')
-    OR (status = 'grace'       AND suspended_at   <= $1 - INTERVAL '90 days')
-    OR (status = 'deactivated' AND deactivated_at <= $1 - INTERVAL '180 days')
+ WHERE ((status = 'suspended'   AND suspended_at   <= $1::timestamptz - INTERVAL '30 days')
+     OR (status = 'grace'       AND suspended_at   <= $1::timestamptz - INTERVAL '90 days')
+     OR (status = 'deactivated' AND deactivated_at <= $1::timestamptz - INTERVAL '180 days'))
+   AND (freeze_reason IS NULL
+        OR (hold_until IS NOT NULL AND hold_until <= $1::timestamptz))
  ORDER BY COALESCE(deactivated_at, suspended_at) NULLS LAST
  LIMIT $2;
 

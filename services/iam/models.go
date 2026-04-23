@@ -45,6 +45,13 @@ type Tenant struct {
 	// DeactivatedAt + 180 days; computed by callers rather than stored.
 	SuspendedAt   *time.Time `json:"suspended_at,omitempty"`
 	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
+
+	// Legal-hold fields (#92 Stage 4). FreezeReason is the active-hold
+	// flag — non-nil means the retention sweeper will skip this tenant.
+	// HoldUntil is an optional auto-release time; when nil the hold is
+	// indefinite and must be cleared manually.
+	HoldUntil    *time.Time `json:"hold_until,omitempty"`
+	FreezeReason *string    `json:"freeze_reason,omitempty"`
 }
 
 // Role is a named collection of permissions scoped to a tenant.

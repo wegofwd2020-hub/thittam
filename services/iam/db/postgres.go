@@ -397,10 +397,25 @@ func (p *Postgres) GetTenant(ctx context.Context, id uuid.UUID) (*iam.Tenant, er
 	return dbTenantToDomain(row), nil
 }
 
-func (p *Postgres) UpdateTenantStatus(ctx context.Context, id uuid.UUID, newStatus string) error {
+// UpdateTenantStatus sets the tenant's status, stamps lifecycle
+// timestamps on first transition, and optionally applies legal-hold
+// fields (#92 Stage 4). holdUntil and freezeReason are optional; nil
+// pointers preserve whatever is currently in the row (COALESCE in the
+// backing SQL) so subsequent bare SuspendTenant calls don't clear an
+// active hold. Clearing a hold is a separate admin operation, not this
+// RPC.
+func (p *Postgres) UpdateTenantStatus(
+	ctx context.Context,
+	id uuid.UUID,
+	newStatus string,
+	holdUntil *time.Time,
+	freezeReason *string,
+) error {
 	_, err := p.q.UpdateTenantStatus(ctx, UpdateTenantStatusParams{
-		ID:     id,
-		Status: newStatus,
+		ID:           id,
+		Status:       newStatus,
+		HoldUntil:    pgTimestamptzFromTimePtr(holdUntil),
+		FreezeReason: pgTextFromStringPtr(freezeReason),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -893,7 +908,41 @@ func dbTenantToDomain(t Tenant) *iam.Tenant {
 		PrimaryCurrencyCode: t.PrimaryCurrencyCode,
 		SuspendedAt:         pgTimestamptzToTimePtr(t.SuspendedAt),
 		DeactivatedAt:       pgTimestamptzToTimePtr(t.DeactivatedAt),
+		HoldUntil:           pgTimestamptzToTimePtr(t.HoldUntil),
+		FreezeReason:        pgTextToStringPtr(t.FreezeReason),
 	}
+}
+
+// pgTextToStringPtr returns a pointer to the text value or nil when the
+// column is NULL. Distinct from pgTextToString (which collapses NULL to
+// ""); the legal-hold flag (#92 Stage 4) needs NULL / "" / set-value
+// distinguished at the domain level.
+func pgTextToStringPtr(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
+	}
+	v := t.String
+	return &v
+}
+
+// pgTextFromStringPtr wraps a *string as a pgtype.Text. nil pointer maps
+// to a NULL pgtype.Text (Valid=false), which COALESCE in UpdateTenantStatus
+// treats as "preserve existing column value" (#92 Stage 4). Empty string
+// is written as-is and is distinct from NULL.
+func pgTextFromStringPtr(s *string) pgtype.Text {
+	if s == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: *s, Valid: true}
+}
+
+// pgTimestamptzFromTimePtr wraps a *time.Time as a pgtype.Timestamptz.
+// nil maps to NULL — see pgTextFromStringPtr for the COALESCE rationale.
+func pgTimestamptzFromTimePtr(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
 
 // pgTimestamptzToTimePtr returns a pointer to time.Time or nil when the

@@ -38,7 +38,12 @@ type Repository interface {
 	// Tenants
 	CreateTenant(ctx context.Context, tenant *Tenant) error
 	GetTenant(ctx context.Context, id uuid.UUID) (*Tenant, error)
-	UpdateTenantStatus(ctx context.Context, id uuid.UUID, status string) error
+	// UpdateTenantStatus sets the tenant's status and optionally its
+	// legal-hold fields (#92 Stage 4). A nil holdUntil / freezeReason
+	// preserves the existing column value — the COALESCE semantics
+	// protect active holds from being cleared by a bare SuspendTenant
+	// retry. Clearing a hold is a separate admin operation.
+	UpdateTenantStatus(ctx context.Context, id uuid.UUID, status string, holdUntil *time.Time, freezeReason *string) error
 	// UpdateTenantAddress replaces the address + country + currency fields
 	// on an existing tenant. Other fields (name, plan, status) are not
 	// touched. Returns ErrTenantNotFound if the row is missing.

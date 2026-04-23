@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // platformAdminCtx returns a context with a synthetic platform_admin caller,
@@ -547,7 +548,7 @@ func TestHandler_SuspendTenant_Success(t *testing.T) {
 		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
 			return &Tenant{ID: id, Name: "Test", Status: "suspended"}, nil
 		},
-		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string) error { return nil },
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string, _ *time.Time, _ *string) error { return nil },
 	}))
 
 	resp, err := h.SuspendTenant(platformAdminCtx(), &iamv1.SuspendTenantRequest{Id: tenantID.String()})
@@ -566,6 +567,65 @@ func TestHandler_SuspendTenant_InvalidID(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().SuspendTenant(platformAdminCtx(), &iamv1.SuspendTenantRequest{Id: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_SuspendTenant_LegalHoldFieldsPropagate(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	holdUntil := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	reason := "litigation pending — preserve data"
+
+	var gotHoldUntil *time.Time
+	var gotFreezeReason *string
+	h := NewHandler(newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Name: "Test", Status: "suspended"}, nil
+		},
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string, holdUntil *time.Time, freezeReason *string) error {
+			gotHoldUntil = holdUntil
+			gotFreezeReason = freezeReason
+			return nil
+		},
+	}))
+
+	req := &iamv1.SuspendTenantRequest{
+		Id:           tenantID.String(),
+		HoldUntil:    timestamppb.New(holdUntil),
+		FreezeReason: &reason,
+	}
+	_, err := h.SuspendTenant(platformAdminCtx(), req)
+	require.NoError(t, err)
+
+	require.NotNil(t, gotHoldUntil)
+	assert.True(t, gotHoldUntil.Equal(holdUntil), "hold_until round-trips through proto Timestamp")
+	require.NotNil(t, gotFreezeReason)
+	assert.Equal(t, reason, *gotFreezeReason)
+}
+
+func TestHandler_SuspendTenant_BareRequest_PlumbsNilHoldFields(t *testing.T) {
+	t.Parallel()
+	// A request with only Id (no hold fields) must reach the service
+	// with nil pointers so the repo's COALESCE preserves any existing
+	// hold on the row.
+	tenantID := uuid.New()
+
+	var gotHoldUntil *time.Time
+	var gotFreezeReason *string
+	h := NewHandler(newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Status: "suspended"}, nil
+		},
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string, holdUntil *time.Time, freezeReason *string) error {
+			gotHoldUntil = holdUntil
+			gotFreezeReason = freezeReason
+			return nil
+		},
+	}))
+
+	_, err := h.SuspendTenant(platformAdminCtx(), &iamv1.SuspendTenantRequest{Id: tenantID.String()})
+	require.NoError(t, err)
+	assert.Nil(t, gotHoldUntil)
+	assert.Nil(t, gotFreezeReason)
 }
 
 // --- InviteUser ---

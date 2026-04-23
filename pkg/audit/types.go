@@ -43,6 +43,10 @@ const (
 	ActionImpersonationStarted Action = "impersonation_started"
 	ActionImpersonationEnded   Action = "impersonation_ended"
 	ActionConfigChanged        Action = "config_changed"
+	// ActionLegalHoldApplied is emitted by IAM SuspendTenant when the
+	// caller supplies a freeze_reason to pause the retention sweeper
+	// for litigation / regulatory holds (#92 Stage 4).
+	ActionLegalHoldApplied Action = "legal_hold_applied"
 )
 
 // ResourceType identifies the entity being acted upon.

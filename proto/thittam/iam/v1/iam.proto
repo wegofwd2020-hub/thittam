@@ -312,6 +312,15 @@ message GetTenantRequest {
 
 message SuspendTenantRequest {
   string id = 1;
+  // Optional legal-hold parameters (#92 Stage 4). When freeze_reason is set
+  // the tenant is considered on hold and the retention sweeper will skip
+  // automated lifecycle transitions. hold_until is an auto-release time;
+  // if unset the hold is indefinite and must be cleared manually.
+  // Absent (proto3 field presence) means "preserve existing hold fields"
+  // — subsequent suspend calls without these fields do not clobber an
+  // active hold.
+  optional google.protobuf.Timestamp hold_until    = 2;
+  optional string                    freeze_reason = 3;
 }
 
 // Invitations
