@@ -47,6 +47,12 @@ const (
 	// caller supplies a freeze_reason to pause the retention sweeper
 	// for litigation / regulatory holds (#92 Stage 4).
 	ActionLegalHoldApplied Action = "legal_hold_applied"
+	// ActionLegalHoldCleared is emitted by IAM ClearTenantLegalHold
+	// when a previously-applied hold is released. Not emitted for
+	// calls against a tenant that had no active hold — the
+	// idempotent no-op path stays audit-quiet (the generic RPC audit
+	// interceptor still records the call itself).
+	ActionLegalHoldCleared Action = "legal_hold_cleared"
 )
 
 // ResourceType identifies the entity being acted upon.

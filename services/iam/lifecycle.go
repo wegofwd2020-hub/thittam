@@ -199,3 +199,15 @@ func mustMarshalHoldState(t *Tenant) json.RawMessage {
 	b, _ := json.Marshal(payload)
 	return b
 }
+
+// mustMarshalClearReason serialises the operator-supplied rationale
+// for a ClearTenantLegalHold call into the audit event's Metadata
+// field. Empty reason yields "{}" — callers may omit rationale
+// entirely.
+func mustMarshalClearReason(reason string) json.RawMessage {
+	if reason == "" {
+		return json.RawMessage(`{}`)
+	}
+	b, _ := json.Marshal(map[string]string{"reason": reason})
+	return b
+}

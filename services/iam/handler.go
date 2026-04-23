@@ -411,6 +411,24 @@ func (h *Handler) SuspendTenant(ctx context.Context, req *iamv1.SuspendTenantReq
 	return tenantToProto(tenant), nil
 }
 
+func (h *Handler) ClearTenantLegalHold(ctx context.Context, req *iamv1.ClearTenantLegalHoldRequest) (*iamv1.Tenant, error) {
+	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
+		return nil, err
+	}
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid id")
+	}
+	// req.GetReason() returns "" when the optional field is unset,
+	// which the service maps to empty audit metadata — no special
+	// casing needed in the handler.
+	tenant, err := h.svc.ClearTenantLegalHold(ctx, id, req.GetReason())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return tenantToProto(tenant), nil
+}
+
 // --- Invitations ---
 
 func (h *Handler) InviteUser(ctx context.Context, req *iamv1.InviteUserRequest) (*iamv1.Invitation, error) {

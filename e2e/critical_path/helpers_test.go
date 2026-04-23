@@ -185,6 +185,15 @@ func (r *iamRepo) UpdateTenantStatus(_ context.Context, id uuid.UUID, status str
 	}
 	return nil
 }
+func (r *iamRepo) ClearTenantLegalHold(_ context.Context, id uuid.UUID) (*iam.Tenant, error) {
+	t, ok := r.tenants[id]
+	if !ok {
+		return nil, iam.ErrTenantNotFound
+	}
+	t.HoldUntil = nil
+	t.FreezeReason = nil
+	return t, nil
+}
 func (r *iamRepo) UpdateTenantAddress(_ context.Context, t *iam.Tenant) (*iam.Tenant, error) {
 	existing, ok := r.tenants[t.ID]
 	if !ok {

@@ -42,8 +42,14 @@ type Repository interface {
 	// legal-hold fields (#92 Stage 4). A nil holdUntil / freezeReason
 	// preserves the existing column value — the COALESCE semantics
 	// protect active holds from being cleared by a bare SuspendTenant
-	// retry. Clearing a hold is a separate admin operation.
+	// retry. Clearing a hold is a separate admin operation
+	// (ClearTenantLegalHold).
 	UpdateTenantStatus(ctx context.Context, id uuid.UUID, status string, holdUntil *time.Time, freezeReason *string) error
+	// ClearTenantLegalHold resets hold_until and freeze_reason to NULL
+	// on the tenant row and returns the updated tenant. Status is
+	// unchanged. Idempotent: calling on a tenant with no active hold
+	// succeeds and returns the row unmodified (#92 Stage 4 pair).
+	ClearTenantLegalHold(ctx context.Context, id uuid.UUID) (*Tenant, error)
 	// UpdateTenantAddress replaces the address + country + currency fields
 	// on an existing tenant. Other fields (name, plan, status) are not
 	// touched. Returns ErrTenantNotFound if the row is missing.

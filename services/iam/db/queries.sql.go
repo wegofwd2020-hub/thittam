@@ -46,6 +46,49 @@ func (q *Queries) AssignRole(ctx context.Context, arg AssignRoleParams) error {
 	return err
 }
 
+const clearTenantLegalHold = `-- name: ClearTenantLegalHold :one
+UPDATE tenants SET
+    hold_until    = NULL,
+    freeze_reason = NULL
+WHERE id = $1
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
+`
+
+// Unconditionally clears the two legal-hold columns on a tenant,
+// releasing the retention-sweeper pause applied via SuspendTenant
+// with hold_until/freeze_reason (#92 Stage 4 pair). The tenant's
+// status is NOT touched — whatever state it was in (typically
+// 'suspended') is preserved and the sweeper's normal lifecycle
+// clock resumes on the next run.
+//
+// Idempotent: running on a tenant with no hold is a no-op UPDATE
+// that still returns the row. Callers decide whether to treat the
+// no-op as "already cleared" (no audit event) vs. "cleared now".
+func (q *Queries) ClearTenantLegalHold(ctx context.Context, id uuid.UUID) (Tenant, error) {
+	row := q.db.QueryRow(ctx, clearTenantLegalHold, id)
+	var i Tenant
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Plan,
+		&i.Status,
+		&i.CreatedAt,
+		&i.IsDemo,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.CountryCode,
+		&i.PostalCode,
+		&i.PrimaryCurrencyCode,
+		&i.SuspendedAt,
+		&i.DeactivatedAt,
+		&i.HoldUntil,
+		&i.FreezeReason,
+	)
+	return i, err
+}
+
 const createInvitation = `-- name: CreateInvitation :one
 INSERT INTO invitations (id, tenant_id, email, invited_by, token, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6)

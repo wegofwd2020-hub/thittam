@@ -125,6 +125,57 @@ func TestListTenantsDueForLifecycle_ExpiredHold_Listed(t *testing.T) {
 		"tenant whose hold_until is in the past must be listed again")
 }
 
+func TestClearTenantLegalHold_RestoresSweeperListing(t *testing.T) {
+	// End-to-end of the hold lifecycle: a tenant on indefinite hold is
+	// skipped by ListTenantsDueForLifecycle; after ClearTenantLegalHold
+	// it becomes a candidate again.
+	pool := testdb.Open(t)
+	tx := testdb.NewTx(t, pool)
+	q := iamdb.New(tx)
+
+	reason := "SEC litigation — indefinite"
+	id := insertSuspendedTenant(t, tx, "Pre-Clear Studios", nil, &reason)
+
+	// Baseline: tenant is on hold, sweeper must skip it.
+	rows, err := q.ListTenantsDueForLifecycle(context.Background(), iamdb.ListTenantsDueForLifecycleParams{
+		Column1: time.Now().UTC(),
+		Limit:   100,
+	})
+	require.NoError(t, err)
+	require.False(t, containsTenant(rows, id), "sanity: held tenant must be skipped before clearing")
+
+	// Clear the hold. Returned row must have both columns NULL.
+	cleared, err := q.ClearTenantLegalHold(context.Background(), id)
+	require.NoError(t, err)
+	assert.False(t, cleared.HoldUntil.Valid, "hold_until must be NULL after clear")
+	assert.False(t, cleared.FreezeReason.Valid, "freeze_reason must be NULL after clear")
+
+	// Post-clear: sweeper must now list the tenant.
+	rows, err = q.ListTenantsDueForLifecycle(context.Background(), iamdb.ListTenantsDueForLifecycleParams{
+		Column1: time.Now().UTC(),
+		Limit:   100,
+	})
+	require.NoError(t, err)
+	assert.True(t, containsTenant(rows, id), "cleared tenant must be listable for lifecycle again")
+}
+
+func TestClearTenantLegalHold_NoHold_Idempotent(t *testing.T) {
+	// Clearing a tenant that has no hold succeeds silently and returns
+	// the row unchanged — the service layer's "quiet on no-op" audit
+	// behavior depends on this repo contract.
+	pool := testdb.Open(t)
+	tx := testdb.NewTx(t, pool)
+	q := iamdb.New(tx)
+
+	id := insertSuspendedTenant(t, tx, "No-Hold Studios", nil, nil)
+
+	row, err := q.ClearTenantLegalHold(context.Background(), id)
+	require.NoError(t, err)
+	assert.Equal(t, id, row.ID)
+	assert.False(t, row.HoldUntil.Valid)
+	assert.False(t, row.FreezeReason.Valid)
+}
+
 func containsTenant(rows []iamdb.Tenant, id uuid.UUID) bool {
 	for _, r := range rows {
 		if r.ID == id {

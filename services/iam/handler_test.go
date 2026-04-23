@@ -602,6 +602,79 @@ func TestHandler_SuspendTenant_LegalHoldFieldsPropagate(t *testing.T) {
 	assert.Equal(t, reason, *gotFreezeReason)
 }
 
+// --- ClearTenantLegalHold ---
+
+func TestHandler_ClearTenantLegalHold_Success(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	var gotID uuid.UUID
+	h := NewHandler(newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Status: "suspended"}, nil
+		},
+		clearTenantLegalHoldFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			gotID = id
+			return &Tenant{ID: id, Status: "suspended"}, nil
+		},
+	}))
+
+	resp, err := h.ClearTenantLegalHold(platformAdminCtx(), &iamv1.ClearTenantLegalHoldRequest{
+		Id: tenantID.String(),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, tenantID.String(), resp.GetId())
+	assert.Equal(t, tenantID, gotID)
+}
+
+func TestHandler_ClearTenantLegalHold_PermissionDenied(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ClearTenantLegalHold(context.Background(), &iamv1.ClearTenantLegalHoldRequest{
+		Id: uuid.New().String(),
+	})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ClearTenantLegalHold_InvalidID(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ClearTenantLegalHold(platformAdminCtx(), &iamv1.ClearTenantLegalHoldRequest{
+		Id: "bad",
+	})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_ClearTenantLegalHold_ReasonPassesThrough(t *testing.T) {
+	t.Parallel()
+	// The reason is captured by the service in audit metadata; here we
+	// just need to prove it round-trips from proto to the service
+	// without being dropped by the handler.
+	tenantID := uuid.New()
+	held := "court order 2026-CV-789"
+	hu := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	// Service-level capture: the handler hands the reason to svc, which
+	// then hands it to the audit path. We verify the audit metadata
+	// round-trips in the service tests; here we just assert no error
+	// and that the call reaches the service.
+	called := false
+	h := NewHandler(newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Status: "suspended", HoldUntil: &hu, FreezeReason: &held}, nil
+		},
+		clearTenantLegalHoldFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			called = true
+			return &Tenant{ID: id, Status: "suspended"}, nil
+		},
+	}))
+
+	reason := "compliance review completed"
+	_, err := h.ClearTenantLegalHold(platformAdminCtx(), &iamv1.ClearTenantLegalHoldRequest{
+		Id:     tenantID.String(),
+		Reason: &reason,
+	})
+	require.NoError(t, err)
+	assert.True(t, called, "service's ClearTenantLegalHold should be invoked")
+}
+
 func TestHandler_SuspendTenant_BareRequest_PlumbsNilHoldFields(t *testing.T) {
 	t.Parallel()
 	// A request with only Id (no hold fields) must reach the service

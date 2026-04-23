@@ -560,6 +560,53 @@ func (s *Service) SuspendTenant(
 	return after, nil
 }
 
+// ClearTenantLegalHold releases a previously-applied legal hold
+// (#92 Stage 4 pair). Status is untouched; only hold_until and
+// freeze_reason are reset to NULL, so the retention sweeper resumes
+// on the next run for tenants still in a transient state.
+//
+// Idempotent: calling on a tenant with no active hold is a no-op.
+// An audit event (ActionLegalHoldCleared) is emitted only when the
+// pre-state actually had freeze_reason set — quiet no-op on already-
+// cleared tenants keeps the audit trail focused on real state
+// changes. The optional `reason` argument is captured in the audit
+// event's Metadata field (not OldState/NewState — it's why, not
+// what).
+func (s *Service) ClearTenantLegalHold(
+	ctx context.Context,
+	id uuid.UUID,
+	reason string,
+) (*Tenant, error) {
+	before, err := s.repo.GetTenant(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("iam: clear legal hold %s: %w", id, err)
+	}
+
+	after, err := s.repo.ClearTenantLegalHold(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("iam: clear legal hold %s: %w", id, err)
+	}
+
+	if before.FreezeReason != nil && s.audit != nil {
+		actor, _ := audit.ActorFromContext(ctx)
+		s.audit.Log(audit.Event{
+			TenantID:     id,
+			ActorID:      actor.UserID,
+			ActorEmail:   actor.Email,
+			ActorIP:      actor.IP,
+			Action:       audit.ActionLegalHoldCleared,
+			ResourceType: audit.ResourceTenant,
+			ResourceID:   id,
+			OldState:     mustMarshalHoldState(before),
+			NewState:     mustMarshalHoldState(after),
+			Metadata:     mustMarshalClearReason(reason),
+			OccurredAt:   time.Now().UTC(),
+		})
+	}
+
+	return after, nil
+}
+
 // --- Invitations ---
 
 // InviteUser creates a pending invitation with a 7-day expiry.

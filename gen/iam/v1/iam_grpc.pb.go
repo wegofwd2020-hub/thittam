@@ -23,31 +23,32 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	IAMService_Login_FullMethodName              = "/thittam.iam.v1.IAMService/Login"
-	IAMService_RefreshToken_FullMethodName       = "/thittam.iam.v1.IAMService/RefreshToken"
-	IAMService_Logout_FullMethodName             = "/thittam.iam.v1.IAMService/Logout"
-	IAMService_ValidateToken_FullMethodName      = "/thittam.iam.v1.IAMService/ValidateToken"
-	IAMService_GetCurrentUser_FullMethodName     = "/thittam.iam.v1.IAMService/GetCurrentUser"
-	IAMService_CreateUser_FullMethodName         = "/thittam.iam.v1.IAMService/CreateUser"
-	IAMService_GetUser_FullMethodName            = "/thittam.iam.v1.IAMService/GetUser"
-	IAMService_ListUsers_FullMethodName          = "/thittam.iam.v1.IAMService/ListUsers"
-	IAMService_UpdateUser_FullMethodName         = "/thittam.iam.v1.IAMService/UpdateUser"
-	IAMService_DeactivateUser_FullMethodName     = "/thittam.iam.v1.IAMService/DeactivateUser"
-	IAMService_ChangePassword_FullMethodName     = "/thittam.iam.v1.IAMService/ChangePassword"
-	IAMService_AssignRole_FullMethodName         = "/thittam.iam.v1.IAMService/AssignRole"
-	IAMService_AssignProjectRole_FullMethodName  = "/thittam.iam.v1.IAMService/AssignProjectRole"
-	IAMService_RevokeRole_FullMethodName         = "/thittam.iam.v1.IAMService/RevokeRole"
-	IAMService_ListRoles_FullMethodName          = "/thittam.iam.v1.IAMService/ListRoles"
-	IAMService_CheckPermission_FullMethodName    = "/thittam.iam.v1.IAMService/CheckPermission"
-	IAMService_CreateTenant_FullMethodName       = "/thittam.iam.v1.IAMService/CreateTenant"
-	IAMService_GetTenant_FullMethodName          = "/thittam.iam.v1.IAMService/GetTenant"
-	IAMService_SuspendTenant_FullMethodName      = "/thittam.iam.v1.IAMService/SuspendTenant"
-	IAMService_SetTenantAddress_FullMethodName   = "/thittam.iam.v1.IAMService/SetTenantAddress"
-	IAMService_InviteUser_FullMethodName         = "/thittam.iam.v1.IAMService/InviteUser"
-	IAMService_AcceptInvitation_FullMethodName   = "/thittam.iam.v1.IAMService/AcceptInvitation"
-	IAMService_SetOIDCConfig_FullMethodName      = "/thittam.iam.v1.IAMService/SetOIDCConfig"
-	IAMService_StartImpersonation_FullMethodName = "/thittam.iam.v1.IAMService/StartImpersonation"
-	IAMService_EndImpersonation_FullMethodName   = "/thittam.iam.v1.IAMService/EndImpersonation"
+	IAMService_Login_FullMethodName                = "/thittam.iam.v1.IAMService/Login"
+	IAMService_RefreshToken_FullMethodName         = "/thittam.iam.v1.IAMService/RefreshToken"
+	IAMService_Logout_FullMethodName               = "/thittam.iam.v1.IAMService/Logout"
+	IAMService_ValidateToken_FullMethodName        = "/thittam.iam.v1.IAMService/ValidateToken"
+	IAMService_GetCurrentUser_FullMethodName       = "/thittam.iam.v1.IAMService/GetCurrentUser"
+	IAMService_CreateUser_FullMethodName           = "/thittam.iam.v1.IAMService/CreateUser"
+	IAMService_GetUser_FullMethodName              = "/thittam.iam.v1.IAMService/GetUser"
+	IAMService_ListUsers_FullMethodName            = "/thittam.iam.v1.IAMService/ListUsers"
+	IAMService_UpdateUser_FullMethodName           = "/thittam.iam.v1.IAMService/UpdateUser"
+	IAMService_DeactivateUser_FullMethodName       = "/thittam.iam.v1.IAMService/DeactivateUser"
+	IAMService_ChangePassword_FullMethodName       = "/thittam.iam.v1.IAMService/ChangePassword"
+	IAMService_AssignRole_FullMethodName           = "/thittam.iam.v1.IAMService/AssignRole"
+	IAMService_AssignProjectRole_FullMethodName    = "/thittam.iam.v1.IAMService/AssignProjectRole"
+	IAMService_RevokeRole_FullMethodName           = "/thittam.iam.v1.IAMService/RevokeRole"
+	IAMService_ListRoles_FullMethodName            = "/thittam.iam.v1.IAMService/ListRoles"
+	IAMService_CheckPermission_FullMethodName      = "/thittam.iam.v1.IAMService/CheckPermission"
+	IAMService_CreateTenant_FullMethodName         = "/thittam.iam.v1.IAMService/CreateTenant"
+	IAMService_GetTenant_FullMethodName            = "/thittam.iam.v1.IAMService/GetTenant"
+	IAMService_SuspendTenant_FullMethodName        = "/thittam.iam.v1.IAMService/SuspendTenant"
+	IAMService_ClearTenantLegalHold_FullMethodName = "/thittam.iam.v1.IAMService/ClearTenantLegalHold"
+	IAMService_SetTenantAddress_FullMethodName     = "/thittam.iam.v1.IAMService/SetTenantAddress"
+	IAMService_InviteUser_FullMethodName           = "/thittam.iam.v1.IAMService/InviteUser"
+	IAMService_AcceptInvitation_FullMethodName     = "/thittam.iam.v1.IAMService/AcceptInvitation"
+	IAMService_SetOIDCConfig_FullMethodName        = "/thittam.iam.v1.IAMService/SetOIDCConfig"
+	IAMService_StartImpersonation_FullMethodName   = "/thittam.iam.v1.IAMService/StartImpersonation"
+	IAMService_EndImpersonation_FullMethodName     = "/thittam.iam.v1.IAMService/EndImpersonation"
 )
 
 // IAMServiceClient is the client API for IAMService service.
@@ -83,6 +84,11 @@ type IAMServiceClient interface {
 	CreateTenant(ctx context.Context, in *CreateTenantRequest, opts ...grpc.CallOption) (*Tenant, error)
 	GetTenant(ctx context.Context, in *GetTenantRequest, opts ...grpc.CallOption) (*Tenant, error)
 	SuspendTenant(ctx context.Context, in *SuspendTenantRequest, opts ...grpc.CallOption) (*Tenant, error)
+	// ClearTenantLegalHold resets hold_until and freeze_reason to NULL,
+	// releasing the retention-sweeper pause applied by a prior
+	// SuspendTenant with legal-hold parameters (#92 Stage 4 pair).
+	// Idempotent — calling on a tenant with no active hold is a no-op.
+	ClearTenantLegalHold(ctx context.Context, in *ClearTenantLegalHoldRequest, opts ...grpc.CallOption) (*Tenant, error)
 	SetTenantAddress(ctx context.Context, in *SetTenantAddressRequest, opts ...grpc.CallOption) (*Tenant, error)
 	// --- Invitations ---
 	InviteUser(ctx context.Context, in *InviteUserRequest, opts ...grpc.CallOption) (*Invitation, error)
@@ -273,6 +279,15 @@ func (c *iAMServiceClient) SuspendTenant(ctx context.Context, in *SuspendTenantR
 	return out, nil
 }
 
+func (c *iAMServiceClient) ClearTenantLegalHold(ctx context.Context, in *ClearTenantLegalHoldRequest, opts ...grpc.CallOption) (*Tenant, error) {
+	out := new(Tenant)
+	err := c.cc.Invoke(ctx, IAMService_ClearTenantLegalHold_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *iAMServiceClient) SetTenantAddress(ctx context.Context, in *SetTenantAddressRequest, opts ...grpc.CallOption) (*Tenant, error) {
 	out := new(Tenant)
 	err := c.cc.Invoke(ctx, IAMService_SetTenantAddress_FullMethodName, in, out, opts...)
@@ -360,6 +375,11 @@ type IAMServiceServer interface {
 	CreateTenant(context.Context, *CreateTenantRequest) (*Tenant, error)
 	GetTenant(context.Context, *GetTenantRequest) (*Tenant, error)
 	SuspendTenant(context.Context, *SuspendTenantRequest) (*Tenant, error)
+	// ClearTenantLegalHold resets hold_until and freeze_reason to NULL,
+	// releasing the retention-sweeper pause applied by a prior
+	// SuspendTenant with legal-hold parameters (#92 Stage 4 pair).
+	// Idempotent — calling on a tenant with no active hold is a no-op.
+	ClearTenantLegalHold(context.Context, *ClearTenantLegalHoldRequest) (*Tenant, error)
 	SetTenantAddress(context.Context, *SetTenantAddressRequest) (*Tenant, error)
 	// --- Invitations ---
 	InviteUser(context.Context, *InviteUserRequest) (*Invitation, error)
@@ -432,6 +452,9 @@ func (UnimplementedIAMServiceServer) GetTenant(context.Context, *GetTenantReques
 }
 func (UnimplementedIAMServiceServer) SuspendTenant(context.Context, *SuspendTenantRequest) (*Tenant, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SuspendTenant not implemented")
+}
+func (UnimplementedIAMServiceServer) ClearTenantLegalHold(context.Context, *ClearTenantLegalHoldRequest) (*Tenant, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ClearTenantLegalHold not implemented")
 }
 func (UnimplementedIAMServiceServer) SetTenantAddress(context.Context, *SetTenantAddressRequest) (*Tenant, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetTenantAddress not implemented")
@@ -806,6 +829,24 @@ func _IAMService_SuspendTenant_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IAMService_ClearTenantLegalHold_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClearTenantLegalHoldRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMServiceServer).ClearTenantLegalHold(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IAMService_ClearTenantLegalHold_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMServiceServer).ClearTenantLegalHold(ctx, req.(*ClearTenantLegalHoldRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _IAMService_SetTenantAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetTenantAddressRequest)
 	if err := dec(in); err != nil {
@@ -996,6 +1037,10 @@ var IAMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SuspendTenant",
 			Handler:    _IAMService_SuspendTenant_Handler,
+		},
+		{
+			MethodName: "ClearTenantLegalHold",
+			Handler:    _IAMService_ClearTenantLegalHold_Handler,
 		},
 		{
 			MethodName: "SetTenantAddress",

@@ -44,6 +44,23 @@ UPDATE tenants SET
 WHERE id = @id
 RETURNING *;
 
+-- name: ClearTenantLegalHold :one
+-- Unconditionally clears the two legal-hold columns on a tenant,
+-- releasing the retention-sweeper pause applied via SuspendTenant
+-- with hold_until/freeze_reason (#92 Stage 4 pair). The tenant's
+-- status is NOT touched — whatever state it was in (typically
+-- 'suspended') is preserved and the sweeper's normal lifecycle
+-- clock resumes on the next run.
+--
+-- Idempotent: running on a tenant with no hold is a no-op UPDATE
+-- that still returns the row. Callers decide whether to treat the
+-- no-op as "already cleared" (no audit event) vs. "cleared now".
+UPDATE tenants SET
+    hold_until    = NULL,
+    freeze_reason = NULL
+WHERE id = $1
+RETURNING *;
+
 -- name: TransitionTenantStatus :one
 -- Idempotent lifecycle transition for the retention sweeper. The WHERE
 -- clause guards against concurrent sweepers double-advancing a tenant;

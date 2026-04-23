@@ -43,6 +43,7 @@ type mockRepo struct {
 	createTenantFn                func(ctx context.Context, tenant *Tenant) error
 	getTenantFn                   func(ctx context.Context, id uuid.UUID) (*Tenant, error)
 	updateTenantStatusFn          func(ctx context.Context, id uuid.UUID, status string, holdUntil *time.Time, freezeReason *string) error
+	clearTenantLegalHoldFn        func(ctx context.Context, id uuid.UUID) (*Tenant, error)
 	updateTenantAddressFn         func(ctx context.Context, t *Tenant) (*Tenant, error)
 	transitionTenantStatusFn      func(ctx context.Context, id uuid.UUID, from, to string) (*Tenant, bool, error)
 	listTenantsDueForLifecycleFn  func(ctx context.Context, now time.Time, limit int) ([]*Tenant, error)
@@ -146,6 +147,12 @@ func (m *mockRepo) UpdateTenantStatus(ctx context.Context, id uuid.UUID, status 
 		return m.updateTenantStatusFn(ctx, id, status, holdUntil, freezeReason)
 	}
 	return nil
+}
+func (m *mockRepo) ClearTenantLegalHold(ctx context.Context, id uuid.UUID) (*Tenant, error) {
+	if m.clearTenantLegalHoldFn != nil {
+		return m.clearTenantLegalHoldFn(ctx, id)
+	}
+	return &Tenant{ID: id, Status: TenantStatusSuspended}, nil
 }
 func (m *mockRepo) UpdateTenantAddress(ctx context.Context, t *Tenant) (*Tenant, error) {
 	if m.updateTenantAddressFn != nil {
@@ -966,6 +973,152 @@ func TestSuspendTenant_BareSuspend_EmitsNoLegalHoldAuditEvent(t *testing.T) {
 	require.NoError(t, logger.Close(flushCtx))
 
 	assert.Empty(t, store.snapshot(), "bare suspend must not emit legal-hold audit event")
+}
+
+func TestClearTenantLegalHold_ClearsFieldsAndEmitsAudit(t *testing.T) {
+	// Not t.Parallel() — waits on audit flush.
+	holdUntil := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	reason := "regulatory freeze"
+
+	before := &Tenant{
+		ID:           fixedTenantID,
+		Name:         "Acme",
+		Status:       TenantStatusSuspended,
+		HoldUntil:    &holdUntil,
+		FreezeReason: &reason,
+	}
+	after := &Tenant{ID: fixedTenantID, Name: "Acme", Status: TenantStatusSuspended}
+
+	repo := &mockRepo{
+		getTenantFn: func(_ context.Context, _ uuid.UUID) (*Tenant, error) {
+			return before, nil
+		},
+		clearTenantLegalHoldFn: func(_ context.Context, _ uuid.UUID) (*Tenant, error) {
+			return after, nil
+		},
+	}
+
+	store := &memoryAuditStore{}
+	logger := audit.NewLogger(store, audit.LoggerConfig{
+		BufferSize:    10,
+		FlushInterval: 10 * time.Millisecond,
+		BatchSize:     10,
+	}, nil)
+	svc := newTestService(repo).WithAuditLogger(logger)
+
+	actorID := uuid.MustParse("a2000000-0000-0000-0000-000000000092")
+	ctx := audit.WithActor(context.Background(), audit.ActorInfo{
+		UserID: actorID,
+		Email:  "admin@xyzcba.com",
+		IP:     "10.0.0.2",
+	})
+
+	clearReason := "court order 2026-CV-456"
+	got, err := svc.ClearTenantLegalHold(ctx, fixedTenantID, clearReason)
+	require.NoError(t, err)
+	assert.Nil(t, got.HoldUntil, "returned tenant should have cleared hold_until")
+	assert.Nil(t, got.FreezeReason, "returned tenant should have cleared freeze_reason")
+
+	flushCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	require.NoError(t, logger.Close(flushCtx))
+
+	events := store.snapshot()
+	require.Len(t, events, 1)
+	e := events[0]
+	assert.Equal(t, fixedTenantID, e.TenantID)
+	assert.Equal(t, actorID, e.ActorID)
+	assert.Equal(t, "admin@xyzcba.com", e.ActorEmail)
+	assert.Equal(t, audit.ActionLegalHoldCleared, e.Action)
+	assert.Equal(t, audit.ResourceTenant, e.ResourceType)
+	assert.JSONEq(t,
+		`{"status":"suspended","hold_until":"2026-06-01T00:00:00Z","freeze_reason":"regulatory freeze"}`,
+		string(e.OldState),
+	)
+	assert.JSONEq(t, `{"status":"suspended"}`, string(e.NewState))
+	assert.JSONEq(t, `{"reason":"court order 2026-CV-456"}`, string(e.Metadata),
+		"operator-supplied rationale lives in Metadata, not state")
+}
+
+func TestClearTenantLegalHold_NoActiveHold_EmitsNoAuditEvent(t *testing.T) {
+	// Idempotent no-op: tenant had no hold to begin with, so no
+	// ActionLegalHoldCleared event. The generic RPC audit interceptor
+	// still records the call itself.
+	notHeld := &Tenant{ID: fixedTenantID, Name: "Clean", Status: TenantStatusSuspended}
+
+	repo := &mockRepo{
+		getTenantFn: func(_ context.Context, _ uuid.UUID) (*Tenant, error) {
+			return notHeld, nil
+		},
+		clearTenantLegalHoldFn: func(_ context.Context, _ uuid.UUID) (*Tenant, error) {
+			return notHeld, nil
+		},
+	}
+
+	store := &memoryAuditStore{}
+	logger := audit.NewLogger(store, audit.LoggerConfig{
+		BufferSize:    10,
+		FlushInterval: 10 * time.Millisecond,
+		BatchSize:     10,
+	}, nil)
+	svc := newTestService(repo).WithAuditLogger(logger)
+
+	_, err := svc.ClearTenantLegalHold(context.Background(), fixedTenantID, "routine review")
+	require.NoError(t, err)
+
+	flushCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	require.NoError(t, logger.Close(flushCtx))
+
+	assert.Empty(t, store.snapshot(), "no audit event when tenant had no hold to clear")
+}
+
+func TestClearTenantLegalHold_EmptyReason_EmptyMetadata(t *testing.T) {
+	// Reason is optional (proto3 field presence); empty string maps to
+	// empty-object metadata so we always emit valid JSON.
+	reason := "compliance sign-off"
+	before := &Tenant{ID: fixedTenantID, Status: TenantStatusSuspended, FreezeReason: &reason}
+	after := &Tenant{ID: fixedTenantID, Status: TenantStatusSuspended}
+
+	repo := &mockRepo{
+		getTenantFn: func(_ context.Context, _ uuid.UUID) (*Tenant, error) { return before, nil },
+		clearTenantLegalHoldFn: func(_ context.Context, _ uuid.UUID) (*Tenant, error) {
+			return after, nil
+		},
+	}
+
+	store := &memoryAuditStore{}
+	logger := audit.NewLogger(store, audit.LoggerConfig{
+		BufferSize:    10,
+		FlushInterval: 10 * time.Millisecond,
+		BatchSize:     10,
+	}, nil)
+	svc := newTestService(repo).WithAuditLogger(logger)
+
+	_, err := svc.ClearTenantLegalHold(context.Background(), fixedTenantID, "")
+	require.NoError(t, err)
+
+	flushCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	require.NoError(t, logger.Close(flushCtx))
+
+	events := store.snapshot()
+	require.Len(t, events, 1)
+	assert.JSONEq(t, `{}`, string(events[0].Metadata))
+}
+
+func TestClearTenantLegalHold_RepoError_Propagated(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("db unavailable")
+	svc := newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, _ uuid.UUID) (*Tenant, error) {
+			return nil, sentinel
+		},
+	})
+
+	_, err := svc.ClearTenantLegalHold(context.Background(), fixedTenantID, "")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, sentinel)
 }
 
 func TestInviteUser_SetsTokenAndExpiry(t *testing.T) {

@@ -426,6 +426,22 @@ func (p *Postgres) UpdateTenantStatus(
 	return nil
 }
 
+// ClearTenantLegalHold resets hold_until and freeze_reason to NULL
+// and returns the updated tenant (#92 Stage 4 pair). Idempotent —
+// the UPDATE runs unconditionally, so a tenant with no active hold
+// simply returns unchanged. Service-layer decides whether to emit
+// an audit event based on the pre-state.
+func (p *Postgres) ClearTenantLegalHold(ctx context.Context, id uuid.UUID) (*iam.Tenant, error) {
+	row, err := p.q.ClearTenantLegalHold(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, iam.ErrTenantNotFound
+		}
+		return nil, fmt.Errorf("iam/db: clear tenant legal hold: %w", err)
+	}
+	return dbTenantToDomain(row), nil
+}
+
 // TransitionTenantStatus performs a conditional transition guarded by the
 // current status. Returns (tenant, true, nil) on successful transition,
 // (nil, false, nil) when another worker already advanced the row (the

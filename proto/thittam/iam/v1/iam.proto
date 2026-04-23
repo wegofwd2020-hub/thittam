@@ -53,6 +53,11 @@ service IAMService {
   rpc CreateTenant(CreateTenantRequest) returns (Tenant);
   rpc GetTenant(GetTenantRequest) returns (Tenant);
   rpc SuspendTenant(SuspendTenantRequest) returns (Tenant);
+  // ClearTenantLegalHold resets hold_until and freeze_reason to NULL,
+  // releasing the retention-sweeper pause applied by a prior
+  // SuspendTenant with legal-hold parameters (#92 Stage 4 pair).
+  // Idempotent — calling on a tenant with no active hold is a no-op.
+  rpc ClearTenantLegalHold(ClearTenantLegalHoldRequest) returns (Tenant);
   rpc SetTenantAddress(SetTenantAddressRequest) returns (Tenant);
 
   // --- Invitations ---
@@ -321,6 +326,14 @@ message SuspendTenantRequest {
   // active hold.
   optional google.protobuf.Timestamp hold_until    = 2;
   optional string                    freeze_reason = 3;
+}
+
+message ClearTenantLegalHoldRequest {
+  string id = 1;
+  // Optional rationale captured in the audit event metadata
+  // (e.g. "court order 2026-CV-123", "compliance sign-off"). Not
+  // validated — free-form operator context for post-hoc forensics.
+  optional string reason = 2;
 }
 
 // Invitations
