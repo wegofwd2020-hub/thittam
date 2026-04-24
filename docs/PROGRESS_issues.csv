@@ -1,5 +1,6 @@
 issue_number,title,state,commit_count,first,last,span_days,scopes
 60,feat(api): REST→gRPC bridge — grpc-gateway in services + Kong in local stack,OPEN,8,2026-04-13,2026-04-13,0,iam; iam-gateway; web
+92,feat(iam): scheduled tenant retention sweeper (suspended → deactivated → purge),OPEN,5,2026-04-21,2026-04-23,2,iam
 61,feat(onboarding): capture company address + country-driven primary currency,OPEN,3,2026-04-14,2026-04-14,0,iam; seed
 23,[P2] Add load and chaos testing for the double-entry ledger and concurrent expense approvals,CLOSED,3,2026-04-04,2026-04-11,7,chaos; frontend; load
 19,[P1] Document NATS JetStream dead-letter strategy for financial events,CLOSED,3,2026-04-04,2026-04-11,7,events; infra
@@ -24,7 +25,6 @@ issue_number,title,state,commit_count,first,last,span_days,scopes
 20,[P2] Document vertical plugin YAML schema (JSON Schema or protobuf),CLOSED,2,2026-04-04,2026-04-10,6,vertical
 18,"[P1] Run critical-path E2E tests on every PR, not just nightly",CLOSED,2,2026-04-04,2026-04-10,6,ci; iam
 14,[P0] Design and implement saga pattern for the 9-step tenant registration pipeline,CLOSED,2,2026-04-04,2026-04-10,6,registration; reporting
-92,feat(iam): scheduled tenant retention sweeper (suspended → deactivated → purge),OPEN,1,2026-04-21,2026-04-21,0,iam
 100,feat(iam): tenant retention lifecycle sweeper (Stages 1+2 of #92),MERGED,1,2026-04-21,2026-04-21,0,iam
 99,feat(iam): UNIQUE constraint on tenants.name (case-insensitive),MERGED,1,2026-04-21,2026-04-21,0,iam
 97,chore(demo): preflight smoke-test for local dev stack,MERGED,1,2026-04-21,2026-04-21,0,demo
