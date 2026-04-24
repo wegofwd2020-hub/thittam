@@ -145,8 +145,9 @@ func main() {
 		if err := budgetv1.RegisterBudgetServiceHandlerFromEndpoint(ctx, gwMux, "localhost:8081", opts); err != nil {
 			log.Fatalf("budget-planning: register gateway: %v", err)
 		}
+		extraOrigins := corsutil.ExtraOriginsFromEnv()
 		corsHandler := cors.New(cors.Options{
-			AllowOriginFunc: corsutil.LocalDevOriginFunc(),
+			AllowOriginFunc: corsutil.OriginFunc(extraOrigins...),
 			AllowedMethods: []string{
 				http.MethodGet, http.MethodPost, http.MethodPut,
 				http.MethodPatch, http.MethodDelete, http.MethodOptions,
@@ -158,7 +159,7 @@ func main() {
 			},
 			AllowCredentials: true,
 		}).Handler(gwMux)
-		log.Printf("budget-planning REST gateway ready on :9081 (CORS: local-dev origins — loopback + RFC-1918 on :3100/:3000)")
+		log.Printf("budget-planning REST gateway ready on :9081 (CORS: local-dev + %d extra origin(s))", len(extraOrigins))
 		if err := http.ListenAndServe(":9081", corsHandler); err != nil {
 			log.Fatalf("budget-planning: gateway listen: %v", err)
 		}

@@ -238,12 +238,13 @@ func main() {
 		if err := iamv1.RegisterIAMServiceHandlerFromEndpoint(ctx, gwMux, "localhost:8086", opts); err != nil {
 			log.Fatalf("iam: register gateway: %v", err)
 		}
-		// CORS for local browser dev. Accepts the Next.js dev server on :3100
-		// or :3000 from any loopback / RFC-1918 host — so demos work over LAN
-		// without re-editing the allow-list. Production CORS is handled by Kong
-		// at the edge; this wrapper is a local-dev convenience.
+		// CORS: accepts the Next.js dev server on :3100/:3000 from any
+		// loopback or RFC-1918 host (local dev, LAN demos) plus any exact
+		// origin listed in CORS_EXTRA_ORIGINS (pre-Kong cloud deploys).
+		// Production CORS is handled by Kong at the edge.
+		extraOrigins := corsutil.ExtraOriginsFromEnv()
 		corsHandler := cors.New(cors.Options{
-			AllowOriginFunc: corsutil.LocalDevOriginFunc(),
+			AllowOriginFunc: corsutil.OriginFunc(extraOrigins...),
 			AllowedMethods: []string{
 				http.MethodGet, http.MethodPost, http.MethodPut,
 				http.MethodPatch, http.MethodDelete, http.MethodOptions,
@@ -255,7 +256,7 @@ func main() {
 			},
 			AllowCredentials: true,
 		}).Handler(gwMux)
-		log.Printf("iam REST gateway ready on :9086 (CORS: local-dev origins — loopback + RFC-1918 on :3100/:3000)")
+		log.Printf("iam REST gateway ready on :9086 (CORS: local-dev + %d extra origin(s))", len(extraOrigins))
 		if err := http.ListenAndServe(":9086", corsHandler); err != nil {
 			log.Fatalf("iam: gateway listen: %v", err)
 		}

@@ -148,8 +148,9 @@ func main() {
 		if err := projectv1.RegisterProjectServiceHandlerFromEndpoint(ctx, gwMux, "localhost:8090", opts); err != nil {
 			log.Fatalf("project-management: register gateway: %v", err)
 		}
+		extraOrigins := corsutil.ExtraOriginsFromEnv()
 		corsHandler := cors.New(cors.Options{
-			AllowOriginFunc: corsutil.LocalDevOriginFunc(),
+			AllowOriginFunc: corsutil.OriginFunc(extraOrigins...),
 			AllowedMethods: []string{
 				http.MethodGet, http.MethodPost, http.MethodPut,
 				http.MethodPatch, http.MethodDelete, http.MethodOptions,
@@ -161,7 +162,7 @@ func main() {
 			},
 			AllowCredentials: true,
 		}).Handler(gwMux)
-		log.Printf("project-management REST gateway ready on :9080 (CORS: local-dev origins — loopback + RFC-1918 on :3100/:3000)")
+		log.Printf("project-management REST gateway ready on :9080 (CORS: local-dev + %d extra origin(s))", len(extraOrigins))
 		if err := http.ListenAndServe(":9080", corsHandler); err != nil {
 			log.Fatalf("project-management: gateway listen: %v", err)
 		}
