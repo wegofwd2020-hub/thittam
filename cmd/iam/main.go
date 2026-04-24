@@ -29,6 +29,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,6 +46,7 @@ import (
 	"github.com/wegofwd2020/thittam/pkg/corsutil"
 	appcrypto "github.com/wegofwd2020/thittam/pkg/crypto"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
+	"github.com/wegofwd2020/thittam/pkg/ratelimit"
 	"github.com/wegofwd2020/thittam/pkg/migrate"
 	"github.com/wegofwd2020/thittam/pkg/secrets"
 	"github.com/wegofwd2020/thittam/pkg/server"
@@ -238,6 +241,25 @@ func main() {
 		if err := iamv1.RegisterIAMServiceHandlerFromEndpoint(ctx, gwMux, "localhost:8086", opts); err != nil {
 			log.Fatalf("iam: register gateway: %v", err)
 		}
+		// Rate-limit /api/v1/auth/* by client IP to blunt credential stuffing.
+		// Defaults to 10 attempts per IP per minute; override with
+		// AUTH_RATE_LIMIT and AUTH_RATE_WINDOW env vars. Fails open if Redis
+		// is unreachable — the limiter is a safety net, not an auth layer.
+		authRateLimiter := ratelimit.Middleware(rdb, ratelimit.Config{
+			Limit:     envInt("AUTH_RATE_LIMIT", 10),
+			Window:    envDuration("AUTH_RATE_WINDOW", time.Minute),
+			KeyPrefix: "iam:auth",
+		})
+		// Wrap only /api/v1/auth/* with the limiter; everything else goes
+		// straight to the grpc-gateway mux.
+		routed := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/api/v1/auth/") {
+				authRateLimiter(gwMux).ServeHTTP(w, r)
+				return
+			}
+			gwMux.ServeHTTP(w, r)
+		})
+
 		// CORS: accepts the Next.js dev server on :3100/:3000 from any
 		// loopback or RFC-1918 host (local dev, LAN demos) plus any exact
 		// origin listed in CORS_EXTRA_ORIGINS (pre-Kong cloud deploys).
@@ -255,8 +277,8 @@ func main() {
 				"X-Caller-Id", "X-Caller-Email", "X-Caller-Role",
 			},
 			AllowCredentials: true,
-		}).Handler(gwMux)
-		log.Printf("iam REST gateway ready on :9086 (CORS: local-dev + %d extra origin(s))", len(extraOrigins))
+		}).Handler(routed)
+		log.Printf("iam REST gateway ready on :9086 (CORS: local-dev + %d extra origin(s); auth rate-limit: %d/%s)", len(extraOrigins), envInt("AUTH_RATE_LIMIT", 10), envDuration("AUTH_RATE_WINDOW", time.Minute))
 		if err := http.ListenAndServe(":9086", corsHandler); err != nil {
 			log.Fatalf("iam: gateway listen: %v", err)
 		}
@@ -339,6 +361,35 @@ func getenv(key, defaultValue string) string {
 		return v
 	}
 	return defaultValue
+}
+
+// envInt reads an int env var or returns the default. Invalid values are
+// treated as unset (warn in logs so misconfiguration is visible).
+func envInt(key string, defaultValue int) int {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return defaultValue
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		log.Printf("iam: env %s=%q is not an int, using default %d", key, raw, defaultValue)
+		return defaultValue
+	}
+	return n
+}
+
+// envDuration reads a Go duration env var (e.g. "1m", "30s") or returns the default.
+func envDuration(key string, defaultValue time.Duration) time.Duration {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return defaultValue
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		log.Printf("iam: env %s=%q is not a duration, using default %s", key, raw, defaultValue)
+		return defaultValue
+	}
+	return d
 }
 
 // iamSchemaMigrator implements iam.SchemaMigrator by running every migration
