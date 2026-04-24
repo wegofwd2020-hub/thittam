@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/protojson"
 	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/corsutil"
 	appcrypto "github.com/wegofwd2020/thittam/pkg/crypto"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/migrate"
@@ -237,25 +238,24 @@ func main() {
 		if err := iamv1.RegisterIAMServiceHandlerFromEndpoint(ctx, gwMux, "localhost:8086", opts); err != nil {
 			log.Fatalf("iam: register gateway: %v", err)
 		}
-		// CORS for local browser dev. The Next.js dev server runs on :3100
-		// (and historically :3000); add both. In production Kong handles CORS
-		// at the edge — this wrapper is a local-dev convenience.
+		// CORS for local browser dev. Accepts the Next.js dev server on :3100
+		// or :3000 from any loopback / RFC-1918 host — so demos work over LAN
+		// without re-editing the allow-list. Production CORS is handled by Kong
+		// at the edge; this wrapper is a local-dev convenience.
 		corsHandler := cors.New(cors.Options{
-			AllowedOrigins: []string{
-				"http://localhost:3100",
-				"http://localhost:3000",
-			},
+			AllowOriginFunc: corsutil.LocalDevOriginFunc(),
 			AllowedMethods: []string{
 				http.MethodGet, http.MethodPost, http.MethodPut,
 				http.MethodPatch, http.MethodDelete, http.MethodOptions,
 			},
 			AllowedHeaders: []string{
 				"Content-Type", "Authorization",
-				"X-Tenant-Id", "X-Project-Id", "X-Caller-Id",
+				"X-Tenant-Id", "X-Project-Id",
+				"X-Caller-Id", "X-Caller-Email", "X-Caller-Role",
 			},
 			AllowCredentials: true,
 		}).Handler(gwMux)
-		log.Printf("iam REST gateway ready on :9086 (CORS allow-list: localhost:3100, localhost:3000)")
+		log.Printf("iam REST gateway ready on :9086 (CORS: local-dev origins — loopback + RFC-1918 on :3100/:3000)")
 		if err := http.ListenAndServe(":9086", corsHandler); err != nil {
 			log.Fatalf("iam: gateway listen: %v", err)
 		}

@@ -48,19 +48,28 @@ if [ -f "$PID_FILE" ]; then
   done < "$PID_FILE"
   rm -f "$PID_FILE"
   echo ""
-  echo -e "  Stopped ${STOPPED} process(es). ${MISSING} were already gone."
-else
-  echo -e "  ${YELLOW}⚠${RESET}  No PID file found at ${PID_FILE}."
-  echo "  Attempting to kill any running 'go run' service processes..."
-
-  SERVICES=(iam project-management budget-planning expense-tracking
-            general-ledger inventory-management reporting-analytics
-            notifications document billing)
-  for svc in "${SERVICES[@]}"; do
-    pkill -f "go run ./cmd/${svc}" 2>/dev/null \
-      && echo -e "  ${GREEN}✓${RESET} Killed ${svc}" || true
-  done
+  echo -e "  Stopped ${STOPPED} launcher(s). ${MISSING} were already gone."
 fi
+
+# Always sweep the compiled service binaries — `go run` exec's into a cached
+# binary whose PID is not the PID we recorded in PID_FILE, so killing the
+# launcher above does not cascade. Also serves as fallback when PID_FILE is
+# missing (e.g. process crash, or dev-start was never run in this shell).
+echo ""
+echo "  Sweeping service binaries..."
+SERVICES=(iam project-management budget-planning expense-tracking
+          general-ledger inventory-management reporting-analytics
+          notifications document billing)
+for svc in "${SERVICES[@]}"; do
+  # Kill the `go run` launcher if still around (belt-and-braces for the PID-file path).
+  pkill -f "go run ./cmd/${svc}" 2>/dev/null \
+    && echo -e "  ${GREEN}✓${RESET} Killed ${svc} (go run)" || true
+  # Kill the compiled binary that `go run` exec'd into. The kernel truncates
+  # comm to 15 chars, so long names (e.g. inventory-management) need the
+  # truncated form for `pkill -x`.
+  pkill -x "${svc:0:15}" 2>/dev/null \
+    && echo -e "  ${GREEN}✓${RESET} Killed ${svc} (binary)" || true
+done
 
 # ── Stop infrastructure ───────────────────────────────────────────────────────
 

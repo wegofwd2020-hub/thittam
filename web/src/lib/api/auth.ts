@@ -3,13 +3,11 @@ import type { TokenPair } from "./types";
 import { ApiError } from "./client";
 import type { ApiErrorBody } from "./types";
 
-const AUTH_BASE = env.platformApiUrl;
-
 async function authRequest<T>(
   path: string,
   body: unknown,
 ): Promise<T> {
-  const res = await fetch(`${AUTH_BASE}${path}`, {
+  const res = await fetch(`${env.platformApiUrl}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -73,5 +71,5 @@ export async function logout(token: string): Promise<void> {
  * The caller should redirect the browser to this URL.
  */
 export function getSSOAuthorizeUrl(tenantSlug: string): string {
-  return `${AUTH_BASE}/api/v1/auth/sso/authorize?tenant=${encodeURIComponent(tenantSlug)}`;
+  return `${env.platformApiUrl}/api/v1/auth/sso/authorize?tenant=${encodeURIComponent(tenantSlug)}`;
 }

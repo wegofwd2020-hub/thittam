@@ -3,29 +3,45 @@
 // budget-planning: 9081). Once Kong (#60 Phase B) is in front of everything,
 // set NEXT_PUBLIC_API_URL=http://localhost:8000 and it will route to all.
 //
-// In local dev, the ApiClient uses `resolveApiUrl(path)` to pick the correct
-// per-service base URL from the path prefix. When NEXT_PUBLIC_API_URL is set
-// (production/Kong), every request goes through that single origin instead.
+// When a NEXT_PUBLIC_* env var is set, it wins. Otherwise, the URL is derived
+// from window.location.hostname at call time so the app works from any host —
+// localhost for single-machine dev, or a LAN IP / hostname for customer demos
+// served over the network. SSR paths get "http://localhost:<port>" as a
+// placeholder; API calls only fire client-side after hydration.
+
+function hostUrl(port: number): string {
+  if (typeof window !== "undefined" && window.location?.hostname) {
+    return `${window.location.protocol}//${window.location.hostname}:${port}`;
+  }
+  return `http://localhost:${port}`;
+}
+
 export const env = {
   /** Single gateway URL (Kong). When unset, client routes per-service in dev. */
-  apiUrl: process.env.NEXT_PUBLIC_API_URL || "",
+  get apiUrl(): string {
+    return process.env.NEXT_PUBLIC_API_URL || "";
+  },
 
   /** IAM grpc-gateway — default for auth, users, tenants. */
-  iamApiUrl:
-    process.env.NEXT_PUBLIC_IAM_URL || "http://localhost:9086",
+  get iamApiUrl(): string {
+    return process.env.NEXT_PUBLIC_IAM_URL || hostUrl(9086);
+  },
 
   /** project-management grpc-gateway — productions, phases, crew. */
-  projectApiUrl:
-    process.env.NEXT_PUBLIC_PROJECT_URL || "http://localhost:9080",
+  get projectApiUrl(): string {
+    return process.env.NEXT_PUBLIC_PROJECT_URL || hostUrl(9080);
+  },
 
   /** budget-planning grpc-gateway — budgets, line items, categories. */
-  budgetApiUrl:
-    process.env.NEXT_PUBLIC_BUDGET_URL || "http://localhost:9081",
+  get budgetApiUrl(): string {
+    return process.env.NEXT_PUBLIC_BUDGET_URL || hostUrl(9081);
+  },
 
   /**
    * Base URL for platform-level APIs (auth, tenant provisioning).
    * Defaults to the IAM grpc-gateway port in local dev.
    */
-  platformApiUrl:
-    process.env.NEXT_PUBLIC_PLATFORM_API_URL || "http://localhost:9086",
-} as const;
+  get platformApiUrl(): string {
+    return process.env.NEXT_PUBLIC_PLATFORM_API_URL || hostUrl(9086);
+  },
+};

@@ -23,6 +23,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	projectv1 "github.com/wegofwd2020/thittam/gen/project/v1"
+	"github.com/wegofwd2020/thittam/pkg/corsutil"
 	"github.com/wegofwd2020/thittam/pkg/events"
 	"github.com/wegofwd2020/thittam/pkg/iamclient"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
@@ -148,21 +149,19 @@ func main() {
 			log.Fatalf("project-management: register gateway: %v", err)
 		}
 		corsHandler := cors.New(cors.Options{
-			AllowedOrigins: []string{
-				"http://localhost:3100",
-				"http://localhost:3000",
-			},
+			AllowOriginFunc: corsutil.LocalDevOriginFunc(),
 			AllowedMethods: []string{
 				http.MethodGet, http.MethodPost, http.MethodPut,
 				http.MethodPatch, http.MethodDelete, http.MethodOptions,
 			},
 			AllowedHeaders: []string{
 				"Content-Type", "Authorization",
-				"X-Tenant-Id", "X-Project-Id", "X-Caller-Id",
+				"X-Tenant-Id", "X-Project-Id",
+				"X-Caller-Id", "X-Caller-Email", "X-Caller-Role",
 			},
 			AllowCredentials: true,
 		}).Handler(gwMux)
-		log.Printf("project-management REST gateway ready on :9080 (CORS allow-list: localhost:3100, localhost:3000)")
+		log.Printf("project-management REST gateway ready on :9080 (CORS: local-dev origins — loopback + RFC-1918 on :3100/:3000)")
 		if err := http.ListenAndServe(":9080", corsHandler); err != nil {
 			log.Fatalf("project-management: gateway listen: %v", err)
 		}
