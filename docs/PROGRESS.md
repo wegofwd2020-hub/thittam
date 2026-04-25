@@ -1,6 +1,6 @@
 # Thittam — Progress Chart
 
-_Auto-generated 2026-04-24T05:13:12+00:00. Regenerated nightly at 21:00 EST._
+_Auto-generated 2026-04-25T04:40:16+00:00. Regenerated nightly at 21:00 EST._
 
 Features are GitHub issues/PRs from [`wegofwd2020-hub/thittam`](https://github.com/wegofwd2020-hub/thittam). Areas are conventional-commit scopes. Script: `scripts/generate_progress.py`.
 
@@ -22,6 +22,7 @@ gantt
     ci                 :active, s_ci, 2026-04-10, 2026-04-23
     cli                :active, s_cli, 2026-04-04, 2026-04-05
     commands           :active, s_commands, 2026-04-21, 2026-04-22
+    corsutil           :active, s_corsutil, 2026-04-24, 2026-04-25
     coverage           :active, s_coverage, 2026-04-10, 2026-04-13
     database           :active, s_database, 2026-04-04, 2026-04-05
     demo               :active, s_demo, 2026-04-21, 2026-04-22
@@ -35,10 +36,10 @@ gantt
     events             :active, s_events, 2026-04-11, 2026-04-12
     frontend           :active, s_frontend, 2026-04-04, 2026-04-11
     glossary           :active, s_glossary, 2026-04-20, 2026-04-21
-    iam                :active, s_iam, 2026-04-04, 2026-04-23
+    iam                :active, s_iam, 2026-04-04, 2026-04-24
     iam-gateway        :active, s_iam_gateway, 2026-04-13, 2026-04-14
     iam-handler        :active, s_iam_handler, 2026-04-13, 2026-04-14
-    infra              :active, s_infra, 2026-04-10, 2026-04-13
+    infra              :active, s_infra, 2026-04-10, 2026-04-24
     lint               :active, s_lint, 2026-04-13, 2026-04-14
     load               :active, s_load, 2026-04-10, 2026-04-11
     migrate            :active, s_migrate, 2026-04-10, 2026-04-11
@@ -46,7 +47,7 @@ gantt
     payments           :active, s_payments, 2026-04-20, 2026-04-21
     platform           :active, s_platform, 2026-04-11, 2026-04-12
     ports              :active, s_ports, 2026-04-13, 2026-04-14
-    progress           :active, s_progress, 2026-04-20, 2026-04-23
+    progress           :active, s_progress, 2026-04-20, 2026-04-24
     project            :active, s_project, 2026-04-13, 2026-04-14
     proto              :active, s_proto, 2026-04-10, 2026-04-11
     rbac               :active, s_rbac, 2026-04-13, 2026-04-14
@@ -70,11 +71,11 @@ gantt
 
 | Scope | Commits | First | Last | Issues touched |
 |---|---|---|---|---|
-| `iam` | 20 | 2026-04-04 | 2026-04-23 | 11 |
-| `infra` | 14 | 2026-04-10 | 2026-04-13 | 4 |
+| `iam` | 21 | 2026-04-04 | 2026-04-24 | 11 |
+| `infra` | 15 | 2026-04-10 | 2026-04-24 | 4 |
 | `frontend` | 14 | 2026-04-04 | 2026-04-11 | 11 |
+| `progress` | 7 | 2026-04-20 | 2026-04-24 | 0 |
 | `ci` | 6 | 2026-04-10 | 2026-04-23 | 3 |
-| `progress` | 6 | 2026-04-20 | 2026-04-23 | 0 |
 | `ui` | 5 | 2026-04-14 | 2026-04-20 | 4 |
 | `vertical` | 5 | 2026-04-03 | 2026-04-10 | 3 |
 | `web` | 4 | 2026-04-13 | 2026-04-23 | 1 |
@@ -90,6 +91,7 @@ gantt
 | `platform` | 2 | 2026-04-11 | 2026-04-12 | 1 |
 | `proto` | 2 | 2026-04-10 | 2026-04-11 | 1 |
 | `reporting` | 2 | 2026-04-04 | 2026-04-10 | 2 |
+| `corsutil` | 1 | 2026-04-24 | 2026-04-24 | 0 |
 | `docs` | 1 | 2026-04-22 | 2026-04-22 | 0 |
 | `api` | 1 | 2026-04-22 | 2026-04-22 | 0 |
 | `demo` | 1 | 2026-04-21 | 2026-04-21 | 1 |
@@ -295,6 +297,10 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 - **Issues referenced (1):**
   - [#98](https://github.com/wegofwd2020-hub/thittam/issues/98) — docs(commands): add Mermaid example to /new-adr template
 
+### `corsutil`
+
+- **Commits:** 1
+
 ### `coverage`
 
 - **Commits:** 2
@@ -377,7 +383,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `iam`
 
-- **Commits:** 20
+- **Commits:** 21
 - **Issues referenced (11):**
   - [#3](https://github.com/wegofwd2020-hub/thittam/issues/3) — feat(project): Complete project-management service — repository, gRPC wiring, ma
   - [#16](https://github.com/wegofwd2020-hub/thittam/issues/16) — [P1] Add CI test suite for vertical plugin YAML schema validation
@@ -403,7 +409,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `infra`
 
-- **Commits:** 14
+- **Commits:** 15
 - **Issues referenced (4):**
   - [#19](https://github.com/wegofwd2020-hub/thittam/issues/19) — [P1] Document NATS JetStream dead-letter strategy for financial events
   - [#24](https://github.com/wegofwd2020-hub/thittam/issues/24) — [P2] Verify and document Istio DestinationRule ROUND_ROBIN load balancing for al
@@ -454,7 +460,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `progress`
 
-- **Commits:** 6
+- **Commits:** 7
 
 ### `project`
 
