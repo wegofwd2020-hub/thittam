@@ -1,6 +1,6 @@
 # Thittam — Progress Chart
 
-_Auto-generated 2026-05-13T05:53:46+00:00. Regenerated nightly at 21:00 EST._
+_Auto-generated 2026-05-14T05:52:42+00:00. Regenerated nightly at 21:00 EST._
 
 Features are GitHub issues/PRs from [`wegofwd2020-hub/thittam`](https://github.com/wegofwd2020-hub/thittam). Areas are conventional-commit scopes. Script: `scripts/generate_progress.py`.
 
@@ -47,7 +47,7 @@ gantt
     payments           :active, s_payments, 2026-04-20, 2026-04-21
     platform           :active, s_platform, 2026-04-11, 2026-04-12
     ports              :active, s_ports, 2026-04-13, 2026-04-14
-    progress           :active, s_progress, 2026-04-20, 2026-05-12
+    progress           :active, s_progress, 2026-04-20, 2026-05-13
     project            :active, s_project, 2026-04-13, 2026-04-14
     proto              :active, s_proto, 2026-04-10, 2026-04-11
     rbac               :active, s_rbac, 2026-04-13, 2026-04-14
@@ -55,6 +55,7 @@ gantt
     registration       :active, s_registration, 2026-04-10, 2026-04-11
     reporting          :active, s_reporting, 2026-04-04, 2026-04-10
     secrets            :active, s_secrets, 2026-04-10, 2026-04-11
+    security           :active, s_security, 2026-05-13, 2026-05-14
     seed               :active, s_seed, 2026-04-14, 2026-04-20
     seeds              :active, s_seeds, 2026-04-13, 2026-04-14
     server             :active, s_server, 2026-04-13, 2026-04-14
@@ -71,7 +72,7 @@ gantt
 
 | Scope | Commits | First | Last | Issues touched |
 |---|---|---|---|---|
-| `progress` | 25 | 2026-04-20 | 2026-05-12 | 0 |
+| `progress` | 26 | 2026-04-20 | 2026-05-13 | 0 |
 | `iam` | 21 | 2026-04-04 | 2026-04-24 | 11 |
 | `infra` | 15 | 2026-04-10 | 2026-04-24 | 4 |
 | `frontend` | 14 | 2026-04-04 | 2026-04-11 | 11 |
@@ -91,6 +92,7 @@ gantt
 | `platform` | 2 | 2026-04-11 | 2026-04-12 | 1 |
 | `proto` | 2 | 2026-04-10 | 2026-04-11 | 1 |
 | `reporting` | 2 | 2026-04-04 | 2026-04-10 | 2 |
+| `security` | 1 | 2026-05-13 | 2026-05-13 | 2 |
 | `corsutil` | 1 | 2026-04-24 | 2026-04-24 | 0 |
 | `docs` | 1 | 2026-04-22 | 2026-04-22 | 0 |
 | `api` | 1 | 2026-04-22 | 2026-04-22 | 0 |
@@ -156,6 +158,8 @@ gantt
 | [#20](https://github.com/wegofwd2020-hub/thittam/issues/20) | [P2] Document vertical plugin YAML schema (JSON Schema or protobuf) | CLOSED | 2 | 2026-04-04 | 2026-04-10 | vertical |
 | [#18](https://github.com/wegofwd2020-hub/thittam/issues/18) | [P1] Run critical-path E2E tests on every PR, not just nightly | CLOSED | 2 | 2026-04-04 | 2026-04-10 | ci, iam |
 | [#14](https://github.com/wegofwd2020-hub/thittam/issues/14) | [P0] Design and implement saga pattern for the 9-step tenant registrat | CLOSED | 2 | 2026-04-04 | 2026-04-10 | registration, reporting |
+| [#102](https://github.com/wegofwd2020-hub/thittam/issues/102) | chore(security): bump Go to 1.25.10 + x/net v0.53.0 (closes #101) | MERGED | 1 | 2026-05-13 | 2026-05-13 | security |
+| [#101](https://github.com/wegofwd2020-hub/thittam/issues/101) | Vulnerabilities detected in dependencies (2026-05-08) | CLOSED | 1 | 2026-05-13 | 2026-05-13 | security |
 | [#100](https://github.com/wegofwd2020-hub/thittam/issues/100) | feat(iam): tenant retention lifecycle sweeper (Stages 1+2 of #92) | MERGED | 1 | 2026-04-21 | 2026-04-21 | iam |
 | [#99](https://github.com/wegofwd2020-hub/thittam/issues/99) | feat(iam): UNIQUE constraint on tenants.name (case-insensitive) | MERGED | 1 | 2026-04-21 | 2026-04-21 | iam |
 | [#98](https://github.com/wegofwd2020-hub/thittam/issues/98) | docs(commands): add Mermaid example to /new-adr template | MERGED | 1 | 2026-04-21 | 2026-04-21 | commands |
@@ -460,7 +464,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `progress`
 
-- **Commits:** 25
+- **Commits:** 26
 
 ### `project`
 
@@ -507,6 +511,13 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 - **Commits:** 1
 - **Issues referenced (1):**
   - [#2](https://github.com/wegofwd2020-hub/thittam/issues/2) — feat(iam): Build IAM service — identity, auth, RBAC, tenancy
+
+### `security`
+
+- **Commits:** 1
+- **Issues referenced (2):**
+  - [#101](https://github.com/wegofwd2020-hub/thittam/issues/101) — Vulnerabilities detected in dependencies (2026-05-08)
+  - [#102](https://github.com/wegofwd2020-hub/thittam/issues/102) — chore(security): bump Go to 1.25.10 + x/net v0.53.0 (closes #101)
 
 ### `seed`
 
