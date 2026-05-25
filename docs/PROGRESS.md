@@ -1,6 +1,6 @@
 # Thittam — Progress Chart
 
-_Auto-generated 2026-05-24T06:07:02+00:00. Regenerated nightly at 21:00 EST._
+_Auto-generated 2026-05-25T06:41:23+00:00. Regenerated nightly at 21:00 EST._
 
 Features are GitHub issues/PRs from [`wegofwd2020-hub/thittam`](https://github.com/wegofwd2020-hub/thittam). Areas are conventional-commit scopes. Script: `scripts/generate_progress.py`.
 
@@ -47,7 +47,7 @@ gantt
     payments           :active, s_payments, 2026-04-20, 2026-04-21
     platform           :active, s_platform, 2026-04-11, 2026-04-12
     ports              :active, s_ports, 2026-04-13, 2026-04-14
-    progress           :active, s_progress, 2026-04-20, 2026-05-23
+    progress           :active, s_progress, 2026-04-20, 2026-05-24
     project            :active, s_project, 2026-04-13, 2026-04-14
     proto              :active, s_proto, 2026-04-10, 2026-04-11
     rbac               :active, s_rbac, 2026-04-13, 2026-04-14
@@ -72,7 +72,7 @@ gantt
 
 | Scope | Commits | First | Last | Issues touched |
 |---|---|---|---|---|
-| `progress` | 36 | 2026-04-20 | 2026-05-23 | 0 |
+| `progress` | 37 | 2026-04-20 | 2026-05-24 | 0 |
 | `iam` | 21 | 2026-04-04 | 2026-04-24 | 11 |
 | `infra` | 15 | 2026-04-10 | 2026-04-24 | 4 |
 | `frontend` | 14 | 2026-04-04 | 2026-04-11 | 11 |
@@ -464,7 +464,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `progress`
 
-- **Commits:** 36
+- **Commits:** 37
 
 ### `project`
 
