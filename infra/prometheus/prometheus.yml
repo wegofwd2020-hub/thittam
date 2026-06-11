@@ -170,3 +170,21 @@ scrape_configs:
     honor_labels: true
     static_configs:
       - targets: ["pushgateway:9091"]
+
+  # ── StudyBuddy OnDemand (cross-project; Python/FastAPI) ──────────────────
+  # StudyBuddy runs in its own Docker compose stack, but its API is mapped to
+  # the host on port 8000 — Prometheus reaches it via host.docker.internal,
+  # the same pattern Thittam Go services use. Endpoint requires a bearer
+  # METRICS_TOKEN (defaults to dev-metrics-token in StudyBuddy's .env).
+  - job_name: studybuddy-api
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials: dev-metrics-token
+    relabel_configs:
+      - target_label: service
+        replacement: studybuddy-api
+      - target_label: project
+        replacement: studybuddy
