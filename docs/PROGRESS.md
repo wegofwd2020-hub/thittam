@@ -1,6 +1,6 @@
 # Thittam — Progress Chart
 
-_Auto-generated 2026-06-11T06:55:50+00:00. Regenerated nightly at 21:00 EST._
+_Auto-generated 2026-06-12T06:48:34+00:00. Regenerated nightly at 21:00 EST._
 
 Features are GitHub issues/PRs from [`wegofwd2020-hub/thittam`](https://github.com/wegofwd2020-hub/thittam). Areas are conventional-commit scopes. Script: `scripts/generate_progress.py`.
 
@@ -39,7 +39,7 @@ gantt
     iam                :active, s_iam, 2026-04-04, 2026-04-24
     iam-gateway        :active, s_iam_gateway, 2026-04-13, 2026-04-14
     iam-handler        :active, s_iam_handler, 2026-04-13, 2026-04-14
-    infra              :active, s_infra, 2026-04-10, 2026-04-24
+    infra              :active, s_infra, 2026-04-10, 2026-06-11
     lint               :active, s_lint, 2026-04-13, 2026-04-14
     load               :active, s_load, 2026-04-10, 2026-04-11
     migrate            :active, s_migrate, 2026-04-10, 2026-04-11
@@ -47,7 +47,7 @@ gantt
     payments           :active, s_payments, 2026-04-20, 2026-04-21
     platform           :active, s_platform, 2026-04-11, 2026-04-12
     ports              :active, s_ports, 2026-04-13, 2026-04-14
-    progress           :active, s_progress, 2026-04-20, 2026-06-10
+    progress           :active, s_progress, 2026-04-20, 2026-06-11
     project            :active, s_project, 2026-04-13, 2026-04-14
     proto              :active, s_proto, 2026-04-10, 2026-04-11
     rbac               :active, s_rbac, 2026-04-13, 2026-04-14
@@ -72,9 +72,9 @@ gantt
 
 | Scope | Commits | First | Last | Issues touched |
 |---|---|---|---|---|
-| `progress` | 54 | 2026-04-20 | 2026-06-10 | 0 |
+| `progress` | 55 | 2026-04-20 | 2026-06-11 | 0 |
 | `iam` | 21 | 2026-04-04 | 2026-04-24 | 11 |
-| `infra` | 15 | 2026-04-10 | 2026-04-24 | 4 |
+| `infra` | 17 | 2026-04-10 | 2026-06-11 | 4 |
 | `frontend` | 14 | 2026-04-04 | 2026-04-11 | 11 |
 | `ci` | 6 | 2026-04-10 | 2026-04-23 | 3 |
 | `ui` | 5 | 2026-04-14 | 2026-04-20 | 4 |
@@ -158,6 +158,8 @@ gantt
 | [#20](https://github.com/wegofwd2020-hub/thittam/issues/20) | [P2] Document vertical plugin YAML schema (JSON Schema or protobuf) | CLOSED | 2 | 2026-04-04 | 2026-04-10 | vertical |
 | [#18](https://github.com/wegofwd2020-hub/thittam/issues/18) | [P1] Run critical-path E2E tests on every PR, not just nightly | CLOSED | 2 | 2026-04-04 | 2026-04-10 | ci, iam |
 | [#14](https://github.com/wegofwd2020-hub/thittam/issues/14) | [P0] Design and implement saga pattern for the 9-step tenant registrat | CLOSED | 2 | 2026-04-04 | 2026-04-10 | registration, reporting |
+| [#106](https://github.com/wegofwd2020-hub/thittam/issues/106) | chore(infra): scrape StudyBuddy API metrics from local Prometheus | MERGED | 1 | 2026-06-11 | 2026-06-11 | — |
+| [#105](https://github.com/wegofwd2020-hub/thittam/issues/105) | chore(security): bump CI Go toolchain to 1.25.11 | MERGED | 1 | 2026-06-11 | 2026-06-11 | — |
 | [#102](https://github.com/wegofwd2020-hub/thittam/issues/102) | chore(security): bump Go to 1.25.10 + x/net v0.53.0 (closes #101) | MERGED | 1 | 2026-05-13 | 2026-05-13 | security |
 | [#101](https://github.com/wegofwd2020-hub/thittam/issues/101) | Vulnerabilities detected in dependencies (2026-05-08) | CLOSED | 1 | 2026-05-13 | 2026-05-13 | security |
 | [#100](https://github.com/wegofwd2020-hub/thittam/issues/100) | feat(iam): tenant retention lifecycle sweeper (Stages 1+2 of #92) | MERGED | 1 | 2026-04-21 | 2026-04-21 | iam |
@@ -413,7 +415,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `infra`
 
-- **Commits:** 15
+- **Commits:** 17
 - **Issues referenced (4):**
   - [#19](https://github.com/wegofwd2020-hub/thittam/issues/19) — [P1] Document NATS JetStream dead-letter strategy for financial events
   - [#24](https://github.com/wegofwd2020-hub/thittam/issues/24) — [P2] Verify and document Istio DestinationRule ROUND_ROBIN load balancing for al
@@ -464,7 +466,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `progress`
 
-- **Commits:** 54
+- **Commits:** 55
 
 ### `project`
 

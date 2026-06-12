@@ -25,6 +25,8 @@ issue_number,title,state,commit_count,first,last,span_days,scopes
 20,[P2] Document vertical plugin YAML schema (JSON Schema or protobuf),CLOSED,2,2026-04-04,2026-04-10,6,vertical
 18,"[P1] Run critical-path E2E tests on every PR, not just nightly",CLOSED,2,2026-04-04,2026-04-10,6,ci; iam
 14,[P0] Design and implement saga pattern for the 9-step tenant registration pipeline,CLOSED,2,2026-04-04,2026-04-10,6,registration; reporting
+106,chore(infra): scrape StudyBuddy API metrics from local Prometheus,MERGED,1,2026-06-11,2026-06-11,0,
+105,chore(security): bump CI Go toolchain to 1.25.11,MERGED,1,2026-06-11,2026-06-11,0,
 101,Vulnerabilities detected in dependencies (2026-05-08),CLOSED,1,2026-05-13,2026-05-13,0,security
 102,chore(security): bump Go to 1.25.10 + x/net v0.53.0 (closes #101),MERGED,1,2026-05-13,2026-05-13,0,security
 100,feat(iam): tenant retention lifecycle sweeper (Stages 1+2 of #92),MERGED,1,2026-04-21,2026-04-21,0,iam
