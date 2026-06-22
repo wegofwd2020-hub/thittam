@@ -8,10 +8,10 @@
       "notes": ""
     },
     "109": {
-      "status": "escalated",
-      "last_gate": "escalate",
-      "updated_at": "2026-06-22T21:54:54.001641+00:00",
-      "notes": "Deliverable done (thittam_docs#43: Rule #18). Gate escalated on whole-file danger scan of CODING_RULES.md (contains secrets/auth/tenant in unrelated rules), not on the accessibility change \u2014 human review via the PR. Note: human-override briefed (triage flagged 'architecture')."
+      "status": "approved",
+      "last_gate": "approved",
+      "updated_at": "2026-06-22T22:18:22.681568+00:00",
+      "notes": "Deliverable merged (thittam_docs#43: Rule #18). Originally escalated on a whole-file danger scan of CODING_RULES.md (secrets/auth/tenant in unrelated rules). Re-gated with diff-aware scanning (wegofwd-orchestration#5, --diff-base before the rule landed): only the added lines are scanned, so the false escalate no longer fires -> approved."
     }
   }
 }
