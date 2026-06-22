@@ -6,6 +6,12 @@
       "last_gate": "approved",
       "updated_at": "2026-06-22T21:31:18.534258+00:00",
       "notes": ""
+    },
+    "109": {
+      "status": "escalated",
+      "last_gate": "escalate",
+      "updated_at": "2026-06-22T21:54:54.001641+00:00",
+      "notes": "Deliverable done (thittam_docs#43: Rule #18). Gate escalated on whole-file danger scan of CODING_RULES.md (contains secrets/auth/tenant in unrelated rules), not on the accessibility change \u2014 human review via the PR. Note: human-override briefed (triage flagged 'architecture')."
     }
   }
 }
