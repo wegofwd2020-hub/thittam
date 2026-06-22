@@ -1,0 +1,14 @@
+{
+  "repo": "",
+  "task_count": 1,
+  "tasks": [
+    {
+      "number": 82,
+      "file": "task-82.md",
+      "title": "docs(accessibility): add WCAG 2.1 AA plan + test procedure",
+      "type": "docs",
+      "severity": "high",
+      "url": "https://github.com/wegofwd2020-hub/thittam/issues/82"
+    }
+  ]
+}

@@ -17,6 +17,14 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Optional add-on: an "in flight" section sourced from the orchestrator's ledger
+# in .orchestration/. Guarded so a missing add-on can never break the nightly
+# build; build_section itself never raises.
+try:
+    from progress_inflight import build_section
+except Exception:  # pragma: no cover - add-on is optional
+    build_section = None
+
 REPO = Path(__file__).resolve().parents[1]
 OUTPUT = REPO / "docs" / "PROGRESS.md"
 OUTPUT_SCOPES_CSV = REPO / "docs" / "PROGRESS_scopes.csv"
@@ -243,7 +251,10 @@ def write_csvs(issues: dict[int, dict], commits: list[dict]) -> None:
 def main() -> None:
     issues = fetch_issues()
     commits = get_commits()
-    OUTPUT.write_text(render(issues, commits))
+    document = render(issues, commits)
+    if build_section is not None:
+        document += "\n" + build_section(REPO / ".orchestration")
+    OUTPUT.write_text(document)
     write_csvs(issues, commits)
     print(
         f"Wrote {OUTPUT} + {OUTPUT_SCOPES_CSV.name} + {OUTPUT_ISSUES_CSV.name} "
