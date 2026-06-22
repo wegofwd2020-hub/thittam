@@ -1,0 +1,9 @@
+{
+  "_comment": "Per-repo triage calibration for thittam (a multi-tenant IAM/SaaS platform). Additive: these terms WIDEN the built-in vocabularies, never shrink them. Identity/tenancy surfaces are treated as danger zones (safety-first for an IAM platform); epics and threat-model design need human judgment. Starting point — tune against board.md rationale as the backlog evolves (see agent-orchestration-plan.md follow-up #1).",
+  "danger_zone_keywords": [
+    "iam", "rbac", "access control", "tenant isolation"
+  ],
+  "decision_keywords": [
+    "epic", "threat model"
+  ]
+}
