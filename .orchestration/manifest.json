@@ -1,6 +1,6 @@
 {
   "repo": "",
-  "task_count": 1,
+  "task_count": 2,
   "tasks": [
     {
       "number": 82,
@@ -9,6 +9,14 @@
       "type": "docs",
       "severity": "high",
       "url": "https://github.com/wegofwd2020-hub/thittam/issues/82"
+    },
+    {
+      "number": 109,
+      "file": "task-109.md",
+      "title": "docs(rules): codify accessibility (WCAG 2.1 AA) as a CODING_RULES entry",
+      "type": "docs",
+      "severity": "low",
+      "url": "https://github.com/wegofwd2020-hub/thittam/issues/109"
     }
   ]
 }
