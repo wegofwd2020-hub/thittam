@@ -1,6 +1,6 @@
 # Thittam — Progress Chart
 
-_Auto-generated 2026-06-22T07:31:27+00:00. Regenerated nightly at 21:00 EST._
+_Auto-generated 2026-06-23T06:13:58+00:00. Regenerated nightly at 21:00 EST._
 
 Features are GitHub issues/PRs from [`wegofwd2020-hub/thittam`](https://github.com/wegofwd2020-hub/thittam). Areas are conventional-commit scopes. Script: `scripts/generate_progress.py`.
 
@@ -44,10 +44,11 @@ gantt
     load               :active, s_load, 2026-04-10, 2026-04-11
     migrate            :active, s_migrate, 2026-04-10, 2026-04-11
     nightly            :active, s_nightly, 2026-04-14, 2026-04-15
+    orchestration      :active, s_orchestration, 2026-06-22, 2026-06-23
     payments           :active, s_payments, 2026-04-20, 2026-04-21
     platform           :active, s_platform, 2026-04-11, 2026-04-12
     ports              :active, s_ports, 2026-04-13, 2026-04-14
-    progress           :active, s_progress, 2026-04-20, 2026-06-21
+    progress           :active, s_progress, 2026-04-20, 2026-06-22
     project            :active, s_project, 2026-04-13, 2026-04-14
     proto              :active, s_proto, 2026-04-10, 2026-04-11
     rbac               :active, s_rbac, 2026-04-13, 2026-04-14
@@ -72,7 +73,7 @@ gantt
 
 | Scope | Commits | First | Last | Issues touched |
 |---|---|---|---|---|
-| `progress` | 65 | 2026-04-20 | 2026-06-21 | 0 |
+| `progress` | 67 | 2026-04-20 | 2026-06-22 | 1 |
 | `iam` | 21 | 2026-04-04 | 2026-04-24 | 11 |
 | `infra` | 17 | 2026-04-10 | 2026-06-11 | 4 |
 | `frontend` | 14 | 2026-04-04 | 2026-04-11 | 11 |
@@ -86,6 +87,7 @@ gantt
 | `dev-start` | 3 | 2026-04-13 | 2026-04-13 | 0 |
 | `verify-rbac` | 3 | 2026-04-13 | 2026-04-13 | 0 |
 | `billing` | 3 | 2026-04-10 | 2026-04-12 | 1 |
+| `orchestration` | 2 | 2026-06-22 | 2026-06-22 | 3 |
 | `readme` | 2 | 2026-04-20 | 2026-04-21 | 1 |
 | `doc-drift` | 2 | 2026-04-13 | 2026-04-13 | 1 |
 | `coverage` | 2 | 2026-04-10 | 2026-04-13 | 1 |
@@ -139,6 +141,7 @@ gantt
 | [#19](https://github.com/wegofwd2020-hub/thittam/issues/19) | [P1] Document NATS JetStream dead-letter strategy for financial events | CLOSED | 3 | 2026-04-04 | 2026-04-11 | events, infra |
 | [#17](https://github.com/wegofwd2020-hub/thittam/issues/17) | [P1] Raise test coverage targets: 800+ tests with per-service threshol | CLOSED | 3 | 2026-04-04 | 2026-04-11 | coverage, services |
 | [#16](https://github.com/wegofwd2020-hub/thittam/issues/16) | [P1] Add CI test suite for vertical plugin YAML schema validation | CLOSED | 3 | 2026-04-04 | 2026-04-10 | iam, vertical |
+| [#109](https://github.com/wegofwd2020-hub/thittam/issues/109) | docs(rules): codify accessibility (WCAG 2.1 AA) as a CODING_RULES entr | CLOSED | 2 | 2026-06-22 | 2026-06-22 | orchestration |
 | [#58](https://github.com/wegofwd2020-hub/thittam/issues/58) | ci(lint): fix 49 findings exposed by golangci-lint v2 (errcheck + stat | CLOSED | 2 | 2026-04-13 | 2026-04-13 | lint |
 | [#57](https://github.com/wegofwd2020-hub/thittam/issues/57) | ci(doc-drift): Documentation Drift Check fails to checkout thittam_doc | CLOSED | 2 | 2026-04-13 | 2026-04-13 | doc-drift |
 | [#55](https://github.com/wegofwd2020-hub/thittam/issues/55) | ci(lint): golangci-lint binary built on Go 1.24 fails on Go 1.25 targe | CLOSED | 2 | 2026-04-13 | 2026-04-14 | lint, nightly |
@@ -158,6 +161,10 @@ gantt
 | [#20](https://github.com/wegofwd2020-hub/thittam/issues/20) | [P2] Document vertical plugin YAML schema (JSON Schema or protobuf) | CLOSED | 2 | 2026-04-04 | 2026-04-10 | vertical |
 | [#18](https://github.com/wegofwd2020-hub/thittam/issues/18) | [P1] Run critical-path E2E tests on every PR, not just nightly | CLOSED | 2 | 2026-04-04 | 2026-04-10 | ci, iam |
 | [#14](https://github.com/wegofwd2020-hub/thittam/issues/14) | [P0] Design and implement saga pattern for the 9-step tenant registrat | CLOSED | 2 | 2026-04-04 | 2026-04-10 | registration, reporting |
+| [#111](https://github.com/wegofwd2020-hub/thittam/issues/111) | chore(orchestration): #109 re-gated to approved (diff-aware scan) | MERGED | 1 | 2026-06-22 | 2026-06-22 | orchestration |
+| [#110](https://github.com/wegofwd2020-hub/thittam/issues/110) | chore(orchestration): record #109 in manifest + ledger | MERGED | 1 | 2026-06-22 | 2026-06-22 | orchestration |
+| [#108](https://github.com/wegofwd2020-hub/thittam/issues/108) | feat(progress): bring thittam into agent orchestration + in-flight PRO | MERGED | 1 | 2026-06-22 | 2026-06-22 | progress |
+| [#107](https://github.com/wegofwd2020-hub/thittam/issues/107) | chore: add .claude project settings (enable frontend-design plugin) | MERGED | 1 | 2026-06-22 | 2026-06-22 | — |
 | [#106](https://github.com/wegofwd2020-hub/thittam/issues/106) | chore(infra): scrape StudyBuddy API metrics from local Prometheus | MERGED | 1 | 2026-06-11 | 2026-06-11 | — |
 | [#105](https://github.com/wegofwd2020-hub/thittam/issues/105) | chore(security): bump CI Go toolchain to 1.25.11 | MERGED | 1 | 2026-06-11 | 2026-06-11 | — |
 | [#102](https://github.com/wegofwd2020-hub/thittam/issues/102) | chore(security): bump Go to 1.25.10 + x/net v0.53.0 (closes #101) | MERGED | 1 | 2026-05-13 | 2026-05-13 | security |
@@ -221,6 +228,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 | [#19](https://github.com/wegofwd2020-hub/thittam/issues/19) | [P1] Document NATS JetStream dead-letter strategy for financ | 3 | 2026-04-04 | 2026-04-11 | 7 |
 | [#17](https://github.com/wegofwd2020-hub/thittam/issues/17) | [P1] Raise test coverage targets: 800+ tests with per-servic | 3 | 2026-04-04 | 2026-04-11 | 7 |
 | [#16](https://github.com/wegofwd2020-hub/thittam/issues/16) | [P1] Add CI test suite for vertical plugin YAML schema valid | 3 | 2026-04-04 | 2026-04-10 | 6 |
+| [#109](https://github.com/wegofwd2020-hub/thittam/issues/109) | docs(rules): codify accessibility (WCAG 2.1 AA) as a CODING_ | 2 | 2026-06-22 | 2026-06-22 | 0 |
 | [#58](https://github.com/wegofwd2020-hub/thittam/issues/58) | ci(lint): fix 49 findings exposed by golangci-lint v2 (errch | 2 | 2026-04-13 | 2026-04-13 | 0 |
 | [#57](https://github.com/wegofwd2020-hub/thittam/issues/57) | ci(doc-drift): Documentation Drift Check fails to checkout t | 2 | 2026-04-13 | 2026-04-13 | 0 |
 | [#55](https://github.com/wegofwd2020-hub/thittam/issues/55) | ci(lint): golangci-lint binary built on Go 1.24 fails on Go  | 2 | 2026-04-13 | 2026-04-14 | 1 |
@@ -447,6 +455,14 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 - **Issues referenced (1):**
   - [#55](https://github.com/wegofwd2020-hub/thittam/issues/55) — ci(lint): golangci-lint binary built on Go 1.24 fails on Go 1.25 target
 
+### `orchestration`
+
+- **Commits:** 2
+- **Issues referenced (3):**
+  - [#109](https://github.com/wegofwd2020-hub/thittam/issues/109) — docs(rules): codify accessibility (WCAG 2.1 AA) as a CODING_RULES entry
+  - [#110](https://github.com/wegofwd2020-hub/thittam/issues/110) — chore(orchestration): record #109 in manifest + ledger
+  - [#111](https://github.com/wegofwd2020-hub/thittam/issues/111) — chore(orchestration): #109 re-gated to approved (diff-aware scan)
+
 ### `payments`
 
 - **Commits:** 1
@@ -466,7 +482,9 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `progress`
 
-- **Commits:** 65
+- **Commits:** 67
+- **Issues referenced (1):**
+  - [#108](https://github.com/wegofwd2020-hub/thittam/issues/108) — feat(progress): bring thittam into agent orchestration + in-flight PROGRESS.md s
 
 ### `project`
 
@@ -586,3 +604,9 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 - **Issues referenced (1):**
   - [#60](https://github.com/wegofwd2020-hub/thittam/issues/60) — feat(api): REST→gRPC bridge — grpc-gateway in services + Kong in local stack
 
+
+## Agent orchestration — in flight
+
+_As of 2026-06-23 06:13 UTC: 0 agent task(s) in flight; 2 approved._
+
+_No agent tasks in flight._

@@ -6,6 +6,7 @@ issue_number,title,state,commit_count,first,last,span_days,scopes
 19,[P1] Document NATS JetStream dead-letter strategy for financial events,CLOSED,3,2026-04-04,2026-04-11,7,events; infra
 17,[P1] Raise test coverage targets: 800+ tests with per-service thresholds,CLOSED,3,2026-04-04,2026-04-11,7,coverage; services
 16,[P1] Add CI test suite for vertical plugin YAML schema validation,CLOSED,3,2026-04-04,2026-04-10,6,iam; vertical
+109,docs(rules): codify accessibility (WCAG 2.1 AA) as a CODING_RULES entry,CLOSED,2,2026-06-22,2026-06-22,0,orchestration
 55,ci(lint): golangci-lint binary built on Go 1.24 fails on Go 1.25 target,CLOSED,2,2026-04-13,2026-04-14,1,lint; nightly
 58,ci(lint): fix 49 findings exposed by golangci-lint v2 (errcheck + staticcheck + unused),CLOSED,2,2026-04-13,2026-04-13,0,lint
 57,ci(doc-drift): Documentation Drift Check fails to checkout thittam_docs (404),CLOSED,2,2026-04-13,2026-04-13,0,doc-drift
@@ -25,6 +26,10 @@ issue_number,title,state,commit_count,first,last,span_days,scopes
 20,[P2] Document vertical plugin YAML schema (JSON Schema or protobuf),CLOSED,2,2026-04-04,2026-04-10,6,vertical
 18,"[P1] Run critical-path E2E tests on every PR, not just nightly",CLOSED,2,2026-04-04,2026-04-10,6,ci; iam
 14,[P0] Design and implement saga pattern for the 9-step tenant registration pipeline,CLOSED,2,2026-04-04,2026-04-10,6,registration; reporting
+111,chore(orchestration): #109 re-gated to approved (diff-aware scan),MERGED,1,2026-06-22,2026-06-22,0,orchestration
+110,chore(orchestration): record #109 in manifest + ledger,MERGED,1,2026-06-22,2026-06-22,0,orchestration
+108,feat(progress): bring thittam into agent orchestration + in-flight PROGRESS.md section,MERGED,1,2026-06-22,2026-06-22,0,progress
+107,chore: add .claude project settings (enable frontend-design plugin),MERGED,1,2026-06-22,2026-06-22,0,
 106,chore(infra): scrape StudyBuddy API metrics from local Prometheus,MERGED,1,2026-06-11,2026-06-11,0,
 105,chore(security): bump CI Go toolchain to 1.25.11,MERGED,1,2026-06-11,2026-06-11,0,
 101,Vulnerabilities detected in dependencies (2026-05-08),CLOSED,1,2026-05-13,2026-05-13,0,security
