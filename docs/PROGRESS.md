@@ -1,6 +1,6 @@
 # Thittam — Progress Chart
 
-_Auto-generated 2026-06-26T06:16:22+00:00. Regenerated nightly at 21:00 EST._
+_Auto-generated 2026-06-27T05:57:47+00:00. Regenerated nightly at 21:00 EST._
 
 Features are GitHub issues/PRs from [`wegofwd2020-hub/thittam`](https://github.com/wegofwd2020-hub/thittam). Areas are conventional-commit scopes. Script: `scripts/generate_progress.py`.
 
@@ -48,7 +48,7 @@ gantt
     payments           :active, s_payments, 2026-04-20, 2026-04-21
     platform           :active, s_platform, 2026-04-11, 2026-04-12
     ports              :active, s_ports, 2026-04-13, 2026-04-14
-    progress           :active, s_progress, 2026-04-20, 2026-06-25
+    progress           :active, s_progress, 2026-04-20, 2026-06-26
     project            :active, s_project, 2026-04-13, 2026-04-14
     proto              :active, s_proto, 2026-04-10, 2026-04-11
     rbac               :active, s_rbac, 2026-04-13, 2026-04-14
@@ -73,7 +73,7 @@ gantt
 
 | Scope | Commits | First | Last | Issues touched |
 |---|---|---|---|---|
-| `progress` | 70 | 2026-04-20 | 2026-06-25 | 1 |
+| `progress` | 71 | 2026-04-20 | 2026-06-26 | 1 |
 | `iam` | 21 | 2026-04-04 | 2026-04-24 | 11 |
 | `infra` | 17 | 2026-04-10 | 2026-06-11 | 4 |
 | `frontend` | 14 | 2026-04-04 | 2026-04-11 | 11 |
@@ -482,7 +482,7 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ### `progress`
 
-- **Commits:** 70
+- **Commits:** 71
 - **Issues referenced (1):**
   - [#108](https://github.com/wegofwd2020-hub/thittam/issues/108) — feat(progress): bring thittam into agent orchestration + in-flight PROGRESS.md s
 
@@ -607,6 +607,6 @@ Issues/PRs referenced in 2+ commits — each extra commit is an iteration or rew
 
 ## Agent orchestration — in flight
 
-_As of 2026-06-26 06:16 UTC: 0 agent task(s) in flight; 2 approved._
+_As of 2026-06-27 05:57 UTC: 0 agent task(s) in flight; 2 approved._
 
 _No agent tasks in flight._
