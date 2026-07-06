@@ -27,12 +27,39 @@ except Exception:  # pragma: no cover - add-on is optional
 
 REPO = Path(__file__).resolve().parents[1]
 OUTPUT = REPO / "docs" / "PROGRESS.md"
+OUTPUT_JSON = REPO / "docs" / "progress.json"
 OUTPUT_SCOPES_CSV = REPO / "docs" / "PROGRESS_scopes.csv"
 OUTPUT_ISSUES_CSV = REPO / "docs" / "PROGRESS_issues.csv"
 GH_REPO = "wegofwd2020-hub/thittam"
 
 ISSUE_RE = re.compile(r"#(\d+)")
 SCOPE_RE = re.compile(r"^[a-z]+\(([a-z0-9\-]+)\)")
+
+
+def _issue_status(state: str, commits: int) -> str:
+    """Map a GitHub issue/PR state (+ commit activity) to the canonical set."""
+    if state in ("CLOSED", "MERGED"):
+        return "done"
+    return "in-progress" if commits > 0 else "pending"
+
+
+def build_progress_json(issues: dict[int, dict], commits: list[dict]) -> dict:
+    """Normalized feature list from issues/PRs referenced in commits + their state."""
+    commit_counts: dict[int, int] = {}
+    for c in commits:
+        for n in c.get("issues", []):
+            commit_counts[n] = commit_counts.get(n, 0) + 1
+    numbers = set(commit_counts) | set(issues)
+    features = []
+    for n in sorted(numbers):
+        meta = issues.get(n, {})
+        cnt = commit_counts.get(n, 0)
+        features.append({"id": f"#{n}", "name": meta.get("title", f"issue {n}"),
+                         "status": _issue_status(meta.get("state", "OPEN"), cnt),
+                         "commits": cnt})
+    return {"project": "Thittam",
+            "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "source": "issues", "stage": "late-build", "features": features}
 
 
 def fetch_issues() -> dict[int, dict]:
@@ -255,6 +282,8 @@ def main() -> None:
     if build_section is not None:
         document += "\n" + build_section(REPO / ".orchestration")
     OUTPUT.write_text(document)
+    import json as _json
+    OUTPUT_JSON.write_text(_json.dumps(build_progress_json(issues, commits), indent=2))
     write_csvs(issues, commits)
     print(
         f"Wrote {OUTPUT} + {OUTPUT_SCOPES_CSV.name} + {OUTPUT_ISSUES_CSV.name} "
