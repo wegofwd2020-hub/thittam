@@ -1,0 +1,680 @@
+{
+  "project": "Thittam",
+  "generated": "2026-07-06T20:23:32+00:00",
+  "source": "issues",
+  "stage": "late-build",
+  "features": [
+    {
+      "id": "#1",
+      "name": "chore(proto): Run buf generate and sqlc generate \u2014 shared prep work",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#2",
+      "name": "feat(iam): Build IAM service \u2014 identity, auth, RBAC, tenancy",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#3",
+      "name": "feat(project): Complete project-management service \u2014 repository, gRPC wiring, main.go",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#4",
+      "name": "feat(budget): Complete budget-planning service \u2014 repository, gRPC wiring, main.go",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#5",
+      "name": "feat(expense): Complete expense-tracking service \u2014 repository, gRPC wiring, main.go",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#6",
+      "name": "feat(inventory): Complete inventory-management service \u2014 repository, gRPC wiring, main.go",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#7",
+      "name": "feat(ledger): Build general-ledger service \u2014 double-entry accounting",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#8",
+      "name": "feat(reporting): Complete reporting-analytics service \u2014 repository, gRPC wiring, main.go",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#9",
+      "name": "feat(notifications): Build notifications service \u2014 email, SMS, push, in-app",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#10",
+      "name": "feat(document): Build document service \u2014 file storage, versioning, e-signatures",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#11",
+      "name": "[P0] Define proto contracts for IAM, GeneralLedger, Notifications, and Document services",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#12",
+      "name": "[P0] Validate tenant ID as UUID before interpolating into SET search_path to prevent schema injection",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#13",
+      "name": "[P0] Resolve contradiction between Rule #2 (env vars) and security doc (Vault for T1 secrets)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#14",
+      "name": "[P0] Design and implement saga pattern for the 9-step tenant registration pipeline",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#15",
+      "name": "[P1] Document and implement reporting-analytics read model strategy",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#16",
+      "name": "[P1] Add CI test suite for vertical plugin YAML schema validation",
+      "status": "done",
+      "commits": 3
+    },
+    {
+      "id": "#17",
+      "name": "[P1] Raise test coverage targets: 800+ tests with per-service thresholds",
+      "status": "done",
+      "commits": 3
+    },
+    {
+      "id": "#18",
+      "name": "[P1] Run critical-path E2E tests on every PR, not just nightly",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#19",
+      "name": "[P1] Document NATS JetStream dead-letter strategy for financial events",
+      "status": "done",
+      "commits": 3
+    },
+    {
+      "id": "#20",
+      "name": "[P2] Document vertical plugin YAML schema (JSON Schema or protobuf)",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#21",
+      "name": "[P2] Implement and ship the billing service",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#22",
+      "name": "[P2] Evaluate tenant-per-schema scalability ceiling and document decision for 500+ tenants",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#23",
+      "name": "[P2] Add load and chaos testing for the double-entry ledger and concurrent expense approvals",
+      "status": "done",
+      "commits": 3
+    },
+    {
+      "id": "#24",
+      "name": "[P2] Verify and document Istio DestinationRule ROUND_ROBIN load balancing for all gRPC service pairs",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#25",
+      "name": "[P3] Replace bcrypt with argon2id or add per-IP rate limiting on auth endpoints",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#26",
+      "name": "[P3] Implement automated documentation drift detection in CI (Rule #16)",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#27",
+      "name": "[P3] Define and document impersonation session lifecycle, maximum duration, and revocation policy",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#28",
+      "name": "[P3] Set MinIO presigned URL window dynamically based on file size",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#29",
+      "name": "feat(frontend): document management UI \u2014 file browser, upload, versioning, e-signatures",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#30",
+      "name": "feat(frontend): notifications inbox UI \u2014 in-app notification centre",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#31",
+      "name": "feat(infra): Prometheus alert rules for all services",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#32",
+      "name": "feat(infra): K8s manifests \u2014 Deployments, Services, HPA, ConfigMaps, NetworkPolicy for all 10 services",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#33",
+      "name": "feat(iam): rename system roles to generic names (ADR-014 Phase 1)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#34",
+      "name": "feat(iam): add inventory_manager and project_supervisor system roles (ADR-014 Phase 1)",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#35",
+      "name": "feat(vertical): add role_labels map to vertical YAML schema (ADR-014 Phase 1)",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#36",
+      "name": "chore(seeds): update XYZ_CBA demo seed for new role model (ADR-014 Phase 1)",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#37",
+      "name": "chore(migrations): data migration \u2014 rename system roles for existing tenants (ADR-014 Phase 1)",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#38",
+      "name": "docs(security): update RBAC documentation for new role model (ADR-014 Phase 1)",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#39",
+      "name": "feat(iam): add project_id scope to user_roles \u2014 schema + DB constraints (ADR-014 Phase 2)",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#40",
+      "name": "feat(iam): project-scoped CheckPermission and AssignProjectRole \u2014 service + repository (ADR-014 Phase 2)",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#41",
+      "name": "feat(proto): add project_id to CheckPermissionRequest and AssignProjectRole RPC (ADR-014 Phase 2)",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#42",
+      "name": "feat(interceptor): project-scoped permission enforcement in gRPC interceptor (ADR-014 Phase 2)",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#43",
+      "name": "feat(services): wire project_id into permission checks across project-scoped services (ADR-014 Phase 2)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#44",
+      "name": "chore(dev): separate DB lifecycle from app startup; add per-test DB scaffold",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#45",
+      "name": "chore(rbac): ADR-014 cross-cutting role-name cleanup (Phase 1 leftover)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#46",
+      "name": "feat(rbac): wire IAM client into project-scoped services + PROJECT_SCOPED_RBAC rollout (ADR-014 Phase 2)",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#47",
+      "name": "feat(rbac): expand RequirePermission coverage to all mutating RPCs in project-scoped services",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#48",
+      "name": "test(crypto): make TestDecrypt_Tampered deterministic",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#49",
+      "name": "chore(repo): gitignore service binaries left at repo root by go build",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#50",
+      "name": "chore(proto): fix buf config so 'buf breaking' compares correctly",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#51",
+      "name": "ci: run 'make test-integration' on every PR",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#52",
+      "name": "verify(rbac): end-to-end dev rollout verification of PROJECT_SCOPED_RBAC",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#53",
+      "name": "ci: Test & Coverage job fails with 'no such tool covdata' on Go 1.22 toolchain",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#54",
+      "name": "ci: vuln-scan failing on Go 1.25 stdlib CVEs (GO-2026-*)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#55",
+      "name": "ci(lint): golangci-lint binary built on Go 1.24 fails on Go 1.25 target",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#56",
+      "name": "ci(buf): RPC response naming warnings break the buf lint job",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#57",
+      "name": "ci(doc-drift): Documentation Drift Check fails to checkout thittam_docs (404)",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#58",
+      "name": "ci(lint): fix 49 findings exposed by golangci-lint v2 (errcheck + staticcheck + unused)",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#59",
+      "name": "ci(deps): bump grpc + go-redis to fix remaining vuln-scan findings; document N/A vulns",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#60",
+      "name": "feat(api): REST\u2192gRPC bridge \u2014 grpc-gateway in services + Kong in local stack",
+      "status": "in-progress",
+      "commits": 8
+    },
+    {
+      "id": "#61",
+      "name": "feat(onboarding): capture company address + country-driven primary currency",
+      "status": "in-progress",
+      "commits": 3
+    },
+    {
+      "id": "#62",
+      "name": "feat(i18n): locale plumbing \u2014 tenant default + user override",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#63",
+      "name": "feat(a11y): surface existing dyslexia toggle + persist to user prefs",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#64",
+      "name": "feat(a11y): accessibility toggles + axe-core CI check",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#65",
+      "name": "feat(ui): adopt shadcn/ui as themeable foundation",
+      "status": "in-progress",
+      "commits": 1
+    },
+    {
+      "id": "#66",
+      "name": "feat(payments): ADR + Gateway interface design (no driver yet)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#67",
+      "name": "feat(seed): add XYZ Construction demo tenant",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#68",
+      "name": "docs(readme): replace upstream golang-migrate README with Thittam overview",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#69",
+      "name": "feat(budget): wire REST gateways + live /budgets pages (Phase B)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#70",
+      "name": "chore(tooling): Phase 1 \u2014 Claude Code workflow improvements (epic)",
+      "status": "in-progress",
+      "commits": 1
+    },
+    {
+      "id": "#71",
+      "name": "chore(tooling): \u00a71.1 /spec-first slash command",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#72",
+      "name": "chore(tooling): \u00a71.2 plan-mode discipline for multi-file changes",
+      "status": "in-progress",
+      "commits": 1
+    },
+    {
+      "id": "#73",
+      "name": "chore(tooling): \u00a71.3 sub-agent fleet defaults",
+      "status": "in-progress",
+      "commits": 1
+    },
+    {
+      "id": "#74",
+      "name": "chore(tooling): \u00a72.2 Thittam slash commands for repeated workflows",
+      "status": "in-progress",
+      "commits": 1
+    },
+    {
+      "id": "#75",
+      "name": "chore(tooling): Phase 1 \u2014 Claude Code workflow (spec-first + slash commands)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#76",
+      "name": "feat(payments): Gateway interface + stub driver (#66)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#77",
+      "name": "fix(ci): fetch full history for proto breaking-change job",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#78",
+      "name": "feat(ui): wire productions pages onto live API (Phase C)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#79",
+      "name": "docs(cost): add hosting & cost plan",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#80",
+      "name": "docs(roadmap): add product feature roadmap",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#81",
+      "name": "docs(ux): add UX goals + requirements spec",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#82",
+      "name": "docs(accessibility): add WCAG 2.1 AA plan + test procedure",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#83",
+      "name": "docs(requirements): add product requirements (PRD) doc",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#84",
+      "name": "docs(marketing): add pitch / investor collateral",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#85",
+      "name": "docs(testing): add load-testing procedure + SLA query runbook",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#86",
+      "name": "docs(security): add threat model paired with network security diagrams",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#87",
+      "name": "docs(integration): add 'working with external services' guide",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#88",
+      "name": "feat(seed): add seeds/template/new-tenant/ scaffold",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#89",
+      "name": "feat(iam): enforce UNIQUE on tenants.name \u2014 migration + service pre-check + 409 on conflict",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#90",
+      "name": "feat(iam): scheduled tenant retention pipeline \u2014 suspended \u2192 grace \u2192 deactivated \u2192 purge",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#91",
+      "name": "feat(iam): UNIQUE constraint on tenants.name (case-insensitive)",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#92",
+      "name": "feat(iam): scheduled tenant retention sweeper (suspended \u2192 deactivated \u2192 purge)",
+      "status": "in-progress",
+      "commits": 5
+    },
+    {
+      "id": "#93",
+      "name": "feat(project,ui): wire Phases + Crew tabs onto live API (Phase C part 2)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#94",
+      "name": "fix(ci): create local main ref so buf breaking actually finds it",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#95",
+      "name": "fix(ui): replace invalid ringColor CSS prop with ring-white Tailwind class",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#96",
+      "name": "feat(ui): per-production budget aggregation on detail page",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#97",
+      "name": "chore(demo): preflight smoke-test for local dev stack",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#98",
+      "name": "docs(commands): add Mermaid example to /new-adr template",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#99",
+      "name": "feat(iam): UNIQUE constraint on tenants.name (case-insensitive)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#100",
+      "name": "feat(iam): tenant retention lifecycle sweeper (Stages 1+2 of #92)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#101",
+      "name": "Vulnerabilities detected in dependencies (2026-05-08)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#102",
+      "name": "chore(security): bump Go to 1.25.10 + x/net v0.53.0 (closes #101)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#103",
+      "name": "Vulnerabilities detected in dependencies (2026-06-03)",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#104",
+      "name": "chore(security): bump Go toolchain to 1.25.11 + x/net to v0.53.0",
+      "status": "done",
+      "commits": 0
+    },
+    {
+      "id": "#105",
+      "name": "chore(security): bump CI Go toolchain to 1.25.11",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#106",
+      "name": "chore(infra): scrape StudyBuddy API metrics from local Prometheus",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#107",
+      "name": "chore: add .claude project settings (enable frontend-design plugin)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#108",
+      "name": "feat(progress): bring thittam into agent orchestration + in-flight PROGRESS.md section",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#109",
+      "name": "docs(rules): codify accessibility (WCAG 2.1 AA) as a CODING_RULES entry",
+      "status": "done",
+      "commits": 2
+    },
+    {
+      "id": "#110",
+      "name": "chore(orchestration): record #109 in manifest + ledger",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#111",
+      "name": "chore(orchestration): #109 re-gated to approved (diff-aware scan)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#112",
+      "name": "Vulnerabilities detected in dependencies (2026-06-26)",
+      "status": "pending",
+      "commits": 0
+    }
+  ]
+}
