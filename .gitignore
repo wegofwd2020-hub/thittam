@@ -49,3 +49,7 @@ generated-docs/
 !.orchestration/classifier.json
 !.orchestration/manifest.json
 !.orchestration/.orchestration.json
+
+# python bytecode from the progress generator/tests
+__pycache__/
+*.pyc
