@@ -76,14 +76,14 @@ jobs:
           print("_See `docs/PROGRESS_consumption.md` for all dashboard options._")
           PYEOF
 
-      - name: Commit and push if changed
+      - name: Commit and push progress.json if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/PROGRESS.md docs/PROGRESS_scopes.csv docs/PROGRESS_issues.csv
+          git add docs/progress.json
           if git diff --cached --quiet; then
-            echo "No changes to commit"
+            echo "No changes to progress.json"
             exit 0
           fi
-          git commit -m "chore(progress): nightly update of docs/PROGRESS.md + CSVs"
+          git commit -m "chore(progress): nightly update of docs/progress.json"
           git push
