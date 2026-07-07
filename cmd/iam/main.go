@@ -206,34 +206,33 @@ func main() {
 	// suspension onto the tenant, starting the retention clock. NATS_URL is
 	// T3 (service endpoint) config; if it is unset iam still boots — the
 	// consumer is simply disabled, matching local dev without a NATS server.
-	var natsConn *nats.Conn
+	// NATS powers ONLY the best-effort billing consumer — it is NOT on iam's
+	// critical auth path (login / JWT issuance / RBAC / token validation). iam is
+	// the identity SPOF, so a NATS outage must never take it down or pull it from
+	// rotation: connect/subscribe failures are logged and the consumer is disabled
+	// (not fatal), and NATS deliberately does NOT gate /readyz (unlike other
+	// services). The suspend event just won't be consumed until NATS recovers.
 	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
-		nc, err := nats.Connect(natsURL,
+		if nc, err := nats.Connect(natsURL,
 			nats.MaxReconnects(-1),
 			nats.ReconnectWait(2*time.Second),
-		)
-		if err != nil {
-			log.Fatalf("iam: startup: connect to NATS: %v", err)
-		}
-		natsConn = nc
-		defer func() { _ = nc.Drain() }()
-
-		js, err := nc.JetStream()
-		if err != nil {
-			log.Fatalf("iam: startup: create JetStream context: %v", err)
-		}
-
-		billingSub, err := jetstream.Subscribe(js,
+		); err != nil {
+			log.Printf("iam: WARN connect to NATS failed — billing consumer disabled: %v", err)
+		} else if js, err := nc.JetStream(); err != nil {
+			log.Printf("iam: WARN JetStream context failed — billing consumer disabled: %v", err)
+			_ = nc.Drain()
+		} else if billingSub, err := jetstream.Subscribe(js,
 			jetstream.StreamFinancial,
 			jetstream.ConsumerIamBilling,
 			iam.NewBillingConsumer(svc).Handle,
-		)
-		if err != nil {
-			log.Fatalf("iam: startup: subscribe to billing consumer: %v", err)
+		); err != nil {
+			log.Printf("iam: WARN subscribe to billing consumer failed — disabled: %v", err)
+			_ = nc.Drain()
+		} else {
+			defer func() { _ = billingSub.Unsubscribe() }()
+			defer func() { _ = nc.Drain() }()
+			log.Printf("iam: billing consumer subscribed (FINANCIAL/%s)", jetstream.ConsumerIamBilling)
 		}
-		defer func() { _ = billingSub.Unsubscribe() }()
-
-		log.Printf("iam: billing consumer subscribed (FINANCIAL/%s)", jetstream.ConsumerIamBilling)
 	} else {
 		log.Printf("iam: NATS_URL not set — billing consumer disabled (tenant suspension on subscription.suspended will not fire)")
 	}
@@ -256,9 +255,8 @@ func main() {
 
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
 	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
-	if natsConn != nil {
-		srv.RegisterHealthChecker("nats", &natsChecker{nc: natsConn})
-	}
+	// NATS is intentionally NOT a readiness checker: it backs only the best-effort
+	// billing consumer, and iam (the auth SPOF) must stay ready during a NATS outage.
 
 	// --- REST gateway (grpc-gateway, ADR-014 follow-up #60) ---
 	// The UI calls REST endpoints (/api/v1/auth/login etc.). Mount the
@@ -372,17 +370,6 @@ type redisChecker struct{ rdb *redis.Client }
 
 func (c *redisChecker) CheckHealth(ctx context.Context) error {
 	return c.rdb.Ping(ctx).Err()
-}
-
-// natsChecker implements observability.HealthChecker for the NATS connection
-// backing the billing consumer. Only registered when NATS_URL is configured.
-type natsChecker struct{ nc *nats.Conn }
-
-func (c *natsChecker) CheckHealth(_ context.Context) error {
-	if !c.nc.IsConnected() {
-		return nats.ErrConnectionClosed
-	}
-	return nil
 }
 
 // waitForVault blocks until CheckHealth succeeds or the deadline is exceeded.
