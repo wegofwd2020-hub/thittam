@@ -12,7 +12,7 @@ import (
 // TenantStore handles tenant and user persistence (steps 1-3).
 type TenantStore interface {
 	// CreateTenant creates a new tenant and returns its UUID.
-	CreateTenant(ctx context.Context, name, slug, plan string) (uuid.UUID, error)
+	CreateTenant(ctx context.Context, name, slug, plan, country, currency string) (uuid.UUID, error)
 
 	// CreateUser creates the first admin user for a tenant and returns its UUID.
 	CreateUser(ctx context.Context, tenantID uuid.UUID, email, displayName, passwordHash string) (uuid.UUID, error)

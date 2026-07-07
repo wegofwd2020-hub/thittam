@@ -137,7 +137,7 @@ func TestOrchestrator_FailAtStep1_NoCompensation(t *testing.T) {
 	dbErr := errors.New("postgres down")
 	p := newTestPipeline(func(p *Pipeline) {
 		p.tenants = &mockTenantStore{
-			createTenantFn: func(ctx context.Context, name, slug, plan string) (uuid.UUID, error) {
+			createTenantFn: func(ctx context.Context, name, slug, plan, country, currency string) (uuid.UUID, error) {
 				return uuid.Nil, dbErr
 			},
 		}

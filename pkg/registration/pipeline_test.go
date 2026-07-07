@@ -17,16 +17,16 @@ import (
 // --- Mocks ---
 
 type mockTenantStore struct {
-	createTenantFn                 func(ctx context.Context, name, slug, plan string) (uuid.UUID, error)
+	createTenantFn                 func(ctx context.Context, name, slug, plan, country, currency string) (uuid.UUID, error)
 	createUserFn                   func(ctx context.Context, tenantID uuid.UUID, email, displayName, passwordHash string) (uuid.UUID, error)
 	tenantExistsBySlugFn           func(ctx context.Context, slug string) (bool, error)
 	tenantExistsByNormalizedNameFn func(ctx context.Context, name string) (bool, error)
 	userExistsByEmailFn            func(ctx context.Context, email string) (bool, error)
 }
 
-func (m *mockTenantStore) CreateTenant(ctx context.Context, name, slug, plan string) (uuid.UUID, error) {
+func (m *mockTenantStore) CreateTenant(ctx context.Context, name, slug, plan, country, currency string) (uuid.UUID, error) {
 	if m.createTenantFn != nil {
-		return m.createTenantFn(ctx, name, slug, plan)
+		return m.createTenantFn(ctx, name, slug, plan, country, currency)
 	}
 	return uuid.New(), nil
 }
@@ -355,7 +355,7 @@ func TestPipeline_CreateTenantFailure(t *testing.T) {
 	dbErr := errors.New("db connection lost")
 	p := newTestPipeline(func(p *Pipeline) {
 		p.tenants = &mockTenantStore{
-			createTenantFn: func(ctx context.Context, name, slug, plan string) (uuid.UUID, error) {
+			createTenantFn: func(ctx context.Context, name, slug, plan, country, currency string) (uuid.UUID, error) {
 				return uuid.Nil, dbErr
 			},
 		}
@@ -367,6 +367,24 @@ func TestPipeline_CreateTenantFailure(t *testing.T) {
 	require.NotNil(t, result)
 	assert.Len(t, result.CompletedSteps, 1)
 	assert.Equal(t, StepFailed, result.CompletedSteps[0].Status)
+}
+
+func TestPipeline_CreateTenant_ReceivesCountryCurrency(t *testing.T) {
+	t.Parallel()
+	var gotCountry, gotCurrency string
+	p := newTestPipeline(func(p *Pipeline) {
+		p.tenants = &mockTenantStore{
+			createTenantFn: func(_ context.Context, _, _, _, country, currency string) (uuid.UUID, error) {
+				gotCountry, gotCurrency = country, currency
+				return uuid.New(), nil
+			},
+		}
+	})
+
+	_, err := p.Run(context.Background(), testRequest()) // Country "IN" → currency "INR"
+	require.NoError(t, err)
+	assert.Equal(t, "IN", gotCountry)
+	assert.Equal(t, "INR", gotCurrency)
 }
 
 func TestPipeline_SeedCoAFailure_PartialResult(t *testing.T) {

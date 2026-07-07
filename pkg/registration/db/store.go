@@ -43,8 +43,11 @@ func NewStore(db *pgxpool.Pool, vq *verticaldb.Queries) *Store {
 
 // --- TenantStore implementation ---
 
-func (s *Store) CreateTenant(ctx context.Context, name, slug, plan string) (uuid.UUID, error) {
-	t, err := s.q.CreateTenant(ctx, CreateTenantParams{Name: name, Slug: slug, Plan: plan})
+func (s *Store) CreateTenant(ctx context.Context, name, slug, plan, country, currency string) (uuid.UUID, error) {
+	t, err := s.q.CreateTenant(ctx, CreateTenantParams{
+		Name: name, Slug: slug, Plan: plan,
+		CountryCode: country, PrimaryCurrencyCode: currency,
+	})
 	if err != nil {
 		if isUniqueViolationOn(err, "tenants_name_ci_unique") {
 			return uuid.Nil, registration.ErrTenantNameTaken
@@ -148,8 +151,11 @@ func (s *Store) InTx(ctx context.Context, fn func(tx TxStore) error) error {
 
 // TxStore methods — mirror the Store methods but operate within the transaction.
 
-func (ts TxStore) CreateTenant(ctx context.Context, name, slug, plan string) (uuid.UUID, error) {
-	t, err := ts.q.CreateTenant(ctx, CreateTenantParams{Name: name, Slug: slug, Plan: plan})
+func (ts TxStore) CreateTenant(ctx context.Context, name, slug, plan, country, currency string) (uuid.UUID, error) {
+	t, err := ts.q.CreateTenant(ctx, CreateTenantParams{
+		Name: name, Slug: slug, Plan: plan,
+		CountryCode: country, PrimaryCurrencyCode: currency,
+	})
 	if err != nil {
 		if isUniqueViolationOn(err, "tenants_name_ci_unique") {
 			return uuid.Nil, registration.ErrTenantNameTaken
