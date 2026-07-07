@@ -45,6 +45,7 @@ func TestPostgresAudit_RoundTrip(t *testing.T) {
 	assert.JSONEq(t, `{"status":"grace"}`, string(got[0].NewState))
 	assert.Empty(t, got[0].ActorIP)         // NULL → zero
 	assert.Nil(t, got[0].ProductionID)      // NULL → nil
+	assert.Nil(t, got[0].Metadata)          // NULL JSONB → nil RawMessage
 	assert.NotEqual(t, uuid.Nil, got[0].ID) // DB default assigned
 }
 
