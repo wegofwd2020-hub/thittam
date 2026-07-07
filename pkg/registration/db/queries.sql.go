@@ -12,7 +12,8 @@ import (
 )
 
 const createTenant = `-- name: CreateTenant :one
-INSERT INTO tenants (name, slug, plan) VALUES ($1, $2, $3) RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
+INSERT INTO tenants (name, slug, plan, country_code, primary_currency_code)
+VALUES ($1, $2, $3, 'IN', 'INR') RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
 `
 
 type CreateTenantParams struct {
@@ -21,6 +22,9 @@ type CreateTenantParams struct {
 	Plan string `json:"plan"`
 }
 
+// country_code/primary_currency_code are NOT NULL as of migration 014 with no
+// DB default; registration doesn't collect these at signup yet, so default to
+// the same IN/INR values migration 014 backfilled onto pre-existing rows.
 func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Tenant, error) {
 	row := q.db.QueryRow(ctx, createTenant, arg.Name, arg.Slug, arg.Plan)
 	var i Tenant

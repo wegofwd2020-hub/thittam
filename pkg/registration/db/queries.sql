@@ -1,5 +1,9 @@
 -- name: CreateTenant :one
-INSERT INTO tenants (name, slug, plan) VALUES ($1, $2, $3) RETURNING *;
+-- country_code/primary_currency_code are NOT NULL as of migration 014 with no
+-- DB default; registration doesn't collect these at signup yet, so default to
+-- the same IN/INR values migration 014 backfilled onto pre-existing rows.
+INSERT INTO tenants (name, slug, plan, country_code, primary_currency_code)
+VALUES ($1, $2, $3, 'IN', 'INR') RETURNING *;
 
 -- name: TenantExistsBySlug :one
 SELECT EXISTS(SELECT 1 FROM tenants WHERE slug = $1);
