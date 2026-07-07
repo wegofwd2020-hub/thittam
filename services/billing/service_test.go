@@ -2,6 +2,7 @@ package billing
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -746,6 +747,63 @@ func TestSuspendSubscription_SetsSuspendedAt(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "suspended", sub.Status)
 	require.NotNil(t, sub.SuspendedAt)
+}
+
+// fakeEventPublisher captures PublishSubscriptionSuspended calls for assertions.
+type fakeEventPublisher struct {
+	calls []*Subscription
+	err   error
+}
+
+func (f *fakeEventPublisher) PublishSubscriptionSuspended(_ context.Context, sub *Subscription) error {
+	f.calls = append(f.calls, sub)
+	return f.err
+}
+
+func TestSuspendSubscription_PublishesEvent(t *testing.T) {
+	t.Parallel()
+	pub := &fakeEventPublisher{}
+	svc := NewService(&mockRepo{
+		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
+			return starterSub(), nil
+		},
+	}).WithPublisher(pub)
+
+	sub, err := svc.SuspendSubscription(context.Background(), fixedTenantID)
+	require.NoError(t, err)
+	require.Len(t, pub.calls, 1)
+	assert.Same(t, sub, pub.calls[0])
+	assert.Equal(t, "suspended", pub.calls[0].Status)
+}
+
+func TestSuspendSubscription_NilPublisherIsNoOp(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
+			return starterSub(), nil
+		},
+	})
+
+	assert.NotPanics(t, func() {
+		sub, err := svc.SuspendSubscription(context.Background(), fixedTenantID)
+		require.NoError(t, err)
+		assert.Equal(t, "suspended", sub.Status)
+	})
+}
+
+func TestSuspendSubscription_PublishErrorDoesNotFailOp(t *testing.T) {
+	t.Parallel()
+	pub := &fakeEventPublisher{err: fmt.Errorf("nats: connection closed")}
+	svc := NewService(&mockRepo{
+		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
+			return starterSub(), nil
+		},
+	}).WithPublisher(pub)
+
+	sub, err := svc.SuspendSubscription(context.Background(), fixedTenantID)
+	require.NoError(t, err)
+	assert.Equal(t, "suspended", sub.Status)
+	require.Len(t, pub.calls, 1)
 }
 
 // --- Tests: PlanLimitsByName ---
