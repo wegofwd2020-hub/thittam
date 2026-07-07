@@ -57,6 +57,10 @@ func (s *Store) TenantExistsBySlug(ctx context.Context, slug string) (bool, erro
 	return s.q.TenantExistsBySlug(ctx, slug)
 }
 
+func (s *Store) TenantExistsByNormalizedName(ctx context.Context, name string) (bool, error) {
+	return s.q.TenantExistsByNormalizedName(ctx, name)
+}
+
 func (s *Store) UserExistsByEmail(ctx context.Context, email string) (bool, error) {
 	return s.q.UserExistsByEmail(ctx, email)
 }
@@ -149,6 +153,10 @@ func (ts TxStore) CreateUser(ctx context.Context, tenantID uuid.UUID, email, dis
 		return uuid.Nil, fmt.Errorf("create user: %w", err)
 	}
 	return u.ID, nil
+}
+
+func (ts TxStore) TenantExistsByNormalizedName(ctx context.Context, name string) (bool, error) {
+	return ts.q.TenantExistsByNormalizedName(ctx, name)
 }
 
 func (ts TxStore) BindTenantVertical(ctx context.Context, tenantID uuid.UUID, verticalID string, registeredBy uuid.UUID) error {

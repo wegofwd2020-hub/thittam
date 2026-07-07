@@ -16,8 +16,8 @@ import (
 
 // mockSagaStore is an in-memory SagaStore for tests.
 type mockSagaStore struct {
-	mu     sync.Mutex
-	byID   map[uuid.UUID]*RegistrationSaga
+	mu      sync.Mutex
+	byID    map[uuid.UUID]*RegistrationSaga
 	byEmail map[string]*RegistrationSaga
 
 	createErr error
@@ -80,12 +80,12 @@ func (m *mockSagaStore) GetByEmail(ctx context.Context, email string) (*Registra
 
 // mockCompensator records which compensating actions were called.
 type mockCompensator struct {
-	deletedTenants  []uuid.UUID
-	deletedUsers    []uuid.UUID
+	deletedTenants   []uuid.UUID
+	deletedUsers     []uuid.UUID
 	unboundVerticals []string
 
-	deleteTenantErr  error
-	deleteUserErr    error
+	deleteTenantErr   error
+	deleteUserErr     error
 	unbindVerticalErr error
 }
 
@@ -152,6 +152,33 @@ func TestOrchestrator_FailAtStep1_NoCompensation(t *testing.T) {
 	require.NotNil(t, saga)
 
 	// failSaga (not failAndCompensate) because StepCreateTenant never completed.
+	assert.Equal(t, SagaFailed, saga.Status)
+	assert.Equal(t, StepCreateTenant, saga.FailedStep)
+	assert.Empty(t, comp.deletedTenants)
+	assert.Empty(t, comp.deletedUsers)
+}
+
+func TestOrchestrator_TenantNameTaken_NoCompensation(t *testing.T) {
+	t.Parallel()
+
+	// Pre-flight name check trips before CreateTenant runs, so no compensation.
+	p := newTestPipeline(func(p *Pipeline) {
+		p.tenants = &mockTenantStore{
+			tenantExistsByNormalizedNameFn: func(ctx context.Context, name string) (bool, error) {
+				return true, nil
+			},
+		}
+	})
+
+	store := newMockSagaStore()
+	comp := &mockCompensator{}
+	orch := newTestOrchestrator(p, store, comp)
+
+	saga, err := orch.Start(context.Background(), testRequest())
+	require.Error(t, err)
+	require.NotNil(t, saga)
+	assert.ErrorIs(t, err, ErrTenantNameTaken)
+
 	assert.Equal(t, SagaFailed, saga.Status)
 	assert.Equal(t, StepCreateTenant, saga.FailedStep)
 	assert.Empty(t, comp.deletedTenants)
@@ -346,9 +373,9 @@ func TestOrchestrator_Resume_SkipsCompletedSteps(t *testing.T) {
 	// Manually inject a failed saga to test resume logic.
 	failedSagaID := uuid.MustParse("d1000000-0000-0000-0000-000000000001")
 	failedSaga := &RegistrationSaga{
-		ID:     failedSagaID,
-		Email:  "resume@test.com",
-		Status: SagaFailed,
+		ID:             failedSagaID,
+		Email:          "resume@test.com",
+		Status:         SagaFailed,
 		CompletedSteps: []Step{StepCreateTenant, StepCreateUser, StepBindVertical},
 		FailedStep:     StepSeedChartOfAccounts,
 		Request:        testRequest(),

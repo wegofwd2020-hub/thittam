@@ -268,6 +268,12 @@ func (o *Orchestrator) run(ctx context.Context, saga *RegistrationSaga) (*Regist
 			slug = slug + "-" + saga.ID.String()[:8]
 		}
 
+		if taken, err := o.pipeline.tenants.TenantExistsByNormalizedName(ctx, req.CompanyName); err != nil {
+			return saga, o.failSaga(ctx, saga, StepCreateTenant, fmt.Errorf("check tenant name: %w", err))
+		} else if taken {
+			return saga, o.failSaga(ctx, saga, StepCreateTenant, ErrTenantNameTaken)
+		}
+
 		tenantID, err := o.pipeline.tenants.CreateTenant(ctx, req.CompanyName, slug, req.Plan)
 		if err != nil {
 			return saga, o.failSaga(ctx, saga, StepCreateTenant, fmt.Errorf("step 1 create tenant: %w", err))

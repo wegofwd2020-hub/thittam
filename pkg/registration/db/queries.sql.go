@@ -107,6 +107,21 @@ func (q *Queries) GetTenantByID(ctx context.Context, id uuid.UUID) (Tenant, erro
 	return i, err
 }
 
+const tenantExistsByNormalizedName = `-- name: TenantExistsByNormalizedName :one
+SELECT EXISTS (
+    SELECT 1 FROM tenants
+    WHERE regexp_replace(lower(trim(name)), '\s+', ' ', 'g')
+        = regexp_replace(lower(trim($1)), '\s+', ' ', 'g')
+)
+`
+
+func (q *Queries) TenantExistsByNormalizedName(ctx context.Context, btrim string) (bool, error) {
+	row := q.db.QueryRow(ctx, tenantExistsByNormalizedName, btrim)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const tenantExistsBySlug = `-- name: TenantExistsBySlug :one
 SELECT EXISTS(SELECT 1 FROM tenants WHERE slug = $1)
 `

@@ -17,10 +17,11 @@ import (
 // --- Mocks ---
 
 type mockTenantStore struct {
-	createTenantFn      func(ctx context.Context, name, slug, plan string) (uuid.UUID, error)
-	createUserFn        func(ctx context.Context, tenantID uuid.UUID, email, displayName, passwordHash string) (uuid.UUID, error)
-	tenantExistsBySlugFn func(ctx context.Context, slug string) (bool, error)
-	userExistsByEmailFn  func(ctx context.Context, email string) (bool, error)
+	createTenantFn                 func(ctx context.Context, name, slug, plan string) (uuid.UUID, error)
+	createUserFn                   func(ctx context.Context, tenantID uuid.UUID, email, displayName, passwordHash string) (uuid.UUID, error)
+	tenantExistsBySlugFn           func(ctx context.Context, slug string) (bool, error)
+	tenantExistsByNormalizedNameFn func(ctx context.Context, name string) (bool, error)
+	userExistsByEmailFn            func(ctx context.Context, email string) (bool, error)
 }
 
 func (m *mockTenantStore) CreateTenant(ctx context.Context, name, slug, plan string) (uuid.UUID, error) {
@@ -40,6 +41,13 @@ func (m *mockTenantStore) CreateUser(ctx context.Context, tenantID uuid.UUID, em
 func (m *mockTenantStore) TenantExistsBySlug(ctx context.Context, slug string) (bool, error) {
 	if m.tenantExistsBySlugFn != nil {
 		return m.tenantExistsBySlugFn(ctx, slug)
+	}
+	return false, nil
+}
+
+func (m *mockTenantStore) TenantExistsByNormalizedName(ctx context.Context, name string) (bool, error) {
+	if m.tenantExistsByNormalizedNameFn != nil {
+		return m.tenantExistsByNormalizedNameFn(ctx, name)
 	}
 	return false, nil
 }
@@ -153,14 +161,14 @@ func testVerticalDefinition() VerticalDefinitionRow {
 		Name:    "Software Development Services",
 		Version: "1.0.0",
 		EntityLabels: vertical.EntityLabels{
-			Project:       "Project",
-			ProjectPlural: "Projects",
-			Phase:         "Milestone",
-			PhasePlural:   "Milestones",
-			TeamMember:    "Team Member",
+			Project:          "Project",
+			ProjectPlural:    "Projects",
+			Phase:            "Milestone",
+			PhasePlural:      "Milestones",
+			TeamMember:       "Team Member",
 			TeamMemberPlural: "Team Members",
-			RateLabel:     "Hourly Rate",
-			RateUnit:      "hour",
+			RateLabel:        "Hourly Rate",
+			RateUnit:         "hour",
 		},
 		DefaultChartOfAccounts: []vertical.ChartOfAccountEntry{
 			{Code: "1000", Name: "Bank & Cash", AccountType: "asset"},
@@ -324,6 +332,21 @@ func TestPipeline_EmailTaken(t *testing.T) {
 	_, err := p.Run(context.Background(), testRequest())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrEmailTaken)
+}
+
+func TestPipeline_TenantNameTaken(t *testing.T) {
+	t.Parallel()
+	p := newTestPipeline(func(p *Pipeline) {
+		p.tenants = &mockTenantStore{
+			tenantExistsByNormalizedNameFn: func(ctx context.Context, name string) (bool, error) {
+				return true, nil
+			},
+		}
+	})
+
+	_, err := p.Run(context.Background(), testRequest())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrTenantNameTaken)
 }
 
 func TestPipeline_CreateTenantFailure(t *testing.T) {
