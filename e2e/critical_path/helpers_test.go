@@ -13,6 +13,7 @@ package critical_path_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -167,6 +168,20 @@ func (r *iamRepo) GetTenant(_ context.Context, id uuid.UUID) (*iam.Tenant, error
 		return t, nil
 	}
 	return nil, iam.ErrTenantNotFound
+}
+
+// FindTenantByNormalizedName mirrors the DB's tenants_name_ci_unique index
+// (case-insensitive, trimmed, internal whitespace collapsed). Returns
+// (nil, nil) when no tenant matches, matching the Postgres wrapper contract.
+func (r *iamRepo) FindTenantByNormalizedName(_ context.Context, name string) (*iam.Tenant, error) {
+	norm := func(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }
+	target := norm(name)
+	for _, t := range r.tenants {
+		if norm(t.Name) == target {
+			return t, nil
+		}
+	}
+	return nil, nil
 }
 func (r *iamRepo) UpdateTenantStatus(_ context.Context, id uuid.UUID, status string, holdUntil *time.Time, freezeReason *string) error {
 	t, ok := r.tenants[id]
