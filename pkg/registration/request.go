@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/wegofwd2020/thittam/pkg/locale"
 )
 
 // ValidPlans lists the allowed subscription plans.
@@ -73,11 +74,13 @@ type StepResult struct {
 
 // RegisterRequest contains the input for tenant registration.
 type RegisterRequest struct {
-	CompanyName string
-	Email       string
-	Password    string
-	VerticalID  string
-	Plan        string
+	CompanyName     string
+	Email           string
+	Password        string
+	VerticalID      string
+	Plan            string
+	Country         string // ISO-3166-1 alpha-2, required
+	PrimaryCurrency string // ISO-4217, optional; derived from Country when empty
 }
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
@@ -114,6 +117,23 @@ func (r *RegisterRequest) Validate() error {
 	}
 	if !isValidPlan(r.Plan) {
 		return fmt.Errorf("%w: plan must be one of: %s", ErrInvalidPlan, strings.Join(ValidPlans, ", "))
+	}
+
+	r.Country = strings.ToUpper(strings.TrimSpace(r.Country))
+	if r.Country == "" {
+		return ErrCountryRequired // bare sentinel, mirroring iam
+	}
+	if !locale.IsKnownCountry(r.Country) {
+		return fmt.Errorf("%w: %q", ErrUnknownCountry, r.Country)
+	}
+	r.PrimaryCurrency = strings.ToUpper(strings.TrimSpace(r.PrimaryCurrency))
+	if r.PrimaryCurrency == "" {
+		cur, err := locale.CurrencyForCountry(r.Country)
+		if err != nil {
+			// Unreachable given IsKnownCountry above; guard against a silent empty currency.
+			return fmt.Errorf("%w: %q", ErrUnknownCountry, r.Country)
+		}
+		r.PrimaryCurrency = cur
 	}
 	return nil
 }

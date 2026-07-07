@@ -198,6 +198,7 @@ func testRequest() RegisterRequest {
 		Password:    "securepass123",
 		VerticalID:  "software-development",
 		Plan:        "professional",
+		Country:     "IN",
 	}
 }
 
@@ -250,27 +251,27 @@ func TestPipeline_ValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "blank company name",
-			req:     RegisterRequest{CompanyName: "", Email: "a@b.com", Password: "12345678", VerticalID: "x", Plan: "starter"},
+			req:     RegisterRequest{CompanyName: "", Email: "a@b.com", Password: "12345678", VerticalID: "x", Plan: "starter", Country: "IN"},
 			wantErr: ErrInvalidRequest,
 		},
 		{
 			name:    "invalid email",
-			req:     RegisterRequest{CompanyName: "Acme", Email: "not-an-email", Password: "12345678", VerticalID: "x", Plan: "starter"},
+			req:     RegisterRequest{CompanyName: "Acme", Email: "not-an-email", Password: "12345678", VerticalID: "x", Plan: "starter", Country: "IN"},
 			wantErr: ErrInvalidRequest,
 		},
 		{
 			name:    "short password",
-			req:     RegisterRequest{CompanyName: "Acme", Email: "a@b.com", Password: "short", VerticalID: "x", Plan: "starter"},
+			req:     RegisterRequest{CompanyName: "Acme", Email: "a@b.com", Password: "short", VerticalID: "x", Plan: "starter", Country: "IN"},
 			wantErr: ErrInvalidRequest,
 		},
 		{
 			name:    "blank vertical_id",
-			req:     RegisterRequest{CompanyName: "Acme", Email: "a@b.com", Password: "12345678", VerticalID: "", Plan: "starter"},
+			req:     RegisterRequest{CompanyName: "Acme", Email: "a@b.com", Password: "12345678", VerticalID: "", Plan: "starter", Country: "IN"},
 			wantErr: ErrInvalidRequest,
 		},
 		{
 			name:    "invalid plan",
-			req:     RegisterRequest{CompanyName: "Acme", Email: "a@b.com", Password: "12345678", VerticalID: "x", Plan: "free"},
+			req:     RegisterRequest{CompanyName: "Acme", Email: "a@b.com", Password: "12345678", VerticalID: "x", Plan: "free", Country: "IN"},
 			wantErr: ErrInvalidPlan,
 		},
 	}
@@ -557,5 +558,40 @@ func TestRegisterRequest_Validate(t *testing.T) {
 		req.CompanyName = "  Acme\t Corp   Studios  "
 		require.NoError(t, req.Validate())
 		assert.Equal(t, "Acme Corp Studios", req.CompanyName)
+	})
+}
+
+func TestRegisterRequest_Validate_Country(t *testing.T) {
+	t.Parallel()
+
+	t.Run("missing country", func(t *testing.T) {
+		r := testRequest()
+		r.Country = ""
+		assert.ErrorIs(t, r.Validate(), ErrCountryRequired)
+	})
+	t.Run("unknown country", func(t *testing.T) {
+		r := testRequest()
+		r.Country = "ZZ"
+		assert.ErrorIs(t, r.Validate(), ErrUnknownCountry)
+	})
+	t.Run("lowercase country accepted and uppercased", func(t *testing.T) {
+		r := testRequest()
+		r.Country = "in"
+		require.NoError(t, r.Validate())
+		assert.Equal(t, "IN", r.Country)
+	})
+	t.Run("currency derived from country", func(t *testing.T) {
+		r := testRequest()
+		r.Country = "IN"
+		r.PrimaryCurrency = ""
+		require.NoError(t, r.Validate())
+		assert.Equal(t, "INR", r.PrimaryCurrency)
+	})
+	t.Run("explicit currency override wins", func(t *testing.T) {
+		r := testRequest()
+		r.Country = "US"
+		r.PrimaryCurrency = "eur"
+		require.NoError(t, r.Validate())
+		assert.Equal(t, "EUR", r.PrimaryCurrency)
 	})
 }

@@ -17,6 +17,11 @@ var (
 	// shared tenants_name_ci_unique index; mirrors iam.ErrTenantNameTaken.
 	ErrTenantNameTaken = errors.New("registration: company name already taken")
 
+	// ErrCountryRequired is returned when country is missing at signup.
+	ErrCountryRequired = errors.New("registration: country is required")
+	// ErrUnknownCountry is returned when the country code has no currency mapping.
+	ErrUnknownCountry = errors.New("registration: unknown country")
+
 	// ErrSlugTaken is returned when the generated slug collides with an existing tenant.
 	ErrSlugTaken = errors.New("registration: tenant slug already taken")
 
