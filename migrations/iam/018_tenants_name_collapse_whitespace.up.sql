@@ -12,6 +12,6 @@
 -- before applying: any pre-existing internal-whitespace duplicates will make
 -- CREATE UNIQUE INDEX fail.
 
-DROP INDEX tenants_name_ci_unique;
+DROP INDEX IF EXISTS tenants_name_ci_unique;
 CREATE UNIQUE INDEX tenants_name_ci_unique
     ON tenants (regexp_replace(lower(trim(name)), '\s+', ' ', 'g'));
