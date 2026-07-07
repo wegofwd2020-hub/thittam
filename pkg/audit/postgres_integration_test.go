@@ -5,10 +5,12 @@ package audit_test
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -16,12 +18,27 @@ import (
 	"github.com/wegofwd2020/thittam/pkg/testdb"
 )
 
+// cleanupAuditLog removes a tenant's audit_log rows. Under the least-privilege
+// suite (THITTAM_TEST_OWNER_DSN set, tests connect as thittam_app which can't
+// DELETE audit_log) it deletes via the owner DSN; otherwise it uses the given
+// pool (local single-role runs).
+func cleanupAuditLog(ctx context.Context, pool *pgxpool.Pool, tenant uuid.UUID) {
+	if dsn := os.Getenv("THITTAM_TEST_OWNER_DSN"); dsn != "" {
+		if op, err := pgxpool.New(ctx, dsn); err == nil {
+			defer op.Close()
+			_, _ = op.Exec(ctx, `DELETE FROM audit_log WHERE tenant_id = $1`, tenant)
+			return
+		}
+	}
+	_, _ = pool.Exec(ctx, `DELETE FROM audit_log WHERE tenant_id = $1`, tenant)
+}
+
 func TestPostgresAudit_RoundTrip(t *testing.T) {
 	pool := testdb.Open(t)
 	store := audit.NewPostgres(pool)
 	tenant := uuid.New()
 	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM audit_log WHERE tenant_id = $1`, tenant)
+		cleanupAuditLog(context.Background(), pool, tenant)
 	})
 
 	e := audit.Event{
@@ -54,7 +71,7 @@ func TestPostgresAudit_BatchAndFilter(t *testing.T) {
 	store := audit.NewPostgres(pool)
 	tenant := uuid.New()
 	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM audit_log WHERE tenant_id = $1`, tenant)
+		cleanupAuditLog(context.Background(), pool, tenant)
 	})
 
 	base := time.Now().UTC()

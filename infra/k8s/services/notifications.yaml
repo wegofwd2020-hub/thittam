@@ -54,7 +54,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: thittam-db
-                  key: url
+                  key: runtime_url
             # SendGrid API key (T2 — email delivery)
             - name: SENDGRID_API_KEY
               valueFrom:

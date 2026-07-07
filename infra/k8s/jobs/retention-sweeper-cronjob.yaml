@@ -70,7 +70,7 @@ spec:
                   valueFrom:
                     secretKeyRef:
                       name: thittam-db
-                      key: url
+                      key: runtime_url
                 # POD_NAME populates the pushgateway `instance` label
                 # so concurrent sweeper pods (if ever scaled out)
                 # don't overwrite each other's pushes.

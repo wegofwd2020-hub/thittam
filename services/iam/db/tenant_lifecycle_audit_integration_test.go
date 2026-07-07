@@ -15,10 +15,12 @@ package db_test
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -27,6 +29,20 @@ import (
 	iam "github.com/wegofwd2020/thittam/services/iam"
 	iamdb "github.com/wegofwd2020/thittam/services/iam/db"
 )
+
+// ownerDeleteAuditLog deletes a tenant's audit_log rows via the owner DSN when
+// the suite runs as thittam_app (THITTAM_TEST_OWNER_DSN set; thittam_app can't
+// DELETE audit_log); else via the given pool (local single-role runs).
+func ownerDeleteAuditLog(ctx context.Context, pool *pgxpool.Pool, tenant uuid.UUID) {
+	if dsn := os.Getenv("THITTAM_TEST_OWNER_DSN"); dsn != "" {
+		if op, err := pgxpool.New(ctx, dsn); err == nil {
+			defer op.Close()
+			_, _ = op.Exec(ctx, `DELETE FROM audit_log WHERE tenant_id = $1`, tenant)
+			return
+		}
+	}
+	_, _ = pool.Exec(ctx, `DELETE FROM audit_log WHERE tenant_id = $1`, tenant)
+}
 
 // lifecycleThresholds returns the three "now" values that drive
 // AdvanceTenantLifecycle through suspended→grace→deactivated→purge_eligible,
@@ -56,7 +72,7 @@ func TestTenantLifecycle_EmitsAuditPerTransition(t *testing.T) {
 
 	tenantID := uuid.New()
 	t.Cleanup(func() {
-		_, _ = pool.Exec(ctx, `DELETE FROM audit_log WHERE tenant_id = $1`, tenantID)
+		ownerDeleteAuditLog(ctx, pool, tenantID) // audit_log: owner only under the split
 		_, _ = pool.Exec(ctx, `DELETE FROM tenants WHERE id = $1`, tenantID)
 	})
 

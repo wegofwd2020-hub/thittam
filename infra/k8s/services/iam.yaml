@@ -61,7 +61,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: thittam-db
-                  key: url
+                  key: runtime_url
             # Vault AppRole credentials (T3 — acceptable as env vars).
             # These grant read-only access to the `iam/` Vault path.
             - name: VAULT_ROLE_ID

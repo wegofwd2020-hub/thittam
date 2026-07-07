@@ -57,7 +57,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: thittam-db
-                  key: url
+                  key: runtime_url
             # Razorpay credentials (T2 — payment gateway)
             - name: RAZORPAY_KEY_ID
               valueFrom:

@@ -55,7 +55,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: thittam-db
-                  key: url
+                  key: runtime_url
             # MinIO credentials (T2 — object storage access key)
             - name: MINIO_ACCESS_KEY
               valueFrom:

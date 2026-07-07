@@ -32,18 +32,10 @@ func TestAuditLog_AppRole_AppendOnly(t *testing.T) {
 
 	tenant := uuid.New()
 	// Cleanup via the OWNER DSN — thittam_app can't DELETE audit_log (that's the point).
-	t.Cleanup(func() {
-		ownerDSN := os.Getenv("THITTAM_TEST_DSN")
-		if ownerDSN == "" {
-			return
-		}
-		op, err := pgxpool.New(ctx, ownerDSN)
-		if err != nil {
-			return
-		}
-		defer op.Close()
-		_, _ = op.Exec(ctx, `DELETE FROM audit_log WHERE tenant_id = $1`, tenant)
-	})
+	// Cleanup via the owner DSN (THITTAM_TEST_OWNER_DSN) — thittam_app can't
+	// DELETE audit_log (that's the point). cleanupAuditLog is defined in
+	// postgres_integration_test.go (same package).
+	t.Cleanup(func() { cleanupAuditLog(ctx, appPool, tenant) })
 
 	// INSERT allowed.
 	_, err = appPool.Exec(ctx, `
