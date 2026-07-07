@@ -8,10 +8,21 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/wegofwd2020/thittam/pkg/registration"
 	verticaldb "github.com/wegofwd2020/thittam/pkg/vertical/db"
 )
+
+// isUniqueViolationOn reports whether err is a Postgres unique_violation (23505)
+// on the named constraint/index. Parameterized for symmetry with iam's helper.
+func isUniqueViolationOn(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	return pgErr.Code == "23505" && pgErr.ConstraintName == constraint
+}
 
 // Store implements registration.TenantStore and registration.VerticalStore
 // using sqlc-generated queries over a pgx/v5 connection pool.
@@ -35,6 +46,9 @@ func NewStore(db *pgxpool.Pool, vq *verticaldb.Queries) *Store {
 func (s *Store) CreateTenant(ctx context.Context, name, slug, plan string) (uuid.UUID, error) {
 	t, err := s.q.CreateTenant(ctx, CreateTenantParams{Name: name, Slug: slug, Plan: plan})
 	if err != nil {
+		if isUniqueViolationOn(err, "tenants_name_ci_unique") {
+			return uuid.Nil, registration.ErrTenantNameTaken
+		}
 		return uuid.Nil, fmt.Errorf("create tenant: %w", err)
 	}
 	return t.ID, nil
@@ -55,6 +69,10 @@ func (s *Store) CreateUser(ctx context.Context, tenantID uuid.UUID, email, displ
 
 func (s *Store) TenantExistsBySlug(ctx context.Context, slug string) (bool, error) {
 	return s.q.TenantExistsBySlug(ctx, slug)
+}
+
+func (s *Store) TenantExistsByNormalizedName(ctx context.Context, name string) (bool, error) {
+	return s.q.TenantExistsByNormalizedName(ctx, name)
 }
 
 func (s *Store) UserExistsByEmail(ctx context.Context, email string) (bool, error) {
@@ -133,6 +151,9 @@ func (s *Store) InTx(ctx context.Context, fn func(tx TxStore) error) error {
 func (ts TxStore) CreateTenant(ctx context.Context, name, slug, plan string) (uuid.UUID, error) {
 	t, err := ts.q.CreateTenant(ctx, CreateTenantParams{Name: name, Slug: slug, Plan: plan})
 	if err != nil {
+		if isUniqueViolationOn(err, "tenants_name_ci_unique") {
+			return uuid.Nil, registration.ErrTenantNameTaken
+		}
 		return uuid.Nil, fmt.Errorf("create tenant: %w", err)
 	}
 	return t.ID, nil
@@ -149,6 +170,10 @@ func (ts TxStore) CreateUser(ctx context.Context, tenantID uuid.UUID, email, dis
 		return uuid.Nil, fmt.Errorf("create user: %w", err)
 	}
 	return u.ID, nil
+}
+
+func (ts TxStore) TenantExistsByNormalizedName(ctx context.Context, name string) (bool, error) {
+	return ts.q.TenantExistsByNormalizedName(ctx, name)
 }
 
 func (ts TxStore) BindTenantVertical(ctx context.Context, tenantID uuid.UUID, verticalID string, registeredBy uuid.UUID) error {

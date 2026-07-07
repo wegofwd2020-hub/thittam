@@ -90,6 +90,16 @@ func (p *Pipeline) Run(ctx context.Context, req RegisterRequest) (*RegisterResul
 		return nil, ErrEmailTaken
 	}
 
+	// Check tenant-name uniqueness (normalized). Unlike slug (which silently
+	// auto-suffixes on collision), a duplicate name is a clean rejection.
+	nameTaken, err := p.tenants.TenantExistsByNormalizedName(ctx, req.CompanyName)
+	if err != nil {
+		return nil, fmt.Errorf("check tenant name: %w", err)
+	}
+	if nameTaken {
+		return nil, ErrTenantNameTaken
+	}
+
 	// Generate slug
 	slug := Slugify(req.CompanyName)
 	if slug == "" {

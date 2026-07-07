@@ -20,6 +20,10 @@ type TenantStore interface {
 	// TenantExistsBySlug returns true if a tenant with this slug already exists.
 	TenantExistsBySlug(ctx context.Context, slug string) (bool, error)
 
+	// TenantExistsByNormalizedName returns true if a tenant already exists with
+	// this name under case-insensitive, trimmed, whitespace-collapsed comparison.
+	TenantExistsByNormalizedName(ctx context.Context, name string) (bool, error)
+
 	// UserExistsByEmail returns true if any user with this email exists.
 	UserExistsByEmail(ctx context.Context, email string) (bool, error)
 }
