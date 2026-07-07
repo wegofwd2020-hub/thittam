@@ -25,11 +25,11 @@ func TestStore_CreateTenant_NameTaken(t *testing.T) {
 			 = regexp_replace(lower(trim($1)),'\s+',' ','g')`, name)
 	})
 
-	_, err := store.CreateTenant(context.Background(), name, "reg-parity-studios", "starter")
+	_, err := store.CreateTenant(context.Background(), name, "reg-parity-studios", "starter", "IN", "INR")
 	require.NoError(t, err)
 
 	// Case + whitespace varied duplicate → clean sentinel, not a raw pg error.
-	_, err = store.CreateTenant(context.Background(), "reg parity studios", "reg-parity-studios-2", "starter")
+	_, err = store.CreateTenant(context.Background(), "reg parity studios", "reg-parity-studios-2", "starter", "IN", "INR")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, registration.ErrTenantNameTaken)
 

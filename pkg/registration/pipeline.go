@@ -130,7 +130,7 @@ func (p *Pipeline) Run(ctx context.Context, req RegisterRequest) (*RegisterResul
 
 	// Step 1: Create Tenant
 	start := time.Now()
-	tenantID, err := p.tenants.CreateTenant(ctx, req.CompanyName, slug, req.Plan)
+	tenantID, err := p.tenants.CreateTenant(ctx, req.CompanyName, slug, req.Plan, req.Country, req.PrimaryCurrency)
 	result.CompletedSteps = append(result.CompletedSteps, stepResult(StepCreateTenant, start, err))
 	if err != nil {
 		return result, fmt.Errorf("step 1 create tenant: %w", err)

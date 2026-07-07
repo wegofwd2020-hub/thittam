@@ -274,7 +274,7 @@ func (o *Orchestrator) run(ctx context.Context, saga *RegistrationSaga) (*Regist
 			return saga, o.failSaga(ctx, saga, StepCreateTenant, ErrTenantNameTaken)
 		}
 
-		tenantID, err := o.pipeline.tenants.CreateTenant(ctx, req.CompanyName, slug, req.Plan)
+		tenantID, err := o.pipeline.tenants.CreateTenant(ctx, req.CompanyName, slug, req.Plan, req.Country, req.PrimaryCurrency)
 		if err != nil {
 			return saga, o.failSaga(ctx, saga, StepCreateTenant, fmt.Errorf("step 1 create tenant: %w", err))
 		}
