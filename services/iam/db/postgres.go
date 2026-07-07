@@ -397,6 +397,19 @@ func (p *Postgres) GetTenant(ctx context.Context, id uuid.UUID) (*iam.Tenant, er
 	return dbTenantToDomain(row), nil
 }
 
+// FindTenantByNormalizedName implements iam.Repository. A no-rows result is
+// not an error here — it means the name is free, so return (nil, nil).
+func (p *Postgres) FindTenantByNormalizedName(ctx context.Context, name string) (*iam.Tenant, error) {
+	row, err := p.q.FindTenantByNormalizedName(ctx, name)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("iam/db: find tenant by name: %w", err)
+	}
+	return dbTenantToDomain(row), nil
+}
+
 // UpdateTenantStatus sets the tenant's status, stamps lifecycle
 // timestamps on first transition, and optionally applies legal-hold
 // fields (#92 Stage 4). holdUntil and freezeReason are optional; nil

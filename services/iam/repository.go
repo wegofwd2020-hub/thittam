@@ -38,6 +38,11 @@ type Repository interface {
 	// Tenants
 	CreateTenant(ctx context.Context, tenant *Tenant) error
 	GetTenant(ctx context.Context, id uuid.UUID) (*Tenant, error)
+	// FindTenantByNormalizedName returns the tenant whose name matches the
+	// given name under case-insensitive, trimmed, internal-whitespace-collapsed
+	// comparison (the tenants_name_ci_unique index). Returns (nil, nil) when no
+	// tenant matches. Used by CreateTenant's pre-flight duplicate check (#89).
+	FindTenantByNormalizedName(ctx context.Context, name string) (*Tenant, error)
 	// UpdateTenantStatus sets the tenant's status and optionally its
 	// legal-hold fields (#92 Stage 4). A nil holdUntil / freezeReason
 	// preserves the existing column value — the COALESCE semantics
