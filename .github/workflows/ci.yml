@@ -257,6 +257,17 @@ jobs:
               -database "${TEST_DB_URL}&x-migrations-table=schema_migrations_${dir}" up
           done
 
+      - name: Provision thittam_app role + grants (#120)
+        # CREATE ROLE needs superuser; CI's thittam is one. The Postgres service is
+        # ephemeral per job, so an unconditional CREATE ROLE won't collide. Grants
+        # run via the owner DSN; export the app DSN for the append-only proof test.
+        run: |
+          set -euo pipefail
+          psql "$THITTAM_TEST_DSN" -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE thittam_app LOGIN PASSWORD 'thittam_app_ci';"
+          psql "$THITTAM_TEST_DSN" -v ON_ERROR_STOP=1 -f scripts/db-grant-app-role.sql
+          echo "THITTAM_TEST_APP_DSN=postgres://thittam_app:thittam_app_ci@localhost:5432/thittam_test?sslmode=disable" >> "$GITHUB_ENV"
+
       - name: Run integration tests (-tags=integration)
         # Includes the trigger from #39 (services/iam/db/user_roles_scope_*)
         # and the rewritten pkg/vertical/db integration test.
