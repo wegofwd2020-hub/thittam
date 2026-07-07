@@ -265,11 +265,14 @@ jobs:
         # CREATE ROLE needs superuser; CI's thittam is one. The Postgres service is
         # ephemeral per job, so an unconditional CREATE ROLE won't collide. Grants
         # run via the owner DSN; export the app DSN for the append-only proof test.
+        # Connect as the OWNER (THITTAM_TEST_OWNER_DSN) to create the role + apply
+        # grants — THITTAM_TEST_DSN now connects as thittam_app (#122), which
+        # doesn't exist until this step runs.
         run: |
           set -euo pipefail
-          psql "$THITTAM_TEST_DSN" -v ON_ERROR_STOP=1 \
+          psql "$THITTAM_TEST_OWNER_DSN" -v ON_ERROR_STOP=1 \
             -c "CREATE ROLE thittam_app LOGIN PASSWORD 'thittam_app_ci';"
-          psql "$THITTAM_TEST_DSN" -v ON_ERROR_STOP=1 -f scripts/db-grant-app-role.sql
+          psql "$THITTAM_TEST_OWNER_DSN" -v ON_ERROR_STOP=1 -f scripts/db-grant-app-role.sql
           echo "THITTAM_TEST_APP_DSN=postgres://thittam_app:thittam_app_ci@localhost:5432/thittam_test?sslmode=disable" >> "$GITHUB_ENV"
 
       - name: Run integration tests (-tags=integration)
