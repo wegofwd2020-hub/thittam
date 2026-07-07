@@ -47,6 +47,7 @@ const (
 	ConsumerReportingFinancial     = "reporting-financial"
 	ConsumerNotificationsFinancial = "notifications-financial"
 	ConsumerNotificationsEvents    = "notifications-events"
+	ConsumerIamBilling             = "iam-billing"
 )
 
 // FinancialSubjects are the NATS subjects that carry money-critical events.
@@ -191,6 +192,15 @@ func FinancialConsumers() []ConsumerConfig {
 			AckWait:        AckWait,
 			BackOff:        DeliveryBackOff,
 			Description:    "Notifications service financial event consumer. Triggers approval-request and over-budget alerts.",
+		},
+		{
+			StreamName:     StreamFinancial,
+			DurableName:    ConsumerIamBilling,
+			FilterSubjects: []string{"thittam.billing.subscription.suspended"},
+			MaxDeliver:     MaxDeliverAttempts,
+			AckWait:        AckWait,
+			BackOff:        DeliveryBackOff,
+			Description:    "IAM service billing consumer. Suspends the tenant + starts the retention clock on subscription suspension (#118).",
 		},
 	}
 }

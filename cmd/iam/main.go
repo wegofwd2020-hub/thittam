@@ -36,6 +36,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/jackc/pgx/v5/pgxpool"
+	nats "github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
 	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
@@ -46,6 +47,7 @@ import (
 	"github.com/wegofwd2020/thittam/pkg/corsutil"
 	appcrypto "github.com/wegofwd2020/thittam/pkg/crypto"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
+	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/ratelimit"
 	"github.com/wegofwd2020/thittam/pkg/migrate"
 	"github.com/wegofwd2020/thittam/pkg/secrets"
@@ -198,6 +200,44 @@ func main() {
 		}
 	}()
 
+	// --- NATS JetStream: billing consumer (#118) ---
+	// iam's first JetStream consumer. Subscribes to the FINANCIAL stream
+	// filtered to thittam.billing.subscription.suspended and mirrors the
+	// suspension onto the tenant, starting the retention clock. NATS_URL is
+	// T3 (service endpoint) config; if it is unset iam still boots — the
+	// consumer is simply disabled, matching local dev without a NATS server.
+	var natsConn *nats.Conn
+	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
+		nc, err := nats.Connect(natsURL,
+			nats.MaxReconnects(-1),
+			nats.ReconnectWait(2*time.Second),
+		)
+		if err != nil {
+			log.Fatalf("iam: startup: connect to NATS: %v", err)
+		}
+		natsConn = nc
+		defer func() { _ = nc.Drain() }()
+
+		js, err := nc.JetStream()
+		if err != nil {
+			log.Fatalf("iam: startup: create JetStream context: %v", err)
+		}
+
+		billingSub, err := jetstream.Subscribe(js,
+			jetstream.StreamFinancial,
+			jetstream.ConsumerIamBilling,
+			iam.NewBillingConsumer(svc).Handle,
+		)
+		if err != nil {
+			log.Fatalf("iam: startup: subscribe to billing consumer: %v", err)
+		}
+		defer func() { _ = billingSub.Unsubscribe() }()
+
+		log.Printf("iam: billing consumer subscribed (FINANCIAL/%s)", jetstream.ConsumerIamBilling)
+	} else {
+		log.Printf("iam: NATS_URL not set — billing consumer disabled (tenant suspension on subscription.suspended will not fire)")
+	}
+
 	// --- gRPC server ---
 	// UnaryCallerInterceptor reads Kong-injected metadata (x-caller-id,
 	// x-caller-role, x-caller-email, x-forwarded-for) and populates the
@@ -216,6 +256,9 @@ func main() {
 
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
 	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
+	if natsConn != nil {
+		srv.RegisterHealthChecker("nats", &natsChecker{nc: natsConn})
+	}
 
 	// --- REST gateway (grpc-gateway, ADR-014 follow-up #60) ---
 	// The UI calls REST endpoints (/api/v1/auth/login etc.). Mount the
@@ -329,6 +372,17 @@ type redisChecker struct{ rdb *redis.Client }
 
 func (c *redisChecker) CheckHealth(ctx context.Context) error {
 	return c.rdb.Ping(ctx).Err()
+}
+
+// natsChecker implements observability.HealthChecker for the NATS connection
+// backing the billing consumer. Only registered when NATS_URL is configured.
+type natsChecker struct{ nc *nats.Conn }
+
+func (c *natsChecker) CheckHealth(_ context.Context) error {
+	if !c.nc.IsConnected() {
+		return nats.ErrConnectionClosed
+	}
+	return nil
 }
 
 // waitForVault blocks until CheckHealth succeeds or the deadline is exceeded.
