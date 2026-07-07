@@ -27,6 +27,15 @@ SELECT * FROM tenants WHERE id = $1;
 -- name: GetTenantBySlug :one
 SELECT * FROM tenants WHERE slug = $1;
 
+-- name: FindTenantByNormalizedName :one
+-- Look up a tenant by name under the migration-018 normalisation
+-- (case-insensitive, trimmed, internal whitespace collapsed). Uses the
+-- tenants_name_ci_unique index. Powers the pre-flight duplicate check.
+SELECT * FROM tenants
+WHERE regexp_replace(lower(trim(name)), '\s+', ' ', 'g')
+    = regexp_replace(lower(trim($1)), '\s+', ' ', 'g')
+LIMIT 1;
+
 -- name: UpdateTenantStatus :one
 -- Sets the tenant's status and stamps the appropriate lifecycle timestamp
 -- on first entry (#92). Repeat calls preserve the original timestamp so

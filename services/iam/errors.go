@@ -1,6 +1,11 @@
 package iam
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/google/uuid"
+)
 
 var (
 	// ErrNotPlatformAdmin is returned when an admin-only RPC is called by a
@@ -37,3 +42,11 @@ var (
 	// explicitly.
 	ErrUnknownCountry = errors.New("iam: unknown country_code")
 )
+
+// TenantNameTakenErr wraps ErrTenantNameTaken with the colliding tenant's
+// UUID so the ALREADY_EXISTS surfaced to the caller names the existing
+// tenant. errors.Is(err, ErrTenantNameTaken) stays true, so grpcError keeps
+// returning codes.AlreadyExists.
+func TenantNameTakenErr(id uuid.UUID) error {
+	return fmt.Errorf("%w (existing tenant %s)", ErrTenantNameTaken, id)
+}

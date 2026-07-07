@@ -435,6 +435,16 @@ func (s *Service) CreateTenant(ctx context.Context, tenant *Tenant) (*Tenant, er
 	// layer on lower(trim(name)); this normalisation ensures stored names
 	// don't carry stray double-spaces into invoices and audit logs (#91).
 	tenant.Name = strings.Join(strings.Fields(tenant.Name), " ")
+
+	// Pre-flight: return a clean ALREADY_EXISTS naming the colliding tenant
+	// rather than leaking a raw unique-violation. The DB index is still the
+	// backstop for the concurrent-create race (#89).
+	if existing, err := s.repo.FindTenantByNormalizedName(ctx, tenant.Name); err != nil {
+		return nil, fmt.Errorf("iam: create tenant: %w", err)
+	} else if existing != nil {
+		return nil, TenantNameTakenErr(existing.ID)
+	}
+
 	if tenant.ID == uuid.Nil {
 		tenant.ID = uuid.New()
 	}

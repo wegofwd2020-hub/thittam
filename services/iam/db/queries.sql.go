@@ -282,6 +282,41 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const findTenantByNormalizedName = `-- name: FindTenantByNormalizedName :one
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason FROM tenants
+WHERE regexp_replace(lower(trim(name)), '\s+', ' ', 'g')
+    = regexp_replace(lower(trim($1)), '\s+', ' ', 'g')
+LIMIT 1
+`
+
+// Look up a tenant by name under the migration-018 normalisation
+// (case-insensitive, trimmed, internal whitespace collapsed). Uses the
+// tenants_name_ci_unique index. Powers the pre-flight duplicate check.
+func (q *Queries) FindTenantByNormalizedName(ctx context.Context, btrim string) (Tenant, error) {
+	row := q.db.QueryRow(ctx, findTenantByNormalizedName, btrim)
+	var i Tenant
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Plan,
+		&i.Status,
+		&i.CreatedAt,
+		&i.IsDemo,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.CountryCode,
+		&i.PostalCode,
+		&i.PrimaryCurrencyCode,
+		&i.SuspendedAt,
+		&i.DeactivatedAt,
+		&i.HoldUntil,
+		&i.FreezeReason,
+	)
+	return i, err
+}
+
 const getInvitationByToken = `-- name: GetInvitationByToken :one
 SELECT id, tenant_id, email, role_id, token, status, invited_by, expires_at, created_at FROM invitations
 WHERE token = $1 AND accepted_at IS NULL AND expires_at > now()
