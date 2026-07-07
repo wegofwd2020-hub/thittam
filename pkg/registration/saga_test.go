@@ -130,6 +130,31 @@ func TestOrchestrator_HappyPath(t *testing.T) {
 	assert.Empty(t, comp.deletedTenants, "no compensation should run on success")
 }
 
+func TestOrchestrator_CreateTenant_ReceivesCountryCurrency(t *testing.T) {
+	t.Parallel()
+
+	var gotCountry, gotCurrency string
+	p := newTestPipeline(func(p *Pipeline) {
+		p.tenants = &mockTenantStore{
+			createTenantFn: func(_ context.Context, _, _, _, country, currency string) (uuid.UUID, error) {
+				gotCountry, gotCurrency = country, currency
+				return uuid.New(), nil
+			},
+		}
+	})
+
+	store := newMockSagaStore()
+	comp := &mockCompensator{}
+	orch := newTestOrchestrator(p, store, comp)
+
+	saga, err := orch.Start(context.Background(), testRequest()) // Country "IN" → currency "INR"
+	require.NoError(t, err)
+	require.NotNil(t, saga)
+
+	assert.Equal(t, "IN", gotCountry)
+	assert.Equal(t, "INR", gotCurrency)
+}
+
 func TestOrchestrator_FailAtStep1_NoCompensation(t *testing.T) {
 	t.Parallel()
 

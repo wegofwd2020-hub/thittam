@@ -610,6 +610,7 @@ func TestRegisterRequest_Validate_Country(t *testing.T) {
 		r.Country = "US"
 		r.PrimaryCurrency = "eur"
 		require.NoError(t, r.Validate())
+		assert.Equal(t, "US", r.Country)
 		assert.Equal(t, "EUR", r.PrimaryCurrency)
 	})
 }
