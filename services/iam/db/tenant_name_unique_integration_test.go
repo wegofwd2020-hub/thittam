@@ -90,3 +90,16 @@ func TestTenantsNameUnique_DistinctNamesCoexist(t *testing.T) {
 	insertTenant(t, tx, "Acme Studios")
 	insertTenant(t, tx, "Beta Studios")
 }
+
+func TestTenantsNameUnique_InternalWhitespaceCollapsed(t *testing.T) {
+	pool := testdb.Open(t)
+	tx := testdb.NewTx(t, pool)
+	insertTenant(t, tx, "Acme  Corp") // two spaces
+
+	id := uuid.New()
+	_, err := tx.Exec(context.Background(),
+		`INSERT INTO tenants (id, name, slug, country_code, primary_currency_code)
+		 VALUES ($1, $2, $3, 'US', 'USD')`,
+		id, "Acme Corp", "slug-"+id.String()[:8]) // one space
+	assertUniqueViolation(t, err, "tenants_name_ci_unique")
+}
