@@ -50,7 +50,7 @@ func (p *Postgres) InsertBatch(ctx context.Context, events []Event) error {
 	if err != nil {
 		return fmt.Errorf("audit/db: begin batch: %w", err)
 	}
-	defer tx.Rollback(ctx) // no-op after a successful Commit
+	defer func() { _ = tx.Rollback(ctx) }() // no-op after a successful Commit
 	for _, e := range events {
 		if _, err := tx.Exec(ctx, insertAuditSQL, insertArgs(e)...); err != nil {
 			return fmt.Errorf("audit/db: batch insert: %w", err)
