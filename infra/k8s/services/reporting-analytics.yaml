@@ -55,7 +55,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: thittam-db
-                  key: url
+                  key: runtime_url
           envFrom:
             - configMapRef:
                 name: thittam-common

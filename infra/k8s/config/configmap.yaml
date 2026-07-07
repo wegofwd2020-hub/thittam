@@ -9,7 +9,12 @@
 # Expected Secrets (create before deploying services):
 #
 #   thittam-db
-#     url: postgres://thittam:<password>@postgres.thittam.svc.cluster.local:5432/thittam
+#     url:         postgres://thittam:<password>@postgres.thittam.svc.cluster.local:5432/thittam       (owner — migrations/admin)
+#     runtime_url: postgres://thittam_app:<password>@postgres.thittam.svc.cluster.local:5432/thittam   (least-privilege runtime; #120/#122)
+#   Service pods consume `runtime_url` (thittam_app) so the audit_log append-only
+#   REVOKE (#120) is enforced. DO NOT roll out this repoint until the thittam-db
+#   Secret actually has a `runtime_url` key (#123) — a missing key makes pods
+#   un-schedulable.
 #
 #   thittam-redis           (if Redis requires auth)
 #     password: <redis-auth-password>
