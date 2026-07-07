@@ -822,6 +822,39 @@ func TestCreateTenant_GeneratesSlugFromName(t *testing.T) {
 	assert.Equal(t, "acme-software-pvt-ltd", savedTenant.Slug)
 }
 
+func TestCreateTenant_PreflightDuplicate_NamesUUID(t *testing.T) {
+	existing := uuid.New()
+	svc := newTestService(&mockRepo{
+		findTenantByNormalizedNameFn: func(_ context.Context, _ string) (*Tenant, error) {
+			return &Tenant{ID: existing, Name: "Acme Corp"}, nil
+		},
+	})
+
+	_, err := svc.CreateTenant(context.Background(), &Tenant{
+		Name: "  acme   corp ", CountryCode: "US",
+	})
+
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrTenantNameTaken), "must wrap ErrTenantNameTaken")
+	assert.Contains(t, err.Error(), existing.String(), "message must name the colliding UUID")
+}
+
+func TestCreateTenant_NormalizesName(t *testing.T) {
+	var stored string
+	svc := newTestService(&mockRepo{
+		createTenantFn: func(_ context.Context, t *Tenant) error {
+			stored = t.Name
+			return nil
+		},
+	})
+
+	_, err := svc.CreateTenant(context.Background(), &Tenant{
+		Name: "  Acme\t Corp   Studios  ", CountryCode: "US",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Acme Corp Studios", stored)
+}
+
 func TestSuspendTenant_UpdatesStatus(t *testing.T) {
 	t.Parallel()
 	var updatedStatus string

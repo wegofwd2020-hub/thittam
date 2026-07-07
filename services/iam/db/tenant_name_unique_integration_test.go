@@ -14,6 +14,7 @@ package db_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -102,4 +103,48 @@ func TestTenantsNameUnique_InternalWhitespaceCollapsed(t *testing.T) {
 		 VALUES ($1, $2, $3, 'US', 'USD')`,
 		id, "Acme Corp", "slug-"+id.String()[:8]) // one space
 	assertUniqueViolation(t, err, "tenants_name_ci_unique")
+}
+
+func TestCreateTenant_ConcurrentSameName_Race(t *testing.T) {
+	pool := testdb.Open(t)
+	// NB: not NewTx — concurrent goroutines need independent connections,
+	// so use the pool directly and clean up the inserted row(s) at the end.
+	const name = "Race Condition Studios"
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(),
+			`DELETE FROM tenants WHERE regexp_replace(lower(trim(name)),'\s+',' ','g')
+			 = regexp_replace(lower(trim($1)),'\s+',' ','g')`, name)
+	})
+
+	const n = 8
+	errs := make(chan error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			id := uuid.New()
+			_, err := pool.Exec(context.Background(),
+				`INSERT INTO tenants (id, name, slug, country_code, primary_currency_code)
+				 VALUES ($1, $2, $3, 'US', 'USD')`,
+				id, name, "slug-"+id.String()[:8])
+			errs <- err
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+
+	var ok, dup int
+	for err := range errs {
+		if err == nil {
+			ok++
+			continue
+		}
+		var pgErr *pgconn.PgError
+		if assert.ErrorAs(t, err, &pgErr) && pgErr.Code == "23505" {
+			dup++
+		}
+	}
+	assert.Equal(t, 1, ok, "exactly one insert should win")
+	assert.Equal(t, n-1, dup, "the rest should be 23505 duplicates")
 }

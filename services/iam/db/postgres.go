@@ -324,6 +324,13 @@ func (p *Postgres) CreateTenant(ctx context.Context, t *iam.Tenant) error {
 		// but name collisions have no ON CONFLICT target and surface here as
 		// PgError 23505 on tenants_name_ci_unique (see migration 015).
 		if isUniqueViolationOn(err, "tenants_name_ci_unique") {
+			// Concurrent-create race: the pre-flight missed a same-name insert
+			// that landed first. Look up the winner so the caller still gets a
+			// UUID-naming ALREADY_EXISTS. Fall back to the bare sentinel if the
+			// lookup itself fails.
+			if existing, lookupErr := p.FindTenantByNormalizedName(ctx, t.Name); lookupErr == nil && existing != nil {
+				return iam.TenantNameTakenErr(existing.ID)
+			}
 			return iam.ErrTenantNameTaken
 		}
 		return fmt.Errorf("iam/db: create tenant: %w", err)
