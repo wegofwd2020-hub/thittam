@@ -223,7 +223,11 @@ jobs:
       # Tests run against a dedicated thittam_test DB so they cannot collide
       # with a parallel migration-validate job using thittam.
       TEST_DB_URL: postgres://thittam:thittam_ci@localhost:5432/thittam_test?sslmode=disable
-      THITTAM_TEST_DSN: postgres://thittam:thittam_ci@localhost:5432/thittam_test?sslmode=disable
+      # Tests connect as the least-privilege runtime role (#122) so the audit_log
+      # REVOKE (#120) is actually exercised. Migrations still use TEST_DB_URL (owner).
+      THITTAM_TEST_DSN: postgres://thittam_app:thittam_app_ci@localhost:5432/thittam_test?sslmode=disable
+      # Owner DSN for audit_log cleanup (thittam_app can't DELETE audit_log).
+      THITTAM_TEST_OWNER_DSN: postgres://thittam:thittam_ci@localhost:5432/thittam_test?sslmode=disable
 
     steps:
       - uses: actions/checkout@v4
