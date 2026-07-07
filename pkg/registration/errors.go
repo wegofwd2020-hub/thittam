@@ -12,6 +12,11 @@ var (
 	// ErrEmailTaken is returned when the email is already registered.
 	ErrEmailTaken = errors.New("registration: email already registered")
 
+	// ErrTenantNameTaken is returned when a tenant already exists with the same
+	// company name (case-insensitive, whitespace-collapsed). Enforced by the
+	// shared tenants_name_ci_unique index; mirrors iam.ErrTenantNameTaken.
+	ErrTenantNameTaken = errors.New("registration: company name already taken")
+
 	// ErrSlugTaken is returned when the generated slug collides with an existing tenant.
 	ErrSlugTaken = errors.New("registration: tenant slug already taken")
 

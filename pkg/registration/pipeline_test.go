@@ -528,4 +528,11 @@ func TestRegisterRequest_Validate(t *testing.T) {
 		require.NoError(t, req.Validate())
 		assert.Equal(t, "professional", req.Plan)
 	})
+
+	t.Run("collapses internal whitespace in company name", func(t *testing.T) {
+		req := testRequest()
+		req.CompanyName = "  Acme\t Corp   Studios  "
+		require.NoError(t, req.Validate())
+		assert.Equal(t, "Acme Corp Studios", req.CompanyName)
+	})
 }

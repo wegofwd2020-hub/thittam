@@ -84,7 +84,9 @@ var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-
 
 // Validate checks all fields and returns a descriptive error on failure.
 func (r *RegisterRequest) Validate() error {
-	r.CompanyName = strings.TrimSpace(r.CompanyName)
+	// Collapse internal whitespace runs and trim, matching iam's canonical form
+	// and the tenants_name_ci_unique index (regexp_replace(lower(trim(name)),'\s+',' ','g')).
+	r.CompanyName = strings.Join(strings.Fields(r.CompanyName), " ")
 	r.Email = strings.TrimSpace(strings.ToLower(r.Email))
 	r.Plan = strings.TrimSpace(strings.ToLower(r.Plan))
 	r.VerticalID = strings.TrimSpace(r.VerticalID)
