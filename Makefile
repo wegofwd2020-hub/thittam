@@ -2,7 +2,7 @@
         infra-up infra-down infra-up-full \
         nats-provision \
         db-init db-drop db-reset db-bootstrap \
-        db-test-bootstrap db-test-reset \
+        db-test-bootstrap db-test-reset db-grant-app-role \
         migrate-all migrate-down migrate-tenant migrate-all-tenants seed seed-construction \
         dev-start dev-start-fresh dev-stop \
         run-all run-web \
@@ -117,6 +117,12 @@ db-reset:
 # db-test-bootstrap — idempotent. Ensure thittam_test exists and is at head.
 db-test-bootstrap:
 	@./scripts/db-test-bootstrap.sh
+
+# db-grant-app-role — grant thittam_app least privilege + revoke UPDATE/DELETE on
+# audit_log (#120). Run as owner (thittam) after migrate-all. Role must already
+# exist (created by local-db-init.sh / CI provisioning — CREATE ROLE needs superuser).
+db-grant-app-role:
+	psql "$(DB_URL)" -v ON_ERROR_STOP=1 -f scripts/db-grant-app-role.sql
 
 # db-test-reset — destructive. Drop and rebuild thittam_test only.
 db-test-reset:

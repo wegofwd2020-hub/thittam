@@ -17,6 +17,8 @@ echo "    DSN: $DB_URL"
 
 DB_NAME=thittam_test ./scripts/local-db-init.sh
 make migrate-all DB_URL="$DB_URL"
+make db-grant-app-role DB_URL="$DB_URL" \
+  || echo "WARN: db-grant-app-role skipped (is thittam_app created? re-run local-db-init.sh)"
 
 echo "==> Test DB ready. Run integration tests with:"
 echo "    THITTAM_TEST_DSN=\"$DB_URL\" go test ./... -tags=integration"

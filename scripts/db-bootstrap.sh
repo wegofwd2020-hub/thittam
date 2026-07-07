@@ -33,6 +33,10 @@ echo "--> Ensuring role + database exist..."
 echo "--> Applying migrations (no-op if already at head)..."
 make migrate-all DB_URL="$DB_URL"
 
+echo "--> Granting thittam_app least privilege + audit_log REVOKE (#120)..."
+make db-grant-app-role DB_URL="$DB_URL" \
+  || echo "    WARN: db-grant-app-role skipped (is thittam_app created? re-run local-db-init.sh)"
+
 if [ "$WITH_SEED" = true ]; then
   echo "--> Loading XYZ_CBA demo seed..."
   make seed DB_URL="$DB_URL"
