@@ -40,6 +40,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/wegofwd2020/thittam/pkg/audit"
 	"github.com/wegofwd2020/thittam/services/iam"
 	iamdb "github.com/wegofwd2020/thittam/services/iam/db"
 )
@@ -74,13 +75,24 @@ func main() {
 	}
 
 	repo := iamdb.NewPostgres(pool)
-	svc := iam.NewService(repo, nil, nil, nil, nil)
+
+	auditLogger := audit.NewLogger(audit.NewPostgres(pool), audit.DefaultConfig(), nil)
+	svc := iam.NewService(repo, nil, nil, nil, nil).WithAuditLogger(auditLogger)
 
 	metrics := newSweeperMetrics()
 	pushURL := os.Getenv("PUSHGATEWAY_URL")
 	instance := pushInstance()
 
 	err = runSweep(ctx, svc, logger, metrics, *batchSize, *maxBatches)
+
+	// Flush buffered audit events before we report/push. The Logger is async
+	// (5s flush); Close drains it. Use a fresh bounded context — the sweep ctx
+	// may be near its 30-min deadline.
+	flushCtx, flushCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if cerr := auditLogger.Close(flushCtx); cerr != nil {
+		logger.Warn("audit flush failed", "error", cerr)
+	}
+	flushCancel()
 
 	// Push metrics unconditionally — even on failure, so the error
 	// counter actually surfaces in Prometheus. A silent error-exit
