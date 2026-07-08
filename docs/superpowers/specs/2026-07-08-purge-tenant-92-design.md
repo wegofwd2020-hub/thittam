@@ -49,16 +49,25 @@ cmd/purge-worker  (K8s CronJob, daily, OWNER DSN):
   for each request status=approved:
     tx: re-verify tenant.status='purge_eligible'  (status-guarded; else → failed)
         DROP SCHEMA IF EXISTS "tenant_<uuid>" CASCADE
-        UPDATE tenants SET status='purged', name=NULL, <address…>=NULL, purged_at=now()
+        UPDATE tenants SET status='purged',
+               name = 'purged-' || id::text,           -- sentinel: name is NOT NULL + ci-unique
+               address_line1=NULL, address_line2=NULL, city=NULL, postal_code=NULL,
+               purged_at=now()
                 WHERE id=$1 AND status='purge_eligible'
         UPDATE tenant_purge_requests SET status='executed', executed_at=now()
     on error → status='failed', failure_reason  (retryable: all steps idempotent)
 ```
 
 **Tenant row fate = tombstone.** After purge the `tenants` row is kept with `status='purged'`,
-PII-ish fields (`name`, address columns) nulled, `slug` + `id` + lifecycle timestamps retained,
-`purged_at` set. This prevents id resurrection, keeps `audit_log.tenant_id` resolvable to a row,
-and reserves the slug. `'purged'` is added to the `tenants_status_check`.
+`purged_at` set, `slug` + `id` + lifecycle timestamps retained. PII erasure: the nullable address
+columns (`address_line1`, `address_line2`, `city`, `postal_code`) are set NULL, and the company
+`name` is overwritten with a per-tenant sentinel `'purged-' || id` — **`name` cannot be NULLed**
+(`NOT NULL` since migration 001, and part of the `tenants_name_ci_unique` index from #015; the
+id-derived sentinel satisfies both). `country_code`/`primary_currency_code` are `NOT NULL` with
+CHECK regexes (migration 014) and are non-identifying, so they are retained. This prevents id
+resurrection, keeps `audit_log.tenant_id` resolvable to a row, and reserves the slug. `'purged'`
+is added to the `tenants_status_check`. The real PII (all business data) is destroyed with the
+schema; the request record's `tenant_name`/`tenant_slug` snapshot preserves the forensic name.
 
 **Worker cadence = daily** CronJob, mirroring `cmd/retention-sweeper` (tenants sit in
 `purge_eligible` for a bounded window, so daily is ample and keeps the destructive job
@@ -83,6 +92,8 @@ Next number is 019 (latest is 018). `.up.sql`:
 - **`ALTER TABLE tenants ADD COLUMN purged_at TIMESTAMPTZ;`**
 - **Broaden the status CHECK** to add `'purged'`: drop `tenants_status_check`, re-add with
   `('active','suspended','grace','deactivated','purge_eligible','purged')`.
+- **No change to `name`'s NOT NULL / ci-unique** — the tombstone writes a sentinel value, not
+  NULL (see Architecture), so the migration doesn't relax those constraints.
 
 `.down.sql`: drop the table + its indexes, drop `tenants.purged_at`, restore the prior CHECK
 (without `'purged'`). Follows the reversible `IF EXISTS` pattern of `016/017_*.down.sql`.
@@ -236,7 +247,14 @@ K8s CronJob manifest under `infra/k8s/`; plus the three test files.
 
 ## Ops / deploy
 
-The purge-worker CronJob must be wired to the **owner** DSN (`thittam`), not the `thittam_app`
-runtime role — it is the one component that legitimately needs DDL/DROP privileges. This is the
-mirror of the #123 role-split note: service pods → `thittam_app`, the purge-worker (like the
-migrator) → owner. Call this out in the deploy checklist; do not point it at `runtime_url`.
+The purge-worker CronJob must be wired to the **owner** DSN — its `DATABASE_URL` reads
+`secretKeyRef: name=thittam-db, key=url` (the owner URL), **NOT `key=runtime_url`** (which the
+retention-sweeper uses — the sweeper only does status UPDATEs, so `thittam_app` sufficed; the
+purge-worker needs DDL/DROP, which `thittam_app` cannot do). This is the mirror of the #123
+role-split note: service pods → `thittam_app`, the purge-worker (like the migrator) → owner.
+Call this out in the deploy checklist.
+
+**Note — `pkg/tenantdb.schemaNameFor` is unexported.** The worker's `DROP SCHEMA` needs the same
+`"tenant_" + id.String()` name; replicate that one-liner in the iam repo method (with a comment
+citing the `pkg/tenantdb` validated-UUID safety rationale) rather than exporting the helper — keeps
+the change contained to iam.
