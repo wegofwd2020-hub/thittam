@@ -190,3 +190,38 @@ WHERE token = $1 AND accepted_at IS NULL AND expires_at > now();
 
 -- name: AcceptInvitation :exec
 UPDATE invitations SET accepted_at = now() WHERE id = $1;
+
+-- name: CreateTenantPurgeRequest :one
+INSERT INTO tenant_purge_requests (
+    id, tenant_id, status, requested_by, request_reason, tenant_name, tenant_slug
+) VALUES ($1, $2, 'pending', $3, $4, $5, $6)
+RETURNING *;
+
+-- name: GetOpenTenantPurgeRequest :one
+SELECT * FROM tenant_purge_requests
+WHERE tenant_id = $1 AND status IN ('pending', 'approved')
+LIMIT 1;
+
+-- name: ApproveTenantPurgeRequest :one
+UPDATE tenant_purge_requests
+   SET status = 'approved', approved_by = $2, approved_at = now()
+ WHERE id = $1 AND status = 'pending'
+RETURNING *;
+
+-- name: CancelTenantPurgeRequest :one
+UPDATE tenant_purge_requests
+   SET status = 'cancelled', cancelled_by = $2, cancelled_at = now()
+ WHERE id = $1 AND status IN ('pending', 'approved')
+RETURNING *;
+
+-- name: ListApprovedTenantPurgeRequests :many
+SELECT * FROM tenant_purge_requests
+ WHERE status = 'approved'
+ ORDER BY approved_at
+ LIMIT $1;
+
+-- name: MarkTenantPurgeRequestFailed :one
+UPDATE tenant_purge_requests
+   SET status = 'failed', failure_reason = $2
+ WHERE id = $1
+RETURNING *;

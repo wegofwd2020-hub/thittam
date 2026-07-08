@@ -84,6 +84,14 @@ type Repository interface {
 	// export a gauge per run (#92 Stage 5).
 	CountTenantsOnHold(ctx context.Context) (int64, error)
 
+	// --- Tenant purge (two-person approval, #92 Stage 3) ---
+	CreateTenantPurgeRequest(ctx context.Context, req *TenantPurgeRequest) error
+	GetOpenTenantPurgeRequest(ctx context.Context, tenantID uuid.UUID) (*TenantPurgeRequest, error)
+	ApproveTenantPurgeRequest(ctx context.Context, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error)
+	CancelTenantPurgeRequest(ctx context.Context, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error)
+	ListApprovedTenantPurgeRequests(ctx context.Context, limit int) ([]*TenantPurgeRequest, error)
+	MarkTenantPurgeRequestFailed(ctx context.Context, requestID uuid.UUID, reason string) (*TenantPurgeRequest, error)
+
 	// Roles
 	CreateRole(ctx context.Context, role *Role) error
 	GetRole(ctx context.Context, tenantID uuid.UUID, name string) (*Role, error)

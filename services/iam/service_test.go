@@ -29,42 +29,48 @@ var (
 // --- Mock Repository ---
 
 type mockRepo struct {
-	getUserByEmailFn              func(ctx context.Context, tenantID uuid.UUID, email string) (*auth.UserRecord, error)
-	findTenantByEmailFn           func(ctx context.Context, email string) (uuid.UUID, error)
-	getUserByIDFn                 func(ctx context.Context, userID uuid.UUID) (*auth.UserRecord, error)
-	createOIDCUserFn              func(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*auth.UserRecord, error)
-	getTenantStatusFn             func(ctx context.Context, tenantID uuid.UUID) (string, error)
-	createUserFn                  func(ctx context.Context, user *User) error
-	getUserFn                     func(ctx context.Context, tenantID, id uuid.UUID) (*User, error)
-	listUsersFn                   func(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]User, error)
-	updateUserFn                  func(ctx context.Context, user *User) error
-	updatePasswordHashFn          func(ctx context.Context, userID uuid.UUID, hash string) error
-	deactivateUserFn              func(ctx context.Context, tenantID, id uuid.UUID) error
-	createTenantFn                func(ctx context.Context, tenant *Tenant) error
-	getTenantFn                   func(ctx context.Context, id uuid.UUID) (*Tenant, error)
-	findTenantByNormalizedNameFn  func(ctx context.Context, name string) (*Tenant, error)
-	updateTenantStatusFn          func(ctx context.Context, id uuid.UUID, status string, holdUntil *time.Time, freezeReason *string) error
-	clearTenantLegalHoldFn        func(ctx context.Context, id uuid.UUID) (*Tenant, error)
-	setTenantLegalHoldFn          func(ctx context.Context, id uuid.UUID, holdUntil *time.Time, freezeReason string) (*Tenant, error)
-	countTenantsOnHoldFn          func(ctx context.Context) (int64, error)
-	updateTenantAddressFn         func(ctx context.Context, t *Tenant) (*Tenant, error)
-	transitionTenantStatusFn      func(ctx context.Context, id uuid.UUID, from, to string) (*Tenant, bool, error)
-	listTenantsDueForLifecycleFn  func(ctx context.Context, now time.Time, limit int) ([]*Tenant, error)
-	createRoleFn                  func(ctx context.Context, role *Role) error
-	getRoleFn                     func(ctx context.Context, tenantID uuid.UUID, name string) (*Role, error)
-	getRoleByIDFn                 func(ctx context.Context, tenantID, roleID uuid.UUID) (*Role, error)
-	listRolesFn                   func(ctx context.Context, tenantID uuid.UUID) ([]Role, error)
-	assignRoleFn                  func(ctx context.Context, ur *UserRole) error
-	revokeRoleFn                  func(ctx context.Context, userID, roleID uuid.UUID) error
-	getUserPermissionsFn          func(ctx context.Context, userID uuid.UUID, projectID *uuid.UUID) ([]string, error)
-	createInvitationFn            func(ctx context.Context, inv *Invitation) error
-	getInvitationByTokenFn        func(ctx context.Context, token string) (*Invitation, error)
-	markInvitationFn              func(ctx context.Context, id uuid.UUID) error
-	upsertOIDCConfigFn            func(ctx context.Context, params OIDCConfigParams) error
-	startImpersonationFn          func(ctx context.Context, params StartImpersonationParams) (*ImpersonationSession, error)
-	endImpersonationSessionFn     func(ctx context.Context, sessionID uuid.UUID) error
-	expireImpersonationSessionsFn func(ctx context.Context) (int64, error)
-	createAuditEntryFn            func(ctx context.Context, entry *AuditEntry) error
+	getUserByEmailFn                  func(ctx context.Context, tenantID uuid.UUID, email string) (*auth.UserRecord, error)
+	findTenantByEmailFn               func(ctx context.Context, email string) (uuid.UUID, error)
+	getUserByIDFn                     func(ctx context.Context, userID uuid.UUID) (*auth.UserRecord, error)
+	createOIDCUserFn                  func(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*auth.UserRecord, error)
+	getTenantStatusFn                 func(ctx context.Context, tenantID uuid.UUID) (string, error)
+	createUserFn                      func(ctx context.Context, user *User) error
+	getUserFn                         func(ctx context.Context, tenantID, id uuid.UUID) (*User, error)
+	listUsersFn                       func(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]User, error)
+	updateUserFn                      func(ctx context.Context, user *User) error
+	updatePasswordHashFn              func(ctx context.Context, userID uuid.UUID, hash string) error
+	deactivateUserFn                  func(ctx context.Context, tenantID, id uuid.UUID) error
+	createTenantFn                    func(ctx context.Context, tenant *Tenant) error
+	getTenantFn                       func(ctx context.Context, id uuid.UUID) (*Tenant, error)
+	findTenantByNormalizedNameFn      func(ctx context.Context, name string) (*Tenant, error)
+	updateTenantStatusFn              func(ctx context.Context, id uuid.UUID, status string, holdUntil *time.Time, freezeReason *string) error
+	clearTenantLegalHoldFn            func(ctx context.Context, id uuid.UUID) (*Tenant, error)
+	setTenantLegalHoldFn              func(ctx context.Context, id uuid.UUID, holdUntil *time.Time, freezeReason string) (*Tenant, error)
+	countTenantsOnHoldFn              func(ctx context.Context) (int64, error)
+	updateTenantAddressFn             func(ctx context.Context, t *Tenant) (*Tenant, error)
+	transitionTenantStatusFn          func(ctx context.Context, id uuid.UUID, from, to string) (*Tenant, bool, error)
+	listTenantsDueForLifecycleFn      func(ctx context.Context, now time.Time, limit int) ([]*Tenant, error)
+	createTenantPurgeRequestFn        func(ctx context.Context, req *TenantPurgeRequest) error
+	getOpenTenantPurgeRequestFn       func(ctx context.Context, tenantID uuid.UUID) (*TenantPurgeRequest, error)
+	approveTenantPurgeRequestFn       func(ctx context.Context, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error)
+	cancelTenantPurgeRequestFn        func(ctx context.Context, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error)
+	listApprovedTenantPurgeRequestsFn func(ctx context.Context, limit int) ([]*TenantPurgeRequest, error)
+	markTenantPurgeRequestFailedFn    func(ctx context.Context, requestID uuid.UUID, reason string) (*TenantPurgeRequest, error)
+	createRoleFn                      func(ctx context.Context, role *Role) error
+	getRoleFn                         func(ctx context.Context, tenantID uuid.UUID, name string) (*Role, error)
+	getRoleByIDFn                     func(ctx context.Context, tenantID, roleID uuid.UUID) (*Role, error)
+	listRolesFn                       func(ctx context.Context, tenantID uuid.UUID) ([]Role, error)
+	assignRoleFn                      func(ctx context.Context, ur *UserRole) error
+	revokeRoleFn                      func(ctx context.Context, userID, roleID uuid.UUID) error
+	getUserPermissionsFn              func(ctx context.Context, userID uuid.UUID, projectID *uuid.UUID) ([]string, error)
+	createInvitationFn                func(ctx context.Context, inv *Invitation) error
+	getInvitationByTokenFn            func(ctx context.Context, token string) (*Invitation, error)
+	markInvitationFn                  func(ctx context.Context, id uuid.UUID) error
+	upsertOIDCConfigFn                func(ctx context.Context, params OIDCConfigParams) error
+	startImpersonationFn              func(ctx context.Context, params StartImpersonationParams) (*ImpersonationSession, error)
+	endImpersonationSessionFn         func(ctx context.Context, sessionID uuid.UUID) error
+	expireImpersonationSessionsFn     func(ctx context.Context) (int64, error)
+	createAuditEntryFn                func(ctx context.Context, entry *AuditEntry) error
 }
 
 func (m *mockRepo) GetUserByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*auth.UserRecord, error) {
@@ -193,6 +199,42 @@ func (m *mockRepo) ListTenantsDueForLifecycle(ctx context.Context, now time.Time
 	}
 	return nil, nil
 }
+func (m *mockRepo) CreateTenantPurgeRequest(ctx context.Context, req *TenantPurgeRequest) error {
+	if m.createTenantPurgeRequestFn != nil {
+		return m.createTenantPurgeRequestFn(ctx, req)
+	}
+	return nil
+}
+func (m *mockRepo) GetOpenTenantPurgeRequest(ctx context.Context, tenantID uuid.UUID) (*TenantPurgeRequest, error) {
+	if m.getOpenTenantPurgeRequestFn != nil {
+		return m.getOpenTenantPurgeRequestFn(ctx, tenantID)
+	}
+	return nil, ErrPurgeRequestNotFound
+}
+func (m *mockRepo) ApproveTenantPurgeRequest(ctx context.Context, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error) {
+	if m.approveTenantPurgeRequestFn != nil {
+		return m.approveTenantPurgeRequestFn(ctx, requestID, approverID)
+	}
+	return nil, ErrPurgeRequestNotFound
+}
+func (m *mockRepo) CancelTenantPurgeRequest(ctx context.Context, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error) {
+	if m.cancelTenantPurgeRequestFn != nil {
+		return m.cancelTenantPurgeRequestFn(ctx, requestID, cancellerID)
+	}
+	return nil, ErrPurgeRequestNotFound
+}
+func (m *mockRepo) ListApprovedTenantPurgeRequests(ctx context.Context, limit int) ([]*TenantPurgeRequest, error) {
+	if m.listApprovedTenantPurgeRequestsFn != nil {
+		return m.listApprovedTenantPurgeRequestsFn(ctx, limit)
+	}
+	return nil, nil
+}
+func (m *mockRepo) MarkTenantPurgeRequestFailed(ctx context.Context, requestID uuid.UUID, reason string) (*TenantPurgeRequest, error) {
+	if m.markTenantPurgeRequestFailedFn != nil {
+		return m.markTenantPurgeRequestFailedFn(ctx, requestID, reason)
+	}
+	return nil, ErrPurgeRequestNotFound
+}
 func (m *mockRepo) CreateRole(ctx context.Context, role *Role) error {
 	if m.createRoleFn != nil {
 		return m.createRoleFn(ctx, role)
@@ -310,9 +352,9 @@ func (m *mockAuthenticator) Authenticate(ctx context.Context, req auth.AuthReque
 // --- Mock TokenIssuer ---
 
 type mockTokenIssuer struct {
-	issueFn   func(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error)
-	refreshFn func(ctx context.Context, refreshToken string) (*auth.TokenPair, error)
-	revokeFn  func(ctx context.Context, refreshToken string) error
+	issueFn    func(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error)
+	refreshFn  func(ctx context.Context, refreshToken string) (*auth.TokenPair, error)
+	revokeFn   func(ctx context.Context, refreshToken string) error
 	validateFn func(ctx context.Context, accessToken string) (*auth.Claims, error)
 }
 

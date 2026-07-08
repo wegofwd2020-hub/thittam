@@ -22,6 +22,40 @@ func (q *Queries) AcceptInvitation(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const approveTenantPurgeRequest = `-- name: ApproveTenantPurgeRequest :one
+UPDATE tenant_purge_requests
+   SET status = 'approved', approved_by = $2, approved_at = now()
+ WHERE id = $1 AND status = 'pending'
+RETURNING id, tenant_id, status, requested_by, requested_at, request_reason, approved_by, approved_at, cancelled_by, cancelled_at, executed_at, failure_reason, tenant_name, tenant_slug
+`
+
+type ApproveTenantPurgeRequestParams struct {
+	ID         uuid.UUID   `json:"id"`
+	ApprovedBy pgtype.UUID `json:"approved_by"`
+}
+
+func (q *Queries) ApproveTenantPurgeRequest(ctx context.Context, arg ApproveTenantPurgeRequestParams) (TenantPurgeRequest, error) {
+	row := q.db.QueryRow(ctx, approveTenantPurgeRequest, arg.ID, arg.ApprovedBy)
+	var i TenantPurgeRequest
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Status,
+		&i.RequestedBy,
+		&i.RequestedAt,
+		&i.RequestReason,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.CancelledBy,
+		&i.CancelledAt,
+		&i.ExecutedAt,
+		&i.FailureReason,
+		&i.TenantName,
+		&i.TenantSlug,
+	)
+	return i, err
+}
+
 const assignRole = `-- name: AssignRole :exec
 INSERT INTO user_roles (user_id, role_id, project_id, assigned_by)
 VALUES ($1, $2, $3, $4)
@@ -46,12 +80,46 @@ func (q *Queries) AssignRole(ctx context.Context, arg AssignRoleParams) error {
 	return err
 }
 
+const cancelTenantPurgeRequest = `-- name: CancelTenantPurgeRequest :one
+UPDATE tenant_purge_requests
+   SET status = 'cancelled', cancelled_by = $2, cancelled_at = now()
+ WHERE id = $1 AND status IN ('pending', 'approved')
+RETURNING id, tenant_id, status, requested_by, requested_at, request_reason, approved_by, approved_at, cancelled_by, cancelled_at, executed_at, failure_reason, tenant_name, tenant_slug
+`
+
+type CancelTenantPurgeRequestParams struct {
+	ID          uuid.UUID   `json:"id"`
+	CancelledBy pgtype.UUID `json:"cancelled_by"`
+}
+
+func (q *Queries) CancelTenantPurgeRequest(ctx context.Context, arg CancelTenantPurgeRequestParams) (TenantPurgeRequest, error) {
+	row := q.db.QueryRow(ctx, cancelTenantPurgeRequest, arg.ID, arg.CancelledBy)
+	var i TenantPurgeRequest
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Status,
+		&i.RequestedBy,
+		&i.RequestedAt,
+		&i.RequestReason,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.CancelledBy,
+		&i.CancelledAt,
+		&i.ExecutedAt,
+		&i.FailureReason,
+		&i.TenantName,
+		&i.TenantSlug,
+	)
+	return i, err
+}
+
 const clearTenantLegalHold = `-- name: ClearTenantLegalHold :one
 UPDATE tenants SET
     hold_until    = NULL,
     freeze_reason = NULL
 WHERE id = $1
-RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason, purged_at
 `
 
 // Unconditionally clears the two legal-hold columns on a tenant,
@@ -85,6 +153,7 @@ func (q *Queries) ClearTenantLegalHold(ctx context.Context, id uuid.UUID) (Tenan
 		&i.DeactivatedAt,
 		&i.HoldUntil,
 		&i.FreezeReason,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -187,7 +256,7 @@ INSERT INTO tenants (
     address_line1, address_line2, city, country_code, postal_code, primary_currency_code
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (slug) DO NOTHING
-RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason, purged_at
 `
 
 type CreateTenantParams struct {
@@ -240,6 +309,52 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		&i.DeactivatedAt,
 		&i.HoldUntil,
 		&i.FreezeReason,
+		&i.PurgedAt,
+	)
+	return i, err
+}
+
+const createTenantPurgeRequest = `-- name: CreateTenantPurgeRequest :one
+INSERT INTO tenant_purge_requests (
+    id, tenant_id, status, requested_by, request_reason, tenant_name, tenant_slug
+) VALUES ($1, $2, 'pending', $3, $4, $5, $6)
+RETURNING id, tenant_id, status, requested_by, requested_at, request_reason, approved_by, approved_at, cancelled_by, cancelled_at, executed_at, failure_reason, tenant_name, tenant_slug
+`
+
+type CreateTenantPurgeRequestParams struct {
+	ID            uuid.UUID `json:"id"`
+	TenantID      uuid.UUID `json:"tenant_id"`
+	RequestedBy   uuid.UUID `json:"requested_by"`
+	RequestReason string    `json:"request_reason"`
+	TenantName    string    `json:"tenant_name"`
+	TenantSlug    string    `json:"tenant_slug"`
+}
+
+func (q *Queries) CreateTenantPurgeRequest(ctx context.Context, arg CreateTenantPurgeRequestParams) (TenantPurgeRequest, error) {
+	row := q.db.QueryRow(ctx, createTenantPurgeRequest,
+		arg.ID,
+		arg.TenantID,
+		arg.RequestedBy,
+		arg.RequestReason,
+		arg.TenantName,
+		arg.TenantSlug,
+	)
+	var i TenantPurgeRequest
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Status,
+		&i.RequestedBy,
+		&i.RequestedAt,
+		&i.RequestReason,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.CancelledBy,
+		&i.CancelledAt,
+		&i.ExecutedAt,
+		&i.FailureReason,
+		&i.TenantName,
+		&i.TenantSlug,
 	)
 	return i, err
 }
@@ -283,7 +398,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const findTenantByNormalizedName = `-- name: FindTenantByNormalizedName :one
-SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason FROM tenants
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason, purged_at FROM tenants
 WHERE regexp_replace(lower(trim(name)), '\s+', ' ', 'g')
     = regexp_replace(lower(trim($1)), '\s+', ' ', 'g')
 LIMIT 1
@@ -313,6 +428,7 @@ func (q *Queries) FindTenantByNormalizedName(ctx context.Context, btrim string) 
 		&i.DeactivatedAt,
 		&i.HoldUntil,
 		&i.FreezeReason,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -339,8 +455,36 @@ func (q *Queries) GetInvitationByToken(ctx context.Context, token string) (Invit
 	return i, err
 }
 
+const getOpenTenantPurgeRequest = `-- name: GetOpenTenantPurgeRequest :one
+SELECT id, tenant_id, status, requested_by, requested_at, request_reason, approved_by, approved_at, cancelled_by, cancelled_at, executed_at, failure_reason, tenant_name, tenant_slug FROM tenant_purge_requests
+WHERE tenant_id = $1 AND status IN ('pending', 'approved')
+LIMIT 1
+`
+
+func (q *Queries) GetOpenTenantPurgeRequest(ctx context.Context, tenantID uuid.UUID) (TenantPurgeRequest, error) {
+	row := q.db.QueryRow(ctx, getOpenTenantPurgeRequest, tenantID)
+	var i TenantPurgeRequest
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Status,
+		&i.RequestedBy,
+		&i.RequestedAt,
+		&i.RequestReason,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.CancelledBy,
+		&i.CancelledAt,
+		&i.ExecutedAt,
+		&i.FailureReason,
+		&i.TenantName,
+		&i.TenantSlug,
+	)
+	return i, err
+}
+
 const getTenant = `-- name: GetTenant :one
-SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason FROM tenants WHERE id = $1
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason, purged_at FROM tenants WHERE id = $1
 `
 
 func (q *Queries) GetTenant(ctx context.Context, id uuid.UUID) (Tenant, error) {
@@ -364,12 +508,13 @@ func (q *Queries) GetTenant(ctx context.Context, id uuid.UUID) (Tenant, error) {
 		&i.DeactivatedAt,
 		&i.HoldUntil,
 		&i.FreezeReason,
+		&i.PurgedAt,
 	)
 	return i, err
 }
 
 const getTenantBySlug = `-- name: GetTenantBySlug :one
-SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason FROM tenants WHERE slug = $1
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason, purged_at FROM tenants WHERE slug = $1
 `
 
 func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, error) {
@@ -393,6 +538,7 @@ func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, err
 		&i.DeactivatedAt,
 		&i.HoldUntil,
 		&i.FreezeReason,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -440,6 +586,48 @@ func (q *Queries) GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) 
 	return i, err
 }
 
+const listApprovedTenantPurgeRequests = `-- name: ListApprovedTenantPurgeRequests :many
+SELECT id, tenant_id, status, requested_by, requested_at, request_reason, approved_by, approved_at, cancelled_by, cancelled_at, executed_at, failure_reason, tenant_name, tenant_slug FROM tenant_purge_requests
+ WHERE status = 'approved'
+ ORDER BY approved_at
+ LIMIT $1
+`
+
+func (q *Queries) ListApprovedTenantPurgeRequests(ctx context.Context, limit int32) ([]TenantPurgeRequest, error) {
+	rows, err := q.db.Query(ctx, listApprovedTenantPurgeRequests, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TenantPurgeRequest{}
+	for rows.Next() {
+		var i TenantPurgeRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.Status,
+			&i.RequestedBy,
+			&i.RequestedAt,
+			&i.RequestReason,
+			&i.ApprovedBy,
+			&i.ApprovedAt,
+			&i.CancelledBy,
+			&i.CancelledAt,
+			&i.ExecutedAt,
+			&i.FailureReason,
+			&i.TenantName,
+			&i.TenantSlug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRoles = `-- name: ListRoles :many
 SELECT id, tenant_id, name, permissions, is_system FROM roles WHERE tenant_id = $1 ORDER BY name ASC
 `
@@ -471,7 +659,7 @@ func (q *Queries) ListRoles(ctx context.Context, tenantID uuid.UUID) ([]Role, er
 }
 
 const listTenantsDueForLifecycle = `-- name: ListTenantsDueForLifecycle :many
-SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason FROM tenants
+SELECT id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason, purged_at FROM tenants
  WHERE ((status = 'suspended'   AND suspended_at   <= $1::timestamptz - INTERVAL '30 days')
      OR (status = 'grace'       AND suspended_at   <= $1::timestamptz - INTERVAL '90 days')
      OR (status = 'deactivated' AND deactivated_at <= $1::timestamptz - INTERVAL '180 days'))
@@ -529,6 +717,7 @@ func (q *Queries) ListTenantsDueForLifecycle(ctx context.Context, arg ListTenant
 			&i.DeactivatedAt,
 			&i.HoldUntil,
 			&i.FreezeReason,
+			&i.PurgedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -620,6 +809,40 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 	return items, nil
 }
 
+const markTenantPurgeRequestFailed = `-- name: MarkTenantPurgeRequestFailed :one
+UPDATE tenant_purge_requests
+   SET status = 'failed', failure_reason = $2
+ WHERE id = $1
+RETURNING id, tenant_id, status, requested_by, requested_at, request_reason, approved_by, approved_at, cancelled_by, cancelled_at, executed_at, failure_reason, tenant_name, tenant_slug
+`
+
+type MarkTenantPurgeRequestFailedParams struct {
+	ID            uuid.UUID   `json:"id"`
+	FailureReason pgtype.Text `json:"failure_reason"`
+}
+
+func (q *Queries) MarkTenantPurgeRequestFailed(ctx context.Context, arg MarkTenantPurgeRequestFailedParams) (TenantPurgeRequest, error) {
+	row := q.db.QueryRow(ctx, markTenantPurgeRequestFailed, arg.ID, arg.FailureReason)
+	var i TenantPurgeRequest
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Status,
+		&i.RequestedBy,
+		&i.RequestedAt,
+		&i.RequestReason,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.CancelledBy,
+		&i.CancelledAt,
+		&i.ExecutedAt,
+		&i.FailureReason,
+		&i.TenantName,
+		&i.TenantSlug,
+	)
+	return i, err
+}
+
 const revokeRole = `-- name: RevokeRole :exec
 DELETE FROM user_roles WHERE user_id = $1 AND role_id = $2
 `
@@ -639,7 +862,7 @@ UPDATE tenants SET
     hold_until    = $2,
     freeze_reason = $3
 WHERE id = $1
-RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason, purged_at
 `
 
 type SetTenantLegalHoldParams struct {
@@ -675,6 +898,7 @@ func (q *Queries) SetTenantLegalHold(ctx context.Context, arg SetTenantLegalHold
 		&i.DeactivatedAt,
 		&i.HoldUntil,
 		&i.FreezeReason,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -685,7 +909,7 @@ UPDATE tenants SET
     suspended_at   = CASE WHEN $1::text = 'suspended'   AND suspended_at   IS NULL THEN now() ELSE suspended_at   END,
     deactivated_at = CASE WHEN $1::text = 'deactivated' AND deactivated_at IS NULL THEN now() ELSE deactivated_at END
 WHERE id = $2 AND status = $3
-RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason, purged_at
 `
 
 type TransitionTenantStatusParams struct {
@@ -719,6 +943,7 @@ func (q *Queries) TransitionTenantStatus(ctx context.Context, arg TransitionTena
 		&i.DeactivatedAt,
 		&i.HoldUntil,
 		&i.FreezeReason,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -732,7 +957,7 @@ UPDATE tenants SET
     postal_code = $6,
     primary_currency_code = $7
 WHERE id = $1
-RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason, purged_at
 `
 
 type UpdateTenantAddressParams struct {
@@ -774,6 +999,7 @@ func (q *Queries) UpdateTenantAddress(ctx context.Context, arg UpdateTenantAddre
 		&i.DeactivatedAt,
 		&i.HoldUntil,
 		&i.FreezeReason,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -786,7 +1012,7 @@ UPDATE tenants SET
     hold_until     = COALESCE($2,    hold_until),
     freeze_reason  = COALESCE($3, freeze_reason)
 WHERE id = $4
-RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason, purged_at
 `
 
 type UpdateTenantStatusParams struct {
@@ -829,6 +1055,7 @@ func (q *Queries) UpdateTenantStatus(ctx context.Context, arg UpdateTenantStatus
 		&i.DeactivatedAt,
 		&i.HoldUntil,
 		&i.FreezeReason,
+		&i.PurgedAt,
 	)
 	return i, err
 }

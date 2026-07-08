@@ -817,8 +817,8 @@ func (p *Postgres) StartImpersonation(ctx context.Context, params iam.StartImper
 	expiresAt := time.Now().UTC().Add(params.Duration)
 
 	var (
-		session    iam.ImpersonationSession
-		ipAddr     pgtype.Text
+		session iam.ImpersonationSession
+		ipAddr  pgtype.Text
 	)
 	err := p.db.QueryRow(ctx, q,
 		id,
@@ -1020,4 +1020,143 @@ func pgTimestamptzToTimePtr(t pgtype.Timestamptz) *time.Time {
 	}
 	v := t.Time
 	return &v
+}
+
+// pgUUIDToPtr returns a pointer to the uuid.UUID value or nil when the
+// column is NULL. Used for optional foreign keys such as approved_by /
+// cancelled_by on tenant_purge_requests (#92 Stage 3).
+func pgUUIDToPtr(u pgtype.UUID) *uuid.UUID {
+	if !u.Valid {
+		return nil
+	}
+	id := uuid.UUID(u.Bytes)
+	return &id
+}
+
+// pgUUIDFromPtr wraps a *uuid.UUID as a pgtype.UUID. nil maps to NULL.
+func pgUUIDFromPtr(id *uuid.UUID) pgtype.UUID {
+	if id == nil {
+		return pgtype.UUID{}
+	}
+	return pgtype.UUID{Bytes: *id, Valid: true}
+}
+
+// --- iam.Repository: Tenant purge (two-person approval, #92 Stage 3) ---
+
+func dbPurgeRequestToDomain(r TenantPurgeRequest) *iam.TenantPurgeRequest {
+	return &iam.TenantPurgeRequest{
+		ID:            r.ID,
+		TenantID:      r.TenantID,
+		Status:        r.Status,
+		RequestedBy:   r.RequestedBy,
+		RequestedAt:   r.RequestedAt,
+		RequestReason: r.RequestReason,
+		ApprovedBy:    pgUUIDToPtr(r.ApprovedBy),
+		ApprovedAt:    pgTimestamptzToTimePtr(r.ApprovedAt),
+		CancelledBy:   pgUUIDToPtr(r.CancelledBy),
+		CancelledAt:   pgTimestamptzToTimePtr(r.CancelledAt),
+		ExecutedAt:    pgTimestamptzToTimePtr(r.ExecutedAt),
+		FailureReason: pgTextToStringPtr(r.FailureReason),
+		TenantName:    r.TenantName,
+		TenantSlug:    r.TenantSlug,
+	}
+}
+
+// CreateTenantPurgeRequest inserts a new pending purge request. Maps a
+// unique-violation on tenant_purge_requests_one_open (at most one open
+// request per tenant) to iam.ErrPurgeRequestExists.
+func (p *Postgres) CreateTenantPurgeRequest(ctx context.Context, req *iam.TenantPurgeRequest) error {
+	row, err := p.q.CreateTenantPurgeRequest(ctx, CreateTenantPurgeRequestParams{
+		ID:            req.ID,
+		TenantID:      req.TenantID,
+		RequestedBy:   req.RequestedBy,
+		RequestReason: req.RequestReason,
+		TenantName:    req.TenantName,
+		TenantSlug:    req.TenantSlug,
+	})
+	if err != nil {
+		if isUniqueViolationOn(err, "tenant_purge_requests_one_open") {
+			return iam.ErrPurgeRequestExists
+		}
+		return fmt.Errorf("iam/db: create purge request: %w", err)
+	}
+	*req = *dbPurgeRequestToDomain(row)
+	return nil
+}
+
+// GetOpenTenantPurgeRequest returns the tenant's open (pending|approved)
+// purge request, or iam.ErrPurgeRequestNotFound if none exists.
+func (p *Postgres) GetOpenTenantPurgeRequest(ctx context.Context, tenantID uuid.UUID) (*iam.TenantPurgeRequest, error) {
+	row, err := p.q.GetOpenTenantPurgeRequest(ctx, tenantID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, iam.ErrPurgeRequestNotFound
+		}
+		return nil, fmt.Errorf("iam/db: get open purge request: %w", err)
+	}
+	return dbPurgeRequestToDomain(row), nil
+}
+
+// ApproveTenantPurgeRequest transitions a pending request to approved.
+// Returns iam.ErrPurgeRequestNotFound if the request is missing or no
+// longer pending (the WHERE status = 'pending' guard didn't match).
+func (p *Postgres) ApproveTenantPurgeRequest(ctx context.Context, requestID, approverID uuid.UUID) (*iam.TenantPurgeRequest, error) {
+	row, err := p.q.ApproveTenantPurgeRequest(ctx, ApproveTenantPurgeRequestParams{
+		ID:         requestID,
+		ApprovedBy: pgUUIDFromPtr(&approverID),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, iam.ErrPurgeRequestNotFound // no longer pending
+		}
+		return nil, fmt.Errorf("iam/db: approve purge request: %w", err)
+	}
+	return dbPurgeRequestToDomain(row), nil
+}
+
+// CancelTenantPurgeRequest transitions an open (pending|approved) request
+// to cancelled. Returns iam.ErrPurgeRequestNotFound if the request is
+// missing or already terminal.
+func (p *Postgres) CancelTenantPurgeRequest(ctx context.Context, requestID, cancellerID uuid.UUID) (*iam.TenantPurgeRequest, error) {
+	row, err := p.q.CancelTenantPurgeRequest(ctx, CancelTenantPurgeRequestParams{
+		ID:          requestID,
+		CancelledBy: pgUUIDFromPtr(&cancellerID),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, iam.ErrPurgeRequestNotFound
+		}
+		return nil, fmt.Errorf("iam/db: cancel purge request: %w", err)
+	}
+	return dbPurgeRequestToDomain(row), nil
+}
+
+// ListApprovedTenantPurgeRequests returns approved requests oldest-first,
+// capped at limit. Polled by the purge worker (#92 Stage 3).
+func (p *Postgres) ListApprovedTenantPurgeRequests(ctx context.Context, limit int) ([]*iam.TenantPurgeRequest, error) {
+	rows, err := p.q.ListApprovedTenantPurgeRequests(ctx, int32(limit))
+	if err != nil {
+		return nil, fmt.Errorf("iam/db: list approved purge requests: %w", err)
+	}
+	out := make([]*iam.TenantPurgeRequest, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, dbPurgeRequestToDomain(r))
+	}
+	return out, nil
+}
+
+// MarkTenantPurgeRequestFailed sets a request to failed with the given
+// reason. Returns iam.ErrPurgeRequestNotFound if the request is missing.
+func (p *Postgres) MarkTenantPurgeRequestFailed(ctx context.Context, requestID uuid.UUID, reason string) (*iam.TenantPurgeRequest, error) {
+	row, err := p.q.MarkTenantPurgeRequestFailed(ctx, MarkTenantPurgeRequestFailedParams{
+		ID:            requestID,
+		FailureReason: pgTextFromString(reason),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, iam.ErrPurgeRequestNotFound
+		}
+		return nil, fmt.Errorf("iam/db: mark purge request failed: %w", err)
+	}
+	return dbPurgeRequestToDomain(row), nil
 }
