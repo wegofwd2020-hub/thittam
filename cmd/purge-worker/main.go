@@ -74,7 +74,12 @@ func main() {
 	}
 	flushCancel()
 
-	pushMetrics(ctx, logger, os.Getenv("PUSHGATEWAY_URL"), pushInstance(), metrics.registry)
+	// Fresh bounded context — mirrors the audit-flush pattern above. Reusing
+	// the 30-minute run ctx would let a nearly-exhausted deadline skip the
+	// metrics push even though the run itself completed.
+	pushCtx, pushCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	pushMetrics(pushCtx, logger, os.Getenv("PUSHGATEWAY_URL"), pushInstance(), metrics.registry)
+	pushCancel()
 
 	if err != nil {
 		logger.Error("purge run failed", "error", err)

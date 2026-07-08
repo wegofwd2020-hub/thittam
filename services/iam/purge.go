@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -114,9 +115,35 @@ func (s *Service) CancelTenantPurge(ctx context.Context, tenantID uuid.UUID, rea
 // the failure reason on the request via MarkTenantPurgeRequestFailed (so
 // operators can see why a run failed and retry) and returns a wrapped
 // error — callers MUST treat this as an aborted purge, not a completed one.
+//
+// ANY purge failure — including a transient DB error unrelated to the
+// tenant's own state — marks the request 'failed' rather than leaving it
+// 'approved' for an automatic retry. This is fail-closed by design: a
+// failed purge requires a fresh two-person approval (RequestTenantPurge +
+// ApproveTenantPurge) before it is attempted again, rather than silently
+// retrying a destructive operation.
 func (s *Service) PurgeApprovedTenant(ctx context.Context, req *TenantPurgeRequest) error {
 	if err := s.repo.PurgeTenantSchemaAndTombstone(ctx, req.TenantID, req.ID); err != nil {
-		if _, ferr := s.repo.MarkTenantPurgeRequestFailed(ctx, req.ID, err.Error()); ferr != nil {
+		_, ferr := s.repo.MarkTenantPurgeRequestFailed(ctx, req.ID, err.Error())
+		if ferr != nil {
+			if errors.Is(ferr, ErrPurgeRequestNotFound) {
+				// Benign reconcile: MarkTenantPurgeRequestFailed's status guard
+				// (WHERE status='approved') matched zero rows, meaning the request
+				// already left 'approved' by the time we tried to mark it failed.
+				// Two causes, both benign:
+				//   - CancelTenantPurge ran mid-flight (the claim step in
+				//     PurgeTenantSchemaAndTombstone returned
+				//     ErrPurgeRequestNotApproved) — the purge never touched
+				//     anything destructive.
+				//   - An ambiguous commit: PurgeTenantSchemaAndTombstone's tx
+				//     actually committed server-side (request now 'executed') but
+				//     the caller saw a network error and treated it as a failure.
+				// Either way there is nothing to fail — return nil without a
+				// success audit (we don't know for certain the purge executed)
+				// and without propagating the original error (it is not a
+				// genuine failure of a still-approved request).
+				return nil
+			}
 			return fmt.Errorf("iam: purge %s failed (%v) and mark-failed errored: %w", req.TenantID, err, ferr)
 		}
 		return fmt.Errorf("iam: purge %s: %w", req.TenantID, err)

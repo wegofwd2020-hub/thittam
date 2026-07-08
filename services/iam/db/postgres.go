@@ -1161,12 +1161,27 @@ func (p *Postgres) MarkTenantPurgeRequestFailed(ctx context.Context, requestID u
 	return dbPurgeRequestToDomain(row), nil
 }
 
-// PurgeTenantSchemaAndTombstone hard-deletes a purge_eligible tenant: DROP
-// SCHEMA tenant_<uuid> CASCADE, tombstone the tenants row, and mark the
-// purge request executed — all in one owner-privileged transaction. Returns
-// iam.ErrTenantNotPurgeable if the tenant left purge_eligible since approval
-// (the status-guarded tombstone UPDATE matched zero rows); the deferred
-// Rollback then undoes the schema drop, so nothing is destroyed.
+// PurgeTenantSchemaAndTombstone hard-deletes a purge_eligible tenant: claim
+// the purge request, DROP SCHEMA tenant_<uuid> CASCADE, and tombstone the
+// tenants row — all in one owner-privileged transaction, claim FIRST so
+// nothing destructive runs before the request's approved-ness is
+// re-verified.
+//
+// Ordering matters (#118 review — claim-first restructure):
+//  1. Claim: status-guarded UPDATE tenant_purge_requests ... WHERE
+//     status='approved'. Zero rows means the request left 'approved'
+//     since the worker listed it — most likely CancelTenantPurge ran
+//     mid-flight, or (rarely) a previous run's ambiguous commit already
+//     executed it. Either way NOTHING destructive has happened yet, so
+//     this makes a mid-flight cancel authoritative: return
+//     iam.ErrPurgeRequestNotApproved and the deferred Rollback is a no-op.
+//  2. Drop the tenant schema.
+//  3. Tombstone: status-guarded UPDATE tenants ... WHERE
+//     status='purge_eligible'. Zero rows means the tenant left
+//     purge_eligible since approval (race / manual change); returning
+//     iam.ErrTenantNotPurgeable rolls back both the claim and the drop, so
+//     nothing is destroyed.
+//  4. Commit.
 func (p *Postgres) PurgeTenantSchemaAndTombstone(ctx context.Context, tenantID, requestID uuid.UUID) error {
 	// Schema name = tenant_<uuid> (dashes kept). Interpolated because Postgres
 	// cannot parameterize identifiers; safe because tenantID is a validated
@@ -1178,6 +1193,18 @@ func (p *Postgres) PurgeTenantSchemaAndTombstone(ctx context.Context, tenantID, 
 		return fmt.Errorf("iam/db: purge begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	claimCt, err := tx.Exec(ctx,
+		`UPDATE tenant_purge_requests SET status='executed', executed_at=now() WHERE id=$1 AND status='approved'`,
+		requestID)
+	if err != nil {
+		return fmt.Errorf("iam/db: claim purge request %s: %w", requestID, err)
+	}
+	if claimCt.RowsAffected() == 0 {
+		// Request was cancelled mid-flight or already processed. Nothing
+		// destructive has run yet — the deferred Rollback is a no-op.
+		return iam.ErrPurgeRequestNotApproved
+	}
 
 	if _, err := tx.Exec(ctx, `DROP SCHEMA IF EXISTS "`+schema+`" CASCADE`); err != nil {
 		return fmt.Errorf("iam/db: drop schema %s: %w", schema, err)
@@ -1193,13 +1220,8 @@ func (p *Postgres) PurgeTenantSchemaAndTombstone(ctx context.Context, tenantID, 
 	}
 	if ct.RowsAffected() == 0 {
 		// Tenant left purge_eligible since approval (race / manual change). The
-		// schema drop rolls back with the tx — nothing is destroyed.
+		// claim and schema drop both roll back with the tx — nothing is destroyed.
 		return iam.ErrTenantNotPurgeable
-	}
-
-	if _, err := tx.Exec(ctx,
-		`UPDATE tenant_purge_requests SET status='executed', executed_at=now() WHERE id=$1`, requestID); err != nil {
-		return fmt.Errorf("iam/db: mark purge request executed: %w", err)
 	}
 
 	return tx.Commit(ctx)

@@ -65,6 +65,10 @@ var (
 	ErrPurgeRequestExists   = errors.New("iam: an open purge request already exists for this tenant")
 	ErrPurgeRequestNotFound = errors.New("iam: no open purge request for this tenant")
 	ErrSelfApproval         = errors.New("iam: purge approver must differ from the requester")
+	// ErrPurgeRequestNotApproved is returned by the purge executor when the
+	// request is no longer 'approved' (cancelled mid-flight, or already
+	// processed) — the destructive work is skipped.
+	ErrPurgeRequestNotApproved = errors.New("iam: purge request is not in approved state")
 )
 
 // TenantNameTakenErr wraps ErrTenantNameTaken with the colliding tenant's

@@ -452,7 +452,7 @@ func (h *Handler) SetTenantRetention(ctx context.Context, req *iamv1.SetTenantRe
 	return tenantToProto(tenant), nil
 }
 
-// --- PurgeTenant two-person-approval requests (#92 Stage 5) ---
+// --- PurgeTenant two-person-approval requests (#92 Stage 3) ---
 
 func (h *Handler) RequestTenantPurge(ctx context.Context, req *iamv1.RequestTenantPurgeRequest) (*iamv1.TenantPurgeRequest, error) {
 	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
@@ -657,7 +657,7 @@ func tenantToProto(t *Tenant) *iamv1.Tenant {
 }
 
 // purgeRequestToProto builds the gRPC TenantPurgeRequest message from the
-// domain model (#92 Stage 5). uuid.UUID pointers become "" when nil;
+// domain model (#92 Stage 3). uuid.UUID pointers become "" when nil;
 // *time.Time fields become nil timestamppb.Timestamps (omitted) when nil.
 func purgeRequestToProto(pr *TenantPurgeRequest) *iamv1.TenantPurgeRequest {
 	pb := &iamv1.TenantPurgeRequest{

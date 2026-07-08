@@ -812,7 +812,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 const markTenantPurgeRequestFailed = `-- name: MarkTenantPurgeRequestFailed :one
 UPDATE tenant_purge_requests
    SET status = 'failed', failure_reason = $2
- WHERE id = $1
+ WHERE id = $1 AND status = 'approved'
 RETURNING id, tenant_id, status, requested_by, requested_at, request_reason, approved_by, approved_at, cancelled_by, cancelled_at, executed_at, failure_reason, tenant_name, tenant_slug
 `
 
@@ -821,6 +821,12 @@ type MarkTenantPurgeRequestFailedParams struct {
 	FailureReason pgtype.Text `json:"failure_reason"`
 }
 
+// Status-guarded so an ambiguous commit (server commits the purge tx,
+// client sees a network error and retries the mark-failed call) can never
+// clobber a request that actually reached 'executed'. Zero rows means the
+// request already left 'approved' — either it executed, or it was
+// cancelled mid-flight — and the caller (PurgeApprovedTenant) treats that
+// as a benign reconcile, not a failure.
 func (q *Queries) MarkTenantPurgeRequestFailed(ctx context.Context, arg MarkTenantPurgeRequestFailedParams) (TenantPurgeRequest, error) {
 	row := q.db.QueryRow(ctx, markTenantPurgeRequestFailed, arg.ID, arg.FailureReason)
 	var i TenantPurgeRequest

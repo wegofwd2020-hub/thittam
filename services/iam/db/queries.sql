@@ -221,7 +221,13 @@ SELECT * FROM tenant_purge_requests
  LIMIT $1;
 
 -- name: MarkTenantPurgeRequestFailed :one
+-- Status-guarded so an ambiguous commit (server commits the purge tx,
+-- client sees a network error and retries the mark-failed call) can never
+-- clobber a request that actually reached 'executed'. Zero rows means the
+-- request already left 'approved' — either it executed, or it was
+-- cancelled mid-flight — and the caller (PurgeApprovedTenant) treats that
+-- as a benign reconcile, not a failure.
 UPDATE tenant_purge_requests
    SET status = 'failed', failure_reason = $2
- WHERE id = $1
+ WHERE id = $1 AND status = 'approved'
 RETURNING *;

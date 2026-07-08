@@ -323,6 +323,40 @@ func TestPurgeApprovedTenant_Failure_MarksFailed(t *testing.T) {
 	assert.Empty(t, events, "must not emit a success audit event on purge failure")
 }
 
+// TestPurgeApprovedTenant_BenignReconcile_ReturnsNil covers the claim-first
+// restructure (#118 review): when PurgeTenantSchemaAndTombstone errors (e.g.
+// ErrPurgeRequestNotApproved because CancelTenantPurge ran mid-flight, or an
+// ambiguous-commit retry) and the follow-up MarkTenantPurgeRequestFailed's
+// status guard (WHERE status='approved') matches zero rows — surfaced as
+// ErrPurgeRequestNotFound — PurgeApprovedTenant must treat this as a benign
+// reconcile: return nil, emit no success audit, and NOT propagate the
+// original purge error.
+func TestPurgeApprovedTenant_BenignReconcile_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	req := &TenantPurgeRequest{ID: uuid.New(), TenantID: fixedTenantID, Status: PurgeRequestApproved}
+	var markFailedCalled bool
+	repo := &mockRepo{
+		purgeTenantSchemaAndTombstoneFn: func(_ context.Context, _, _ uuid.UUID) error { return ErrPurgeRequestNotApproved },
+		markTenantPurgeRequestFailedFn: func(_ context.Context, _ uuid.UUID, _ string) (*TenantPurgeRequest, error) {
+			markFailedCalled = true
+			return nil, ErrPurgeRequestNotFound
+		},
+	}
+	store := &memoryAuditStore{}
+	logger := newTestAuditLogger(store)
+	svc := newTestService(repo).WithAuditLogger(logger)
+
+	err := svc.PurgeApprovedTenant(context.Background(), req)
+	require.NoError(t, err, "a benign reconcile (already-executed/cancelled) must not surface as an error")
+	assert.True(t, markFailedCalled, "MarkTenantPurgeRequestFailed must still be attempted")
+
+	flushCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	require.NoError(t, logger.Close(flushCtx))
+	events := store.snapshot()
+	assert.Empty(t, events, "must not emit a success audit event on a benign reconcile")
+}
+
 func TestPurgeApprovedTenant_MarkFailedErrors_WrapsBothErrors(t *testing.T) {
 	t.Parallel()
 	req := &TenantPurgeRequest{ID: uuid.New(), TenantID: fixedTenantID, Status: PurgeRequestApproved}
