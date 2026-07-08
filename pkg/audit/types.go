@@ -55,6 +55,21 @@ const (
 	// idempotent no-op path stays audit-quiet (the generic RPC audit
 	// interceptor still records the call itself).
 	ActionLegalHoldCleared Action = "legal_hold_cleared"
+
+	// PurgeTenant (#92 Stage 3): two-person-approval hard-delete pipeline.
+	// ActionPurgeRequested is emitted by IAM RequestTenantPurge when an
+	// operator opens a pending purge request for a purge_eligible tenant.
+	ActionPurgeRequested Action = "purge_requested"
+	// ActionPurgeApproved is emitted by IAM ApproveTenantPurge when a second
+	// operator (must differ from the requester) approves an open request.
+	// No deletion happens at approval time — the purge-worker executes it.
+	ActionPurgeApproved Action = "purge_approved"
+	// ActionPurgeCancelled is emitted by IAM CancelTenantPurge when an open
+	// (pending or approved) request is cancelled before execution.
+	ActionPurgeCancelled Action = "purge_cancelled"
+	// ActionTenantPurged is emitted by IAM PurgeApprovedTenant (called by the
+	// purge-worker) after PurgeTenantSchemaAndTombstone succeeds.
+	ActionTenantPurged Action = "tenant_purged"
 )
 
 // ResourceType identifies the entity being acted upon.

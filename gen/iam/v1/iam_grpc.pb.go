@@ -45,6 +45,9 @@ const (
 	IAMService_ClearTenantLegalHold_FullMethodName = "/thittam.iam.v1.IAMService/ClearTenantLegalHold"
 	IAMService_SetTenantRetention_FullMethodName   = "/thittam.iam.v1.IAMService/SetTenantRetention"
 	IAMService_SetTenantAddress_FullMethodName     = "/thittam.iam.v1.IAMService/SetTenantAddress"
+	IAMService_RequestTenantPurge_FullMethodName   = "/thittam.iam.v1.IAMService/RequestTenantPurge"
+	IAMService_ApproveTenantPurge_FullMethodName   = "/thittam.iam.v1.IAMService/ApproveTenantPurge"
+	IAMService_CancelTenantPurge_FullMethodName    = "/thittam.iam.v1.IAMService/CancelTenantPurge"
 	IAMService_InviteUser_FullMethodName           = "/thittam.iam.v1.IAMService/InviteUser"
 	IAMService_AcceptInvitation_FullMethodName     = "/thittam.iam.v1.IAMService/AcceptInvitation"
 	IAMService_SetOIDCConfig_FullMethodName        = "/thittam.iam.v1.IAMService/SetOIDCConfig"
@@ -97,6 +100,15 @@ type IAMServiceClient interface {
 	// Platform-admin only (#119).
 	SetTenantRetention(ctx context.Context, in *SetTenantRetentionRequest, opts ...grpc.CallOption) (*Tenant, error)
 	SetTenantAddress(ctx context.Context, in *SetTenantAddressRequest, opts ...grpc.CallOption) (*Tenant, error)
+	// RequestTenantPurge opens a two-person-approval purge request for a
+	// purge_eligible tenant (#92 Stage 5). Platform-admin only.
+	RequestTenantPurge(ctx context.Context, in *RequestTenantPurgeRequest, opts ...grpc.CallOption) (*TenantPurgeRequest, error)
+	// ApproveTenantPurge approves the open pending request for a tenant. The
+	// approver must differ from the requester. Platform-admin only.
+	ApproveTenantPurge(ctx context.Context, in *ApproveTenantPurgeRequest, opts ...grpc.CallOption) (*TenantPurgeRequest, error)
+	// CancelTenantPurge cancels the open (pending or approved) request for a
+	// tenant. Platform-admin only.
+	CancelTenantPurge(ctx context.Context, in *CancelTenantPurgeRequest, opts ...grpc.CallOption) (*TenantPurgeRequest, error)
 	// --- Invitations ---
 	InviteUser(ctx context.Context, in *InviteUserRequest, opts ...grpc.CallOption) (*Invitation, error)
 	AcceptInvitation(ctx context.Context, in *AcceptInvitationRequest, opts ...grpc.CallOption) (*TokenPair, error)
@@ -313,6 +325,33 @@ func (c *iAMServiceClient) SetTenantAddress(ctx context.Context, in *SetTenantAd
 	return out, nil
 }
 
+func (c *iAMServiceClient) RequestTenantPurge(ctx context.Context, in *RequestTenantPurgeRequest, opts ...grpc.CallOption) (*TenantPurgeRequest, error) {
+	out := new(TenantPurgeRequest)
+	err := c.cc.Invoke(ctx, IAMService_RequestTenantPurge_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *iAMServiceClient) ApproveTenantPurge(ctx context.Context, in *ApproveTenantPurgeRequest, opts ...grpc.CallOption) (*TenantPurgeRequest, error) {
+	out := new(TenantPurgeRequest)
+	err := c.cc.Invoke(ctx, IAMService_ApproveTenantPurge_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *iAMServiceClient) CancelTenantPurge(ctx context.Context, in *CancelTenantPurgeRequest, opts ...grpc.CallOption) (*TenantPurgeRequest, error) {
+	out := new(TenantPurgeRequest)
+	err := c.cc.Invoke(ctx, IAMService_CancelTenantPurge_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *iAMServiceClient) InviteUser(ctx context.Context, in *InviteUserRequest, opts ...grpc.CallOption) (*Invitation, error) {
 	out := new(Invitation)
 	err := c.cc.Invoke(ctx, IAMService_InviteUser_FullMethodName, in, out, opts...)
@@ -403,6 +442,15 @@ type IAMServiceServer interface {
 	// Platform-admin only (#119).
 	SetTenantRetention(context.Context, *SetTenantRetentionRequest) (*Tenant, error)
 	SetTenantAddress(context.Context, *SetTenantAddressRequest) (*Tenant, error)
+	// RequestTenantPurge opens a two-person-approval purge request for a
+	// purge_eligible tenant (#92 Stage 5). Platform-admin only.
+	RequestTenantPurge(context.Context, *RequestTenantPurgeRequest) (*TenantPurgeRequest, error)
+	// ApproveTenantPurge approves the open pending request for a tenant. The
+	// approver must differ from the requester. Platform-admin only.
+	ApproveTenantPurge(context.Context, *ApproveTenantPurgeRequest) (*TenantPurgeRequest, error)
+	// CancelTenantPurge cancels the open (pending or approved) request for a
+	// tenant. Platform-admin only.
+	CancelTenantPurge(context.Context, *CancelTenantPurgeRequest) (*TenantPurgeRequest, error)
 	// --- Invitations ---
 	InviteUser(context.Context, *InviteUserRequest) (*Invitation, error)
 	AcceptInvitation(context.Context, *AcceptInvitationRequest) (*TokenPair, error)
@@ -483,6 +531,15 @@ func (UnimplementedIAMServiceServer) SetTenantRetention(context.Context, *SetTen
 }
 func (UnimplementedIAMServiceServer) SetTenantAddress(context.Context, *SetTenantAddressRequest) (*Tenant, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetTenantAddress not implemented")
+}
+func (UnimplementedIAMServiceServer) RequestTenantPurge(context.Context, *RequestTenantPurgeRequest) (*TenantPurgeRequest, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RequestTenantPurge not implemented")
+}
+func (UnimplementedIAMServiceServer) ApproveTenantPurge(context.Context, *ApproveTenantPurgeRequest) (*TenantPurgeRequest, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApproveTenantPurge not implemented")
+}
+func (UnimplementedIAMServiceServer) CancelTenantPurge(context.Context, *CancelTenantPurgeRequest) (*TenantPurgeRequest, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelTenantPurge not implemented")
 }
 func (UnimplementedIAMServiceServer) InviteUser(context.Context, *InviteUserRequest) (*Invitation, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InviteUser not implemented")
@@ -908,6 +965,60 @@ func _IAMService_SetTenantAddress_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IAMService_RequestTenantPurge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestTenantPurgeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMServiceServer).RequestTenantPurge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IAMService_RequestTenantPurge_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMServiceServer).RequestTenantPurge(ctx, req.(*RequestTenantPurgeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IAMService_ApproveTenantPurge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApproveTenantPurgeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMServiceServer).ApproveTenantPurge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IAMService_ApproveTenantPurge_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMServiceServer).ApproveTenantPurge(ctx, req.(*ApproveTenantPurgeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IAMService_CancelTenantPurge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelTenantPurgeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMServiceServer).CancelTenantPurge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IAMService_CancelTenantPurge_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMServiceServer).CancelTenantPurge(ctx, req.(*CancelTenantPurgeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _IAMService_InviteUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(InviteUserRequest)
 	if err := dec(in); err != nil {
@@ -1092,6 +1203,18 @@ var IAMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetTenantAddress",
 			Handler:    _IAMService_SetTenantAddress_Handler,
+		},
+		{
+			MethodName: "RequestTenantPurge",
+			Handler:    _IAMService_RequestTenantPurge_Handler,
+		},
+		{
+			MethodName: "ApproveTenantPurge",
+			Handler:    _IAMService_ApproveTenantPurge_Handler,
+		},
+		{
+			MethodName: "CancelTenantPurge",
+			Handler:    _IAMService_CancelTenantPurge_Handler,
 		},
 		{
 			MethodName: "InviteUser",

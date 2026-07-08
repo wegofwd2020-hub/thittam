@@ -30,15 +30,15 @@ import (
 // ── Deterministic fixture IDs ──────────────────────────────────────────────
 
 var (
-	fixedTenantID    = uuid.MustParse("a0000000-0000-0000-0000-000000000001")
-	fixedUserID      = uuid.MustParse("a0000000-0000-0000-0000-000000000002")
-	fixedBudgetID    = uuid.MustParse("a0000000-0000-0000-0000-000000000003")
-	fixedExpenseID   = uuid.MustParse("a0000000-0000-0000-0000-000000000004")
-	fixedLedgerID    = uuid.MustParse("a0000000-0000-0000-0000-000000000005")
+	fixedTenantID     = uuid.MustParse("a0000000-0000-0000-0000-000000000001")
+	fixedUserID       = uuid.MustParse("a0000000-0000-0000-0000-000000000002")
+	fixedBudgetID     = uuid.MustParse("a0000000-0000-0000-0000-000000000003")
+	fixedExpenseID    = uuid.MustParse("a0000000-0000-0000-0000-000000000004")
+	fixedLedgerID     = uuid.MustParse("a0000000-0000-0000-0000-000000000005")
 	fixedProductionID = uuid.MustParse("a0000000-0000-0000-0000-000000000006")
-	fixedPeriodID    = uuid.MustParse("a0000000-0000-0000-0000-000000000007")
-	fixedAccountID1  = uuid.MustParse("a0000000-0000-0000-0000-000000000008")
-	fixedAccountID2  = uuid.MustParse("a0000000-0000-0000-0000-000000000009")
+	fixedPeriodID     = uuid.MustParse("a0000000-0000-0000-0000-000000000007")
+	fixedAccountID1   = uuid.MustParse("a0000000-0000-0000-0000-000000000008")
+	fixedAccountID2   = uuid.MustParse("a0000000-0000-0000-0000-000000000009")
 )
 
 // movieVerticalCtx returns a context pre-loaded with the movie-production vertical config.
@@ -91,7 +91,7 @@ func (stubTokenIssuer) Issue(_ context.Context, _ *auth.AuthResult) (*auth.Token
 func (stubTokenIssuer) Refresh(_ context.Context, _ string) (*auth.TokenPair, error) {
 	return &auth.TokenPair{}, nil
 }
-func (stubTokenIssuer) Revoke(_ context.Context, _ string) error   { return nil }
+func (stubTokenIssuer) Revoke(_ context.Context, _ string) error { return nil }
 func (stubTokenIssuer) Validate(_ context.Context, _ string) (*auth.Claims, error) {
 	return &auth.Claims{}, nil
 }
@@ -156,7 +156,7 @@ func (r *iamRepo) UpdateUser(_ context.Context, u *iam.User) error {
 	return nil
 }
 func (r *iamRepo) UpdatePasswordHash(_ context.Context, _ uuid.UUID, _ string) error { return nil }
-func (r *iamRepo) DeactivateUser(_ context.Context, _, _ uuid.UUID) error              { return nil }
+func (r *iamRepo) DeactivateUser(_ context.Context, _, _ uuid.UUID) error            { return nil }
 
 // Tenants
 func (r *iamRepo) CreateTenant(_ context.Context, t *iam.Tenant) error {
@@ -253,6 +253,28 @@ func (r *iamRepo) ListTenantsDueForLifecycle(_ context.Context, _ time.Time, _ i
 	return nil, nil
 }
 
+// Tenant purge (two-person approval, #92 Stage 3). Critical-path e2e does
+// not exercise PurgeTenant — trivial stubs suffice to satisfy the interface.
+func (r *iamRepo) CreateTenantPurgeRequest(_ context.Context, _ *iam.TenantPurgeRequest) error {
+	return nil
+}
+func (r *iamRepo) GetOpenTenantPurgeRequest(_ context.Context, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
+	return nil, iam.ErrPurgeRequestNotFound
+}
+func (r *iamRepo) ApproveTenantPurgeRequest(_ context.Context, _, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
+	return nil, iam.ErrPurgeRequestNotFound
+}
+func (r *iamRepo) CancelTenantPurgeRequest(_ context.Context, _, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
+	return nil, iam.ErrPurgeRequestNotFound
+}
+func (r *iamRepo) ListApprovedTenantPurgeRequests(_ context.Context, _ int) ([]*iam.TenantPurgeRequest, error) {
+	return nil, nil
+}
+func (r *iamRepo) MarkTenantPurgeRequestFailed(_ context.Context, _ uuid.UUID, _ string) (*iam.TenantPurgeRequest, error) {
+	return nil, iam.ErrPurgeRequestNotFound
+}
+func (r *iamRepo) PurgeTenantSchemaAndTombstone(_ context.Context, _, _ uuid.UUID) error { return nil }
+
 // Roles
 func (r *iamRepo) CreateRole(_ context.Context, role *iam.Role) error {
 	r.roles = append(r.roles, role)
@@ -281,8 +303,8 @@ func (r *iamRepo) ListRoles(_ context.Context, _ uuid.UUID) ([]iam.Role, error) 
 	}
 	return out, nil
 }
-func (r *iamRepo) AssignRole(_ context.Context, _ *iam.UserRole) error   { return nil }
-func (r *iamRepo) RevokeRole(_ context.Context, _, _ uuid.UUID) error    { return nil }
+func (r *iamRepo) AssignRole(_ context.Context, _ *iam.UserRole) error { return nil }
+func (r *iamRepo) RevokeRole(_ context.Context, _, _ uuid.UUID) error  { return nil }
 func (r *iamRepo) GetUserPermissions(_ context.Context, _ uuid.UUID, _ *uuid.UUID) ([]string, error) {
 	return nil, nil
 }

@@ -66,6 +66,16 @@ service IAMService {
   rpc SetTenantRetention(SetTenantRetentionRequest) returns (Tenant);
   rpc SetTenantAddress(SetTenantAddressRequest) returns (Tenant);
 
+  // RequestTenantPurge opens a two-person-approval purge request for a
+  // purge_eligible tenant (#92 Stage 5). Platform-admin only.
+  rpc RequestTenantPurge(RequestTenantPurgeRequest) returns (TenantPurgeRequest);
+  // ApproveTenantPurge approves the open pending request for a tenant. The
+  // approver must differ from the requester. Platform-admin only.
+  rpc ApproveTenantPurge(ApproveTenantPurgeRequest) returns (TenantPurgeRequest);
+  // CancelTenantPurge cancels the open (pending or approved) request for a
+  // tenant. Platform-admin only.
+  rpc CancelTenantPurge(CancelTenantPurgeRequest) returns (TenantPurgeRequest);
+
   // --- Invitations ---
   rpc InviteUser(InviteUserRequest) returns (Invitation);
   rpc AcceptInvitation(AcceptInvitationRequest) returns (TokenPair) {
@@ -353,6 +363,24 @@ message SetTenantRetentionRequest {
   // Replace an existing active hold. Default false → the call is rejected with
   // FAILED_PRECONDITION if the tenant already has a hold.
   bool overwrite = 4;
+}
+
+// PurgeTenant two-person-approval requests (#92 Stage 5).
+message RequestTenantPurgeRequest { string tenant_id = 1; string reason = 2; }
+message ApproveTenantPurgeRequest { string tenant_id = 1; string reason = 2; }
+message CancelTenantPurgeRequest  { string tenant_id = 1; string reason = 2; }
+
+message TenantPurgeRequest {
+  string id = 1;
+  string tenant_id = 2;
+  string status = 3;
+  string requested_by = 4;
+  google.protobuf.Timestamp requested_at = 5;
+  string request_reason = 6;
+  string approved_by = 7;
+  google.protobuf.Timestamp approved_at = 8;
+  google.protobuf.Timestamp executed_at = 9;
+  string failure_reason = 10;
 }
 
 // Invitations

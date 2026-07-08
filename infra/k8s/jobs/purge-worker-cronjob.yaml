@@ -1,0 +1,121 @@
+# purge-worker — daily CronJob that executes approved tenant purges (#92
+# Stage 3), the terminal, destructive step of the retention lifecycle.
+#
+# Mirrors retention-sweeper-cronjob.yaml with ONE deliberate difference:
+# DATABASE_URL below points at secretKeyRef key `url` (the OWNER DSN), NOT
+# `runtime_url` (the `thittam_app` role the sweeper and services use). The
+# purge worker's job is DROP SCHEMA tenant_<uuid> + tombstone, and DROP
+# SCHEMA requires owner privileges — thittam_app cannot run it. Do not
+# "fix" this to match the sweeper; that would silently break every purge.
+#
+# The worker polls tenant_purge_requests for rows already approved by
+# two-person sign-off (RequestTenantPurge / ApproveTenantPurge, both RPCs
+# gated well before this job ever runs) and executes them one at a time.
+#
+# Schedule: 02:45 UTC daily — after the retention-sweeper (02:15), so any
+# tenant the sweeper just marked purge_eligible has a full cycle to go
+# through request/approve before the next purge run even looks at it.
+#
+# Concurrency: Forbid — a previous run that hasn't finished within 24h
+# should be the only signal that something's wrong; overlapping runs would
+# race on the status-guarded purge transaction, but the loser simply no-ops.
+#
+# Failure policy: Never restart the same pod on failure. Kubernetes retains
+# the last 3 successful and last 1 failed pod for post-mortem. A single
+# tenant's purge failure does not fail the run (see main.go); only a
+# systemic error (e.g. the list query itself) does.
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: purge-worker
+  namespace: thittam
+  labels:
+    app: purge-worker
+    app.kubernetes.io/name: purge-worker
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: job
+spec:
+  schedule: "45 2 * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app: purge-worker
+            app.kubernetes.io/name: purge-worker
+            app.kubernetes.io/part-of: thittam
+          annotations:
+            # Short-lived pod — Prometheus scraping is handled via
+            # Pushgateway instead (#92 Stage 5). The worker pushes
+            # metrics at end of run to the URL in PUSHGATEWAY_URL
+            # below, which Prometheus scrapes on its normal interval.
+            prometheus.io/scrape: "false"
+        spec:
+          serviceAccountName: purge-worker
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            fsGroup: 65534
+          containers:
+            - name: purge-worker
+              image: ghcr.io/wegofwd2020-hub/thittam/purge-worker:latest
+              imagePullPolicy: IfNotPresent
+              args:
+                - "-batch"
+                - "100"
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: thittam-db
+                      key: url          # OWNER DSN — purge needs DROP SCHEMA; runtime_url (thittam_app) cannot.
+                # POD_NAME populates the pushgateway `instance` label
+                # so concurrent worker pods (if ever scaled out)
+                # don't overwrite each other's pushes.
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                # PUSHGATEWAY_URL — unset means "skip push" (useful
+                # during cluster bring-up before Pushgateway is deployed).
+                # Set via the common config map so all batch jobs share
+                # the same target.
+                - name: PUSHGATEWAY_URL
+                  valueFrom:
+                    configMapKeyRef:
+                      name: thittam-common
+                      key: pushgateway_url
+                      optional: true
+              envFrom:
+                - configMapRef:
+                    name: thittam-common
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: purge-worker
+  namespace: thittam
+  labels:
+    app: purge-worker
+    app.kubernetes.io/part-of: thittam

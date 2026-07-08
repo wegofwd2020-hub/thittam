@@ -112,6 +112,7 @@ type Tenant struct {
 	DeactivatedAt       pgtype.Timestamptz `json:"deactivated_at"`
 	HoldUntil           pgtype.Timestamptz `json:"hold_until"`
 	FreezeReason        pgtype.Text        `json:"freeze_reason"`
+	PurgedAt            pgtype.Timestamptz `json:"purged_at"`
 }
 
 type TenantAuthConfig struct {
@@ -128,6 +129,23 @@ type TenantAuthConfig struct {
 	DefaultRole      string      `json:"default_role"`
 	CreatedAt        time.Time   `json:"created_at"`
 	UpdatedAt        time.Time   `json:"updated_at"`
+}
+
+type TenantPurgeRequest struct {
+	ID            uuid.UUID          `json:"id"`
+	TenantID      uuid.UUID          `json:"tenant_id"`
+	Status        string             `json:"status"`
+	RequestedBy   uuid.UUID          `json:"requested_by"`
+	RequestedAt   time.Time          `json:"requested_at"`
+	RequestReason string             `json:"request_reason"`
+	ApprovedBy    pgtype.UUID        `json:"approved_by"`
+	ApprovedAt    pgtype.Timestamptz `json:"approved_at"`
+	CancelledBy   pgtype.UUID        `json:"cancelled_by"`
+	CancelledAt   pgtype.Timestamptz `json:"cancelled_at"`
+	ExecutedAt    pgtype.Timestamptz `json:"executed_at"`
+	FailureReason pgtype.Text        `json:"failure_reason"`
+	TenantName    string             `json:"tenant_name"`
+	TenantSlug    string             `json:"tenant_slug"`
 }
 
 type TenantSetting struct {

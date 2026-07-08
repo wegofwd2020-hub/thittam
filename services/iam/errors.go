@@ -12,21 +12,21 @@ var (
 	// caller that does not hold the platform_admin role.
 	ErrNotPlatformAdmin = errors.New("iam: caller does not have platform_admin role")
 
-	ErrTenantNotFound     = errors.New("iam: tenant not found")
-	ErrImpersonationNotFound   = errors.New("iam: impersonation session not found")
+	ErrTenantNotFound            = errors.New("iam: tenant not found")
+	ErrImpersonationNotFound     = errors.New("iam: impersonation session not found")
 	ErrImpersonationAlreadyEnded = errors.New("iam: impersonation session already ended")
-	ErrUserNotFound       = errors.New("iam: user not found")
-	ErrUserAlreadyExists  = errors.New("iam: user already exists for tenant")
-	ErrRoleNotFound       = errors.New("iam: role not found")
-	ErrInvitationNotFound = errors.New("iam: invitation not found")
-	ErrInvitationExpired  = errors.New("iam: invitation has expired")
-	ErrInvitationAccepted = errors.New("iam: invitation already accepted")
-	ErrTenantSlugTaken    = errors.New("iam: tenant slug already taken")
+	ErrUserNotFound              = errors.New("iam: user not found")
+	ErrUserAlreadyExists         = errors.New("iam: user already exists for tenant")
+	ErrRoleNotFound              = errors.New("iam: role not found")
+	ErrInvitationNotFound        = errors.New("iam: invitation not found")
+	ErrInvitationExpired         = errors.New("iam: invitation has expired")
+	ErrInvitationAccepted        = errors.New("iam: invitation already accepted")
+	ErrTenantSlugTaken           = errors.New("iam: tenant slug already taken")
 	// ErrTenantNameTaken is returned by CreateTenant when another tenant
 	// already exists with the same name (case-insensitive, whitespace-collapsed).
 	// Enforced by the tenants_name_ci_unique index added in migration 015.
-	ErrTenantNameTaken    = errors.New("iam: tenant name already taken")
-	ErrInvalidPlan        = errors.New("iam: invalid plan; must be starter, professional, or enterprise")
+	ErrTenantNameTaken = errors.New("iam: tenant name already taken")
+	ErrInvalidPlan     = errors.New("iam: invalid plan; must be starter, professional, or enterprise")
 	// ErrRoleNotProjectScoped is returned by AssignProjectRole when the caller
 	// supplies a role that must be tenant-wide (e.g. super_admin, manager).
 	ErrRoleNotProjectScoped = errors.New("iam: role cannot be project-scoped")
@@ -59,6 +59,16 @@ var (
 	// tenant is still under e.g. a litigation hold; clear the existing hold
 	// first if a dated hold is really intended. Maps to FailedPrecondition.
 	ErrHoldNarrowsIndefinite = errors.New("iam: cannot convert an indefinite hold into a dated one; clear the existing hold first")
+
+	// PurgeTenant (#92 Stage 3).
+	ErrTenantNotPurgeable   = errors.New("iam: tenant is not purge_eligible")
+	ErrPurgeRequestExists   = errors.New("iam: an open purge request already exists for this tenant")
+	ErrPurgeRequestNotFound = errors.New("iam: no open purge request for this tenant")
+	ErrSelfApproval         = errors.New("iam: purge approver must differ from the requester")
+	// ErrPurgeRequestNotApproved is returned by the purge executor when the
+	// request is no longer 'approved' (cancelled mid-flight, or already
+	// processed) — the destructive work is skipped.
+	ErrPurgeRequestNotApproved = errors.New("iam: purge request is not in approved state")
 )
 
 // TenantNameTakenErr wraps ErrTenantNameTaken with the colliding tenant's

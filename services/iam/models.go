@@ -34,7 +34,7 @@ type Tenant struct {
 	AddressLine1        string `json:"address_line1,omitempty"`
 	AddressLine2        string `json:"address_line2,omitempty"`
 	City                string `json:"city,omitempty"`
-	CountryCode         string `json:"country_code"`          // ISO 3166-1 alpha-2
+	CountryCode         string `json:"country_code"` // ISO 3166-1 alpha-2
 	PostalCode          string `json:"postal_code,omitempty"`
 	PrimaryCurrencyCode string `json:"primary_currency_code"` // ISO 4217
 
@@ -132,6 +132,35 @@ type AuditEntry struct {
 	TenantID   uuid.UUID `json:"tenant_id"` // tenant context for the action
 	IPAddress  string    `json:"ip_address,omitempty"`
 }
+
+// TenantPurgeRequest is the persisted two-person-approval record for a
+// PurgeTenant operation (#92 Stage 3). One OPEN (pending|approved) request may
+// exist per tenant at a time.
+type TenantPurgeRequest struct {
+	ID            uuid.UUID  `json:"id"`
+	TenantID      uuid.UUID  `json:"tenant_id"`
+	Status        string     `json:"status"` // pending|approved|executed|failed|cancelled
+	RequestedBy   uuid.UUID  `json:"requested_by"`
+	RequestedAt   time.Time  `json:"requested_at"`
+	RequestReason string     `json:"request_reason"`
+	ApprovedBy    *uuid.UUID `json:"approved_by,omitempty"`
+	ApprovedAt    *time.Time `json:"approved_at,omitempty"`
+	CancelledBy   *uuid.UUID `json:"cancelled_by,omitempty"`
+	CancelledAt   *time.Time `json:"cancelled_at,omitempty"`
+	ExecutedAt    *time.Time `json:"executed_at,omitempty"`
+	FailureReason *string    `json:"failure_reason,omitempty"`
+	// Forensic snapshot (tombstone overwrites the live tenant name).
+	TenantName string `json:"tenant_name"`
+	TenantSlug string `json:"tenant_slug"`
+}
+
+const (
+	PurgeRequestPending   = "pending"
+	PurgeRequestApproved  = "approved"
+	PurgeRequestExecuted  = "executed"
+	PurgeRequestFailed    = "failed"
+	PurgeRequestCancelled = "cancelled"
+)
 
 // Invitation is a pending email invite for a new user.
 type Invitation struct {
