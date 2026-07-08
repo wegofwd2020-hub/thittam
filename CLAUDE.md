@@ -63,6 +63,8 @@ buf generate                    # Protobuf/gRPC codegen
 sqlc generate                   # SQL query codegen
 ```
 
+**Local DB safety:** Never run `docker compose … -v` / `down` / `up` against `infra/local/` to spin up a scratch database — that compose is project-scoped, so `-v` deletes ALL local volumes (it once destroyed unrelated MinIO dev data). For migration/DB verification use a disposable, uniquely-named throwaway container, or `pkg/testdb` (integration tests SKIP without `THITTAM_TEST_DSN`); treat CI's real-Postgres job as the authoritative up/down gate. This binds delegated subagents too — state it explicitly in their instructions.
+
 ## Conventions
 
 - **Branching:** Trunk-based — `feat/`, `fix/`, `chore/`, `docs/`, `hotfix/` prefixes with ticket IDs
