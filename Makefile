@@ -143,6 +143,7 @@ migrate-all:
 	migrate -path migrations/document      -database "$(DB_URL)&x-migrations-table=schema_migrations_document" up
 	migrate -path migrations/notifications -database "$(DB_URL)&x-migrations-table=schema_migrations_notifications" up
 	migrate -path migrations/reporting     -database "$(DB_URL)&x-migrations-table=schema_migrations_reporting" up
+	migrate -path migrations/billing       -database "$(DB_URL)&x-migrations-table=schema_migrations_billing" up
 	migrate -path migrations/audit         -database "$(DB_URL)&x-migrations-table=schema_migrations_audit" up
 	@echo "==> All migrations complete."
 
@@ -176,6 +177,7 @@ migrate-all-tenants:
 migrate-down:
 	@echo "==> Rolling back migrations (reverse order)..."
 	migrate -path migrations/audit         -database "$(DB_URL)&x-migrations-table=schema_migrations_audit" down
+	migrate -path migrations/billing       -database "$(DB_URL)&x-migrations-table=schema_migrations_billing" down
 	migrate -path migrations/shared        -database "$(DB_URL)&x-migrations-table=schema_migrations_shared" down
 	migrate -path migrations/reporting      -database "$(DB_URL)" down
 	migrate -path migrations/notifications  -database "$(DB_URL)" down
