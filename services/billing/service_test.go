@@ -2,6 +2,7 @@ package billing
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/wegofwd2020/thittam/pkg/events"
 )
 
 // --- Mock repository ---
@@ -789,61 +791,47 @@ func TestSuspendSubscription_SetsSuspendedAt(t *testing.T) {
 	require.NotNil(t, sub.SuspendedAt)
 }
 
-// fakeEventPublisher captures PublishSubscriptionSuspended calls for assertions.
-type fakeEventPublisher struct {
-	calls []*Subscription
-	err   error
-}
-
-func (f *fakeEventPublisher) PublishSubscriptionSuspended(_ context.Context, sub *Subscription) error {
-	f.calls = append(f.calls, sub)
-	return f.err
-}
-
-func TestSuspendSubscription_PublishesEvent(t *testing.T) {
+func TestSuspendSubscription_WritesOutboxAtomically(t *testing.T) {
 	t.Parallel()
-	pub := &fakeEventPublisher{}
+	var gotSubject string
+	var gotPayload []byte
+	var gotStatus string
 	svc := NewService(&mockRepo{
 		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
 			return starterSub(), nil
 		},
-	}).WithPublisher(pub)
-
-	sub, err := svc.SuspendSubscription(context.Background(), fixedTenantID)
-	require.NoError(t, err)
-	require.Len(t, pub.calls, 1)
-	assert.Same(t, sub, pub.calls[0])
-	assert.Equal(t, "suspended", pub.calls[0].Status)
-}
-
-func TestSuspendSubscription_NilPublisherIsNoOp(t *testing.T) {
-	t.Parallel()
-	svc := NewService(&mockRepo{
-		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
-			return starterSub(), nil
+		suspendSubscriptionWithOutboxFn: func(_ context.Context, s *Subscription, subject string, payload []byte) error {
+			gotSubject, gotPayload, gotStatus = subject, payload, s.Status
+			return nil
 		},
 	})
-
-	assert.NotPanics(t, func() {
-		sub, err := svc.SuspendSubscription(context.Background(), fixedTenantID)
-		require.NoError(t, err)
-		assert.Equal(t, "suspended", sub.Status)
-	})
-}
-
-func TestSuspendSubscription_PublishErrorDoesNotFailOp(t *testing.T) {
-	t.Parallel()
-	pub := &fakeEventPublisher{err: fmt.Errorf("nats: connection closed")}
-	svc := NewService(&mockRepo{
-		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
-			return starterSub(), nil
-		},
-	}).WithPublisher(pub)
 
 	sub, err := svc.SuspendSubscription(context.Background(), fixedTenantID)
 	require.NoError(t, err)
 	assert.Equal(t, "suspended", sub.Status)
-	require.Len(t, pub.calls, 1)
+	require.NotNil(t, sub.SuspendedAt)
+	assert.Equal(t, "suspended", gotStatus, "outbox written with the suspended subscription")
+	assert.Equal(t, events.SubjectBillingSubscriptionSuspended, gotSubject)
+
+	var p events.BillingSubscriptionSuspendedPayload
+	require.NoError(t, json.Unmarshal(gotPayload, &p), "payload is a valid BillingSubscriptionSuspendedPayload")
+	assert.Equal(t, sub.ID.String(), p.SubscriptionID)
+	assert.NotEmpty(t, p.SuspendedAt)
+	assert.NotEmpty(t, p.PurgeAfter)
+}
+
+func TestSuspendSubscription_PropagatesOutboxError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
+			return starterSub(), nil
+		},
+		suspendSubscriptionWithOutboxFn: func(_ context.Context, _ *Subscription, _ string, _ []byte) error {
+			return fmt.Errorf("tx failed")
+		},
+	})
+	_, err := svc.SuspendSubscription(context.Background(), fixedTenantID)
+	require.Error(t, err, "a failed atomic write must fail the op (unlike the old best-effort publish)")
 }
 
 // --- Tests: PlanLimitsByName ---
