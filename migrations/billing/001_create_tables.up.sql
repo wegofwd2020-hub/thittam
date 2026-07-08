@@ -46,6 +46,7 @@ CREATE TABLE invoices (
 );
 
 CREATE INDEX idx_invoices_tenant ON invoices (tenant_id);
+-- Partial index: only actionable/unpaid states need indexing (paid/void excluded intentionally).
 CREATE INDEX idx_invoices_status ON invoices (status) WHERE status IN ('pending', 'failed', 'overdue');
 
 CREATE TABLE payment_methods (

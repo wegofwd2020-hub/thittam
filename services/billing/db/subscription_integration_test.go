@@ -30,7 +30,7 @@ func TestSubscriptionRoundTrip_SuspendFields(t *testing.T) {
 	_, err := pool.Exec(ctx,
 		`INSERT INTO tenants (id, name, slug, country_code, primary_currency_code, status)
 		 VALUES ($1, $2, $3, 'US', 'USD', 'active')`,
-		tenantID, "Billing IT", "bil-"+tenantID.String()[:8])
+		tenantID, "Billing IT "+tenantID.String()[:8], "bil-"+tenantID.String()[:8])
 	require.NoError(t, err, "seed tenant")
 	t.Cleanup(func() {
 		// ON DELETE CASCADE removes the subscription too.
