@@ -43,6 +43,7 @@ const (
 	IAMService_GetTenant_FullMethodName            = "/thittam.iam.v1.IAMService/GetTenant"
 	IAMService_SuspendTenant_FullMethodName        = "/thittam.iam.v1.IAMService/SuspendTenant"
 	IAMService_ClearTenantLegalHold_FullMethodName = "/thittam.iam.v1.IAMService/ClearTenantLegalHold"
+	IAMService_SetTenantRetention_FullMethodName   = "/thittam.iam.v1.IAMService/SetTenantRetention"
 	IAMService_SetTenantAddress_FullMethodName     = "/thittam.iam.v1.IAMService/SetTenantAddress"
 	IAMService_InviteUser_FullMethodName           = "/thittam.iam.v1.IAMService/InviteUser"
 	IAMService_AcceptInvitation_FullMethodName     = "/thittam.iam.v1.IAMService/AcceptInvitation"
@@ -89,6 +90,12 @@ type IAMServiceClient interface {
 	// SuspendTenant with legal-hold parameters (#92 Stage 4 pair).
 	// Idempotent — calling on a tenant with no active hold is a no-op.
 	ClearTenantLegalHold(ctx context.Context, in *ClearTenantLegalHoldRequest, opts ...grpc.CallOption) (*Tenant, error)
+	// SetTenantRetention applies a status-preserving legal hold to a suspended
+	// tenant — an indefinite pause (hold_until unset) or a dated extension
+	// (hold_until in the future). Reuses the freeze_reason/hold_until columns;
+	// the retention sweeper skips held tenants. Resume is ClearTenantLegalHold.
+	// Platform-admin only (#119).
+	SetTenantRetention(ctx context.Context, in *SetTenantRetentionRequest, opts ...grpc.CallOption) (*Tenant, error)
 	SetTenantAddress(ctx context.Context, in *SetTenantAddressRequest, opts ...grpc.CallOption) (*Tenant, error)
 	// --- Invitations ---
 	InviteUser(ctx context.Context, in *InviteUserRequest, opts ...grpc.CallOption) (*Invitation, error)
@@ -288,6 +295,15 @@ func (c *iAMServiceClient) ClearTenantLegalHold(ctx context.Context, in *ClearTe
 	return out, nil
 }
 
+func (c *iAMServiceClient) SetTenantRetention(ctx context.Context, in *SetTenantRetentionRequest, opts ...grpc.CallOption) (*Tenant, error) {
+	out := new(Tenant)
+	err := c.cc.Invoke(ctx, IAMService_SetTenantRetention_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *iAMServiceClient) SetTenantAddress(ctx context.Context, in *SetTenantAddressRequest, opts ...grpc.CallOption) (*Tenant, error) {
 	out := new(Tenant)
 	err := c.cc.Invoke(ctx, IAMService_SetTenantAddress_FullMethodName, in, out, opts...)
@@ -380,6 +396,12 @@ type IAMServiceServer interface {
 	// SuspendTenant with legal-hold parameters (#92 Stage 4 pair).
 	// Idempotent — calling on a tenant with no active hold is a no-op.
 	ClearTenantLegalHold(context.Context, *ClearTenantLegalHoldRequest) (*Tenant, error)
+	// SetTenantRetention applies a status-preserving legal hold to a suspended
+	// tenant — an indefinite pause (hold_until unset) or a dated extension
+	// (hold_until in the future). Reuses the freeze_reason/hold_until columns;
+	// the retention sweeper skips held tenants. Resume is ClearTenantLegalHold.
+	// Platform-admin only (#119).
+	SetTenantRetention(context.Context, *SetTenantRetentionRequest) (*Tenant, error)
 	SetTenantAddress(context.Context, *SetTenantAddressRequest) (*Tenant, error)
 	// --- Invitations ---
 	InviteUser(context.Context, *InviteUserRequest) (*Invitation, error)
@@ -455,6 +477,9 @@ func (UnimplementedIAMServiceServer) SuspendTenant(context.Context, *SuspendTena
 }
 func (UnimplementedIAMServiceServer) ClearTenantLegalHold(context.Context, *ClearTenantLegalHoldRequest) (*Tenant, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ClearTenantLegalHold not implemented")
+}
+func (UnimplementedIAMServiceServer) SetTenantRetention(context.Context, *SetTenantRetentionRequest) (*Tenant, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetTenantRetention not implemented")
 }
 func (UnimplementedIAMServiceServer) SetTenantAddress(context.Context, *SetTenantAddressRequest) (*Tenant, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetTenantAddress not implemented")
@@ -847,6 +872,24 @@ func _IAMService_ClearTenantLegalHold_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IAMService_SetTenantRetention_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetTenantRetentionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMServiceServer).SetTenantRetention(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IAMService_SetTenantRetention_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMServiceServer).SetTenantRetention(ctx, req.(*SetTenantRetentionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _IAMService_SetTenantAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetTenantAddressRequest)
 	if err := dec(in); err != nil {
@@ -1041,6 +1084,10 @@ var IAMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClearTenantLegalHold",
 			Handler:    _IAMService_ClearTenantLegalHold_Handler,
+		},
+		{
+			MethodName: "SetTenantRetention",
+			Handler:    _IAMService_SetTenantRetention_Handler,
 		},
 		{
 			MethodName: "SetTenantAddress",

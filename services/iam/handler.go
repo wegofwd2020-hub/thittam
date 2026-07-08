@@ -429,6 +429,29 @@ func (h *Handler) ClearTenantLegalHold(ctx context.Context, req *iamv1.ClearTena
 	return tenantToProto(tenant), nil
 }
 
+func (h *Handler) SetTenantRetention(ctx context.Context, req *iamv1.SetTenantRetentionRequest) (*iamv1.Tenant, error) {
+	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
+		return nil, err
+	}
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid id")
+	}
+	if strings.TrimSpace(req.GetFreezeReason()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "freeze_reason is required")
+	}
+	var holdUntil *time.Time
+	if t := req.HoldUntil; t != nil { // raw field: preserve proto3 presence
+		v := t.AsTime()
+		holdUntil = &v
+	}
+	tenant, err := h.svc.SetTenantRetention(ctx, id, holdUntil, req.GetFreezeReason(), req.GetOverwrite())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return tenantToProto(tenant), nil
+}
+
 // --- Invitations ---
 
 func (h *Handler) InviteUser(ctx context.Context, req *iamv1.InviteUserRequest) (*iamv1.Invitation, error) {
@@ -668,8 +691,13 @@ func grpcError(err error) error {
 		return status.Error(codes.FailedPrecondition, err.Error())
 
 	case errors.Is(err, ErrInvalidPlan),
-		errors.Is(err, ErrRoleNotProjectScoped):
+		errors.Is(err, ErrRoleNotProjectScoped),
+		errors.Is(err, ErrHoldUntilInPast):
 		return status.Error(codes.InvalidArgument, err.Error())
+
+	case errors.Is(err, ErrTenantNotHoldable),
+		errors.Is(err, ErrTenantHoldExists):
+		return status.Error(codes.FailedPrecondition, err.Error())
 
 	case errors.Is(err, auth.ErrInvalidCredentials),
 		errors.Is(err, auth.ErrTokenExpired),
