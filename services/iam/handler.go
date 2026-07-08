@@ -452,6 +452,62 @@ func (h *Handler) SetTenantRetention(ctx context.Context, req *iamv1.SetTenantRe
 	return tenantToProto(tenant), nil
 }
 
+// --- PurgeTenant two-person-approval requests (#92 Stage 5) ---
+
+func (h *Handler) RequestTenantPurge(ctx context.Context, req *iamv1.RequestTenantPurgeRequest) (*iamv1.TenantPurgeRequest, error) {
+	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
+		return nil, err
+	}
+	id, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	if strings.TrimSpace(req.GetReason()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "reason is required")
+	}
+	pr, err := h.svc.RequestTenantPurge(ctx, id, req.GetReason())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return purgeRequestToProto(pr), nil
+}
+
+func (h *Handler) ApproveTenantPurge(ctx context.Context, req *iamv1.ApproveTenantPurgeRequest) (*iamv1.TenantPurgeRequest, error) {
+	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
+		return nil, err
+	}
+	id, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	if strings.TrimSpace(req.GetReason()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "reason is required")
+	}
+	pr, err := h.svc.ApproveTenantPurge(ctx, id, req.GetReason())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return purgeRequestToProto(pr), nil
+}
+
+func (h *Handler) CancelTenantPurge(ctx context.Context, req *iamv1.CancelTenantPurgeRequest) (*iamv1.TenantPurgeRequest, error) {
+	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
+		return nil, err
+	}
+	id, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	if strings.TrimSpace(req.GetReason()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "reason is required")
+	}
+	pr, err := h.svc.CancelTenantPurge(ctx, id, req.GetReason())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return purgeRequestToProto(pr), nil
+}
+
 // --- Invitations ---
 
 func (h *Handler) InviteUser(ctx context.Context, req *iamv1.InviteUserRequest) (*iamv1.Invitation, error) {
@@ -600,6 +656,33 @@ func tenantToProto(t *Tenant) *iamv1.Tenant {
 	}
 }
 
+// purgeRequestToProto builds the gRPC TenantPurgeRequest message from the
+// domain model (#92 Stage 5). uuid.UUID pointers become "" when nil;
+// *time.Time fields become nil timestamppb.Timestamps (omitted) when nil.
+func purgeRequestToProto(pr *TenantPurgeRequest) *iamv1.TenantPurgeRequest {
+	pb := &iamv1.TenantPurgeRequest{
+		Id:            pr.ID.String(),
+		TenantId:      pr.TenantID.String(),
+		Status:        pr.Status,
+		RequestedBy:   pr.RequestedBy.String(),
+		RequestedAt:   timestamppb.New(pr.RequestedAt),
+		RequestReason: pr.RequestReason,
+	}
+	if pr.ApprovedBy != nil {
+		pb.ApprovedBy = pr.ApprovedBy.String()
+	}
+	if pr.ApprovedAt != nil {
+		pb.ApprovedAt = timestamppb.New(*pr.ApprovedAt)
+	}
+	if pr.ExecutedAt != nil {
+		pb.ExecutedAt = timestamppb.New(*pr.ExecutedAt)
+	}
+	if pr.FailureReason != nil {
+		pb.FailureReason = *pr.FailureReason
+	}
+	return pb
+}
+
 func roleToProto(r *Role) *iamv1.Role {
 	return &iamv1.Role{
 		Id:          r.ID.String(),
@@ -699,6 +782,16 @@ func grpcError(err error) error {
 		errors.Is(err, ErrTenantHoldExists),
 		errors.Is(err, ErrHoldNarrowsIndefinite):
 		return status.Error(codes.FailedPrecondition, err.Error())
+
+	case errors.Is(err, ErrTenantNotPurgeable),
+		errors.Is(err, ErrSelfApproval):
+		return status.Error(codes.FailedPrecondition, err.Error())
+
+	case errors.Is(err, ErrPurgeRequestExists):
+		return status.Error(codes.AlreadyExists, err.Error())
+
+	case errors.Is(err, ErrPurgeRequestNotFound):
+		return status.Error(codes.NotFound, err.Error())
 
 	case errors.Is(err, auth.ErrInvalidCredentials),
 		errors.Is(err, auth.ErrTokenExpired),

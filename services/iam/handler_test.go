@@ -777,6 +777,141 @@ func TestHandler_SuspendTenant_BareRequest_PlumbsNilHoldFields(t *testing.T) {
 	assert.Nil(t, gotFreezeReason)
 }
 
+// --- RequestTenantPurge / ApproveTenantPurge / CancelTenantPurge (#92 Stage 5) ---
+
+func TestHandler_RequestTenantPurge_Success(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := NewHandler(newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Status: TenantStatusPurgeEligible, Name: "X", Slug: "x"}, nil
+		},
+		createTenantPurgeRequestFn: func(_ context.Context, _ *TenantPurgeRequest) error { return nil },
+	}))
+	resp, err := h.RequestTenantPurge(platformAdminCtx(), &iamv1.RequestTenantPurgeRequest{TenantId: tid.String(), Reason: "gdpr"})
+	require.NoError(t, err)
+	assert.Equal(t, "pending", resp.GetStatus())
+	assert.Equal(t, tid.String(), resp.GetTenantId())
+}
+
+func TestHandler_RequestTenantPurge_PermissionDenied(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().RequestTenantPurge(context.Background(), &iamv1.RequestTenantPurgeRequest{TenantId: uuid.New().String(), Reason: "x"})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_RequestTenantPurge_EmptyReason(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().RequestTenantPurge(platformAdminCtx(), &iamv1.RequestTenantPurgeRequest{TenantId: uuid.New().String(), Reason: "   "})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_RequestTenantPurge_NotEligible_FailedPrecondition(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Status: "active"}, nil
+		},
+	}))
+	_, err := h.RequestTenantPurge(platformAdminCtx(), &iamv1.RequestTenantPurgeRequest{TenantId: uuid.New().String(), Reason: "x"})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
+func TestHandler_ApproveTenantPurge_Success(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	// requester differs from the zero-value uuid.UUID{} that the handler's
+	// ctx resolves to via audit.ActorFromContext (platformAdminCtx only sets
+	// the interceptor caller, not the audit actor) so this isn't a self-approval.
+	requester := uuid.New()
+	openReq := &TenantPurgeRequest{ID: uuid.New(), TenantID: tid, Status: PurgeRequestPending, RequestedBy: requester}
+	h := NewHandler(newTestService(&mockRepo{
+		getOpenTenantPurgeRequestFn: func(_ context.Context, _ uuid.UUID) (*TenantPurgeRequest, error) {
+			return openReq, nil
+		},
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Status: TenantStatusPurgeEligible}, nil
+		},
+		approveTenantPurgeRequestFn: func(_ context.Context, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error) {
+			return &TenantPurgeRequest{ID: requestID, TenantID: tid, Status: PurgeRequestApproved, RequestedBy: requester, ApprovedBy: &approverID}, nil
+		},
+	}))
+	resp, err := h.ApproveTenantPurge(platformAdminCtx(), &iamv1.ApproveTenantPurgeRequest{TenantId: tid.String(), Reason: "ok"})
+	require.NoError(t, err)
+	assert.Equal(t, "approved", resp.GetStatus())
+	assert.Equal(t, uuid.UUID{}.String(), resp.GetApprovedBy())
+}
+
+func TestHandler_ApproveTenantPurge_PermissionDenied(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ApproveTenantPurge(context.Background(), &iamv1.ApproveTenantPurgeRequest{TenantId: uuid.New().String(), Reason: "x"})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ApproveTenantPurge_EmptyReason(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ApproveTenantPurge(platformAdminCtx(), &iamv1.ApproveTenantPurgeRequest{TenantId: uuid.New().String(), Reason: ""})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// TestHandler_ApproveTenantPurge_SelfApproval_FailedPrecondition exercises the
+// full handler -> service -> grpcError chain: platformAdminCtx's caller is
+// not attached to the audit-actor context, so ActorFromContext resolves to
+// the zero uuid.UUID{} — matching an open request whose RequestedBy is also
+// left at its zero value simulates the same caller requesting and approving.
+func TestHandler_ApproveTenantPurge_SelfApproval_FailedPrecondition(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := NewHandler(newTestService(&mockRepo{
+		getOpenTenantPurgeRequestFn: func(_ context.Context, _ uuid.UUID) (*TenantPurgeRequest, error) {
+			return &TenantPurgeRequest{ID: uuid.New(), TenantID: tid, Status: PurgeRequestPending, RequestedBy: uuid.UUID{}}, nil
+		},
+		approveTenantPurgeRequestFn: func(_ context.Context, _, _ uuid.UUID) (*TenantPurgeRequest, error) {
+			t.Fatal("must not approve on self-approval")
+			return nil, nil
+		},
+	}))
+	_, err := h.ApproveTenantPurge(platformAdminCtx(), &iamv1.ApproveTenantPurgeRequest{TenantId: tid.String(), Reason: "ok"})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
+func TestHandler_CancelTenantPurge_Success(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	openReq := &TenantPurgeRequest{ID: uuid.New(), TenantID: tid, Status: PurgeRequestPending, RequestedBy: uuid.New()}
+	h := NewHandler(newTestService(&mockRepo{
+		getOpenTenantPurgeRequestFn: func(_ context.Context, _ uuid.UUID) (*TenantPurgeRequest, error) {
+			return openReq, nil
+		},
+		cancelTenantPurgeRequestFn: func(_ context.Context, requestID, _ uuid.UUID) (*TenantPurgeRequest, error) {
+			return &TenantPurgeRequest{ID: requestID, TenantID: tid, Status: PurgeRequestCancelled, RequestedBy: openReq.RequestedBy}, nil
+		},
+	}))
+	resp, err := h.CancelTenantPurge(platformAdminCtx(), &iamv1.CancelTenantPurgeRequest{TenantId: tid.String(), Reason: "changed my mind"})
+	require.NoError(t, err)
+	assert.Equal(t, "cancelled", resp.GetStatus())
+}
+
+func TestHandler_CancelTenantPurge_PermissionDenied(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().CancelTenantPurge(context.Background(), &iamv1.CancelTenantPurgeRequest{TenantId: uuid.New().String(), Reason: "x"})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_CancelTenantPurge_EmptyReason(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().CancelTenantPurge(platformAdminCtx(), &iamv1.CancelTenantPurgeRequest{TenantId: uuid.New().String(), Reason: " "})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_CancelTenantPurge_NoOpenRequest_NotFound(t *testing.T) {
+	t.Parallel()
+	// mockRepo default (no getOpenTenantPurgeRequestFn) returns ErrPurgeRequestNotFound.
+	h := NewHandler(newTestService(&mockRepo{}))
+	_, err := h.CancelTenantPurge(platformAdminCtx(), &iamv1.CancelTenantPurgeRequest{TenantId: uuid.New().String(), Reason: "x"})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
 // --- InviteUser ---
 
 func TestHandler_InviteUser_Success(t *testing.T) {
