@@ -338,3 +338,21 @@ func TestPurgeApprovedTenant_MarkFailedErrors_WrapsBothErrors(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, markFailedErr)
 }
+
+// --- ListApprovedPurges (worker-facing passthrough) ---
+
+func TestListApprovedPurges_DelegatesToRepo(t *testing.T) {
+	t.Parallel()
+	want := []*TenantPurgeRequest{{ID: uuid.New(), TenantID: fixedTenantID, Status: PurgeRequestApproved}}
+	var gotLimit int
+	repo := &mockRepo{
+		listApprovedTenantPurgeRequestsFn: func(_ context.Context, limit int) ([]*TenantPurgeRequest, error) {
+			gotLimit = limit
+			return want, nil
+		},
+	}
+	got, err := newTestService(repo).ListApprovedPurges(context.Background(), 100)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+	assert.Equal(t, 100, gotLimit)
+}

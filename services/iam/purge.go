@@ -135,6 +135,11 @@ func (s *Service) PurgeApprovedTenant(ctx context.Context, req *TenantPurgeReque
 	return nil
 }
 
+// ListApprovedPurges returns approved purge requests for the worker to execute.
+func (s *Service) ListApprovedPurges(ctx context.Context, limit int) ([]*TenantPurgeRequest, error) {
+	return s.repo.ListApprovedTenantPurgeRequests(ctx, limit)
+}
+
 // auditPurge emits a purge-lifecycle audit event carrying the ctx actor and
 // a free-text reason (via mustMarshalClearReason, the existing
 // {"reason": "..."} helper from lifecycle.go).
