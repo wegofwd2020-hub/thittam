@@ -2,6 +2,7 @@ package billing
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -40,4 +41,11 @@ type Repository interface {
 	// Dunning
 	CreateDunningAttempt(ctx context.Context, d *DunningAttempt) error
 	ListDunningAttempts(ctx context.Context, invoiceID uuid.UUID) ([]DunningAttempt, error)
+
+	// Outbox (#126)
+	SuspendSubscriptionWithOutbox(ctx context.Context, sub *Subscription, subject string, payload []byte) error
+	ClaimUnsentOutbox(ctx context.Context, limit int) ([]*OutboxEvent, error)
+	MarkOutboxSent(ctx context.Context, id uuid.UUID) error
+	RecordOutboxFailure(ctx context.Context, id uuid.UUID, errMsg string) error
+	DeleteSentOutboxOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
 }

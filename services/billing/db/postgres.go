@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -117,6 +119,101 @@ func (p *Postgres) UpdateSubscription(ctx context.Context, s *billing.Subscripti
 		return fmt.Errorf("billing: update subscription: %w", err)
 	}
 	return nil
+}
+
+// --- Outbox (#126) ---
+
+// SuspendSubscriptionWithOutbox atomically suspends a subscription and
+// records a subscription.suspended outbox row in one tx so the domain
+// change and the event are never observed inconsistently.
+func (p *Postgres) SuspendSubscriptionWithOutbox(ctx context.Context, s *billing.Subscription, subject string, payload []byte) error {
+	tx, err := p.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("billing: begin suspend+outbox tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Same column set as UpdateSubscription — keep in sync.
+	if _, err := tx.Exec(ctx, `
+		UPDATE subscriptions
+		SET plan=$2, status=$3, billing_cycle=$4, current_period_start=$5, current_period_end=$6,
+		    trial_ends_at=$7, cancelled_at=$8, suspended_at=$9, razorpay_sub_id=$10, stripe_sub_id=$11,
+		    updated_at=$12
+		WHERE tenant_id = $1`,
+		s.TenantID, s.Plan, s.Status, s.BillingCycle, s.CurrentPeriodStart, s.CurrentPeriodEnd,
+		s.TrialEndsAt, s.CancelledAt, s.SuspendedAt, s.RazorpaySubID, s.StripeSubID, s.UpdatedAt,
+	); err != nil {
+		return fmt.Errorf("billing: suspend subscription (tx): %w", err)
+	}
+
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO event_outbox (subject, tenant_id, payload) VALUES ($1, $2, $3)`,
+		subject, s.TenantID, payload,
+	); err != nil {
+		return fmt.Errorf("billing: insert outbox: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
+// ClaimUnsentOutbox atomically claims a batch of unsent events for the relay:
+// SKIP LOCKED avoids double-claim across replicas; attempts++ counts the try.
+// The claim is a single short statement — no tx is held across the NATS publish.
+func (p *Postgres) ClaimUnsentOutbox(ctx context.Context, limit int) ([]*billing.OutboxEvent, error) {
+	rows, err := p.db.Query(ctx, `
+		UPDATE event_outbox SET attempts = attempts + 1
+		WHERE id IN (
+			SELECT id FROM event_outbox
+			WHERE sent_at IS NULL
+			ORDER BY created_at
+			FOR UPDATE SKIP LOCKED
+			LIMIT $1
+		)
+		RETURNING id, subject, tenant_id, payload, created_at, sent_at, attempts, last_error`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("billing: claim outbox: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*billing.OutboxEvent
+	for rows.Next() {
+		var e billing.OutboxEvent
+		var sentAt pgtype.Timestamptz
+		var lastErr pgtype.Text
+		if err := rows.Scan(&e.ID, &e.Subject, &e.TenantID, &e.Payload, &e.CreatedAt, &sentAt, &e.Attempts, &lastErr); err != nil {
+			return nil, fmt.Errorf("billing: scan outbox: %w", err)
+		}
+		if sentAt.Valid {
+			e.SentAt = &sentAt.Time
+		}
+		if lastErr.Valid {
+			e.LastError = &lastErr.String
+		}
+		out = append(out, &e)
+	}
+	return out, rows.Err()
+}
+
+func (p *Postgres) MarkOutboxSent(ctx context.Context, id uuid.UUID) error {
+	if _, err := p.db.Exec(ctx, `UPDATE event_outbox SET sent_at = now() WHERE id = $1`, id); err != nil {
+		return fmt.Errorf("billing: mark outbox sent: %w", err)
+	}
+	return nil
+}
+
+func (p *Postgres) RecordOutboxFailure(ctx context.Context, id uuid.UUID, errMsg string) error {
+	if _, err := p.db.Exec(ctx, `UPDATE event_outbox SET last_error = $2 WHERE id = $1`, id, errMsg); err != nil {
+		return fmt.Errorf("billing: record outbox failure: %w", err)
+	}
+	return nil
+}
+
+func (p *Postgres) DeleteSentOutboxOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	ct, err := p.db.Exec(ctx, `DELETE FROM event_outbox WHERE sent_at IS NOT NULL AND sent_at < $1`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("billing: delete sent outbox: %w", err)
+	}
+	return ct.RowsAffected(), nil
 }
 
 // --- Invoices ---

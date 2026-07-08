@@ -2,30 +2,23 @@ package billing
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"github.com/wegofwd2020/thittam/pkg/events"
 )
 
 // Service implements billing business logic.
 type Service struct {
-	repo      Repository
-	publisher EventPublisher // optional; nil = no-op
+	repo Repository
 }
 
 // NewService creates a billing service.
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
-}
-
-// WithPublisher attaches an EventPublisher so SuspendSubscription publishes
-// subscription.suspended. A nil publisher (the default) is a no-op.
-func (s *Service) WithPublisher(p EventPublisher) *Service {
-	s.publisher = p
-	return s
 }
 
 // --- Subscription management ---
@@ -131,8 +124,9 @@ func (s *Service) CancelSubscription(ctx context.Context, tenantID uuid.UUID) (*
 	return sub, nil
 }
 
-// SuspendSubscription moves a subscription to suspended status after exhausting
-// dunning retries. Called by the scheduled dunning job on Day 14.
+// SuspendSubscription moves a subscription to suspended and records the
+// subscription.suspended event in the SAME transaction (transactional outbox,
+// #126) — the relay publishes it. Atomic: a failed write fails the op.
 func (s *Service) SuspendSubscription(ctx context.Context, tenantID uuid.UUID) (*Subscription, error) {
 	sub, err := s.repo.GetSubscriptionByTenant(ctx, tenantID)
 	if err != nil {
@@ -143,16 +137,18 @@ func (s *Service) SuspendSubscription(ctx context.Context, tenantID uuid.UUID) (
 	sub.Status = "suspended"
 	sub.SuspendedAt = &now
 	sub.UpdatedAt = now
-	if err := s.repo.UpdateSubscription(ctx, sub); err != nil {
-		return nil, fmt.Errorf("suspend subscription: %w", err)
+
+	payload, err := json.Marshal(events.BillingSubscriptionSuspendedPayload{
+		SubscriptionID: sub.ID.String(),
+		SuspendedAt:    now.Format(time.RFC3339),
+		PurgeAfter:     now.AddDate(0, 0, 30).Format(time.RFC3339),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal suspend payload: %w", err)
 	}
 
-	if s.publisher != nil {
-		if err := s.publisher.PublishSubscriptionSuspended(ctx, sub); err != nil {
-			// Best-effort: the suspend is committed; a failed publish must not fail the op.
-			slog.Default().Warn("publish subscription.suspended failed",
-				"tenant_id", tenantID, "subscription_id", sub.ID, "err", err)
-		}
+	if err := s.repo.SuspendSubscriptionWithOutbox(ctx, sub, events.SubjectBillingSubscriptionSuspended, payload); err != nil {
+		return nil, fmt.Errorf("suspend subscription: %w", err)
 	}
 	return sub, nil
 }

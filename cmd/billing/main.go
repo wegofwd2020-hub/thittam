@@ -13,7 +13,6 @@ import (
 	"github.com/nats-io/nats.go"
 	billingv1 "github.com/wegofwd2020/thittam/gen/billing/v1"
 	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
-	"github.com/wegofwd2020/thittam/pkg/events"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/billing"
@@ -38,8 +37,9 @@ func main() {
 	}
 
 	// --- NATS JetStream (optional) ---
-	// Billing must still boot without NATS configured (e.g. local/dev), so the
-	// publisher stays nil and SuspendSubscription's publish becomes a no-op.
+	// Billing must still boot without NATS configured (e.g. local/dev). The
+	// outbox write in SuspendSubscription always happens regardless; only the
+	// relay (below), which drains the outbox to NATS, is gated on pub != nil.
 	var pub *jetstream.Publisher
 	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
 		nc, err := nats.Connect(natsURL,
@@ -65,8 +65,16 @@ func main() {
 	// look up per-tenant vertical config on the request path.
 	repo := billingdb.NewPostgres(pool)
 	svc := billing.NewService(repo)
+
+	// --- Outbox relay (#126) ---
+	// Drains event_outbox → NATS in-process. Only runs when NATS is configured
+	// (same gate as the publisher); reuses the pool + publisher.
 	if pub != nil {
-		svc = svc.WithPublisher(&billingPublisher{pub: pub})
+		relayCtx, cancelRelay := context.WithCancel(ctx)
+		defer cancelRelay()
+		relay := billing.NewRelay(repo, pub)
+		go relay.Run(relayCtx)
+		log.Printf("billing: outbox relay started")
 	}
 
 	// --- Document service client (for invoice PDF download URLs) ---
@@ -119,23 +127,4 @@ func requireenv(key string) string {
 		log.Fatalf("billing: startup: required environment variable %s is not set", key)
 	}
 	return v
-}
-
-// billingPublisher adapts *jetstream.Publisher to billing.EventPublisher.
-// Lives in cmd/ (composition root) to avoid import cycles between
-// pkg/jetstream and services/billing.
-type billingPublisher struct{ pub *jetstream.Publisher }
-
-func (p *billingPublisher) PublishSubscriptionSuspended(ctx context.Context, sub *billing.Subscription) error {
-	now := time.Now().UTC()
-	suspendedAt := now
-	if sub.SuspendedAt != nil {
-		suspendedAt = *sub.SuspendedAt
-	}
-	return p.pub.Publish(ctx, events.SubjectBillingSubscriptionSuspended, sub.TenantID,
-		events.BillingSubscriptionSuspendedPayload{
-			SubscriptionID: sub.ID.String(),
-			SuspendedAt:    suspendedAt.Format(time.RFC3339),
-			PurgeAfter:     suspendedAt.AddDate(0, 0, 30).Format(time.RFC3339),
-		})
 }
