@@ -13,6 +13,7 @@ MIGRATION_DIRS=(
   inventory
   document
   notifications
+  billing
 )
 
 # expected_version <dir>
