@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-07-07T06:14:14+00:00",
+  "generated": "2026-07-08T05:26:55+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -535,13 +535,13 @@
     {
       "id": "#89",
       "name": "feat(iam): enforce UNIQUE on tenants.name \u2014 migration + service pre-check + 409 on conflict",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 9
     },
     {
       "id": "#90",
       "name": "feat(iam): scheduled tenant retention pipeline \u2014 suspended \u2192 grace \u2192 deactivated \u2192 purge",
-      "status": "pending",
+      "status": "done",
       "commits": 0
     },
     {
@@ -553,8 +553,8 @@
     {
       "id": "#92",
       "name": "feat(iam): scheduled tenant retention sweeper (suspended \u2192 deactivated \u2192 purge)",
-      "status": "in-progress",
-      "commits": 5
+      "status": "done",
+      "commits": 10
     },
     {
       "id": "#93",
@@ -673,6 +673,96 @@
     {
       "id": "#112",
       "name": "Vulnerabilities detected in dependencies (2026-06-26)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#113",
+      "name": "fix(security): bump vulnerable deps to clear GO-2026 CVEs (#112)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#114",
+      "name": "feat(iam): finish #89 \u2014 whitespace-normalized tenant-name uniqueness",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#115",
+      "name": "feat(registration): collect country/currency at signup (remove IN/INR stopgap)",
+      "status": "done",
+      "commits": 5
+    },
+    {
+      "id": "#116",
+      "name": "feat(registration): tenant-name uniqueness parity with iam (#89 follow-up)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#117",
+      "name": "feat(registration): collect country + derive currency at signup (closes #115)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#118",
+      "name": "feat(billing): on invoice.payment_failed, suspend tenant + start retention clock",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#119",
+      "name": "feat(iam): SetTenantRetention operator-override RPC (pause/extend/force-advance)",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#120",
+      "name": "epic(db): least-privilege thittam_app role \u2014 enforce audit_log append-only",
+      "status": "in-progress",
+      "commits": 4
+    },
+    {
+      "id": "#121",
+      "name": "feat(audit): Postgres audit Store + wire into retention sweeper (#92)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#122",
+      "name": "infra(db): split DATABASE_URL into migrator (owner) vs runtime (thittam_app) DSN",
+      "status": "in-progress",
+      "commits": 5
+    },
+    {
+      "id": "#123",
+      "name": "ops(db): provision thittam_app password + repoint prod Secret",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#124",
+      "name": "feat(db): least-privilege thittam_app role \u2014 audit_log append-only (#120)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#125",
+      "name": "feat(db): services connect as thittam_app \u2014 enforce audit_log append-only (#122)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#126",
+      "name": "reliability(billing): no outbox for subscription.suspended \u2014 lapsed tenant can silently skip retention",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#127",
+      "name": "feat(billing,iam): suspend tenant + start retention clock on subscription suspension (#118)",
       "status": "pending",
       "commits": 0
     }
