@@ -128,3 +128,16 @@ type UsageSummary struct {
 
 // TrialDays is the length of the initial trial period for new subscriptions.
 const TrialDays = 14
+
+// OutboxEvent is a row of the transactional outbox (#126): a domain event
+// persisted in the same tx as its domain change, awaiting relay publication.
+type OutboxEvent struct {
+	ID        uuid.UUID
+	Subject   string
+	TenantID  uuid.UUID
+	Payload   []byte
+	CreatedAt time.Time
+	SentAt    *time.Time
+	Attempts  int
+	LastError *string
+}

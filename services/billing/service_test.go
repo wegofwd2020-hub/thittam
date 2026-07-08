@@ -33,6 +33,13 @@ type mockRepo struct {
 	latestUsageRecordFn         func(ctx context.Context, tenantID uuid.UUID) (*UsageRecord, error)
 	createDunningAttemptFn      func(ctx context.Context, d *DunningAttempt) error
 	listDunningAttemptsFn       func(ctx context.Context, invoiceID uuid.UUID) ([]DunningAttempt, error)
+
+	// Outbox (#126)
+	suspendSubscriptionWithOutboxFn func(ctx context.Context, sub *Subscription, subject string, payload []byte) error
+	claimUnsentOutboxFn             func(ctx context.Context, limit int) ([]*OutboxEvent, error)
+	markOutboxSentFn                func(ctx context.Context, id uuid.UUID) error
+	recordOutboxFailureFn           func(ctx context.Context, id uuid.UUID, errMsg string) error
+	deleteSentOutboxOlderThanFn     func(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 func (m *mockRepo) CreateSubscription(ctx context.Context, s *Subscription) error {
@@ -142,6 +149,39 @@ func (m *mockRepo) ListDunningAttempts(ctx context.Context, invoiceID uuid.UUID)
 		return m.listDunningAttemptsFn(ctx, invoiceID)
 	}
 	return nil, nil
+}
+
+// --- Outbox (#126) ---
+
+func (m *mockRepo) SuspendSubscriptionWithOutbox(ctx context.Context, sub *Subscription, subject string, payload []byte) error {
+	if m.suspendSubscriptionWithOutboxFn != nil {
+		return m.suspendSubscriptionWithOutboxFn(ctx, sub, subject, payload)
+	}
+	return nil
+}
+func (m *mockRepo) ClaimUnsentOutbox(ctx context.Context, limit int) ([]*OutboxEvent, error) {
+	if m.claimUnsentOutboxFn != nil {
+		return m.claimUnsentOutboxFn(ctx, limit)
+	}
+	return nil, nil
+}
+func (m *mockRepo) MarkOutboxSent(ctx context.Context, id uuid.UUID) error {
+	if m.markOutboxSentFn != nil {
+		return m.markOutboxSentFn(ctx, id)
+	}
+	return nil
+}
+func (m *mockRepo) RecordOutboxFailure(ctx context.Context, id uuid.UUID, errMsg string) error {
+	if m.recordOutboxFailureFn != nil {
+		return m.recordOutboxFailureFn(ctx, id, errMsg)
+	}
+	return nil
+}
+func (m *mockRepo) DeleteSentOutboxOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	if m.deleteSentOutboxOlderThanFn != nil {
+		return m.deleteSentOutboxOlderThanFn(ctx, cutoff)
+	}
+	return 0, nil
 }
 
 // --- Fixtures ---

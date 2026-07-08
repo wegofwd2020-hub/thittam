@@ -41,6 +41,7 @@ type billingRepo struct {
 	paymentMethods map[uuid.UUID]*billing.PaymentMethod // keyed by pmID
 	usageRecords  []*billing.UsageRecord
 	dunning       []*billing.DunningAttempt
+	outbox        []*billing.OutboxEvent
 	seq           int
 }
 
@@ -208,6 +209,77 @@ func (r *billingRepo) ListDunningAttempts(_ context.Context, invoiceID uuid.UUID
 		}
 	}
 	return out, nil
+}
+
+// --- Outbox (#126) ---
+
+func (r *billingRepo) SuspendSubscriptionWithOutbox(_ context.Context, s *billing.Subscription, subject string, payload []byte) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.subs[s.TenantID] = s
+	r.outbox = append(r.outbox, &billing.OutboxEvent{
+		ID:        uuid.New(),
+		Subject:   subject,
+		TenantID:  s.TenantID,
+		Payload:   payload,
+		CreatedAt: time.Now(),
+	})
+	return nil
+}
+
+func (r *billingRepo) ClaimUnsentOutbox(_ context.Context, limit int) ([]*billing.OutboxEvent, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []*billing.OutboxEvent
+	for _, e := range r.outbox {
+		if e.SentAt == nil {
+			e.Attempts++
+			out = append(out, e)
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
+func (r *billingRepo) MarkOutboxSent(_ context.Context, id uuid.UUID) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, e := range r.outbox {
+		if e.ID == id {
+			now := time.Now()
+			e.SentAt = &now
+		}
+	}
+	return nil
+}
+
+func (r *billingRepo) RecordOutboxFailure(_ context.Context, id uuid.UUID, errMsg string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, e := range r.outbox {
+		if e.ID == id {
+			e.LastError = &errMsg
+		}
+	}
+	return nil
+}
+
+func (r *billingRepo) DeleteSentOutboxOlderThan(_ context.Context, cutoff time.Time) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var kept []*billing.OutboxEvent
+	var deleted int64
+	for _, e := range r.outbox {
+		if e.SentAt != nil && e.SentAt.Before(cutoff) {
+			deleted++
+			continue
+		}
+		kept = append(kept, e)
+	}
+	r.outbox = kept
+	return deleted, nil
 }
 
 // ── Test: subscription lifecycle ─────────────────────────────────────────
