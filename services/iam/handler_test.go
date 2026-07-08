@@ -675,6 +675,82 @@ func TestHandler_ClearTenantLegalHold_ReasonPassesThrough(t *testing.T) {
 	assert.True(t, called, "service's ClearTenantLegalHold should be invoked")
 }
 
+// --- SetTenantRetention ---
+
+func TestHandler_SetTenantRetention_Success(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	h := NewHandler(newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Status: "suspended"}, nil
+		},
+		setTenantLegalHoldFn: func(_ context.Context, id uuid.UUID, holdUntil *time.Time, freezeReason string) (*Tenant, error) {
+			return &Tenant{ID: id, Status: "suspended", FreezeReason: &freezeReason, HoldUntil: holdUntil}, nil
+		},
+	}))
+	resp, err := h.SetTenantRetention(platformAdminCtx(), &iamv1.SetTenantRetentionRequest{
+		Id: tenantID.String(), FreezeReason: "support escalation",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, tenantID.String(), resp.GetId())
+}
+
+func TestHandler_SetTenantRetention_PermissionDenied(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().SetTenantRetention(context.Background(), &iamv1.SetTenantRetentionRequest{
+		Id: uuid.New().String(), FreezeReason: "x",
+	})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_SetTenantRetention_EmptyReason(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().SetTenantRetention(platformAdminCtx(), &iamv1.SetTenantRetentionRequest{
+		Id: uuid.New().String(), FreezeReason: "  ",
+	})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_SetTenantRetention_HoldUntilPresenceRoundTrips(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	future := time.Now().Add(60 * 24 * time.Hour).UTC()
+	ts := timestamppb.New(future)
+
+	var gotHoldUntil *time.Time
+	h := NewHandler(newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Status: "suspended"}, nil
+		},
+		setTenantLegalHoldFn: func(_ context.Context, id uuid.UUID, holdUntil *time.Time, freezeReason string) (*Tenant, error) {
+			gotHoldUntil = holdUntil
+			return &Tenant{ID: id, Status: "suspended", FreezeReason: &freezeReason, HoldUntil: holdUntil}, nil
+		},
+	}))
+
+	_, err := h.SetTenantRetention(platformAdminCtx(), &iamv1.SetTenantRetentionRequest{
+		Id:           tenantID.String(),
+		FreezeReason: "x",
+		HoldUntil:    ts,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, gotHoldUntil, "handler must read the raw req.HoldUntil field, not drop it")
+	assert.True(t, gotHoldUntil.Equal(ts.AsTime()), "hold_until must round-trip through proto Timestamp")
+}
+
+func TestHandler_SetTenantRetention_NotHoldableMapsFailedPrecondition(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Status: "active"}, nil
+		},
+	}))
+	_, err := h.SetTenantRetention(platformAdminCtx(), &iamv1.SetTenantRetentionRequest{
+		Id: uuid.New().String(), FreezeReason: "x",
+	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
 func TestHandler_SuspendTenant_BareRequest_PlumbsNilHoldFields(t *testing.T) {
 	t.Parallel()
 	// A request with only Id (no hold fields) must reach the service

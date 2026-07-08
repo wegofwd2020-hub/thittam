@@ -58,6 +58,12 @@ service IAMService {
   // SuspendTenant with legal-hold parameters (#92 Stage 4 pair).
   // Idempotent — calling on a tenant with no active hold is a no-op.
   rpc ClearTenantLegalHold(ClearTenantLegalHoldRequest) returns (Tenant);
+  // SetTenantRetention applies a status-preserving legal hold to a suspended
+  // tenant — an indefinite pause (hold_until unset) or a dated extension
+  // (hold_until in the future). Reuses the freeze_reason/hold_until columns;
+  // the retention sweeper skips held tenants. Resume is ClearTenantLegalHold.
+  // Platform-admin only (#119).
+  rpc SetTenantRetention(SetTenantRetentionRequest) returns (Tenant);
   rpc SetTenantAddress(SetTenantAddressRequest) returns (Tenant);
 
   // --- Invitations ---
@@ -334,6 +340,19 @@ message ClearTenantLegalHoldRequest {
   // (e.g. "court order 2026-CV-123", "compliance sign-off"). Not
   // validated — free-form operator context for post-hoc forensics.
   optional string reason = 2;
+}
+
+message SetTenantRetentionRequest {
+  string id = 1;
+  // Required, non-empty. Written to freeze_reason; its presence freezes the
+  // sweeper. Encodes the operator's rationale (e.g. "retention-extended: ...").
+  string freeze_reason = 2;
+  // Unset = indefinite pause. Set = extend the hold until this time; the
+  // service rejects a value at or before now.
+  optional google.protobuf.Timestamp hold_until = 3;
+  // Replace an existing active hold. Default false → the call is rejected with
+  // FAILED_PRECONDITION if the tenant already has a hold.
+  bool overwrite = 4;
 }
 
 // Invitations

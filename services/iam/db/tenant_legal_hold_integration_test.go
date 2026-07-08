@@ -20,11 +20,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	iamdb "github.com/wegofwd2020/thittam/services/iam/db"
 	"github.com/wegofwd2020/thittam/pkg/testdb"
+	"github.com/wegofwd2020/thittam/services/iam"
+	iamdb "github.com/wegofwd2020/thittam/services/iam/db"
 )
 
 // insertSuspendedTenant creates a tenants row in 'suspended' state with
@@ -201,6 +203,113 @@ func TestClearTenantLegalHold_NoHold_Idempotent(t *testing.T) {
 	assert.Equal(t, id, row.ID)
 	assert.False(t, row.HoldUntil.Valid)
 	assert.False(t, row.FreezeReason.Valid)
+}
+
+func TestSetTenantLegalHold_AppliesIndefiniteHold_SkipsSweeper(t *testing.T) {
+	pool := testdb.Open(t)
+	tx := testdb.NewTx(t, pool)
+	q := iamdb.New(tx)
+
+	// Unheld suspended tenant is a sweeper candidate.
+	id := insertSuspendedTenant(t, tx, "To-Hold Studios", nil, nil)
+	rows, err := q.ListTenantsDueForLifecycle(context.Background(), iamdb.ListTenantsDueForLifecycleParams{
+		Column1: time.Now().UTC(), Limit: 100,
+	})
+	require.NoError(t, err)
+	require.True(t, containsTenant(rows, id), "sanity: unheld tenant is a candidate before hold")
+
+	// Apply an indefinite hold via the new write path.
+	held, err := q.SetTenantLegalHold(context.Background(), iamdb.SetTenantLegalHoldParams{
+		ID:           id,
+		HoldUntil:    pgtype.Timestamptz{}, // NULL = indefinite
+		FreezeReason: pgtype.Text{String: "support escalation", Valid: true},
+	})
+	require.NoError(t, err)
+	assert.True(t, held.FreezeReason.Valid)
+	assert.Equal(t, "support escalation", held.FreezeReason.String)
+	assert.False(t, held.HoldUntil.Valid, "indefinite hold => hold_until NULL")
+	assert.Equal(t, "suspended", held.Status, "status must be unchanged by a hold write")
+
+	// Sweeper now skips it.
+	rows, err = q.ListTenantsDueForLifecycle(context.Background(), iamdb.ListTenantsDueForLifecycleParams{
+		Column1: time.Now().UTC(), Limit: 100,
+	})
+	require.NoError(t, err)
+	assert.False(t, containsTenant(rows, id), "held tenant must be skipped by the sweeper")
+}
+
+// TestSetTenantLegalHold_AppliesDatedHold_SkipsSweeperUntilExpiry mirrors
+// TestSetTenantLegalHold_AppliesIndefiniteHold_SkipsSweeper above but for a
+// dated hold_until (#119 fix-wave FIX 2): the write must round-trip the
+// future timestamp + reason, leave status untouched, and the sweeper must
+// skip the tenant while the hold is still active.
+func TestSetTenantLegalHold_AppliesDatedHold_SkipsSweeperUntilExpiry(t *testing.T) {
+	pool := testdb.Open(t)
+	tx := testdb.NewTx(t, pool)
+	q := iamdb.New(tx)
+
+	id := insertSuspendedTenant(t, tx, "Dated-Hold Studios", nil, nil)
+
+	future := time.Now().UTC().Add(45 * 24 * time.Hour)
+	reason := "retention-extended: ticket-119"
+	held, err := q.SetTenantLegalHold(context.Background(), iamdb.SetTenantLegalHoldParams{
+		ID:           id,
+		HoldUntil:    pgtype.Timestamptz{Time: future, Valid: true},
+		FreezeReason: pgtype.Text{String: reason, Valid: true},
+	})
+	require.NoError(t, err)
+	require.True(t, held.HoldUntil.Valid, "dated hold must round-trip hold_until")
+	assert.WithinDuration(t, future, held.HoldUntil.Time, time.Second)
+	require.True(t, held.FreezeReason.Valid)
+	assert.Equal(t, reason, held.FreezeReason.String)
+	assert.Equal(t, "suspended", held.Status, "status must be unchanged by a hold write")
+
+	rows, err := q.ListTenantsDueForLifecycle(context.Background(), iamdb.ListTenantsDueForLifecycleParams{
+		Column1: time.Now().UTC(), Limit: 100,
+	})
+	require.NoError(t, err)
+	assert.False(t, containsTenant(rows, id), "tenant on a future-dated hold must be skipped by the sweeper")
+}
+
+// TestSetTenantLegalHold_PreservesSuspendedAtAnchor asserts that applying a
+// legal hold does not disturb the suspended_at anchor the retention clock is
+// measured from (#119 fix-wave FIX 2). insertSuspendedTenant backdates
+// suspended_at to now()-45 days; SetTenantLegalHold's backing SQL only
+// touches hold_until/freeze_reason, so the anchor must survive unchanged and
+// deactivated_at must remain unset.
+func TestSetTenantLegalHold_PreservesSuspendedAtAnchor(t *testing.T) {
+	pool := testdb.Open(t)
+	tx := testdb.NewTx(t, pool)
+	q := iamdb.New(tx)
+
+	id := insertSuspendedTenant(t, tx, "Anchor Studios", nil, nil)
+	wantSuspendedAt := time.Now().UTC().Add(-45 * 24 * time.Hour)
+
+	held, err := q.SetTenantLegalHold(context.Background(), iamdb.SetTenantLegalHoldParams{
+		ID:           id,
+		HoldUntil:    pgtype.Timestamptz{}, // indefinite
+		FreezeReason: pgtype.Text{String: "support escalation", Valid: true},
+	})
+	require.NoError(t, err)
+	require.True(t, held.SuspendedAt.Valid, "suspended_at anchor must remain set after a hold write")
+	assert.WithinDuration(t, wantSuspendedAt, held.SuspendedAt.Time, time.Minute,
+		"suspended_at must be unchanged from the value insertSuspendedTenant set")
+	assert.False(t, held.DeactivatedAt.Valid, "deactivated_at must remain unset")
+}
+
+// TestPostgresSetTenantLegalHold_UnknownID_ReturnsErrTenantNotFound exercises
+// the *Postgres wrapper (not the raw sqlc Queries) for an id that doesn't
+// exist, proving pgx.ErrNoRows maps to iam.ErrTenantNotFound the same way
+// Postgres.ClearTenantLegalHold already does (#119 fix-wave FIX 2). No insert
+// is needed — a random UUID is guaranteed not to match — so this is cheap
+// enough to run straight off the pool without the tx-rollback harness.
+func TestPostgresSetTenantLegalHold_UnknownID_ReturnsErrTenantNotFound(t *testing.T) {
+	pool := testdb.Open(t)
+	repo := iamdb.NewPostgres(pool)
+
+	_, err := repo.SetTenantLegalHold(context.Background(), uuid.New(), nil, "x")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, iam.ErrTenantNotFound)
 }
 
 func containsTenant(rows []iamdb.Tenant, id uuid.UUID) bool {

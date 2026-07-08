@@ -41,6 +41,24 @@ var (
 	// mapping in pkg/locale. Extend the map or supply primary_currency_code
 	// explicitly.
 	ErrUnknownCountry = errors.New("iam: unknown country_code")
+	// ErrTenantNotHoldable is returned by SetTenantRetention when the tenant's
+	// status has no running retention clock to hold — 'active' (not yet
+	// suspended) or 'purge_eligible' (terminal). Maps to FailedPrecondition.
+	ErrTenantNotHoldable = errors.New("iam: tenant status has no retention clock to hold")
+	// ErrTenantHoldExists is returned by SetTenantRetention when the tenant
+	// already has an active hold and overwrite was not requested. Maps to
+	// FailedPrecondition. The wrapped message names the existing freeze_reason.
+	ErrTenantHoldExists = errors.New("iam: tenant already has an active hold; pass overwrite to replace it")
+	// ErrHoldUntilInPast is returned by SetTenantRetention when hold_until is at
+	// or before now. Maps to InvalidArgument.
+	ErrHoldUntilInPast = errors.New("iam: hold_until must be in the future")
+	// ErrHoldNarrowsIndefinite is returned by SetTenantRetention when the
+	// existing hold is indefinite (freeze_reason set, hold_until NULL) and
+	// the request would replace it with a dated hold_until. Converting an
+	// indefinite hold into a dated one risks the sweeper resuming while the
+	// tenant is still under e.g. a litigation hold; clear the existing hold
+	// first if a dated hold is really intended. Maps to FailedPrecondition.
+	ErrHoldNarrowsIndefinite = errors.New("iam: cannot convert an indefinite hold into a dated one; clear the existing hold first")
 )
 
 // TenantNameTakenErr wraps ErrTenantNameTaken with the colliding tenant's

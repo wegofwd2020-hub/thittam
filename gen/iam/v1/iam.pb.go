@@ -2476,6 +2476,83 @@ func (x *ClearTenantLegalHoldRequest) GetReason() string {
 	return ""
 }
 
+type SetTenantRetentionRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Required, non-empty. Written to freeze_reason; its presence freezes the
+	// sweeper. Encodes the operator's rationale (e.g. "retention-extended: ...").
+	FreezeReason string `protobuf:"bytes,2,opt,name=freeze_reason,json=freezeReason,proto3" json:"freeze_reason,omitempty"`
+	// Unset = indefinite pause. Set = extend the hold until this time; the
+	// service rejects a value at or before now.
+	HoldUntil *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=hold_until,json=holdUntil,proto3,oneof" json:"hold_until,omitempty"`
+	// Replace an existing active hold. Default false → the call is rejected with
+	// FAILED_PRECONDITION if the tenant already has a hold.
+	Overwrite bool `protobuf:"varint,4,opt,name=overwrite,proto3" json:"overwrite,omitempty"`
+}
+
+func (x *SetTenantRetentionRequest) Reset() {
+	*x = SetTenantRetentionRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_thittam_iam_v1_iam_proto_msgTypes[38]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SetTenantRetentionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetTenantRetentionRequest) ProtoMessage() {}
+
+func (x *SetTenantRetentionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_thittam_iam_v1_iam_proto_msgTypes[38]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetTenantRetentionRequest.ProtoReflect.Descriptor instead.
+func (*SetTenantRetentionRequest) Descriptor() ([]byte, []int) {
+	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *SetTenantRetentionRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SetTenantRetentionRequest) GetFreezeReason() string {
+	if x != nil {
+		return x.FreezeReason
+	}
+	return ""
+}
+
+func (x *SetTenantRetentionRequest) GetHoldUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.HoldUntil
+	}
+	return nil
+}
+
+func (x *SetTenantRetentionRequest) GetOverwrite() bool {
+	if x != nil {
+		return x.Overwrite
+	}
+	return false
+}
+
 // Invitations
 type InviteUserRequest struct {
 	state         protoimpl.MessageState
@@ -2491,7 +2568,7 @@ type InviteUserRequest struct {
 func (x *InviteUserRequest) Reset() {
 	*x = InviteUserRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_thittam_iam_v1_iam_proto_msgTypes[38]
+		mi := &file_thittam_iam_v1_iam_proto_msgTypes[39]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2504,7 +2581,7 @@ func (x *InviteUserRequest) String() string {
 func (*InviteUserRequest) ProtoMessage() {}
 
 func (x *InviteUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_thittam_iam_v1_iam_proto_msgTypes[38]
+	mi := &file_thittam_iam_v1_iam_proto_msgTypes[39]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2517,7 +2594,7 @@ func (x *InviteUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InviteUserRequest.ProtoReflect.Descriptor instead.
 func (*InviteUserRequest) Descriptor() ([]byte, []int) {
-	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{38}
+	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *InviteUserRequest) GetTenantId() string {
@@ -2560,7 +2637,7 @@ type AcceptInvitationRequest struct {
 func (x *AcceptInvitationRequest) Reset() {
 	*x = AcceptInvitationRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_thittam_iam_v1_iam_proto_msgTypes[39]
+		mi := &file_thittam_iam_v1_iam_proto_msgTypes[40]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2573,7 +2650,7 @@ func (x *AcceptInvitationRequest) String() string {
 func (*AcceptInvitationRequest) ProtoMessage() {}
 
 func (x *AcceptInvitationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_thittam_iam_v1_iam_proto_msgTypes[39]
+	mi := &file_thittam_iam_v1_iam_proto_msgTypes[40]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2586,7 +2663,7 @@ func (x *AcceptInvitationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptInvitationRequest.ProtoReflect.Descriptor instead.
 func (*AcceptInvitationRequest) Descriptor() ([]byte, []int) {
-	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{39}
+	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *AcceptInvitationRequest) GetToken() string {
@@ -2624,7 +2701,7 @@ type SetOIDCConfigRequest struct {
 func (x *SetOIDCConfigRequest) Reset() {
 	*x = SetOIDCConfigRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_thittam_iam_v1_iam_proto_msgTypes[40]
+		mi := &file_thittam_iam_v1_iam_proto_msgTypes[41]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2637,7 +2714,7 @@ func (x *SetOIDCConfigRequest) String() string {
 func (*SetOIDCConfigRequest) ProtoMessage() {}
 
 func (x *SetOIDCConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_thittam_iam_v1_iam_proto_msgTypes[40]
+	mi := &file_thittam_iam_v1_iam_proto_msgTypes[41]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2650,7 +2727,7 @@ func (x *SetOIDCConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetOIDCConfigRequest.ProtoReflect.Descriptor instead.
 func (*SetOIDCConfigRequest) Descriptor() ([]byte, []int) {
-	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{40}
+	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *SetOIDCConfigRequest) GetTenantId() string {
@@ -2732,7 +2809,7 @@ type SetOIDCConfigResponse struct {
 func (x *SetOIDCConfigResponse) Reset() {
 	*x = SetOIDCConfigResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_thittam_iam_v1_iam_proto_msgTypes[41]
+		mi := &file_thittam_iam_v1_iam_proto_msgTypes[42]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2745,7 +2822,7 @@ func (x *SetOIDCConfigResponse) String() string {
 func (*SetOIDCConfigResponse) ProtoMessage() {}
 
 func (x *SetOIDCConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_thittam_iam_v1_iam_proto_msgTypes[41]
+	mi := &file_thittam_iam_v1_iam_proto_msgTypes[42]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2758,7 +2835,7 @@ func (x *SetOIDCConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetOIDCConfigResponse.ProtoReflect.Descriptor instead.
 func (*SetOIDCConfigResponse) Descriptor() ([]byte, []int) {
-	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{41}
+	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{42}
 }
 
 // Impersonation
@@ -2781,7 +2858,7 @@ type ImpersonationSession struct {
 func (x *ImpersonationSession) Reset() {
 	*x = ImpersonationSession{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_thittam_iam_v1_iam_proto_msgTypes[42]
+		mi := &file_thittam_iam_v1_iam_proto_msgTypes[43]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2794,7 +2871,7 @@ func (x *ImpersonationSession) String() string {
 func (*ImpersonationSession) ProtoMessage() {}
 
 func (x *ImpersonationSession) ProtoReflect() protoreflect.Message {
-	mi := &file_thittam_iam_v1_iam_proto_msgTypes[42]
+	mi := &file_thittam_iam_v1_iam_proto_msgTypes[43]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2807,7 +2884,7 @@ func (x *ImpersonationSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImpersonationSession.ProtoReflect.Descriptor instead.
 func (*ImpersonationSession) Descriptor() ([]byte, []int) {
-	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{42}
+	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ImpersonationSession) GetId() string {
@@ -2889,7 +2966,7 @@ type StartImpersonationRequest struct {
 func (x *StartImpersonationRequest) Reset() {
 	*x = StartImpersonationRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_thittam_iam_v1_iam_proto_msgTypes[43]
+		mi := &file_thittam_iam_v1_iam_proto_msgTypes[44]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2902,7 +2979,7 @@ func (x *StartImpersonationRequest) String() string {
 func (*StartImpersonationRequest) ProtoMessage() {}
 
 func (x *StartImpersonationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_thittam_iam_v1_iam_proto_msgTypes[43]
+	mi := &file_thittam_iam_v1_iam_proto_msgTypes[44]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2915,7 +2992,7 @@ func (x *StartImpersonationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartImpersonationRequest.ProtoReflect.Descriptor instead.
 func (*StartImpersonationRequest) Descriptor() ([]byte, []int) {
-	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{43}
+	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *StartImpersonationRequest) GetPlatformUserId() string {
@@ -2971,7 +3048,7 @@ type EndImpersonationRequest struct {
 func (x *EndImpersonationRequest) Reset() {
 	*x = EndImpersonationRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_thittam_iam_v1_iam_proto_msgTypes[44]
+		mi := &file_thittam_iam_v1_iam_proto_msgTypes[45]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2984,7 +3061,7 @@ func (x *EndImpersonationRequest) String() string {
 func (*EndImpersonationRequest) ProtoMessage() {}
 
 func (x *EndImpersonationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_thittam_iam_v1_iam_proto_msgTypes[44]
+	mi := &file_thittam_iam_v1_iam_proto_msgTypes[45]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2997,7 +3074,7 @@ func (x *EndImpersonationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EndImpersonationRequest.ProtoReflect.Descriptor instead.
 func (*EndImpersonationRequest) Descriptor() ([]byte, []int) {
-	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{44}
+	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *EndImpersonationRequest) GetSessionId() string {
@@ -3016,7 +3093,7 @@ type EndImpersonationResponse struct {
 func (x *EndImpersonationResponse) Reset() {
 	*x = EndImpersonationResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_thittam_iam_v1_iam_proto_msgTypes[45]
+		mi := &file_thittam_iam_v1_iam_proto_msgTypes[46]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3029,7 +3106,7 @@ func (x *EndImpersonationResponse) String() string {
 func (*EndImpersonationResponse) ProtoMessage() {}
 
 func (x *EndImpersonationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_thittam_iam_v1_iam_proto_msgTypes[45]
+	mi := &file_thittam_iam_v1_iam_proto_msgTypes[46]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3042,7 +3119,7 @@ func (x *EndImpersonationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EndImpersonationResponse.ProtoReflect.Descriptor instead.
 func (*EndImpersonationResponse) Descriptor() ([]byte, []int) {
-	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{45}
+	return file_thittam_iam_v1_iam_proto_rawDescGZIP(), []int{46}
 }
 
 var File_thittam_iam_v1_iam_proto protoreflect.FileDescriptor
@@ -3337,6 +3414,18 @@ var file_thittam_iam_v1_iam_proto_rawDesc = []byte{
 	0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x1b, 0x0a, 0x06, 0x72, 0x65, 0x61, 0x73, 0x6f,
 	0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x06, 0x72, 0x65, 0x61, 0x73, 0x6f,
 	0x6e, 0x88, 0x01, 0x01, 0x42, 0x09, 0x0a, 0x07, 0x5f, 0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x22,
+	0xbd, 0x01, 0x0a, 0x19, 0x53, 0x65, 0x74, 0x54, 0x65, 0x6e, 0x61, 0x6e, 0x74, 0x52, 0x65, 0x74,
+	0x65, 0x6e, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x0e, 0x0a,
+	0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x23, 0x0a,
+	0x0d, 0x66, 0x72, 0x65, 0x65, 0x7a, 0x65, 0x5f, 0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x0c, 0x66, 0x72, 0x65, 0x65, 0x7a, 0x65, 0x52, 0x65, 0x61, 0x73,
+	0x6f, 0x6e, 0x12, 0x3e, 0x0a, 0x0a, 0x68, 0x6f, 0x6c, 0x64, 0x5f, 0x75, 0x6e, 0x74, 0x69, 0x6c,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61,
+	0x6d, 0x70, 0x48, 0x00, 0x52, 0x09, 0x68, 0x6f, 0x6c, 0x64, 0x55, 0x6e, 0x74, 0x69, 0x6c, 0x88,
+	0x01, 0x01, 0x12, 0x1c, 0x0a, 0x09, 0x6f, 0x76, 0x65, 0x72, 0x77, 0x72, 0x69, 0x74, 0x65, 0x18,
+	0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x09, 0x6f, 0x76, 0x65, 0x72, 0x77, 0x72, 0x69, 0x74, 0x65,
+	0x42, 0x0d, 0x0a, 0x0b, 0x5f, 0x68, 0x6f, 0x6c, 0x64, 0x5f, 0x75, 0x6e, 0x74, 0x69, 0x6c, 0x22,
 	0x7e, 0x0a, 0x11, 0x49, 0x6e, 0x76, 0x69, 0x74, 0x65, 0x55, 0x73, 0x65, 0x72, 0x52, 0x65, 0x71,
 	0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x74, 0x65, 0x6e, 0x61, 0x6e, 0x74, 0x5f, 0x69,
 	0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x74, 0x65, 0x6e, 0x61, 0x6e, 0x74, 0x49,
@@ -3418,7 +3507,7 @@ var file_thittam_iam_v1_iam_proto_rawDesc = []byte{
 	0x12, 0x1d, 0x0a, 0x0a, 0x73, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x5f, 0x69, 0x64, 0x18, 0x01,
 	0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x73, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x49, 0x64, 0x22,
 	0x1a, 0x0a, 0x18, 0x45, 0x6e, 0x64, 0x49, 0x6d, 0x70, 0x65, 0x72, 0x73, 0x6f, 0x6e, 0x61, 0x74,
-	0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x32, 0xd3, 0x12, 0x0a, 0x0a,
+	0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x32, 0xac, 0x13, 0x0a, 0x0a,
 	0x49, 0x41, 0x4d, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x12, 0x5f, 0x0a, 0x05, 0x4c, 0x6f,
 	0x67, 0x69, 0x6e, 0x12, 0x1c, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61,
 	0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
@@ -3530,48 +3619,54 @@ var file_thittam_iam_v1_iam_proto_rawDesc = []byte{
 	0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x43, 0x6c, 0x65, 0x61, 0x72, 0x54, 0x65, 0x6e,
 	0x61, 0x6e, 0x74, 0x4c, 0x65, 0x67, 0x61, 0x6c, 0x48, 0x6f, 0x6c, 0x64, 0x52, 0x65, 0x71, 0x75,
 	0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61,
-	0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x65, 0x6e, 0x61, 0x6e, 0x74, 0x12, 0x53, 0x0a, 0x10, 0x53,
-	0x65, 0x74, 0x54, 0x65, 0x6e, 0x61, 0x6e, 0x74, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x12,
-	0x27, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31,
-	0x2e, 0x53, 0x65, 0x74, 0x54, 0x65, 0x6e, 0x61, 0x6e, 0x74, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73,
-	0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74,
-	0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x65, 0x6e, 0x61, 0x6e, 0x74,
-	0x12, 0x4b, 0x0a, 0x0a, 0x49, 0x6e, 0x76, 0x69, 0x74, 0x65, 0x55, 0x73, 0x65, 0x72, 0x12, 0x21,
-	0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e,
-	0x49, 0x6e, 0x76, 0x69, 0x74, 0x65, 0x55, 0x73, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
-	0x74, 0x1a, 0x1a, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e,
-	0x76, 0x31, 0x2e, 0x49, 0x6e, 0x76, 0x69, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x85, 0x01,
-	0x0a, 0x10, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x49, 0x6e, 0x76, 0x69, 0x74, 0x61, 0x74, 0x69,
-	0x6f, 0x6e, 0x12, 0x27, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d,
-	0x2e, 0x76, 0x31, 0x2e, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x49, 0x6e, 0x76, 0x69, 0x74, 0x61,
-	0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x74, 0x68,
-	0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x6f, 0x6b,
-	0x65, 0x6e, 0x50, 0x61, 0x69, 0x72, 0x22, 0x2d, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x27, 0x3a, 0x01,
-	0x2a, 0x22, 0x22, 0x2f, 0x61, 0x70, 0x69, 0x2f, 0x76, 0x31, 0x2f, 0x69, 0x6e, 0x76, 0x69, 0x74,
-	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x2f, 0x7b, 0x74, 0x6f, 0x6b, 0x65, 0x6e, 0x7d, 0x2f, 0x61,
-	0x63, 0x63, 0x65, 0x70, 0x74, 0x12, 0x5c, 0x0a, 0x0d, 0x53, 0x65, 0x74, 0x4f, 0x49, 0x44, 0x43,
-	0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x12, 0x24, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d,
-	0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x74, 0x4f, 0x49, 0x44, 0x43, 0x43,
-	0x6f, 0x6e, 0x66, 0x69, 0x67, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x25, 0x2e, 0x74,
-	0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65,
-	0x74, 0x4f, 0x49, 0x44, 0x43, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x52, 0x65, 0x73, 0x70, 0x6f,
-	0x6e, 0x73, 0x65, 0x12, 0x65, 0x0a, 0x12, 0x53, 0x74, 0x61, 0x72, 0x74, 0x49, 0x6d, 0x70, 0x65,
-	0x72, 0x73, 0x6f, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x29, 0x2e, 0x74, 0x68, 0x69, 0x74,
-	0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x74, 0x61, 0x72, 0x74,
-	0x49, 0x6d, 0x70, 0x65, 0x72, 0x73, 0x6f, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x1a, 0x24, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69,
-	0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6d, 0x70, 0x65, 0x72, 0x73, 0x6f, 0x6e, 0x61, 0x74,
-	0x69, 0x6f, 0x6e, 0x53, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x65, 0x0a, 0x10, 0x45, 0x6e,
-	0x64, 0x49, 0x6d, 0x70, 0x65, 0x72, 0x73, 0x6f, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x27,
-	0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e,
-	0x45, 0x6e, 0x64, 0x49, 0x6d, 0x70, 0x65, 0x72, 0x73, 0x6f, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x28, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61,
+	0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x65, 0x6e, 0x61, 0x6e, 0x74, 0x12, 0x57, 0x0a, 0x12, 0x53,
+	0x65, 0x74, 0x54, 0x65, 0x6e, 0x61, 0x6e, 0x74, 0x52, 0x65, 0x74, 0x65, 0x6e, 0x74, 0x69, 0x6f,
+	0x6e, 0x12, 0x29, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e,
+	0x76, 0x31, 0x2e, 0x53, 0x65, 0x74, 0x54, 0x65, 0x6e, 0x61, 0x6e, 0x74, 0x52, 0x65, 0x74, 0x65,
+	0x6e, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x74,
+	0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x65,
+	0x6e, 0x61, 0x6e, 0x74, 0x12, 0x53, 0x0a, 0x10, 0x53, 0x65, 0x74, 0x54, 0x65, 0x6e, 0x61, 0x6e,
+	0x74, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x12, 0x27, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74,
+	0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x74, 0x54, 0x65, 0x6e,
+	0x61, 0x6e, 0x74, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x1a, 0x16, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e,
+	0x76, 0x31, 0x2e, 0x54, 0x65, 0x6e, 0x61, 0x6e, 0x74, 0x12, 0x4b, 0x0a, 0x0a, 0x49, 0x6e, 0x76,
+	0x69, 0x74, 0x65, 0x55, 0x73, 0x65, 0x72, 0x12, 0x21, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61,
+	0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e, 0x76, 0x69, 0x74, 0x65, 0x55,
+	0x73, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x74, 0x68, 0x69,
+	0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e, 0x76, 0x69,
+	0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x85, 0x01, 0x0a, 0x10, 0x41, 0x63, 0x63, 0x65, 0x70,
+	0x74, 0x49, 0x6e, 0x76, 0x69, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x27, 0x2e, 0x74, 0x68,
+	0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x41, 0x63, 0x63,
+	0x65, 0x70, 0x74, 0x49, 0x6e, 0x76, 0x69, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69,
+	0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x6f, 0x6b, 0x65, 0x6e, 0x50, 0x61, 0x69, 0x72, 0x22,
+	0x2d, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x27, 0x3a, 0x01, 0x2a, 0x22, 0x22, 0x2f, 0x61, 0x70, 0x69,
+	0x2f, 0x76, 0x31, 0x2f, 0x69, 0x6e, 0x76, 0x69, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x2f,
+	0x7b, 0x74, 0x6f, 0x6b, 0x65, 0x6e, 0x7d, 0x2f, 0x61, 0x63, 0x63, 0x65, 0x70, 0x74, 0x12, 0x5c,
+	0x0a, 0x0d, 0x53, 0x65, 0x74, 0x4f, 0x49, 0x44, 0x43, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x12,
+	0x24, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31,
+	0x2e, 0x53, 0x65, 0x74, 0x4f, 0x49, 0x44, 0x43, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x25, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e,
+	0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x74, 0x4f, 0x49, 0x44, 0x43, 0x43, 0x6f,
+	0x6e, 0x66, 0x69, 0x67, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x65, 0x0a, 0x12,
+	0x53, 0x74, 0x61, 0x72, 0x74, 0x49, 0x6d, 0x70, 0x65, 0x72, 0x73, 0x6f, 0x6e, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x12, 0x29, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d,
+	0x2e, 0x76, 0x31, 0x2e, 0x53, 0x74, 0x61, 0x72, 0x74, 0x49, 0x6d, 0x70, 0x65, 0x72, 0x73, 0x6f,
+	0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x24, 0x2e,
+	0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x49,
+	0x6d, 0x70, 0x65, 0x72, 0x73, 0x6f, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x65, 0x73, 0x73,
+	0x69, 0x6f, 0x6e, 0x12, 0x65, 0x0a, 0x10, 0x45, 0x6e, 0x64, 0x49, 0x6d, 0x70, 0x65, 0x72, 0x73,
+	0x6f, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x27, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61,
 	0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x45, 0x6e, 0x64, 0x49, 0x6d, 0x70, 0x65,
-	0x72, 0x73, 0x6f, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
-	0x65, 0x42, 0x31, 0x5a, 0x2f, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
-	0x77, 0x65, 0x67, 0x6f, 0x66, 0x77, 0x64, 0x32, 0x30, 0x32, 0x30, 0x2f, 0x74, 0x68, 0x69, 0x74,
-	0x74, 0x61, 0x6d, 0x2f, 0x67, 0x65, 0x6e, 0x2f, 0x69, 0x61, 0x6d, 0x2f, 0x76, 0x31, 0x3b, 0x69,
-	0x61, 0x6d, 0x76, 0x31, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x72, 0x73, 0x6f, 0x6e, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x1a, 0x28, 0x2e, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2e, 0x69, 0x61, 0x6d, 0x2e, 0x76,
+	0x31, 0x2e, 0x45, 0x6e, 0x64, 0x49, 0x6d, 0x70, 0x65, 0x72, 0x73, 0x6f, 0x6e, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42, 0x31, 0x5a, 0x2f, 0x67, 0x69,
+	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x77, 0x65, 0x67, 0x6f, 0x66, 0x77, 0x64,
+	0x32, 0x30, 0x32, 0x30, 0x2f, 0x74, 0x68, 0x69, 0x74, 0x74, 0x61, 0x6d, 0x2f, 0x67, 0x65, 0x6e,
+	0x2f, 0x69, 0x61, 0x6d, 0x2f, 0x76, 0x31, 0x3b, 0x69, 0x61, 0x6d, 0x76, 0x31, 0x62, 0x06, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -3586,7 +3681,7 @@ func file_thittam_iam_v1_iam_proto_rawDescGZIP() []byte {
 	return file_thittam_iam_v1_iam_proto_rawDescData
 }
 
-var file_thittam_iam_v1_iam_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
+var file_thittam_iam_v1_iam_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
 var file_thittam_iam_v1_iam_proto_goTypes = []any{
 	(*User)(nil),                        // 0: thittam.iam.v1.User
 	(*Tenant)(nil),                      // 1: thittam.iam.v1.Tenant
@@ -3626,90 +3721,94 @@ var file_thittam_iam_v1_iam_proto_goTypes = []any{
 	(*GetTenantRequest)(nil),            // 35: thittam.iam.v1.GetTenantRequest
 	(*SuspendTenantRequest)(nil),        // 36: thittam.iam.v1.SuspendTenantRequest
 	(*ClearTenantLegalHoldRequest)(nil), // 37: thittam.iam.v1.ClearTenantLegalHoldRequest
-	(*InviteUserRequest)(nil),           // 38: thittam.iam.v1.InviteUserRequest
-	(*AcceptInvitationRequest)(nil),     // 39: thittam.iam.v1.AcceptInvitationRequest
-	(*SetOIDCConfigRequest)(nil),        // 40: thittam.iam.v1.SetOIDCConfigRequest
-	(*SetOIDCConfigResponse)(nil),       // 41: thittam.iam.v1.SetOIDCConfigResponse
-	(*ImpersonationSession)(nil),        // 42: thittam.iam.v1.ImpersonationSession
-	(*StartImpersonationRequest)(nil),   // 43: thittam.iam.v1.StartImpersonationRequest
-	(*EndImpersonationRequest)(nil),     // 44: thittam.iam.v1.EndImpersonationRequest
-	(*EndImpersonationResponse)(nil),    // 45: thittam.iam.v1.EndImpersonationResponse
-	(*timestamppb.Timestamp)(nil),       // 46: google.protobuf.Timestamp
+	(*SetTenantRetentionRequest)(nil),   // 38: thittam.iam.v1.SetTenantRetentionRequest
+	(*InviteUserRequest)(nil),           // 39: thittam.iam.v1.InviteUserRequest
+	(*AcceptInvitationRequest)(nil),     // 40: thittam.iam.v1.AcceptInvitationRequest
+	(*SetOIDCConfigRequest)(nil),        // 41: thittam.iam.v1.SetOIDCConfigRequest
+	(*SetOIDCConfigResponse)(nil),       // 42: thittam.iam.v1.SetOIDCConfigResponse
+	(*ImpersonationSession)(nil),        // 43: thittam.iam.v1.ImpersonationSession
+	(*StartImpersonationRequest)(nil),   // 44: thittam.iam.v1.StartImpersonationRequest
+	(*EndImpersonationRequest)(nil),     // 45: thittam.iam.v1.EndImpersonationRequest
+	(*EndImpersonationResponse)(nil),    // 46: thittam.iam.v1.EndImpersonationResponse
+	(*timestamppb.Timestamp)(nil),       // 47: google.protobuf.Timestamp
 }
 var file_thittam_iam_v1_iam_proto_depIdxs = []int32{
-	46, // 0: thittam.iam.v1.User.created_at:type_name -> google.protobuf.Timestamp
-	46, // 1: thittam.iam.v1.Tenant.created_at:type_name -> google.protobuf.Timestamp
-	46, // 2: thittam.iam.v1.UserRole.assigned_at:type_name -> google.protobuf.Timestamp
-	46, // 3: thittam.iam.v1.Invitation.expires_at:type_name -> google.protobuf.Timestamp
-	46, // 4: thittam.iam.v1.Invitation.created_at:type_name -> google.protobuf.Timestamp
-	46, // 5: thittam.iam.v1.TokenPair.expires_at:type_name -> google.protobuf.Timestamp
-	46, // 6: thittam.iam.v1.Claims.issued_at:type_name -> google.protobuf.Timestamp
-	46, // 7: thittam.iam.v1.Claims.expires_at:type_name -> google.protobuf.Timestamp
+	47, // 0: thittam.iam.v1.User.created_at:type_name -> google.protobuf.Timestamp
+	47, // 1: thittam.iam.v1.Tenant.created_at:type_name -> google.protobuf.Timestamp
+	47, // 2: thittam.iam.v1.UserRole.assigned_at:type_name -> google.protobuf.Timestamp
+	47, // 3: thittam.iam.v1.Invitation.expires_at:type_name -> google.protobuf.Timestamp
+	47, // 4: thittam.iam.v1.Invitation.created_at:type_name -> google.protobuf.Timestamp
+	47, // 5: thittam.iam.v1.TokenPair.expires_at:type_name -> google.protobuf.Timestamp
+	47, // 6: thittam.iam.v1.Claims.issued_at:type_name -> google.protobuf.Timestamp
+	47, // 7: thittam.iam.v1.Claims.expires_at:type_name -> google.protobuf.Timestamp
 	0,  // 8: thittam.iam.v1.GetCurrentUserResponse.user:type_name -> thittam.iam.v1.User
 	1,  // 9: thittam.iam.v1.GetCurrentUserResponse.tenant:type_name -> thittam.iam.v1.Tenant
 	0,  // 10: thittam.iam.v1.ListUsersResponse.users:type_name -> thittam.iam.v1.User
 	2,  // 11: thittam.iam.v1.ListRolesResponse.roles:type_name -> thittam.iam.v1.Role
-	46, // 12: thittam.iam.v1.SuspendTenantRequest.hold_until:type_name -> google.protobuf.Timestamp
-	46, // 13: thittam.iam.v1.ImpersonationSession.started_at:type_name -> google.protobuf.Timestamp
-	46, // 14: thittam.iam.v1.ImpersonationSession.expires_at:type_name -> google.protobuf.Timestamp
-	46, // 15: thittam.iam.v1.ImpersonationSession.ended_at:type_name -> google.protobuf.Timestamp
-	7,  // 16: thittam.iam.v1.IAMService.Login:input_type -> thittam.iam.v1.LoginRequest
-	8,  // 17: thittam.iam.v1.IAMService.RefreshToken:input_type -> thittam.iam.v1.RefreshTokenRequest
-	9,  // 18: thittam.iam.v1.IAMService.Logout:input_type -> thittam.iam.v1.LogoutRequest
-	11, // 19: thittam.iam.v1.IAMService.ValidateToken:input_type -> thittam.iam.v1.ValidateTokenRequest
-	12, // 20: thittam.iam.v1.IAMService.GetCurrentUser:input_type -> thittam.iam.v1.GetCurrentUserRequest
-	14, // 21: thittam.iam.v1.IAMService.CreateUser:input_type -> thittam.iam.v1.CreateUserRequest
-	15, // 22: thittam.iam.v1.IAMService.GetUser:input_type -> thittam.iam.v1.GetUserRequest
-	16, // 23: thittam.iam.v1.IAMService.ListUsers:input_type -> thittam.iam.v1.ListUsersRequest
-	18, // 24: thittam.iam.v1.IAMService.UpdateUser:input_type -> thittam.iam.v1.UpdateUserRequest
-	19, // 25: thittam.iam.v1.IAMService.DeactivateUser:input_type -> thittam.iam.v1.DeactivateUserRequest
-	21, // 26: thittam.iam.v1.IAMService.ChangePassword:input_type -> thittam.iam.v1.ChangePasswordRequest
-	23, // 27: thittam.iam.v1.IAMService.AssignRole:input_type -> thittam.iam.v1.AssignRoleRequest
-	25, // 28: thittam.iam.v1.IAMService.AssignProjectRole:input_type -> thittam.iam.v1.AssignProjectRoleRequest
-	27, // 29: thittam.iam.v1.IAMService.RevokeRole:input_type -> thittam.iam.v1.RevokeRoleRequest
-	29, // 30: thittam.iam.v1.IAMService.ListRoles:input_type -> thittam.iam.v1.ListRolesRequest
-	31, // 31: thittam.iam.v1.IAMService.CheckPermission:input_type -> thittam.iam.v1.CheckPermissionRequest
-	33, // 32: thittam.iam.v1.IAMService.CreateTenant:input_type -> thittam.iam.v1.CreateTenantRequest
-	35, // 33: thittam.iam.v1.IAMService.GetTenant:input_type -> thittam.iam.v1.GetTenantRequest
-	36, // 34: thittam.iam.v1.IAMService.SuspendTenant:input_type -> thittam.iam.v1.SuspendTenantRequest
-	37, // 35: thittam.iam.v1.IAMService.ClearTenantLegalHold:input_type -> thittam.iam.v1.ClearTenantLegalHoldRequest
-	34, // 36: thittam.iam.v1.IAMService.SetTenantAddress:input_type -> thittam.iam.v1.SetTenantAddressRequest
-	38, // 37: thittam.iam.v1.IAMService.InviteUser:input_type -> thittam.iam.v1.InviteUserRequest
-	39, // 38: thittam.iam.v1.IAMService.AcceptInvitation:input_type -> thittam.iam.v1.AcceptInvitationRequest
-	40, // 39: thittam.iam.v1.IAMService.SetOIDCConfig:input_type -> thittam.iam.v1.SetOIDCConfigRequest
-	43, // 40: thittam.iam.v1.IAMService.StartImpersonation:input_type -> thittam.iam.v1.StartImpersonationRequest
-	44, // 41: thittam.iam.v1.IAMService.EndImpersonation:input_type -> thittam.iam.v1.EndImpersonationRequest
-	5,  // 42: thittam.iam.v1.IAMService.Login:output_type -> thittam.iam.v1.TokenPair
-	5,  // 43: thittam.iam.v1.IAMService.RefreshToken:output_type -> thittam.iam.v1.TokenPair
-	10, // 44: thittam.iam.v1.IAMService.Logout:output_type -> thittam.iam.v1.LogoutResponse
-	6,  // 45: thittam.iam.v1.IAMService.ValidateToken:output_type -> thittam.iam.v1.Claims
-	13, // 46: thittam.iam.v1.IAMService.GetCurrentUser:output_type -> thittam.iam.v1.GetCurrentUserResponse
-	0,  // 47: thittam.iam.v1.IAMService.CreateUser:output_type -> thittam.iam.v1.User
-	0,  // 48: thittam.iam.v1.IAMService.GetUser:output_type -> thittam.iam.v1.User
-	17, // 49: thittam.iam.v1.IAMService.ListUsers:output_type -> thittam.iam.v1.ListUsersResponse
-	0,  // 50: thittam.iam.v1.IAMService.UpdateUser:output_type -> thittam.iam.v1.User
-	20, // 51: thittam.iam.v1.IAMService.DeactivateUser:output_type -> thittam.iam.v1.DeactivateUserResponse
-	22, // 52: thittam.iam.v1.IAMService.ChangePassword:output_type -> thittam.iam.v1.ChangePasswordResponse
-	24, // 53: thittam.iam.v1.IAMService.AssignRole:output_type -> thittam.iam.v1.AssignRoleResponse
-	26, // 54: thittam.iam.v1.IAMService.AssignProjectRole:output_type -> thittam.iam.v1.AssignProjectRoleResponse
-	28, // 55: thittam.iam.v1.IAMService.RevokeRole:output_type -> thittam.iam.v1.RevokeRoleResponse
-	30, // 56: thittam.iam.v1.IAMService.ListRoles:output_type -> thittam.iam.v1.ListRolesResponse
-	32, // 57: thittam.iam.v1.IAMService.CheckPermission:output_type -> thittam.iam.v1.CheckPermissionResponse
-	1,  // 58: thittam.iam.v1.IAMService.CreateTenant:output_type -> thittam.iam.v1.Tenant
-	1,  // 59: thittam.iam.v1.IAMService.GetTenant:output_type -> thittam.iam.v1.Tenant
-	1,  // 60: thittam.iam.v1.IAMService.SuspendTenant:output_type -> thittam.iam.v1.Tenant
-	1,  // 61: thittam.iam.v1.IAMService.ClearTenantLegalHold:output_type -> thittam.iam.v1.Tenant
-	1,  // 62: thittam.iam.v1.IAMService.SetTenantAddress:output_type -> thittam.iam.v1.Tenant
-	4,  // 63: thittam.iam.v1.IAMService.InviteUser:output_type -> thittam.iam.v1.Invitation
-	5,  // 64: thittam.iam.v1.IAMService.AcceptInvitation:output_type -> thittam.iam.v1.TokenPair
-	41, // 65: thittam.iam.v1.IAMService.SetOIDCConfig:output_type -> thittam.iam.v1.SetOIDCConfigResponse
-	42, // 66: thittam.iam.v1.IAMService.StartImpersonation:output_type -> thittam.iam.v1.ImpersonationSession
-	45, // 67: thittam.iam.v1.IAMService.EndImpersonation:output_type -> thittam.iam.v1.EndImpersonationResponse
-	42, // [42:68] is the sub-list for method output_type
-	16, // [16:42] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	47, // 12: thittam.iam.v1.SuspendTenantRequest.hold_until:type_name -> google.protobuf.Timestamp
+	47, // 13: thittam.iam.v1.SetTenantRetentionRequest.hold_until:type_name -> google.protobuf.Timestamp
+	47, // 14: thittam.iam.v1.ImpersonationSession.started_at:type_name -> google.protobuf.Timestamp
+	47, // 15: thittam.iam.v1.ImpersonationSession.expires_at:type_name -> google.protobuf.Timestamp
+	47, // 16: thittam.iam.v1.ImpersonationSession.ended_at:type_name -> google.protobuf.Timestamp
+	7,  // 17: thittam.iam.v1.IAMService.Login:input_type -> thittam.iam.v1.LoginRequest
+	8,  // 18: thittam.iam.v1.IAMService.RefreshToken:input_type -> thittam.iam.v1.RefreshTokenRequest
+	9,  // 19: thittam.iam.v1.IAMService.Logout:input_type -> thittam.iam.v1.LogoutRequest
+	11, // 20: thittam.iam.v1.IAMService.ValidateToken:input_type -> thittam.iam.v1.ValidateTokenRequest
+	12, // 21: thittam.iam.v1.IAMService.GetCurrentUser:input_type -> thittam.iam.v1.GetCurrentUserRequest
+	14, // 22: thittam.iam.v1.IAMService.CreateUser:input_type -> thittam.iam.v1.CreateUserRequest
+	15, // 23: thittam.iam.v1.IAMService.GetUser:input_type -> thittam.iam.v1.GetUserRequest
+	16, // 24: thittam.iam.v1.IAMService.ListUsers:input_type -> thittam.iam.v1.ListUsersRequest
+	18, // 25: thittam.iam.v1.IAMService.UpdateUser:input_type -> thittam.iam.v1.UpdateUserRequest
+	19, // 26: thittam.iam.v1.IAMService.DeactivateUser:input_type -> thittam.iam.v1.DeactivateUserRequest
+	21, // 27: thittam.iam.v1.IAMService.ChangePassword:input_type -> thittam.iam.v1.ChangePasswordRequest
+	23, // 28: thittam.iam.v1.IAMService.AssignRole:input_type -> thittam.iam.v1.AssignRoleRequest
+	25, // 29: thittam.iam.v1.IAMService.AssignProjectRole:input_type -> thittam.iam.v1.AssignProjectRoleRequest
+	27, // 30: thittam.iam.v1.IAMService.RevokeRole:input_type -> thittam.iam.v1.RevokeRoleRequest
+	29, // 31: thittam.iam.v1.IAMService.ListRoles:input_type -> thittam.iam.v1.ListRolesRequest
+	31, // 32: thittam.iam.v1.IAMService.CheckPermission:input_type -> thittam.iam.v1.CheckPermissionRequest
+	33, // 33: thittam.iam.v1.IAMService.CreateTenant:input_type -> thittam.iam.v1.CreateTenantRequest
+	35, // 34: thittam.iam.v1.IAMService.GetTenant:input_type -> thittam.iam.v1.GetTenantRequest
+	36, // 35: thittam.iam.v1.IAMService.SuspendTenant:input_type -> thittam.iam.v1.SuspendTenantRequest
+	37, // 36: thittam.iam.v1.IAMService.ClearTenantLegalHold:input_type -> thittam.iam.v1.ClearTenantLegalHoldRequest
+	38, // 37: thittam.iam.v1.IAMService.SetTenantRetention:input_type -> thittam.iam.v1.SetTenantRetentionRequest
+	34, // 38: thittam.iam.v1.IAMService.SetTenantAddress:input_type -> thittam.iam.v1.SetTenantAddressRequest
+	39, // 39: thittam.iam.v1.IAMService.InviteUser:input_type -> thittam.iam.v1.InviteUserRequest
+	40, // 40: thittam.iam.v1.IAMService.AcceptInvitation:input_type -> thittam.iam.v1.AcceptInvitationRequest
+	41, // 41: thittam.iam.v1.IAMService.SetOIDCConfig:input_type -> thittam.iam.v1.SetOIDCConfigRequest
+	44, // 42: thittam.iam.v1.IAMService.StartImpersonation:input_type -> thittam.iam.v1.StartImpersonationRequest
+	45, // 43: thittam.iam.v1.IAMService.EndImpersonation:input_type -> thittam.iam.v1.EndImpersonationRequest
+	5,  // 44: thittam.iam.v1.IAMService.Login:output_type -> thittam.iam.v1.TokenPair
+	5,  // 45: thittam.iam.v1.IAMService.RefreshToken:output_type -> thittam.iam.v1.TokenPair
+	10, // 46: thittam.iam.v1.IAMService.Logout:output_type -> thittam.iam.v1.LogoutResponse
+	6,  // 47: thittam.iam.v1.IAMService.ValidateToken:output_type -> thittam.iam.v1.Claims
+	13, // 48: thittam.iam.v1.IAMService.GetCurrentUser:output_type -> thittam.iam.v1.GetCurrentUserResponse
+	0,  // 49: thittam.iam.v1.IAMService.CreateUser:output_type -> thittam.iam.v1.User
+	0,  // 50: thittam.iam.v1.IAMService.GetUser:output_type -> thittam.iam.v1.User
+	17, // 51: thittam.iam.v1.IAMService.ListUsers:output_type -> thittam.iam.v1.ListUsersResponse
+	0,  // 52: thittam.iam.v1.IAMService.UpdateUser:output_type -> thittam.iam.v1.User
+	20, // 53: thittam.iam.v1.IAMService.DeactivateUser:output_type -> thittam.iam.v1.DeactivateUserResponse
+	22, // 54: thittam.iam.v1.IAMService.ChangePassword:output_type -> thittam.iam.v1.ChangePasswordResponse
+	24, // 55: thittam.iam.v1.IAMService.AssignRole:output_type -> thittam.iam.v1.AssignRoleResponse
+	26, // 56: thittam.iam.v1.IAMService.AssignProjectRole:output_type -> thittam.iam.v1.AssignProjectRoleResponse
+	28, // 57: thittam.iam.v1.IAMService.RevokeRole:output_type -> thittam.iam.v1.RevokeRoleResponse
+	30, // 58: thittam.iam.v1.IAMService.ListRoles:output_type -> thittam.iam.v1.ListRolesResponse
+	32, // 59: thittam.iam.v1.IAMService.CheckPermission:output_type -> thittam.iam.v1.CheckPermissionResponse
+	1,  // 60: thittam.iam.v1.IAMService.CreateTenant:output_type -> thittam.iam.v1.Tenant
+	1,  // 61: thittam.iam.v1.IAMService.GetTenant:output_type -> thittam.iam.v1.Tenant
+	1,  // 62: thittam.iam.v1.IAMService.SuspendTenant:output_type -> thittam.iam.v1.Tenant
+	1,  // 63: thittam.iam.v1.IAMService.ClearTenantLegalHold:output_type -> thittam.iam.v1.Tenant
+	1,  // 64: thittam.iam.v1.IAMService.SetTenantRetention:output_type -> thittam.iam.v1.Tenant
+	1,  // 65: thittam.iam.v1.IAMService.SetTenantAddress:output_type -> thittam.iam.v1.Tenant
+	4,  // 66: thittam.iam.v1.IAMService.InviteUser:output_type -> thittam.iam.v1.Invitation
+	5,  // 67: thittam.iam.v1.IAMService.AcceptInvitation:output_type -> thittam.iam.v1.TokenPair
+	42, // 68: thittam.iam.v1.IAMService.SetOIDCConfig:output_type -> thittam.iam.v1.SetOIDCConfigResponse
+	43, // 69: thittam.iam.v1.IAMService.StartImpersonation:output_type -> thittam.iam.v1.ImpersonationSession
+	46, // 70: thittam.iam.v1.IAMService.EndImpersonation:output_type -> thittam.iam.v1.EndImpersonationResponse
+	44, // [44:71] is the sub-list for method output_type
+	17, // [17:44] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_thittam_iam_v1_iam_proto_init() }
@@ -4175,7 +4274,7 @@ func file_thittam_iam_v1_iam_proto_init() {
 			}
 		}
 		file_thittam_iam_v1_iam_proto_msgTypes[38].Exporter = func(v any, i int) any {
-			switch v := v.(*InviteUserRequest); i {
+			switch v := v.(*SetTenantRetentionRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4187,7 +4286,7 @@ func file_thittam_iam_v1_iam_proto_init() {
 			}
 		}
 		file_thittam_iam_v1_iam_proto_msgTypes[39].Exporter = func(v any, i int) any {
-			switch v := v.(*AcceptInvitationRequest); i {
+			switch v := v.(*InviteUserRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4199,7 +4298,7 @@ func file_thittam_iam_v1_iam_proto_init() {
 			}
 		}
 		file_thittam_iam_v1_iam_proto_msgTypes[40].Exporter = func(v any, i int) any {
-			switch v := v.(*SetOIDCConfigRequest); i {
+			switch v := v.(*AcceptInvitationRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4211,7 +4310,7 @@ func file_thittam_iam_v1_iam_proto_init() {
 			}
 		}
 		file_thittam_iam_v1_iam_proto_msgTypes[41].Exporter = func(v any, i int) any {
-			switch v := v.(*SetOIDCConfigResponse); i {
+			switch v := v.(*SetOIDCConfigRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4223,7 +4322,7 @@ func file_thittam_iam_v1_iam_proto_init() {
 			}
 		}
 		file_thittam_iam_v1_iam_proto_msgTypes[42].Exporter = func(v any, i int) any {
-			switch v := v.(*ImpersonationSession); i {
+			switch v := v.(*SetOIDCConfigResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4235,7 +4334,7 @@ func file_thittam_iam_v1_iam_proto_init() {
 			}
 		}
 		file_thittam_iam_v1_iam_proto_msgTypes[43].Exporter = func(v any, i int) any {
-			switch v := v.(*StartImpersonationRequest); i {
+			switch v := v.(*ImpersonationSession); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4247,7 +4346,7 @@ func file_thittam_iam_v1_iam_proto_init() {
 			}
 		}
 		file_thittam_iam_v1_iam_proto_msgTypes[44].Exporter = func(v any, i int) any {
-			switch v := v.(*EndImpersonationRequest); i {
+			switch v := v.(*StartImpersonationRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4259,6 +4358,18 @@ func file_thittam_iam_v1_iam_proto_init() {
 			}
 		}
 		file_thittam_iam_v1_iam_proto_msgTypes[45].Exporter = func(v any, i int) any {
+			switch v := v.(*EndImpersonationRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_thittam_iam_v1_iam_proto_msgTypes[46].Exporter = func(v any, i int) any {
 			switch v := v.(*EndImpersonationResponse); i {
 			case 0:
 				return &v.state
@@ -4273,13 +4384,14 @@ func file_thittam_iam_v1_iam_proto_init() {
 	}
 	file_thittam_iam_v1_iam_proto_msgTypes[36].OneofWrappers = []any{}
 	file_thittam_iam_v1_iam_proto_msgTypes[37].OneofWrappers = []any{}
+	file_thittam_iam_v1_iam_proto_msgTypes[38].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_thittam_iam_v1_iam_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   46,
+			NumMessages:   47,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

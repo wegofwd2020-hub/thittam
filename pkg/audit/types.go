@@ -45,7 +45,9 @@ const (
 	ActionConfigChanged        Action = "config_changed"
 	// ActionLegalHoldApplied is emitted by IAM SuspendTenant when the
 	// caller supplies a freeze_reason to pause the retention sweeper
-	// for litigation / regulatory holds (#92 Stage 4).
+	// for litigation / regulatory holds (#92 Stage 4). Also emitted by
+	// SetTenantRetention, the operator hold/extend RPC for tenants already
+	// suspended (#119).
 	ActionLegalHoldApplied Action = "legal_hold_applied"
 	// ActionLegalHoldCleared is emitted by IAM ClearTenantLegalHold
 	// when a previously-applied hold is released. Not emitted for

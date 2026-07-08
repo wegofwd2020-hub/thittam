@@ -209,6 +209,15 @@ func (r *iamRepo) ClearTenantLegalHold(_ context.Context, id uuid.UUID) (*iam.Te
 	t.FreezeReason = nil
 	return t, nil
 }
+func (r *iamRepo) SetTenantLegalHold(_ context.Context, id uuid.UUID, holdUntil *time.Time, freezeReason string) (*iam.Tenant, error) {
+	t, ok := r.tenants[id]
+	if !ok {
+		return nil, iam.ErrTenantNotFound
+	}
+	t.HoldUntil = holdUntil
+	t.FreezeReason = &freezeReason
+	return t, nil
+}
 func (r *iamRepo) CountTenantsOnHold(_ context.Context) (int64, error) {
 	var n int64
 	for _, t := range r.tenants {

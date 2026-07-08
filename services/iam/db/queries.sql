@@ -78,6 +78,19 @@ UPDATE tenants SET
 WHERE id = $1
 RETURNING *;
 
+-- name: SetTenantLegalHold :one
+-- Sets the two legal-hold columns on a tenant WITHOUT touching status or the
+-- suspended_at/deactivated_at anchors — the operator override that pauses or
+-- extends the retention sweeper for an already-suspended tenant (#119).
+-- Unlike ClearTenantLegalHold this writes the columns: a NULL hold_until is an
+-- indefinite hold, a future hold_until is a dated extension. Collision and
+-- status-eligibility are enforced in the service layer, not here.
+UPDATE tenants SET
+    hold_until    = $2,
+    freeze_reason = $3
+WHERE id = $1
+RETURNING *;
+
 -- name: TransitionTenantStatus :one
 -- Idempotent lifecycle transition for the retention sweeper. The WHERE
 -- clause guards against concurrent sweepers double-advancing a tenant;
