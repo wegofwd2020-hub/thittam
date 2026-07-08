@@ -157,6 +157,28 @@ else
   echo "  [ok] FINANCIAL/notifications-financial consumer created"
 fi
 
+# iam-billing: iam's first JetStream consumer (#118). Filtered to the single
+# subscription.suspended subject — iam mirrors billing's suspension onto the
+# tenant, starting the retention clock (active → suspended → grace → ...).
+if consumer_exists FINANCIAL iam-billing; then
+  echo "  [skip] FINANCIAL/iam-billing consumer already exists"
+else
+  $NATS --server "${NATS_URL}" consumer add FINANCIAL iam-billing \
+    --target=push.iam-billing \
+    --defaults \
+    --deliver all \
+    --ack explicit \
+    --replay=instant \
+    --wait 30s \
+    --max-deliver 5 \
+    --backoff=linear --backoff-min=5s --backoff-max=30m --backoff-steps=4 \
+    --no-headers-only \
+    --max-pending=-1 \
+    --filter=thittam.billing.subscription.suspended \
+    --description "IAM service billing consumer. Suspends the tenant + starts the retention clock (#118)"
+  echo "  [ok] FINANCIAL/iam-billing consumer created"
+fi
+
 # notifications-events: non-financial domain events (project, document).
 # Financial events are intentionally excluded — they are already handled by
 # notifications-financial on the FINANCIAL stream, which provides DLQ protection

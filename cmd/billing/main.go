@@ -7,10 +7,14 @@ import (
 	"context"
 	"log"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go"
 	billingv1 "github.com/wegofwd2020/thittam/gen/billing/v1"
 	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
+	"github.com/wegofwd2020/thittam/pkg/events"
+	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/billing"
 	billingdb "github.com/wegofwd2020/thittam/services/billing/db"
@@ -33,13 +37,37 @@ func main() {
 		log.Fatalf("billing: startup: ping database: %v", err)
 	}
 
+	// --- NATS JetStream (optional) ---
+	// Billing must still boot without NATS configured (e.g. local/dev), so the
+	// publisher stays nil and SuspendSubscription's publish becomes a no-op.
+	var pub *jetstream.Publisher
+	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
+		nc, err := nats.Connect(natsURL,
+			nats.MaxReconnects(-1),
+			nats.ReconnectWait(2*time.Second),
+		)
+		if err != nil {
+			log.Fatalf("billing: startup: connect to NATS: %v", err)
+		}
+		defer func() { _ = nc.Drain() }()
+
+		js, err := nc.JetStream()
+		if err != nil {
+			log.Fatalf("billing: startup: create JetStream context: %v", err)
+		}
+		pub = jetstream.NewPublisher(js)
+	} else {
+		log.Printf("billing: NATS_URL not set — subscription.suspended will not be published")
+	}
+
 	// --- Repository and service ---
 	// No Redis or vertical loader: billing is universal and does not
 	// look up per-tenant vertical config on the request path.
-	// No NATS publisher: billing domain events are reserved for a future PR
-	// when the billing saga (invoice.paid → subscription.activated) is wired up.
 	repo := billingdb.NewPostgres(pool)
 	svc := billing.NewService(repo)
+	if pub != nil {
+		svc = svc.WithPublisher(&billingPublisher{pub: pub})
+	}
 
 	// --- Document service client (for invoice PDF download URLs) ---
 	// DOCUMENT_SERVICE_ADDR is T3 (non-sensitive endpoint), safe as env var.
@@ -91,4 +119,23 @@ func requireenv(key string) string {
 		log.Fatalf("billing: startup: required environment variable %s is not set", key)
 	}
 	return v
+}
+
+// billingPublisher adapts *jetstream.Publisher to billing.EventPublisher.
+// Lives in cmd/ (composition root) to avoid import cycles between
+// pkg/jetstream and services/billing.
+type billingPublisher struct{ pub *jetstream.Publisher }
+
+func (p *billingPublisher) PublishSubscriptionSuspended(ctx context.Context, sub *billing.Subscription) error {
+	now := time.Now().UTC()
+	suspendedAt := now
+	if sub.SuspendedAt != nil {
+		suspendedAt = *sub.SuspendedAt
+	}
+	return p.pub.Publish(ctx, events.SubjectBillingSubscriptionSuspended, sub.TenantID,
+		events.BillingSubscriptionSuspendedPayload{
+			SubscriptionID: sub.ID.String(),
+			SuspendedAt:    suspendedAt.Format(time.RFC3339),
+			PurgeAfter:     suspendedAt.AddDate(0, 0, 30).Format(time.RFC3339),
+		})
 }

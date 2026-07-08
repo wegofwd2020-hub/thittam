@@ -36,6 +36,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/jackc/pgx/v5/pgxpool"
+	nats "github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
 	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
@@ -46,6 +47,7 @@ import (
 	"github.com/wegofwd2020/thittam/pkg/corsutil"
 	appcrypto "github.com/wegofwd2020/thittam/pkg/crypto"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
+	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/ratelimit"
 	"github.com/wegofwd2020/thittam/pkg/migrate"
 	"github.com/wegofwd2020/thittam/pkg/secrets"
@@ -198,6 +200,43 @@ func main() {
 		}
 	}()
 
+	// --- NATS JetStream: billing consumer (#118) ---
+	// iam's first JetStream consumer. Subscribes to the FINANCIAL stream
+	// filtered to thittam.billing.subscription.suspended and mirrors the
+	// suspension onto the tenant, starting the retention clock. NATS_URL is
+	// T3 (service endpoint) config; if it is unset iam still boots — the
+	// consumer is simply disabled, matching local dev without a NATS server.
+	// NATS powers ONLY the best-effort billing consumer — it is NOT on iam's
+	// critical auth path (login / JWT issuance / RBAC / token validation). iam is
+	// the identity SPOF, so a NATS outage must never take it down or pull it from
+	// rotation: connect/subscribe failures are logged and the consumer is disabled
+	// (not fatal), and NATS deliberately does NOT gate /readyz (unlike other
+	// services). The suspend event just won't be consumed until NATS recovers.
+	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
+		if nc, err := nats.Connect(natsURL,
+			nats.MaxReconnects(-1),
+			nats.ReconnectWait(2*time.Second),
+		); err != nil {
+			log.Printf("iam: WARN connect to NATS failed — billing consumer disabled: %v", err)
+		} else if js, err := nc.JetStream(); err != nil {
+			log.Printf("iam: WARN JetStream context failed — billing consumer disabled: %v", err)
+			_ = nc.Drain()
+		} else if billingSub, err := jetstream.Subscribe(js,
+			jetstream.StreamFinancial,
+			jetstream.ConsumerIamBilling,
+			iam.NewBillingConsumer(svc).Handle,
+		); err != nil {
+			log.Printf("iam: WARN subscribe to billing consumer failed — disabled: %v", err)
+			_ = nc.Drain()
+		} else {
+			defer func() { _ = billingSub.Unsubscribe() }()
+			defer func() { _ = nc.Drain() }()
+			log.Printf("iam: billing consumer subscribed (FINANCIAL/%s)", jetstream.ConsumerIamBilling)
+		}
+	} else {
+		log.Printf("iam: NATS_URL not set — billing consumer disabled (tenant suspension on subscription.suspended will not fire)")
+	}
+
 	// --- gRPC server ---
 	// UnaryCallerInterceptor reads Kong-injected metadata (x-caller-id,
 	// x-caller-role, x-caller-email, x-forwarded-for) and populates the
@@ -216,6 +255,8 @@ func main() {
 
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
 	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
+	// NATS is intentionally NOT a readiness checker: it backs only the best-effort
+	// billing consumer, and iam (the auth SPOF) must stay ready during a NATS outage.
 
 	// --- REST gateway (grpc-gateway, ADR-014 follow-up #60) ---
 	// The UI calls REST endpoints (/api/v1/auth/login etc.). Mount the

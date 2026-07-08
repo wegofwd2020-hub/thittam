@@ -3,6 +3,7 @@ package billing
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,12 +12,20 @@ import (
 
 // Service implements billing business logic.
 type Service struct {
-	repo Repository
+	repo      Repository
+	publisher EventPublisher // optional; nil = no-op
 }
 
 // NewService creates a billing service.
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
+}
+
+// WithPublisher attaches an EventPublisher so SuspendSubscription publishes
+// subscription.suspended. A nil publisher (the default) is a no-op.
+func (s *Service) WithPublisher(p EventPublisher) *Service {
+	s.publisher = p
+	return s
 }
 
 // --- Subscription management ---
@@ -136,6 +145,14 @@ func (s *Service) SuspendSubscription(ctx context.Context, tenantID uuid.UUID) (
 	sub.UpdatedAt = now
 	if err := s.repo.UpdateSubscription(ctx, sub); err != nil {
 		return nil, fmt.Errorf("suspend subscription: %w", err)
+	}
+
+	if s.publisher != nil {
+		if err := s.publisher.PublishSubscriptionSuspended(ctx, sub); err != nil {
+			// Best-effort: the suspend is committed; a failed publish must not fail the op.
+			slog.Default().Warn("publish subscription.suspended failed",
+				"tenant_id", tenantID, "subscription_id", sub.ID, "err", err)
+		}
 	}
 	return sub, nil
 }
