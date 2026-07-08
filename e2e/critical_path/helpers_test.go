@@ -273,6 +273,7 @@ func (r *iamRepo) ListApprovedTenantPurgeRequests(_ context.Context, _ int) ([]*
 func (r *iamRepo) MarkTenantPurgeRequestFailed(_ context.Context, _ uuid.UUID, _ string) (*iam.TenantPurgeRequest, error) {
 	return nil, iam.ErrPurgeRequestNotFound
 }
+func (r *iamRepo) PurgeTenantSchemaAndTombstone(_ context.Context, _, _ uuid.UUID) error { return nil }
 
 // Roles
 func (r *iamRepo) CreateRole(_ context.Context, role *iam.Role) error {

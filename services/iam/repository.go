@@ -91,6 +91,12 @@ type Repository interface {
 	CancelTenantPurgeRequest(ctx context.Context, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error)
 	ListApprovedTenantPurgeRequests(ctx context.Context, limit int) ([]*TenantPurgeRequest, error)
 	MarkTenantPurgeRequestFailed(ctx context.Context, requestID uuid.UUID, reason string) (*TenantPurgeRequest, error)
+	// PurgeTenantSchemaAndTombstone hard-deletes a purge_eligible tenant in one
+	// transaction: DROP SCHEMA tenant_<uuid> CASCADE, tombstone the tenants row
+	// (status='purged', PII nulled, name→sentinel, purged_at=now()), and mark
+	// the purge request executed. Owner privileges required (DDL). Returns
+	// ErrTenantNotPurgeable if the tenant left purge_eligible (status-guarded).
+	PurgeTenantSchemaAndTombstone(ctx context.Context, tenantID, requestID uuid.UUID) error
 
 	// Roles
 	CreateRole(ctx context.Context, role *Role) error

@@ -56,6 +56,7 @@ type mockRepo struct {
 	cancelTenantPurgeRequestFn        func(ctx context.Context, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error)
 	listApprovedTenantPurgeRequestsFn func(ctx context.Context, limit int) ([]*TenantPurgeRequest, error)
 	markTenantPurgeRequestFailedFn    func(ctx context.Context, requestID uuid.UUID, reason string) (*TenantPurgeRequest, error)
+	purgeTenantSchemaAndTombstoneFn   func(ctx context.Context, tenantID, requestID uuid.UUID) error
 	createRoleFn                      func(ctx context.Context, role *Role) error
 	getRoleFn                         func(ctx context.Context, tenantID uuid.UUID, name string) (*Role, error)
 	getRoleByIDFn                     func(ctx context.Context, tenantID, roleID uuid.UUID) (*Role, error)
@@ -234,6 +235,12 @@ func (m *mockRepo) MarkTenantPurgeRequestFailed(ctx context.Context, requestID u
 		return m.markTenantPurgeRequestFailedFn(ctx, requestID, reason)
 	}
 	return nil, ErrPurgeRequestNotFound
+}
+func (m *mockRepo) PurgeTenantSchemaAndTombstone(ctx context.Context, tenantID, requestID uuid.UUID) error {
+	if m.purgeTenantSchemaAndTombstoneFn != nil {
+		return m.purgeTenantSchemaAndTombstoneFn(ctx, tenantID, requestID)
+	}
+	return nil
 }
 func (m *mockRepo) CreateRole(ctx context.Context, role *Role) error {
 	if m.createRoleFn != nil {

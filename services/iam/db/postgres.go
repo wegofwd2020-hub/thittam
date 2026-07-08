@@ -1160,3 +1160,47 @@ func (p *Postgres) MarkTenantPurgeRequestFailed(ctx context.Context, requestID u
 	}
 	return dbPurgeRequestToDomain(row), nil
 }
+
+// PurgeTenantSchemaAndTombstone hard-deletes a purge_eligible tenant: DROP
+// SCHEMA tenant_<uuid> CASCADE, tombstone the tenants row, and mark the
+// purge request executed — all in one owner-privileged transaction. Returns
+// iam.ErrTenantNotPurgeable if the tenant left purge_eligible since approval
+// (the status-guarded tombstone UPDATE matched zero rows); the deferred
+// Rollback then undoes the schema drop, so nothing is destroyed.
+func (p *Postgres) PurgeTenantSchemaAndTombstone(ctx context.Context, tenantID, requestID uuid.UUID) error {
+	// Schema name = tenant_<uuid> (dashes kept). Interpolated because Postgres
+	// cannot parameterize identifiers; safe because tenantID is a validated
+	// uuid.UUID (see pkg/tenantdb doc: uuid.String() yields only hex+hyphens).
+	schema := "tenant_" + tenantID.String()
+
+	tx, err := p.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("iam/db: purge begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, `DROP SCHEMA IF EXISTS "`+schema+`" CASCADE`); err != nil {
+		return fmt.Errorf("iam/db: drop schema %s: %w", schema, err)
+	}
+
+	ct, err := tx.Exec(ctx, `UPDATE tenants SET status='purged',
+		name = 'purged-' || id::text,
+		address_line1=NULL, address_line2=NULL, city=NULL, postal_code=NULL,
+		purged_at=now()
+	 WHERE id=$1 AND status='purge_eligible'`, tenantID)
+	if err != nil {
+		return fmt.Errorf("iam/db: tombstone tenant %s: %w", tenantID, err)
+	}
+	if ct.RowsAffected() == 0 {
+		// Tenant left purge_eligible since approval (race / manual change). The
+		// schema drop rolls back with the tx — nothing is destroyed.
+		return iam.ErrTenantNotPurgeable
+	}
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE tenant_purge_requests SET status='executed', executed_at=now() WHERE id=$1`, requestID); err != nil {
+		return fmt.Errorf("iam/db: mark purge request executed: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
