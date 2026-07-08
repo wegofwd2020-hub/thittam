@@ -696,7 +696,8 @@ func grpcError(err error) error {
 		return status.Error(codes.InvalidArgument, err.Error())
 
 	case errors.Is(err, ErrTenantNotHoldable),
-		errors.Is(err, ErrTenantHoldExists):
+		errors.Is(err, ErrTenantHoldExists),
+		errors.Is(err, ErrHoldNarrowsIndefinite):
 		return status.Error(codes.FailedPrecondition, err.Error())
 
 	case errors.Is(err, auth.ErrInvalidCredentials),

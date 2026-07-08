@@ -52,6 +52,13 @@ var (
 	// ErrHoldUntilInPast is returned by SetTenantRetention when hold_until is at
 	// or before now. Maps to InvalidArgument.
 	ErrHoldUntilInPast = errors.New("iam: hold_until must be in the future")
+	// ErrHoldNarrowsIndefinite is returned by SetTenantRetention when the
+	// existing hold is indefinite (freeze_reason set, hold_until NULL) and
+	// the request would replace it with a dated hold_until. Converting an
+	// indefinite hold into a dated one risks the sweeper resuming while the
+	// tenant is still under e.g. a litigation hold; clear the existing hold
+	// first if a dated hold is really intended. Maps to FailedPrecondition.
+	ErrHoldNarrowsIndefinite = errors.New("iam: cannot convert an indefinite hold into a dated one; clear the existing hold first")
 )
 
 // TenantNameTakenErr wraps ErrTenantNameTaken with the colliding tenant's

@@ -125,6 +125,44 @@ func TestSetTenantRetention_CollisionAllowedWithOverwrite(t *testing.T) {
 	assert.True(t, called, "overwrite=true must proceed to the repo write")
 }
 
+func TestSetTenantRetention_RejectsNarrowingIndefiniteHoldToDated(t *testing.T) {
+	t.Parallel()
+	existing := "legal:case-42"
+	future := time.Now().UTC().Add(30 * 24 * time.Hour)
+	repo := &mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			// Indefinite hold: FreezeReason set, HoldUntil nil.
+			return &Tenant{ID: id, Status: TenantStatusSuspended, FreezeReason: &existing, HoldUntil: nil}, nil
+		},
+		setTenantLegalHoldFn: func(_ context.Context, _ uuid.UUID, _ *time.Time, _ string) (*Tenant, error) {
+			t.Fatal("must not write a dated hold over an existing indefinite hold")
+			return nil, nil
+		},
+	}
+	_, err := newTestService(repo).SetTenantRetention(context.Background(), fixedTenantID, &future, "retention-extended", true)
+	assert.ErrorIs(t, err, ErrHoldNarrowsIndefinite)
+}
+
+func TestSetTenantRetention_IndefiniteToIndefinite_ReasonChangeAllowed(t *testing.T) {
+	t.Parallel()
+	existing := "legal:case-42"
+	called := false
+	repo := &mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			// Indefinite hold: FreezeReason set, HoldUntil nil.
+			return &Tenant{ID: id, Status: TenantStatusSuspended, FreezeReason: &existing, HoldUntil: nil}, nil
+		},
+		setTenantLegalHoldFn: func(_ context.Context, id uuid.UUID, holdUntil *time.Time, freezeReason string) (*Tenant, error) {
+			called = true
+			return &Tenant{ID: id, Status: TenantStatusSuspended, FreezeReason: &freezeReason, HoldUntil: holdUntil}, nil
+		},
+	}
+	// New holdUntil stays nil (indefinite -> indefinite); only the reason changes.
+	_, err := newTestService(repo).SetTenantRetention(context.Background(), fixedTenantID, nil, "retention-extended: new reason", true)
+	require.NoError(t, err)
+	assert.True(t, called, "indefinite-to-indefinite (reason change only) must proceed to the repo write")
+}
+
 func TestSetTenantRetention_EmitsAuditWithOverwriteMeta(t *testing.T) {
 	// Not t.Parallel() — waits on the audit flush.
 	existing := "legal:case-42"

@@ -54,6 +54,16 @@ func (s *Service) SetTenantRetention(
 		return nil, fmt.Errorf("iam: set tenant retention %s (existing hold %q): %w", id, *before.FreezeReason, ErrTenantHoldExists)
 	}
 
+	// Guard against narrowing an indefinite hold (e.g. litigation) into a
+	// dated one: after the dated hold_until passes the sweeper would resume,
+	// even though the underlying reason for an indefinite hold may still
+	// apply. Only blocks indefinite-source -> dated; indefinite -> indefinite
+	// (reason change, holdUntil stays nil) and dated -> anything are allowed.
+	existingIndefinite := before.FreezeReason != nil && *before.FreezeReason != "" && before.HoldUntil == nil
+	if existingIndefinite && holdUntil != nil {
+		return nil, fmt.Errorf("iam: set tenant retention %s: %w", id, ErrHoldNarrowsIndefinite)
+	}
+
 	after, err := s.repo.SetTenantLegalHold(ctx, id, holdUntil, freezeReason)
 	if err != nil {
 		return nil, fmt.Errorf("iam: set tenant retention %s: %w", id, err)

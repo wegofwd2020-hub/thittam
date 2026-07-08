@@ -711,6 +711,33 @@ func TestHandler_SetTenantRetention_EmptyReason(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestHandler_SetTenantRetention_HoldUntilPresenceRoundTrips(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	future := time.Now().Add(60 * 24 * time.Hour).UTC()
+	ts := timestamppb.New(future)
+
+	var gotHoldUntil *time.Time
+	h := NewHandler(newTestService(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			return &Tenant{ID: id, Status: "suspended"}, nil
+		},
+		setTenantLegalHoldFn: func(_ context.Context, id uuid.UUID, holdUntil *time.Time, freezeReason string) (*Tenant, error) {
+			gotHoldUntil = holdUntil
+			return &Tenant{ID: id, Status: "suspended", FreezeReason: &freezeReason, HoldUntil: holdUntil}, nil
+		},
+	}))
+
+	_, err := h.SetTenantRetention(platformAdminCtx(), &iamv1.SetTenantRetentionRequest{
+		Id:           tenantID.String(),
+		FreezeReason: "x",
+		HoldUntil:    ts,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, gotHoldUntil, "handler must read the raw req.HoldUntil field, not drop it")
+	assert.True(t, gotHoldUntil.Equal(ts.AsTime()), "hold_until must round-trip through proto Timestamp")
+}
+
 func TestHandler_SetTenantRetention_NotHoldableMapsFailedPrecondition(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(newTestService(&mockRepo{
