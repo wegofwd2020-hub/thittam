@@ -634,6 +634,51 @@ func (q *Queries) RevokeRole(ctx context.Context, arg RevokeRoleParams) error {
 	return err
 }
 
+const setTenantLegalHold = `-- name: SetTenantLegalHold :one
+UPDATE tenants SET
+    hold_until    = $2,
+    freeze_reason = $3
+WHERE id = $1
+RETURNING id, name, slug, plan, status, created_at, is_demo, address_line1, address_line2, city, country_code, postal_code, primary_currency_code, suspended_at, deactivated_at, hold_until, freeze_reason
+`
+
+type SetTenantLegalHoldParams struct {
+	ID           uuid.UUID          `json:"id"`
+	HoldUntil    pgtype.Timestamptz `json:"hold_until"`
+	FreezeReason pgtype.Text        `json:"freeze_reason"`
+}
+
+// Sets the two legal-hold columns on a tenant WITHOUT touching status or the
+// suspended_at/deactivated_at anchors — the operator override that pauses or
+// extends the retention sweeper for an already-suspended tenant (#119).
+// Unlike ClearTenantLegalHold this writes the columns: a NULL hold_until is an
+// indefinite hold, a future hold_until is a dated extension. Collision and
+// status-eligibility are enforced in the service layer, not here.
+func (q *Queries) SetTenantLegalHold(ctx context.Context, arg SetTenantLegalHoldParams) (Tenant, error) {
+	row := q.db.QueryRow(ctx, setTenantLegalHold, arg.ID, arg.HoldUntil, arg.FreezeReason)
+	var i Tenant
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Plan,
+		&i.Status,
+		&i.CreatedAt,
+		&i.IsDemo,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.CountryCode,
+		&i.PostalCode,
+		&i.PrimaryCurrencyCode,
+		&i.SuspendedAt,
+		&i.DeactivatedAt,
+		&i.HoldUntil,
+		&i.FreezeReason,
+	)
+	return i, err
+}
+
 const transitionTenantStatus = `-- name: TransitionTenantStatus :one
 UPDATE tenants SET
     status         = $1,

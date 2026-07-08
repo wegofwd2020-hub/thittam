@@ -473,6 +473,26 @@ func (p *Postgres) ClearTenantLegalHold(ctx context.Context, id uuid.UUID) (*iam
 	return dbTenantToDomain(row), nil
 }
 
+// SetTenantLegalHold sets hold_until and freeze_reason to the given values
+// and returns the updated tenant (#119). Status, suspended_at, and
+// deactivated_at are NOT touched — this applies (or extends) a hold without
+// regressing the retention clock. freezeReason is written verbatim; a nil
+// holdUntil writes NULL (indefinite hold).
+func (p *Postgres) SetTenantLegalHold(ctx context.Context, id uuid.UUID, holdUntil *time.Time, freezeReason string) (*iam.Tenant, error) {
+	row, err := p.q.SetTenantLegalHold(ctx, SetTenantLegalHoldParams{
+		ID:           id,
+		HoldUntil:    pgTimestamptzFromTimePtr(holdUntil),
+		FreezeReason: pgtype.Text{String: freezeReason, Valid: true},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, iam.ErrTenantNotFound
+		}
+		return nil, fmt.Errorf("iam/db: set tenant legal hold: %w", err)
+	}
+	return dbTenantToDomain(row), nil
+}
+
 // TransitionTenantStatus performs a conditional transition guarded by the
 // current status. Returns (tenant, true, nil) on successful transition,
 // (nil, false, nil) when another worker already advanced the row (the

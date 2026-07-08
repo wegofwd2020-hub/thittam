@@ -55,6 +55,13 @@ type Repository interface {
 	// unchanged. Idempotent: calling on a tenant with no active hold
 	// succeeds and returns the row unmodified (#92 Stage 4 pair).
 	ClearTenantLegalHold(ctx context.Context, id uuid.UUID) (*Tenant, error)
+	// SetTenantLegalHold sets the tenant's hold_until and freeze_reason to the
+	// given values and returns the updated row. Status, suspended_at, and
+	// deactivated_at are NOT touched — this applies a hold without regressing
+	// the retention clock (#119). freezeReason is written verbatim (the caller
+	// guarantees it is non-empty); a nil holdUntil writes NULL (indefinite
+	// hold). Returns ErrTenantNotFound if the row is missing.
+	SetTenantLegalHold(ctx context.Context, id uuid.UUID, holdUntil *time.Time, freezeReason string) (*Tenant, error)
 	// UpdateTenantAddress replaces the address + country + currency fields
 	// on an existing tenant. Other fields (name, plan, status) are not
 	// touched. Returns ErrTenantNotFound if the row is missing.

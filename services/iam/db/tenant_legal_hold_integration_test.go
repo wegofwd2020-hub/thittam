@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -201,6 +202,39 @@ func TestClearTenantLegalHold_NoHold_Idempotent(t *testing.T) {
 	assert.Equal(t, id, row.ID)
 	assert.False(t, row.HoldUntil.Valid)
 	assert.False(t, row.FreezeReason.Valid)
+}
+
+func TestSetTenantLegalHold_AppliesIndefiniteHold_SkipsSweeper(t *testing.T) {
+	pool := testdb.Open(t)
+	tx := testdb.NewTx(t, pool)
+	q := iamdb.New(tx)
+
+	// Unheld suspended tenant is a sweeper candidate.
+	id := insertSuspendedTenant(t, tx, "To-Hold Studios", nil, nil)
+	rows, err := q.ListTenantsDueForLifecycle(context.Background(), iamdb.ListTenantsDueForLifecycleParams{
+		Column1: time.Now().UTC(), Limit: 100,
+	})
+	require.NoError(t, err)
+	require.True(t, containsTenant(rows, id), "sanity: unheld tenant is a candidate before hold")
+
+	// Apply an indefinite hold via the new write path.
+	held, err := q.SetTenantLegalHold(context.Background(), iamdb.SetTenantLegalHoldParams{
+		ID:           id,
+		HoldUntil:    pgtype.Timestamptz{}, // NULL = indefinite
+		FreezeReason: pgtype.Text{String: "support escalation", Valid: true},
+	})
+	require.NoError(t, err)
+	assert.True(t, held.FreezeReason.Valid)
+	assert.Equal(t, "support escalation", held.FreezeReason.String)
+	assert.False(t, held.HoldUntil.Valid, "indefinite hold => hold_until NULL")
+	assert.Equal(t, "suspended", held.Status, "status must be unchanged by a hold write")
+
+	// Sweeper now skips it.
+	rows, err = q.ListTenantsDueForLifecycle(context.Background(), iamdb.ListTenantsDueForLifecycleParams{
+		Column1: time.Now().UTC(), Limit: 100,
+	})
+	require.NoError(t, err)
+	assert.False(t, containsTenant(rows, id), "held tenant must be skipped by the sweeper")
 }
 
 func containsTenant(rows []iamdb.Tenant, id uuid.UUID) bool {

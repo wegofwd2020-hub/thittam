@@ -45,6 +45,7 @@ type mockRepo struct {
 	findTenantByNormalizedNameFn  func(ctx context.Context, name string) (*Tenant, error)
 	updateTenantStatusFn          func(ctx context.Context, id uuid.UUID, status string, holdUntil *time.Time, freezeReason *string) error
 	clearTenantLegalHoldFn        func(ctx context.Context, id uuid.UUID) (*Tenant, error)
+	setTenantLegalHoldFn          func(ctx context.Context, id uuid.UUID, holdUntil *time.Time, freezeReason string) (*Tenant, error)
 	countTenantsOnHoldFn          func(ctx context.Context) (int64, error)
 	updateTenantAddressFn         func(ctx context.Context, t *Tenant) (*Tenant, error)
 	transitionTenantStatusFn      func(ctx context.Context, id uuid.UUID, from, to string) (*Tenant, bool, error)
@@ -161,6 +162,12 @@ func (m *mockRepo) ClearTenantLegalHold(ctx context.Context, id uuid.UUID) (*Ten
 		return m.clearTenantLegalHoldFn(ctx, id)
 	}
 	return &Tenant{ID: id, Status: TenantStatusSuspended}, nil
+}
+func (m *mockRepo) SetTenantLegalHold(ctx context.Context, id uuid.UUID, holdUntil *time.Time, freezeReason string) (*Tenant, error) {
+	if m.setTenantLegalHoldFn != nil {
+		return m.setTenantLegalHoldFn(ctx, id, holdUntil, freezeReason)
+	}
+	return &Tenant{ID: id, Status: TenantStatusSuspended, FreezeReason: &freezeReason, HoldUntil: holdUntil}, nil
 }
 func (m *mockRepo) CountTenantsOnHold(ctx context.Context) (int64, error) {
 	if m.countTenantsOnHoldFn != nil {
