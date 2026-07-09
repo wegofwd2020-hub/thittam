@@ -17,6 +17,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -27,6 +28,11 @@ import (
 	billingdb "github.com/wegofwd2020/thittam/services/billing/db"
 )
 
+// errMissingDSN is the sentinel config error: DATABASE_URL was not set.
+// main uses errors.Is against this to pick the exit code (1) that the doc
+// block's exit-code contract promises for config errors.
+var errMissingDSN = errors.New("DATABASE_URL is required")
+
 func main() {
 	root := &cobra.Command{
 		Use:   "outbox-admin",
@@ -36,6 +42,9 @@ func main() {
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		if errors.Is(err, errMissingDSN) {
+			os.Exit(1)
+		}
 		os.Exit(2)
 	}
 }
@@ -44,8 +53,7 @@ func main() {
 func openRepo(ctx context.Context) (*billingdb.Postgres, func(), error) {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		fmt.Fprintln(os.Stderr, "ERROR: DATABASE_URL is required")
-		os.Exit(1)
+		return nil, nil, errMissingDSN
 	}
 
 	pool, err := pgxpool.New(ctx, dbURL)

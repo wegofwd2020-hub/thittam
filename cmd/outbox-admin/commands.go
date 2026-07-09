@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"text/tabwriter"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -46,7 +47,20 @@ func newListCmd() *cobra.Command {
 				}
 				fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", e.ID, e.Subject, e.TenantID, e.Attempts, lastErr)
 			}
-			return w.Flush()
+			if err := w.Flush(); err != nil {
+				return err
+			}
+
+			stats, serr := repo.OutboxStats(ctx)
+			if serr != nil {
+				return serr
+			}
+			if stats.Dead > int64(len(dead)) {
+				remaining := stats.Dead - int64(len(dead))
+				fmt.Printf("\nNOTE: showing %d of %d dead-lettered event(s); %d NOT shown. Re-run list after handling these to see the rest.\n",
+					len(dead), stats.Dead, remaining)
+			}
+			return nil
 		},
 	}
 }
@@ -64,6 +78,15 @@ func newReplayCmd() *cobra.Command {
 				return errors.New("specify exactly one of --id or --all")
 			}
 
+			var id uuid.UUID
+			if idFlag != "" {
+				parsed, perr := uuid.Parse(idFlag)
+				if perr != nil {
+					return fmt.Errorf("invalid --id: %w", perr)
+				}
+				id = parsed
+			}
+
 			ctx, cancel := cmdContext()
 			defer cancel()
 
@@ -74,10 +97,6 @@ func newReplayCmd() *cobra.Command {
 			defer closeFn()
 
 			if idFlag != "" {
-				id, perr := uuid.Parse(idFlag)
-				if perr != nil {
-					return fmt.Errorf("invalid --id: %w", perr)
-				}
 				if rerr := repo.ReplayDeadOutbox(ctx, id); rerr != nil {
 					if errors.Is(rerr, billing.ErrOutboxEventNotFound) {
 						return fmt.Errorf("no dead event with id %s", id)
@@ -96,13 +115,37 @@ func newReplayCmd() *cobra.Command {
 				fmt.Println("dead-letter queue is empty; nothing to replay")
 				return nil
 			}
+
+			// Snapshot the true total before mutating anything, so we can
+			// tell the operator whether this batch is capped short of the
+			// full DLQ (finding 1), independent of any per-event failures
+			// below (finding 3).
+			stats, serr := repo.OutboxStats(ctx)
+			if serr != nil {
+				return serr
+			}
+			cappedRemaining := stats.Dead - int64(len(dead))
+
+			var replayed, failed int
 			for _, e := range dead {
 				if rerr := repo.ReplayDeadOutbox(ctx, e.ID); rerr != nil {
-					return fmt.Errorf("replay %s: %w", e.ID, rerr)
+					failed++
+					fmt.Fprintf(os.Stderr, "FAILED to replay %s: %v\n", e.ID, rerr)
+					continue
 				}
+				replayed++
 				fmt.Printf("replayed %s\n", e.ID)
 			}
-			fmt.Printf("replayed %d event(s)\n", len(dead))
+			fmt.Printf("summary: replayed %d event(s), failed %d event(s)\n", replayed, failed)
+
+			if cappedRemaining > 0 {
+				fmt.Printf("NOTE: %d dead-lettered event(s) were NOT attempted this run (capped at %d). Re-run replay --all to continue draining.\n",
+					cappedRemaining, len(dead))
+			}
+
+			if failed > 0 {
+				return fmt.Errorf("%d of %d event(s) failed to replay", failed, len(dead))
+			}
 			return nil
 		},
 	}
@@ -112,9 +155,17 @@ func newReplayCmd() *cobra.Command {
 	return cmd
 }
 
+// truncate returns s unchanged if it has at most n runes; otherwise it cuts s
+// to n runes total (n-1 runes of content plus a trailing ellipsis), operating
+// on runes so a multi-byte UTF-8 sequence is never split mid-rune. n <= 0
+// yields an empty string rather than panicking.
 func truncate(s string, n int) string {
-	if len(s) <= n {
+	if n <= 0 {
+		return ""
+	}
+	if utf8.RuneCountInString(s) <= n {
 		return s
 	}
-	return s[:n-1] + "…"
+	runes := []rune(s)
+	return string(runes[:n-1]) + "…"
 }
