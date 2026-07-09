@@ -51,12 +51,19 @@ func newListCmd() *cobra.Command {
 				return err
 			}
 
+			// The dead count is decoration on top of the listing above,
+			// which already succeeded: a transient failure here must not
+			// turn a successful `list` into a runtime error (finding 2).
+			var total int64
 			stats, serr := repo.OutboxStats(ctx)
-			if serr != nil {
-				return serr
+			if serr == nil {
+				total = stats.Dead
 			}
-			if stats.Dead > int64(len(dead)) {
-				remaining := stats.Dead - int64(len(dead))
+			remaining, ok, warn := deadCountNotice(len(dead), total, serr)
+			if warn != "" {
+				fmt.Fprintln(os.Stderr, warn)
+			}
+			if ok {
 				fmt.Printf("\nNOTE: showing %d of %d dead-lettered event(s); %d NOT shown. Re-run list after handling these to see the rest.\n",
 					len(dead), stats.Dead, remaining)
 			}
@@ -119,12 +126,19 @@ func newReplayCmd() *cobra.Command {
 			// Snapshot the true total before mutating anything, so we can
 			// tell the operator whether this batch is capped short of the
 			// full DLQ (finding 1), independent of any per-event failures
-			// below (finding 3).
+			// below (finding 3). This count is purely informational: a
+			// transient failure here must not stop the replay loop below
+			// from running (finding 2) — ListDeadOutbox already succeeded,
+			// so the actual replay work must proceed regardless.
+			var total int64
 			stats, serr := repo.OutboxStats(ctx)
-			if serr != nil {
-				return serr
+			if serr == nil {
+				total = stats.Dead
 			}
-			cappedRemaining := stats.Dead - int64(len(dead))
+			cappedRemaining, cappedOK, warn := deadCountNotice(len(dead), total, serr)
+			if warn != "" {
+				fmt.Fprintln(os.Stderr, warn)
+			}
 
 			var replayed, failed int
 			for _, e := range dead {
@@ -138,7 +152,7 @@ func newReplayCmd() *cobra.Command {
 			}
 			fmt.Printf("summary: replayed %d event(s), failed %d event(s)\n", replayed, failed)
 
-			if cappedRemaining > 0 {
+			if cappedOK {
 				fmt.Printf("NOTE: %d dead-lettered event(s) were NOT attempted this run (capped at %d). Re-run replay --all to continue draining.\n",
 					cappedRemaining, len(dead))
 			}
@@ -153,6 +167,34 @@ func newReplayCmd() *cobra.Command {
 	cmd.Flags().StringVar(&idFlag, "id", "", "UUID of a single dead event to replay")
 	cmd.Flags().BoolVar(&all, "all", false, "Replay every dead event")
 	return cmd
+}
+
+// deadCountNotice decides whether an operator-facing "N more remaining"
+// notice is warranted, given a best-effort OutboxStats snapshot. It is pure
+// so the decision (used identically by `list` and `replay --all`) can be
+// unit-tested without a database.
+//
+//   - shown is the number of dead events the caller already listed/attempted
+//     (len(dead)); total is stats.Dead from a successful OutboxStats call
+//     (ignored/zero if statsErr is non-nil).
+//   - If statsErr is non-nil, the true total is unknowable this run: ok is
+//     false and warn explains why, so an operator who sees no notice does
+//     not conclude the queue is drained — they know the count could not be
+//     determined, rather than reading silence as "drained" or "zero".
+//   - If statsErr is nil and total <= shown, there is nothing beyond what
+//     was already shown/attempted: ok is false, warn is "".
+//   - Otherwise ok is true and remaining is total-shown, for the caller to
+//     fold into its own (list- or replay-specific) wording.
+func deadCountNotice(shown int, total int64, statsErr error) (remaining int64, ok bool, warn string) {
+	if statsErr != nil {
+		return 0, false, fmt.Sprintf(
+			"WARNING: could not determine total dead-lettered event count (%v); a \"N more remaining\" notice may be missing even though more events exist below the display/replay cap. Do not read the absence of that notice as the queue being drained.",
+			statsErr)
+	}
+	if total <= int64(shown) {
+		return 0, false, ""
+	}
+	return total - int64(shown), true, ""
 }
 
 // truncate returns s unchanged if it has at most n runes; otherwise it cuts s

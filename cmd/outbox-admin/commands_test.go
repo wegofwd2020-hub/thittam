@@ -65,6 +65,80 @@ func TestTruncateNoPanicOnNonPositiveN(t *testing.T) {
 	}
 }
 
+func TestDeadCountNotice(t *testing.T) {
+	statsErr := errors.New("connection reset by peer")
+
+	cases := []struct {
+		name       string
+		shown      int
+		total      int64
+		statsErr   error
+		wantOK     bool
+		wantRemain int64
+		wantWarn   bool
+	}{
+		{
+			name:     "no error, dead equals shown: no notice",
+			shown:    7,
+			total:    7,
+			statsErr: nil,
+			wantOK:   false,
+		},
+		{
+			name:     "no error, dead less than shown (stale/inconsistent snapshot): no notice",
+			shown:    7,
+			total:    5,
+			statsErr: nil,
+			wantOK:   false,
+		},
+		{
+			name:       "no error, dead exceeds shown: notice names exact remaining count",
+			shown:      100,
+			total:      137,
+			statsErr:   nil,
+			wantOK:     true,
+			wantRemain: 37,
+		},
+		{
+			name:     "stats error: warning, no notice, no drained implication",
+			shown:    100,
+			total:    0,
+			statsErr: statsErr,
+			wantOK:   false,
+			wantWarn: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			remaining, ok, warn := deadCountNotice(tc.shown, tc.total, tc.statsErr)
+
+			if ok != tc.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
+			}
+			if tc.wantOK && remaining != tc.wantRemain {
+				t.Fatalf("remaining = %d, want %d", remaining, tc.wantRemain)
+			}
+			if tc.wantWarn && warn == "" {
+				t.Fatal("expected a non-empty warning, got \"\"")
+			}
+			if !tc.wantWarn && warn != "" {
+				t.Fatalf("expected no warning, got: %q", warn)
+			}
+			if tc.statsErr != nil && !strings.Contains(warn, tc.statsErr.Error()) {
+				t.Fatalf("warning %q does not mention underlying error %q", warn, tc.statsErr.Error())
+			}
+			// A stats failure must never come back looking like "queue
+			// drained" (ok=false with an empty warn is indistinguishable
+			// from the legitimate zero-remaining case) — it must always
+			// carry an explicit warning explaining the count is unknown.
+			if tc.statsErr != nil && (ok || warn == "") {
+				t.Fatalf("stats error must produce ok=false with a non-empty warning, got ok=%v warn=%q", ok, warn)
+			}
+		})
+	}
+}
+
 // withoutDatabaseURL unsets DATABASE_URL for the duration of the test and
 // restores whatever was there before, so these tests never depend on (or
 // pollute) the ambient environment.
