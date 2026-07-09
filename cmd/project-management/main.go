@@ -158,9 +158,7 @@ func main() {
 				http.MethodPatch, http.MethodDelete, http.MethodOptions,
 			},
 			AllowedHeaders: []string{
-				"Content-Type", "Authorization",
-				"X-Tenant-Id", "X-Project-Id",
-				"X-Caller-Id", "X-Caller-Email", "X-Caller-Role",
+				"Content-Type", "Authorization", "Accept", "X-Project-Id",
 			},
 			AllowCredentials: true,
 		}).Handler(gwMux)

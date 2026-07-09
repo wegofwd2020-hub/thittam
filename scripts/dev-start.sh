@@ -240,8 +240,9 @@ command -v tmuxinator &>/dev/null || warn "tmuxinator not found (not needed for 
 
 header "Dev Keys"
 
-if [ -f "keys/jwt_private.pem" ] && [ -f "keys/oidc_encryption.key" ]; then
+if [ -f "keys/jwt_private.pem" ] && [ -f "keys/jwt_public.pem" ] && [ -f "keys/oidc_encryption.key" ]; then
   ok "keys/jwt_private.pem exists"
+  ok "keys/jwt_public.pem exists"
   ok "keys/oidc_encryption.key exists"
 else
   step "Generating dev keys via 'make dev-keys'..."

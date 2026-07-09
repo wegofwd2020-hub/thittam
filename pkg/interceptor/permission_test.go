@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -139,4 +140,35 @@ func TestRequirePermission_NilChecker_Denies(t *testing.T) {
 	err := RequirePermission(ctx, nil, "budget:write")
 	require.Error(t, err, "a permission check must never pass because the checker is missing")
 	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+// blockingChecker never returns on its own — it only unblocks when its ctx is
+// cancelled — so it exercises the checkPermissionTimeout deadline rather than
+// any real work.
+type blockingChecker struct{}
+
+func (blockingChecker) CheckPermission(ctx context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	<-ctx.Done()
+	return false, ctx.Err()
+}
+
+// TestRequirePermission_CheckerTimesOut_Internal confirms a checker that
+// hangs past the deadline surfaces as the existing codes.Internal
+// "permission check failed" path — never as success (a timeout must not be
+// mistaken for "no permission needed" or, worse, "permission granted").
+//
+// checkPermissionTimeout is shrunk for the duration of this test (not
+// t.Parallel(), so no other test observes the shrunk value) instead of
+// waiting out the real 5s production timeout.
+func TestRequirePermission_CheckerTimesOut_Internal(t *testing.T) {
+	enableFlag(t, "true")
+
+	orig := checkPermissionTimeout
+	checkPermissionTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { checkPermissionTimeout = orig })
+
+	err := RequirePermission(ctxWithCaller(testProjectA), blockingChecker{}, "budget:read")
+	require.Error(t, err)
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.Internal, st.Code())
 }

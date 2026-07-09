@@ -331,6 +331,16 @@ dev-keys:
 		openssl genrsa -out keys/jwt_private.pem 2048; \
 		echo "  keys/jwt_private.pem generated (RSA-2048)"; \
 	fi
+	@# Derived from the private key, so this must run every time (not only
+	@# when jwt_private.pem was just generated above) — a stale keys/ dir
+	@# from before #138 has a private key but no public one, and every
+	@# service's VerifierFromEnv refuses to start without it (#138 C1).
+	@if [ -f keys/jwt_public.pem ]; then \
+		echo "  keys/jwt_public.pem already exists — skipping"; \
+	else \
+		openssl rsa -in keys/jwt_private.pem -pubout -out keys/jwt_public.pem; \
+		echo "  keys/jwt_public.pem generated (derived from jwt_private.pem)"; \
+	fi
 	@if [ -f keys/oidc_encryption.key ]; then \
 		echo "  keys/oidc_encryption.key already exists — skipping"; \
 	else \

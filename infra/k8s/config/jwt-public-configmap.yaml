@@ -1,0 +1,43 @@
+# thittam-jwt-public — the JWT verification (public) key, mounted by every
+# service's Deployment at /etc/thittam/jwt/jwt_public.pem (see
+# JWT_PUBLIC_KEY_PATH in infra/k8s/services/*.yaml).
+#
+# This is NOT a secret. It is an RSA public key: it can verify a token
+# signature, but it cannot create one. Possessing it grants no authority —
+# only the private key (held by iam, fetched from Vault at
+# "iam/jwt-public-key" — sic, "public" key stored in Vault only because iam
+# is also the service that *generates* the keypair) can mint valid tokens.
+# Do NOT move this value into a Kubernetes Secret or into Vault: doing so
+# would suggest nine services need Vault AppRole credentials to read a
+# public value, which only expands their blast radius for no benefit.
+#
+# The placeholder body below is not usable as-is — a real deployment must
+# populate it with the public half of iam's actual signing key before any
+# service can start (pkg/auth.VerifierFromEnv fails closed if the PEM does
+# not parse as a valid RSA public key).
+#
+# Populate/update in place with:
+#
+#   openssl rsa -in jwt_private.pem -pubout -out jwt_public.pem
+#   kubectl create configmap thittam-jwt-public -n thittam \
+#     --from-file=jwt_public.pem=jwt_public.pem \
+#     --dry-run=client -o yaml | kubectl apply -f -
+#
+# (jwt_private.pem here is iam's real signing key — never the one under
+# ./keys used for local dev.)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: thittam-jwt-public
+  namespace: thittam
+  labels:
+    app.kubernetes.io/part-of: thittam
+    app.kubernetes.io/component: config
+data:
+  jwt_public.pem: |
+    -----BEGIN PUBLIC KEY-----
+    REPLACE-ME-WITH-THE-REAL-JWT-PUBLIC-KEY
+    See the header comment in this file for how to populate this ConfigMap
+    from iam's actual RSA signing key with:
+      openssl rsa -in jwt_private.pem -pubout -out jwt_public.pem
+    -----END PUBLIC KEY-----

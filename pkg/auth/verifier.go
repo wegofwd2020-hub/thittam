@@ -127,13 +127,28 @@ func (v *Verifier) Verify(accessToken string) (*Claims, error) {
 	}, nil
 }
 
-// VerifierFromEnv loads the JWT public key the same way cmd/iam selects its
-// secret source: VAULT_ADDR present → Vault ("iam/jwt-public-key"); absent →
-// files under IAM_KEY_DIR (default ./keys), name "jwt_public.pem".
+// VerifierFromEnv loads the JWT public key.
+//
+// Precedence:
+//  1. JWT_PUBLIC_KEY_PATH — an explicit file (K8s mounts the public key as a
+//     ConfigMap; it is not a secret, so no Vault credentials are needed).
+//  2. VAULT_ADDR          — fetch "iam/jwt-public-key".
+//  3. IAM_KEY_DIR         — "jwt_public.pem" under that dir (default ./keys).
 //
 // A service that cannot load the key must refuse to start. Returning an error
-// here — rather than a permissive fallback — is what makes that true.
+// here — rather than a permissive fallback — is what makes that true. In
+// particular, an explicit JWT_PUBLIC_KEY_PATH that cannot be read is an error,
+// never a silent fallback to the Vault or file-dir branches: a typo'd path
+// must not quietly go unnoticed by starting the service some other way.
 func VerifierFromEnv(ctx context.Context) (*Verifier, error) {
+	if path := os.Getenv("JWT_PUBLIC_KEY_PATH"); path != "" {
+		pemBytes, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("auth: verifier: load %s: %w", path, err)
+		}
+		return NewVerifier(pemBytes)
+	}
+
 	var src secrets.Source
 	var name string
 

@@ -1,12 +1,15 @@
 package auth
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -306,4 +309,68 @@ func TestVerifier_FutureNotBefore(t *testing.T) {
 
 	_, verr := v.Verify(s)
 	assert.ErrorIs(t, verr, ErrTokenInvalid, "observed behaviour: golang-jwt/v5 rejects a future nbf as ErrTokenNotValidYet, mapped here to ErrTokenInvalid")
+}
+
+// The following VerifierFromEnv tests use t.Setenv, which forbids
+// t.Parallel() in the same test (and in any ancestor/descendant): they must
+// run sequentially against the real process environment.
+
+// writePublicKeyPEM writes a valid RSA public key PEM to dir/name and returns
+// its full path.
+func writePublicKeyPEM(t *testing.T, dir, name string) string {
+	t.Helper()
+	_, pub := testKeyPair(t)
+	path := filepath.Join(dir, name)
+	require.NoError(t, os.WriteFile(path, pub, 0o600))
+	return path
+}
+
+// TestVerifierFromEnv_ExplicitPath_UsedWhenValid confirms JWT_PUBLIC_KEY_PATH
+// takes precedence: it is checked first (before VAULT_ADDR/IAM_KEY_DIR), and a
+// valid file there is loaded successfully.
+func TestVerifierFromEnv_ExplicitPath_UsedWhenValid(t *testing.T) {
+	dir := t.TempDir()
+	path := writePublicKeyPEM(t, dir, "jwt_public.pem")
+
+	t.Setenv("JWT_PUBLIC_KEY_PATH", path)
+	t.Setenv("VAULT_ADDR", "") // must not matter — the explicit path wins
+	t.Setenv("IAM_KEY_DIR", "")
+
+	v, err := VerifierFromEnv(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, v)
+}
+
+// TestVerifierFromEnv_ExplicitPath_UnreadableIsError confirms an unreadable
+// JWT_PUBLIC_KEY_PATH is a hard error — never a silent fallback to the
+// Vault or IAM_KEY_DIR branches. IAM_KEY_DIR here points at a directory that
+// *does* hold a valid jwt_public.pem, so if VerifierFromEnv fell back to it
+// this test would see success instead of an error.
+func TestVerifierFromEnv_ExplicitPath_UnreadableIsError(t *testing.T) {
+	fallbackDir := t.TempDir()
+	writePublicKeyPEM(t, fallbackDir, "jwt_public.pem")
+
+	t.Setenv("JWT_PUBLIC_KEY_PATH", filepath.Join(t.TempDir(), "does-not-exist.pem"))
+	t.Setenv("VAULT_ADDR", "")
+	t.Setenv("IAM_KEY_DIR", fallbackDir)
+
+	v, err := VerifierFromEnv(context.Background())
+	require.Error(t, err)
+	assert.Nil(t, v)
+}
+
+// TestVerifierFromEnv_NoExplicitPath_FallsBackToIAMKeyDir confirms that with
+// JWT_PUBLIC_KEY_PATH and VAULT_ADDR both unset, VerifierFromEnv falls back to
+// reading jwt_public.pem from IAM_KEY_DIR.
+func TestVerifierFromEnv_NoExplicitPath_FallsBackToIAMKeyDir(t *testing.T) {
+	dir := t.TempDir()
+	writePublicKeyPEM(t, dir, "jwt_public.pem")
+
+	t.Setenv("JWT_PUBLIC_KEY_PATH", "")
+	t.Setenv("VAULT_ADDR", "")
+	t.Setenv("IAM_KEY_DIR", dir)
+
+	v, err := VerifierFromEnv(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, v)
 }
