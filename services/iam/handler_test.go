@@ -451,8 +451,9 @@ func TestHandler_AssignProjectRole_RejectsTenantWideRole(t *testing.T) {
 // TestHandler_AssignProjectRole_InvalidArgs no longer covers "assigned_by":
 // the handler stopped reading req.GetAssignedBy() (it now sources the audit
 // identity from the verified caller), so an invalid assigned_by string is no
-// longer a validation error — see TestAssignRole_AssignedByIsTheCaller-style
-// coverage in AssignRole for the replacement behaviour.
+// longer a validation error — the sub-case was removed for that reason. The
+// replacement behaviour (a forged assigned_by is ignored in favor of the
+// caller's identity) is covered by TestAssignProjectRole_AssignedByIsTheCaller.
 func TestHandler_AssignProjectRole_InvalidArgs(t *testing.T) {
 	t.Parallel()
 	cases := []struct{ name, field string }{
@@ -962,9 +963,10 @@ func TestHandler_InviteUser_InvalidTenantID(t *testing.T) {
 
 // Note: there is no TestHandler_InviteUser_InvalidInvitedBy — the handler no
 // longer reads req.GetInvitedBy() at all (invited_by is now sourced from the
-// verified caller, see TestInviteUser_InvitedByIsTheCaller-style coverage on
-// AssignRole), so an invalid invited_by string in the request is no longer a
-// validation error.
+// verified caller), so an invalid invited_by string in the request is no
+// longer a validation error and the sub-case was removed. The replacement
+// behaviour (a forged invited_by is ignored in favor of the caller's
+// identity) is covered by TestInviteUser_InvitedByIsTheCaller.
 
 func TestHandler_InviteUser_InvalidRoleID(t *testing.T) {
 	t.Parallel()
@@ -1205,6 +1207,8 @@ func TestCreateUser_CrossTenant_Denied(t *testing.T) {
 func TestAssignRole_CrossTenant_Denied(t *testing.T) {
 	t.Parallel()
 	caller, victim := uuid.New(), uuid.New()
+	require.NotEqual(t, caller, victim)
+
 	h := newHandlerWithRepo(&mockRepo{
 		assignRoleFn: func(context.Context, *UserRole) error {
 			t.Fatal("repository must not be reached on a cross-tenant request")
@@ -1242,4 +1246,69 @@ func TestAssignRole_AssignedByIsTheCaller(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, callerID, gotAssignedBy, "assigned_by must come from the token, not the request")
+}
+
+// The audit trail must name the caller, not whoever the request names.
+// Mirrors TestAssignRole_AssignedByIsTheCaller for the AssignProjectRole path,
+// which has its own req.GetAssignedBy() forgery hole closed independently of
+// AssignRole (see handler.go AssignProjectRole).
+func TestAssignProjectRole_AssignedByIsTheCaller(t *testing.T) {
+	t.Parallel()
+	tid, callerID, projectID := uuid.New(), uuid.New(), uuid.New()
+	var gotAssignedBy uuid.UUID
+	var gotProjectID *uuid.UUID
+
+	h := newHandlerWithRepo(&mockRepo{
+		getRoleByIDFn: func(_ context.Context, tenantID, roleID uuid.UUID) (*Role, error) {
+			return &Role{ID: roleID, TenantID: tenantID, Name: "project_supervisor", IsSystem: true}, nil
+		},
+		assignRoleFn: func(_ context.Context, ur *UserRole) error {
+			gotAssignedBy = ur.AssignedBy
+			gotProjectID = ur.ProjectID
+			return nil
+		},
+	})
+	ctx := interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
+		UserID: callerID, TenantID: tid, Roles: []string{interceptor.RoleMember},
+	})
+
+	_, err := h.AssignProjectRole(ctx, &iamv1.AssignProjectRoleRequest{
+		TenantId:   tid.String(),
+		UserId:     uuid.New().String(),
+		RoleId:     uuid.New().String(),
+		ProjectId:  projectID.String(),
+		AssignedBy: uuid.New().String(), // a lie the handler must ignore
+	})
+	require.NoError(t, err)
+	assert.Equal(t, callerID, gotAssignedBy, "assigned_by must come from the token, not the request")
+	require.NotNil(t, gotProjectID, "project_id must survive to the repository call")
+	assert.Equal(t, projectID, *gotProjectID, "project_id must survive to the repository call")
+}
+
+// The audit trail must name the caller, not whoever the request names.
+// Mirrors TestAssignRole_AssignedByIsTheCaller for the InviteUser path, which
+// has its own req.GetInvitedBy() forgery hole closed independently of
+// AssignRole (see handler.go InviteUser).
+func TestInviteUser_InvitedByIsTheCaller(t *testing.T) {
+	t.Parallel()
+	tid, callerID := uuid.New(), uuid.New()
+	var gotInvitedBy uuid.UUID
+
+	h := newHandlerWithRepo(&mockRepo{
+		createInvitationFn: func(_ context.Context, inv *Invitation) error {
+			gotInvitedBy = inv.InvitedBy
+			return nil
+		},
+	})
+	ctx := interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
+		UserID: callerID, TenantID: tid, Roles: []string{interceptor.RoleMember},
+	})
+
+	_, err := h.InviteUser(ctx, &iamv1.InviteUserRequest{
+		TenantId:  tid.String(),
+		Email:     "invite@example.com",
+		InvitedBy: uuid.New().String(), // a lie the handler must ignore
+	})
+	require.NoError(t, err)
+	assert.Equal(t, callerID, gotInvitedBy, "invited_by must come from the token, not the request")
 }
