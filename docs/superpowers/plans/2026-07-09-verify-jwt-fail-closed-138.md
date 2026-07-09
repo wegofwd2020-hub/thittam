@@ -736,7 +736,7 @@ func TestAuth_ValidToken_PopulatesCallerAndTenant(t *testing.T) {
 	assert.Equal(t, "user@example.com", caller.Email)
 	assert.Equal(t, "203.0.113.9", caller.IP)
 
-	gotTenant, ok := tenant.FromContext(ctx)
+	gotTenant, ok := tenant.IDFromContext(ctx)
 	require.True(t, ok)
 	assert.Equal(t, tid, gotTenant)
 }
