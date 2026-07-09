@@ -342,6 +342,16 @@ Coverage: billing threshold is ≥ 75%; the branch currently sits at 80.5% and m
 
 ## 14. Open follow-ups (not this change)
 
+- **Batch saturation defeats the guard.** §5's accepted cost is stated for a *lone*
+  poison row. It generalises: `ClaimUnsentOutbox` orders by `created_at`, so if the
+  100 oldest unsent rows are all poison, every batch is entirely poison, `published`
+  is 0, and the guard correctly declines to dead-letter — forever. The same rows are
+  re-claimed each tick and newer healthy events behind them are never reached. Only
+  `BillingOutboxBacklogStale` (warning) surfaces this; `BillingOutboxDeadLetter`
+  never fires, because nothing is ever parked. Requires ≥ `relayBatchSize` simultaneous
+  poison rows, implausible with one event type on the outbox today. A fix would need
+  the guard to consider evidence of broker health beyond the current batch — e.g. a
+  recent successful publish anywhere, rather than a successful sibling.
 - `event_outbox_dead` has no retention/cleanup. Intentional: the table is expected to
   hold zero rows, and silently deleting an undelivered event is precisely the failure
   this change exists to prevent. Revisit only if a real DLQ backlog ever accumulates.
