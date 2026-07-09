@@ -125,9 +125,9 @@ func bearerTokenFromContext(ctx context.Context) (string, error) {
 // --- Users ---
 
 func (h *Handler) CreateUser(ctx context.Context, req *iamv1.CreateUserRequest) (*iamv1.User, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	user := &User{
 		TenantID:    tenantID,
@@ -142,9 +142,9 @@ func (h *Handler) CreateUser(ctx context.Context, req *iamv1.CreateUserRequest) 
 }
 
 func (h *Handler) GetUser(ctx context.Context, req *iamv1.GetUserRequest) (*iamv1.User, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
@@ -158,9 +158,9 @@ func (h *Handler) GetUser(ctx context.Context, req *iamv1.GetUserRequest) (*iamv
 }
 
 func (h *Handler) ListUsers(ctx context.Context, req *iamv1.ListUsersRequest) (*iamv1.ListUsersResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	users, err := h.svc.ListUsers(ctx, tenantID, req.GetStatus(), int(req.GetLimit()), int(req.GetOffset()))
 	if err != nil {
@@ -174,9 +174,9 @@ func (h *Handler) ListUsers(ctx context.Context, req *iamv1.ListUsersRequest) (*
 }
 
 func (h *Handler) UpdateUser(ctx context.Context, req *iamv1.UpdateUserRequest) (*iamv1.User, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
@@ -227,9 +227,9 @@ func (h *Handler) ChangePassword(ctx context.Context, req *iamv1.ChangePasswordR
 // --- Roles & Permissions ---
 
 func (h *Handler) AssignRole(ctx context.Context, req *iamv1.AssignRoleRequest) (*iamv1.AssignRoleResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	userID, err := uuid.Parse(req.GetUserId())
 	if err != nil {
@@ -239,10 +239,11 @@ func (h *Handler) AssignRole(ctx context.Context, req *iamv1.AssignRoleRequest) 
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid role_id")
 	}
-	assignedBy, err := uuid.Parse(req.GetAssignedBy())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid assigned_by")
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not present in context")
 	}
+	assignedBy := caller.UserID
 	if err := h.svc.AssignRole(ctx, tenantID, userID, roleID, assignedBy); err != nil {
 		return nil, grpcError(err)
 	}
@@ -265,9 +266,9 @@ func (h *Handler) RevokeRole(ctx context.Context, req *iamv1.RevokeRoleRequest) 
 }
 
 func (h *Handler) ListRoles(ctx context.Context, req *iamv1.ListRolesRequest) (*iamv1.ListRolesResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	roles, err := h.svc.ListRoles(ctx, tenantID)
 	if err != nil {
@@ -301,9 +302,9 @@ func (h *Handler) CheckPermission(ctx context.Context, req *iamv1.CheckPermissio
 }
 
 func (h *Handler) AssignProjectRole(ctx context.Context, req *iamv1.AssignProjectRoleRequest) (*iamv1.AssignProjectRoleResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	userID, err := uuid.Parse(req.GetUserId())
 	if err != nil {
@@ -317,10 +318,11 @@ func (h *Handler) AssignProjectRole(ctx context.Context, req *iamv1.AssignProjec
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid project_id")
 	}
-	assignedBy, err := uuid.Parse(req.GetAssignedBy())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid assigned_by")
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not present in context")
 	}
+	assignedBy := caller.UserID
 	if err := h.svc.AssignProjectRole(ctx, tenantID, userID, roleID, projectID, assignedBy); err != nil {
 		return nil, grpcError(err)
 	}
@@ -330,6 +332,9 @@ func (h *Handler) AssignProjectRole(ctx context.Context, req *iamv1.AssignProjec
 // --- Tenants ---
 
 func (h *Handler) CreateTenant(ctx context.Context, req *iamv1.CreateTenantRequest) (*iamv1.Tenant, error) {
+	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
+		return nil, err
+	}
 	tenant := &Tenant{
 		Name:                req.GetName(),
 		Plan:                req.GetPlan(),
@@ -352,9 +357,9 @@ func (h *Handler) CreateTenant(ctx context.Context, req *iamv1.CreateTenantReque
 // tenant. Restricted to callers with the tenant_admin role (or platform
 // admin) — a regular user should not be able to change the currency.
 func (h *Handler) SetTenantAddress(ctx context.Context, req *iamv1.SetTenantAddressRequest) (*iamv1.Tenant, error) {
-	id, err := uuid.Parse(req.GetTenantId())
+	id, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	t := &Tenant{
 		ID:                  id,
@@ -511,14 +516,15 @@ func (h *Handler) CancelTenantPurge(ctx context.Context, req *iamv1.CancelTenant
 // --- Invitations ---
 
 func (h *Handler) InviteUser(ctx context.Context, req *iamv1.InviteUserRequest) (*iamv1.Invitation, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
-	invitedBy, err := uuid.Parse(req.GetInvitedBy())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid invited_by")
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not present in context")
 	}
+	invitedBy := caller.UserID
 	inv := &Invitation{
 		TenantID:  tenantID,
 		Email:     req.GetEmail(),

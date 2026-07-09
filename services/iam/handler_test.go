@@ -34,6 +34,19 @@ func newHandler() *Handler {
 	return NewHandler(newTestService(&mockRepo{}))
 }
 
+func newHandlerWithRepo(r *mockRepo) *Handler { return NewHandler(newTestService(r)) }
+
+// memberCtx returns a caller in tenant tid holding only the `member` role —
+// enough to pass authentication, not enough for platform-admin gates.
+func memberCtx(tid uuid.UUID) context.Context {
+	return interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
+		UserID:   uuid.New(),
+		TenantID: tid,
+		Email:    "member@example.com",
+		Roles:    []string{interceptor.RoleMember},
+	})
+}
+
 // --- Login ---
 
 func TestHandler_Login_Success(t *testing.T) {
@@ -91,8 +104,9 @@ func TestHandler_ValidateToken_Success(t *testing.T) {
 
 func TestHandler_CreateUser_Success(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().CreateUser(context.Background(), &iamv1.CreateUserRequest{
-		TenantId:    uuid.New().String(),
+	tid := uuid.New()
+	resp, err := newHandler().CreateUser(memberCtx(tid), &iamv1.CreateUserRequest{
+		TenantId:    tid.String(),
 		Email:       "new@example.com",
 		DisplayName: "New User",
 		Password:    "pass123",
@@ -103,7 +117,7 @@ func TestHandler_CreateUser_Success(t *testing.T) {
 
 func TestHandler_CreateUser_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateUser(context.Background(), &iamv1.CreateUserRequest{
+	_, err := newHandler().CreateUser(memberCtx(uuid.New()), &iamv1.CreateUserRequest{
 		TenantId: "bad",
 		Email:    "user@example.com",
 		Password: "pass",
@@ -123,7 +137,7 @@ func TestHandler_GetUser_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.GetUser(context.Background(), &iamv1.GetUserRequest{
+	resp, err := h.GetUser(memberCtx(tenantID), &iamv1.GetUserRequest{
 		TenantId: tenantID.String(),
 		Id:       userID.String(),
 	})
@@ -133,13 +147,14 @@ func TestHandler_GetUser_Success(t *testing.T) {
 
 func TestHandler_GetUser_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetUser(context.Background(), &iamv1.GetUserRequest{TenantId: "bad", Id: uuid.New().String()})
+	_, err := newHandler().GetUser(memberCtx(uuid.New()), &iamv1.GetUserRequest{TenantId: "bad", Id: uuid.New().String()})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_GetUser_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetUser(context.Background(), &iamv1.GetUserRequest{TenantId: uuid.New().String(), Id: "bad"})
+	tid := uuid.New()
+	_, err := newHandler().GetUser(memberCtx(tid), &iamv1.GetUserRequest{TenantId: tid.String(), Id: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -154,14 +169,14 @@ func TestHandler_ListUsers_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.ListUsers(context.Background(), &iamv1.ListUsersRequest{TenantId: tenantID.String()})
+	resp, err := h.ListUsers(memberCtx(tenantID), &iamv1.ListUsersRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetUsers(), 1)
 }
 
 func TestHandler_ListUsers_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListUsers(context.Background(), &iamv1.ListUsersRequest{TenantId: "bad"})
+	_, err := newHandler().ListUsers(memberCtx(uuid.New()), &iamv1.ListUsersRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -177,7 +192,7 @@ func TestHandler_UpdateUser_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.UpdateUser(context.Background(), &iamv1.UpdateUserRequest{
+	resp, err := h.UpdateUser(memberCtx(tenantID), &iamv1.UpdateUserRequest{
 		TenantId:    tenantID.String(),
 		Id:          userID.String(),
 		DisplayName: "Updated",
@@ -189,13 +204,14 @@ func TestHandler_UpdateUser_Success(t *testing.T) {
 
 func TestHandler_UpdateUser_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdateUser(context.Background(), &iamv1.UpdateUserRequest{TenantId: "bad", Id: uuid.New().String()})
+	_, err := newHandler().UpdateUser(memberCtx(uuid.New()), &iamv1.UpdateUserRequest{TenantId: "bad", Id: uuid.New().String()})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_UpdateUser_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdateUser(context.Background(), &iamv1.UpdateUserRequest{TenantId: uuid.New().String(), Id: "bad"})
+	tid := uuid.New()
+	_, err := newHandler().UpdateUser(memberCtx(tid), &iamv1.UpdateUserRequest{TenantId: tid.String(), Id: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -266,8 +282,9 @@ func TestHandler_ChangePassword_InvalidUserID(t *testing.T) {
 
 func TestHandler_AssignRole_Success(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().AssignRole(context.Background(), &iamv1.AssignRoleRequest{
-		TenantId:   uuid.New().String(),
+	tid := uuid.New()
+	resp, err := newHandler().AssignRole(memberCtx(tid), &iamv1.AssignRoleRequest{
+		TenantId:   tid.String(),
 		UserId:     uuid.New().String(),
 		RoleId:     uuid.New().String(),
 		AssignedBy: uuid.New().String(),
@@ -278,7 +295,7 @@ func TestHandler_AssignRole_Success(t *testing.T) {
 
 func TestHandler_AssignRole_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().AssignRole(context.Background(), &iamv1.AssignRoleRequest{
+	_, err := newHandler().AssignRole(memberCtx(uuid.New()), &iamv1.AssignRoleRequest{
 		TenantId: "bad", UserId: uuid.New().String(), RoleId: uuid.New().String(), AssignedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -286,8 +303,9 @@ func TestHandler_AssignRole_InvalidTenantID(t *testing.T) {
 
 func TestHandler_AssignRole_InvalidUserID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().AssignRole(context.Background(), &iamv1.AssignRoleRequest{
-		TenantId: uuid.New().String(), UserId: "bad", RoleId: uuid.New().String(), AssignedBy: uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().AssignRole(memberCtx(tid), &iamv1.AssignRoleRequest{
+		TenantId: tid.String(), UserId: "bad", RoleId: uuid.New().String(), AssignedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -321,14 +339,14 @@ func TestHandler_ListRoles_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.ListRoles(context.Background(), &iamv1.ListRolesRequest{TenantId: tenantID.String()})
+	resp, err := h.ListRoles(memberCtx(tenantID), &iamv1.ListRolesRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetRoles(), 1)
 }
 
 func TestHandler_ListRoles_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListRoles(context.Background(), &iamv1.ListRolesRequest{TenantId: "bad"})
+	_, err := newHandler().ListRoles(memberCtx(uuid.New()), &iamv1.ListRolesRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -398,8 +416,9 @@ func TestHandler_AssignProjectRole_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.AssignProjectRole(context.Background(), &iamv1.AssignProjectRoleRequest{
-		TenantId:   uuid.New().String(),
+	tid := uuid.New()
+	resp, err := h.AssignProjectRole(memberCtx(tid), &iamv1.AssignProjectRoleRequest{
+		TenantId:   tid.String(),
 		UserId:     uuid.New().String(),
 		RoleId:     uuid.New().String(),
 		ProjectId:  uuid.New().String(),
@@ -417,8 +436,9 @@ func TestHandler_AssignProjectRole_RejectsTenantWideRole(t *testing.T) {
 		},
 	}))
 
-	_, err := h.AssignProjectRole(context.Background(), &iamv1.AssignProjectRoleRequest{
-		TenantId:   uuid.New().String(),
+	tid := uuid.New()
+	_, err := h.AssignProjectRole(memberCtx(tid), &iamv1.AssignProjectRoleRequest{
+		TenantId:   tid.String(),
 		UserId:     uuid.New().String(),
 		RoleId:     uuid.New().String(),
 		ProjectId:  uuid.New().String(),
@@ -428,6 +448,11 @@ func TestHandler_AssignProjectRole_RejectsTenantWideRole(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+// TestHandler_AssignProjectRole_InvalidArgs no longer covers "assigned_by":
+// the handler stopped reading req.GetAssignedBy() (it now sources the audit
+// identity from the verified caller), so an invalid assigned_by string is no
+// longer a validation error — see TestAssignRole_AssignedByIsTheCaller-style
+// coverage in AssignRole for the replacement behaviour.
 func TestHandler_AssignProjectRole_InvalidArgs(t *testing.T) {
 	t.Parallel()
 	cases := []struct{ name, field string }{
@@ -435,14 +460,14 @@ func TestHandler_AssignProjectRole_InvalidArgs(t *testing.T) {
 		{"invalid user_id", "user"},
 		{"invalid role_id", "role"},
 		{"invalid project_id", "project"},
-		{"invalid assigned_by", "assigned_by"},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+			tid := uuid.New()
 			req := &iamv1.AssignProjectRoleRequest{
-				TenantId:   uuid.New().String(),
+				TenantId:   tid.String(),
 				UserId:     uuid.New().String(),
 				RoleId:     uuid.New().String(),
 				ProjectId:  uuid.New().String(),
@@ -457,10 +482,8 @@ func TestHandler_AssignProjectRole_InvalidArgs(t *testing.T) {
 				req.RoleId = "bad"
 			case "project":
 				req.ProjectId = "bad"
-			case "assigned_by":
-				req.AssignedBy = "bad"
 			}
-			_, err := newHandler().AssignProjectRole(context.Background(), req)
+			_, err := newHandler().AssignProjectRole(memberCtx(tid), req)
 			assert.Equal(t, codes.InvalidArgument, status.Code(err))
 		})
 	}
@@ -470,7 +493,7 @@ func TestHandler_AssignProjectRole_InvalidArgs(t *testing.T) {
 
 func TestHandler_CreateTenant_Success(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().CreateTenant(context.Background(), &iamv1.CreateTenantRequest{
+	resp, err := newHandler().CreateTenant(platformAdminCtx(), &iamv1.CreateTenantRequest{
 		Name:        "Red Chillies Entertainment",
 		Plan:        "starter",
 		CountryCode: "IN", // #61 — required; currency derived as INR
@@ -491,7 +514,7 @@ func TestHandler_SetTenantAddress_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.SetTenantAddress(context.Background(), &iamv1.SetTenantAddressRequest{
+	resp, err := h.SetTenantAddress(memberCtx(tenantID), &iamv1.SetTenantAddressRequest{
 		TenantId:    tenantID.String(),
 		CountryCode: "IN",
 		City:        "Chennai",
@@ -503,7 +526,7 @@ func TestHandler_SetTenantAddress_Success(t *testing.T) {
 
 func TestHandler_SetTenantAddress_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().SetTenantAddress(context.Background(), &iamv1.SetTenantAddressRequest{
+	_, err := newHandler().SetTenantAddress(memberCtx(uuid.New()), &iamv1.SetTenantAddressRequest{
 		TenantId:    "not-a-uuid",
 		CountryCode: "IN",
 	})
@@ -513,8 +536,9 @@ func TestHandler_SetTenantAddress_InvalidTenantID(t *testing.T) {
 func TestHandler_SetTenantAddress_MissingCountry(t *testing.T) {
 	t.Parallel()
 	h := newHandler()
-	_, err := h.SetTenantAddress(context.Background(), &iamv1.SetTenantAddressRequest{
-		TenantId: uuid.New().String(),
+	tid := uuid.New()
+	_, err := h.SetTenantAddress(memberCtx(tid), &iamv1.SetTenantAddressRequest{
+		TenantId: tid.String(),
 	})
 	require.Error(t, err)
 }
@@ -918,8 +942,9 @@ func TestHandler_CancelTenantPurge_NoOpenRequest_NotFound(t *testing.T) {
 
 func TestHandler_InviteUser_Success(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().InviteUser(context.Background(), &iamv1.InviteUserRequest{
-		TenantId:  uuid.New().String(),
+	tid := uuid.New()
+	resp, err := newHandler().InviteUser(memberCtx(tid), &iamv1.InviteUserRequest{
+		TenantId:  tid.String(),
 		Email:     "invite@example.com",
 		InvitedBy: uuid.New().String(),
 	})
@@ -929,24 +954,23 @@ func TestHandler_InviteUser_Success(t *testing.T) {
 
 func TestHandler_InviteUser_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().InviteUser(context.Background(), &iamv1.InviteUserRequest{
+	_, err := newHandler().InviteUser(memberCtx(uuid.New()), &iamv1.InviteUserRequest{
 		TenantId: "bad", Email: "e@e.com", InvitedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
-func TestHandler_InviteUser_InvalidInvitedBy(t *testing.T) {
-	t.Parallel()
-	_, err := newHandler().InviteUser(context.Background(), &iamv1.InviteUserRequest{
-		TenantId: uuid.New().String(), Email: "e@e.com", InvitedBy: "bad",
-	})
-	assert.Equal(t, codes.InvalidArgument, status.Code(err))
-}
+// Note: there is no TestHandler_InviteUser_InvalidInvitedBy — the handler no
+// longer reads req.GetInvitedBy() at all (invited_by is now sourced from the
+// verified caller, see TestInviteUser_InvitedByIsTheCaller-style coverage on
+// AssignRole), so an invalid invited_by string in the request is no longer a
+// validation error.
 
 func TestHandler_InviteUser_InvalidRoleID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().InviteUser(context.Background(), &iamv1.InviteUserRequest{
-		TenantId: uuid.New().String(), Email: "e@e.com", InvitedBy: uuid.New().String(), RoleId: "bad",
+	tid := uuid.New()
+	_, err := newHandler().InviteUser(memberCtx(tid), &iamv1.InviteUserRequest{
+		TenantId: tid.String(), Email: "e@e.com", InvitedBy: uuid.New().String(), RoleId: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -1144,4 +1168,78 @@ func TestHandler_SetOIDCConfig_ServiceError_ReturnsInternalError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+// --- #144: tenant boundary + forgeable audit identity ---
+
+// CreateTenant reads no tenant_id from the request (it creates one), so
+// TenantFromRequest does not apply here — it must instead gate on
+// RequireRole(platform_admin), same as the platform RPCs.
+func TestCreateTenant_RequiresPlatformAdmin(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().CreateTenant(memberCtx(uuid.New()), &iamv1.CreateTenantRequest{Name: "x"})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+// A caller authenticated for tenant A must not be able to act on tenant B by
+// simply naming B in the request body. The repository must never be reached.
+func TestCreateUser_CrossTenant_Denied(t *testing.T) {
+	t.Parallel()
+	caller, victim := uuid.New(), uuid.New()
+	require.NotEqual(t, caller, victim)
+
+	h := newHandlerWithRepo(&mockRepo{
+		createUserFn: func(context.Context, *User) error {
+			t.Fatal("repository must not be reached on a cross-tenant request")
+			return nil
+		},
+	})
+	_, err := h.CreateUser(memberCtx(caller), &iamv1.CreateUserRequest{
+		TenantId: victim.String(), Email: "a@b.c", Password: "x",
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestAssignRole_CrossTenant_Denied(t *testing.T) {
+	t.Parallel()
+	caller, victim := uuid.New(), uuid.New()
+	h := newHandlerWithRepo(&mockRepo{
+		assignRoleFn: func(context.Context, *UserRole) error {
+			t.Fatal("repository must not be reached on a cross-tenant request")
+			return nil
+		},
+	})
+	_, err := h.AssignRole(memberCtx(caller), &iamv1.AssignRoleRequest{
+		TenantId: victim.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+// The audit trail must name the caller, not whoever the request names.
+func TestAssignRole_AssignedByIsTheCaller(t *testing.T) {
+	t.Parallel()
+	tid, callerID := uuid.New(), uuid.New()
+	var gotAssignedBy uuid.UUID
+
+	h := newHandlerWithRepo(&mockRepo{
+		assignRoleFn: func(_ context.Context, ur *UserRole) error {
+			gotAssignedBy = ur.AssignedBy
+			return nil
+		},
+	})
+	ctx := interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
+		UserID: callerID, TenantID: tid, Roles: []string{interceptor.RoleMember},
+	})
+
+	_, err := h.AssignRole(ctx, &iamv1.AssignRoleRequest{
+		TenantId:   tid.String(),
+		UserId:     uuid.New().String(),
+		RoleId:     uuid.New().String(),
+		AssignedBy: uuid.New().String(), // a lie the handler must ignore
+	})
+	require.NoError(t, err)
+	assert.Equal(t, callerID, gotAssignedBy, "assigned_by must come from the token, not the request")
 }
