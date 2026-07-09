@@ -52,8 +52,9 @@ func TestTenantFromRequest(t *testing.T) {
 	}
 }
 
-// The returned tenant must never be the request's, even when the request names a
-// tenant that happens to parse. This is the whole point of the helper.
+// On a mismatch the helper must return neither tenant — not the request's (the
+// obvious leak) and not the caller's (which a handler ignoring the error would
+// then use to query, silently succeeding on the wrong tenant).
 func TestTenantFromRequest_NeverReturnsTheRequestTenant(t *testing.T) {
 	t.Parallel()
 	tenantA, tenantB := uuid.New(), uuid.New()
@@ -61,6 +62,35 @@ func TestTenantFromRequest_NeverReturnsTheRequestTenant(t *testing.T) {
 
 	got, err := TenantFromRequest(ctx, tenantB.String())
 	require.Error(t, err)
-	assert.NotEqual(t, tenantB, got)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, uuid.Nil, got)
+	assert.NotEqual(t, tenantB, got, "the request's tenant must never be returned")
+	assert.NotEqual(t, tenantA, got, "nor the caller's, alongside an error")
+}
+
+// The literal nil UUID parses. It must not become a wildcard: the nil-caller-tenant
+// guard runs before parsing, so a real caller sending it gets PermissionDenied.
+func TestTenantFromRequest_NilUUIDRequestIsNotAWildcard(t *testing.T) {
+	t.Parallel()
+	ctx := WithCaller(context.Background(), CallerInfo{UserID: uuid.New(), TenantID: uuid.New()})
+
+	got, err := TenantFromRequest(ctx, uuid.Nil.String())
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, uuid.Nil, got)
+}
+
+// Whitespace is a malformed id, not an omitted one. It must not fall into the
+// "empty means use the token's tenant" branch.
+func TestTenantFromRequest_WhitespaceIsNotEmpty(t *testing.T) {
+	t.Parallel()
+	tenantA := uuid.New()
+	ctx := WithCaller(context.Background(), CallerInfo{UserID: uuid.New(), TenantID: tenantA})
+
+	for _, in := range []string{" ", "\t", "\n"} {
+		got, err := TenantFromRequest(ctx, in)
+		require.Error(t, err, "input %q", in)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assert.Equal(t, uuid.Nil, got)
+	}
 }
