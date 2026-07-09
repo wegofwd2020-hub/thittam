@@ -41,6 +41,13 @@ spec:
         runAsNonRoot: true
         runAsUser: 65534
         fsGroup: 65534
+      volumes:
+        # JWT public key — not a secret (it can only verify signatures, not
+        # create them), so it is mounted from a ConfigMap. See
+        # infra/k8s/config/jwt-public-configmap.yaml.
+        - name: jwt-public-key
+          configMap:
+            name: thittam-jwt-public
       containers:
         - name: billing
           image: ghcr.io/wegofwd2020-hub/thittam/billing:latest
@@ -69,9 +76,15 @@ spec:
                 secretKeyRef:
                   name: thittam-billing
                   key: razorpay_key_secret
+            - name: JWT_PUBLIC_KEY_PATH
+              value: /etc/thittam/jwt/jwt_public.pem
           envFrom:
             - configMapRef:
                 name: thittam-common
+          volumeMounts:
+            - name: jwt-public-key
+              mountPath: /etc/thittam/jwt
+              readOnly: true
           resources:
             # Billing is financial-critical — similar sizing to general-ledger.
             requests:

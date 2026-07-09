@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	expensev1 "github.com/wegofwd2020/thittam/gen/expense/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/tenant"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	"github.com/stretchr/testify/assert"
@@ -15,12 +16,24 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// allowAllPerm grants every permission. Authorization semantics are covered by
+// pkg/interceptor's own tests; these handler tests exercise handler logic.
+type allowAllPerm struct{}
+
+func (allowAllPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	return true, nil
+}
+
+// ctxWithTenant injects vertical config, a tenant ID, and a synthetic caller
+// (RequirePermission now runs unconditionally, so every handler test needs a
+// caller in context or it fails Unauthenticated before reaching handler logic).
 func ctxWithTenant(tenantID uuid.UUID) context.Context {
-	return tenant.WithID(ctxWithVertical(), tenantID)
+	ctx := tenant.WithID(ctxWithVertical(), tenantID)
+	return interceptor.WithCaller(ctx, interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID})
 }
 
 func newHandler() *Handler {
-	return NewHandler(NewService(&mockRepo{}))
+	return NewHandler(NewService(&mockRepo{})).WithPermissionChecker(allowAllPerm{})
 }
 
 // --- CreatePurchaseOrder ---
@@ -85,7 +98,7 @@ func TestHandler_CreatePurchaseOrder_DefaultCurrency(t *testing.T) {
 		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
 			return &PurchaseOrder{ID: id, TenantID: tid, Currency: "INR"}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 	resp, err := h.CreatePurchaseOrder(ctxWithTenant(uuid.New()), &expensev1.CreatePurchaseOrderRequest{
 		ProductionId: uuid.New().String(),
 		Amount:       "100.00",
@@ -280,7 +293,10 @@ func TestHandler_ApproveExpense_Success(t *testing.T) {
 		Role:      "",
 		MaxAmount: decimal.NewFromInt(999999999),
 	})
-	ctx := tenant.WithID(vertical.WithConfig(context.Background(), cfg), tenantID)
+	ctx := interceptor.WithCaller(
+		tenant.WithID(vertical.WithConfig(context.Background(), cfg), tenantID),
+		interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID},
+	)
 
 	callCount := 0
 	h := NewHandler(NewService(&mockRepo{
@@ -292,7 +308,7 @@ func TestHandler_ApproveExpense_Success(t *testing.T) {
 			}
 			return &Expense{ID: id, TenantID: tid, Status: status, Amount: decimal.NewFromInt(5000)}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.ApproveExpense(ctx, &expensev1.ApproveExpenseRequest{ExpenseId: expID.String()})
 	require.NoError(t, err)
@@ -438,6 +454,25 @@ func TestHandler_GetApprovalLimits(t *testing.T) {
 	assert.Equal(t, "coordinator", resp.GetLimits()[0].GetRole())
 	assert.Equal(t, "200000.00", resp.GetLimits()[0].GetMaxAmount())
 	assert.Equal(t, "1000000.00", resp.GetDualApprovalAbove())
+}
+
+// --- fail-closed regression (#138) ---
+
+// TestSubmitExpense_NoPermissionChecker_Denies proves the fail-open is closed:
+// a handler with no PermissionChecker wired must deny writes, not silently
+// skip the check. Without this test, someone could reinstate the
+// the nil-checker guard around RequirePermission and nothing would catch it.
+func TestSubmitExpense_NoPermissionChecker_Denies(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{})) // deliberately no WithPermissionChecker
+
+	_, err := h.SubmitExpense(ctxWithTenant(uuid.New()), &expensev1.SubmitExpenseRequest{
+		ProductionId: uuid.New().String(),
+		CategoryId:   "catering",
+		Amount:       "1000.00",
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err), "a missing permission checker must deny, not skip the check")
 }
 
 // --- grpcErr ---

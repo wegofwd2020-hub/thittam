@@ -238,17 +238,20 @@ func main() {
 	}
 
 	// --- gRPC server ---
-	// UnaryCallerInterceptor reads Kong-injected metadata (x-caller-id,
-	// x-caller-role, x-caller-email, x-forwarded-for) and populates the
-	// caller identity + audit actor in each request context. Admin RPCs
-	// (SetOIDCConfig, SuspendTenant, DeactivateUser) call RequireRole to
-	// enforce platform_admin access at the handler level.
+	// UnaryAuthInterceptor verifies the caller's JWT (#138) and populates the
+	// caller identity + audit actor in each request context from verified
+	// claims only. Admin RPCs (SetOIDCConfig, SuspendTenant, DeactivateUser)
+	// call RequireRole to enforce platform_admin access at the handler level.
+	jwtVerifier, err := auth.VerifierFromEnv(ctx)
+	if err != nil {
+		log.Fatalf("iam: startup: load JWT public key: %v", err)
+	}
 	srv := server.New(server.Config{
 		Name:        "iam",
 		Port:        8086,
 		MetricsPort: 9096,
-		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryCallerInterceptor()},
-		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamCallerInterceptor()},
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(jwtVerifier, interceptor.PublicMethods)},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(jwtVerifier, interceptor.PublicMethods)},
 	}, nil)
 
 	iamv1.RegisterIAMServiceServer(srv.GRPCServer(), handler)
@@ -313,9 +316,7 @@ func main() {
 				http.MethodPatch, http.MethodDelete, http.MethodOptions,
 			},
 			AllowedHeaders: []string{
-				"Content-Type", "Authorization",
-				"X-Tenant-Id", "X-Project-Id",
-				"X-Caller-Id", "X-Caller-Email", "X-Caller-Role",
+				"Content-Type", "Authorization", "Accept",
 			},
 			AllowCredentials: true,
 		}).Handler(routed)

@@ -72,13 +72,17 @@ class ApiClient {
     this.token = token;
   }
 
+  // tenantId is no longer sent as a header (#138) — the field is unread now,
+  // but setTenantId is still called from web/src/lib/auth/context.tsx, so it
+  // stays rather than breaking those call sites. UI code reads the tenant from
+  // useAuth(), not from here.
   setTenantId(tenantId: string | null): void {
     this.tenantId = tenantId;
   }
 
-  // Kong will inject x-caller-* headers in production. In local dev (no Kong)
-  // the web client carries them itself so service interceptors can populate
-  // caller context. See pkg/interceptor.UnaryCallerInterceptor.
+  // caller is no longer sent as a header (#138) — the field is unread now,
+  // but setCaller is still called from web/src/lib/auth/context.tsx, so it
+  // stays rather than breaking those call sites.
   setCaller(caller: Caller | null): void {
     this.caller = caller;
   }
@@ -126,15 +130,9 @@ class ApiClient {
       headers["Authorization"] = `Bearer ${this.token}`;
     }
 
-    if (this.tenantId) {
-      headers["X-Tenant-Id"] = this.tenantId;
-    }
-
-    if (this.caller) {
-      headers["X-Caller-Id"] = this.caller.id;
-      headers["X-Caller-Email"] = this.caller.email;
-      headers["X-Caller-Role"] = this.caller.role;
-    }
+    // Identity travels in the bearer token alone. The server derives the caller
+    // and the tenant from its verified claims (#138) and ignores any
+    // X-Caller-* / X-Tenant-Id header, so sending them is at best misleading.
 
     const url = `${resolveBaseUrl(path)}${path}`;
 

@@ -16,8 +16,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
+	"google.golang.org/grpc"
+
 	ledgerv1 "github.com/wegofwd2020/thittam/gen/ledger/v1"
+	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/pkg/events"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/ledger"
@@ -66,11 +70,17 @@ func main() {
 	handler := ledger.NewHandler(svc)
 
 	// --- gRPC server ---
+	verifier, err := auth.VerifierFromEnv(ctx)
+	if err != nil {
+		log.Fatalf("general-ledger: startup: load JWT public key: %v", err)
+	}
 	srv := server.New(server.Config{
 		Name:        "general-ledger",
 		Port:        8083,
 		MetricsPort: 9093,
 		// Loader: nil — vertical interceptor is not used for this service.
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
 	}, nil)
 
 	ledgerv1.RegisterLedgerServiceServer(srv.GRPCServer(), handler)

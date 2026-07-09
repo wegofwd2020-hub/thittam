@@ -62,12 +62,17 @@ for arg in "$@"; do
   esac
 done
 
-# --with-project-rbac exports the ADR-014 Phase 2 rollout env vars so the
-# four project-scoped services dial IAM and enforce permissions. Enable in
-# dev to verify the rollout playbook end-to-end (see verify-project-rbac.sh).
-# Production rollout is controlled by the deployment manifest, not this flag.
+# IAM must be reachable: RequirePermission now fails closed when the checker is
+# nil (#138), so every service needs IAM_SERVICE_ADDR whether or not
+# project-scoped RBAC is enabled.
+export IAM_SERVICE_ADDR="${IAM_SERVICE_ADDR:-localhost:8086}"
+
+# --with-project-rbac additionally enables the ADR-014 Phase 2 rollout
+# enforcement so the four project-scoped services check project-scoped
+# permissions. Enable in dev to verify the rollout playbook end-to-end (see
+# verify-project-rbac.sh). Production rollout is controlled by the deployment
+# manifest, not this flag.
 if [ "$WITH_PROJECT_RBAC" = true ]; then
-  export IAM_SERVICE_ADDR="${IAM_SERVICE_ADDR:-localhost:8086}"
   export PROJECT_SCOPED_RBAC=true
 fi
 
@@ -172,6 +177,7 @@ start_svc() {
     "REDIS_URL=${REDIS_URL}"
     "NATS_URL=${NATS_URL}"
     "IAM_KEY_DIR=${IAM_KEY_DIR}"
+    "GRPC_REFLECTION=${GRPC_REFLECTION:-1}"
   )
   # Append any caller-supplied extras
   for extra in "$@"; do
@@ -234,8 +240,9 @@ command -v tmuxinator &>/dev/null || warn "tmuxinator not found (not needed for 
 
 header "Dev Keys"
 
-if [ -f "keys/jwt_private.pem" ] && [ -f "keys/oidc_encryption.key" ]; then
+if [ -f "keys/jwt_private.pem" ] && [ -f "keys/jwt_public.pem" ] && [ -f "keys/oidc_encryption.key" ]; then
   ok "keys/jwt_private.pem exists"
+  ok "keys/jwt_public.pem exists"
   ok "keys/oidc_encryption.key exists"
 else
   step "Generating dev keys via 'make dev-keys'..."

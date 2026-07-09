@@ -45,10 +45,8 @@ func (h *Handler) CreateProduction(ctx context.Context, req *projectv1.CreatePro
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
+		return nil, err
 	}
 
 	prod := &Production{
@@ -124,10 +122,8 @@ func (h *Handler) UpdateProduction(ctx context.Context, req *projectv1.UpdatePro
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
+		return nil, err
 	}
 
 	id, err := uuid.Parse(req.GetId())
@@ -161,10 +157,8 @@ func (h *Handler) ArchiveProduction(ctx context.Context, req *projectv1.ArchiveP
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
+		return nil, err
 	}
 
 	id, err := uuid.Parse(req.GetId())
@@ -191,10 +185,8 @@ func (h *Handler) CreatePhase(ctx context.Context, req *projectv1.CreatePhaseReq
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
+		return nil, err
 	}
 
 	productionID, err := uuid.Parse(req.GetProductionId())
@@ -241,10 +233,8 @@ func (h *Handler) ListPhases(ctx context.Context, req *projectv1.ListPhasesReque
 }
 
 func (h *Handler) UpdatePhaseStatus(ctx context.Context, req *projectv1.UpdatePhaseStatusRequest) (*projectv1.Phase, error) {
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "production:write"); err != nil {
+		return nil, err
 	}
 
 	phaseID, err := uuid.Parse(req.GetPhaseId())
@@ -271,10 +261,8 @@ func (h *Handler) AddCrewMember(ctx context.Context, req *projectv1.AddCrewMembe
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "resource:manage"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "resource:manage"); err != nil {
+		return nil, err
 	}
 
 	productionID, err := uuid.Parse(req.GetProductionId())
@@ -338,10 +326,8 @@ func (h *Handler) ListCrewMembers(ctx context.Context, req *projectv1.ListCrewMe
 }
 
 func (h *Handler) RemoveCrewMember(ctx context.Context, req *projectv1.RemoveCrewMemberRequest) (*projectv1.RemoveCrewMemberResponse, error) {
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "resource:manage"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "resource:manage"); err != nil {
+		return nil, err
 	}
 
 	id, err := uuid.Parse(req.GetId())

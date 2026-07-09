@@ -45,10 +45,8 @@ func (h *Handler) CreatePurchaseOrder(ctx context.Context, req *expensev1.Create
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "expense:submit"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:submit"); err != nil {
+		return nil, err
 	}
 
 	productionID, err := uuid.Parse(req.GetProductionId())
@@ -145,10 +143,8 @@ func (h *Handler) ListPurchaseOrders(ctx context.Context, req *expensev1.ListPur
 // --- Expenses ---
 
 func (h *Handler) SubmitExpense(ctx context.Context, req *expensev1.SubmitExpenseRequest) (*expensev1.Expense, error) {
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "expense:submit"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:submit"); err != nil {
+		return nil, err
 	}
 
 	tenantID, ok := tenant.IDFromContext(ctx)
@@ -263,10 +259,8 @@ func (h *Handler) ApproveExpense(ctx context.Context, req *expensev1.ApproveExpe
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "expense:approve"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:approve"); err != nil {
+		return nil, err
 	}
 
 	expenseID, err := uuid.Parse(req.GetExpenseId())
@@ -289,10 +283,8 @@ func (h *Handler) ApproveExpense(ctx context.Context, req *expensev1.ApproveExpe
 // --- Petty Cash ---
 
 func (h *Handler) CreatePettyCashAdvance(ctx context.Context, req *expensev1.CreatePettyCashAdvanceRequest) (*expensev1.PettyCashAdvance, error) {
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "expense:submit"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:submit"); err != nil {
+		return nil, err
 	}
 
 	tenantID, ok := tenant.IDFromContext(ctx)

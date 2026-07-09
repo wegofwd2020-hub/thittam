@@ -45,10 +45,8 @@ func (h *Handler) CreateBudget(ctx context.Context, req *budgetv1.CreateBudgetRe
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
+		return nil, err
 	}
 
 	productionID, err := uuid.Parse(req.GetProductionId())
@@ -133,10 +131,8 @@ func (h *Handler) SubmitBudget(ctx context.Context, req *budgetv1.SubmitBudgetRe
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
+		return nil, err
 	}
 
 	id, err := uuid.Parse(req.GetId())
@@ -161,10 +157,8 @@ func (h *Handler) ApproveBudget(ctx context.Context, req *budgetv1.ApproveBudget
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "budget:approve"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "budget:approve"); err != nil {
+		return nil, err
 	}
 
 	id, err := uuid.Parse(req.GetId())
@@ -189,10 +183,8 @@ func (h *Handler) CreateBudgetFromTemplate(ctx context.Context, req *budgetv1.Cr
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
+		return nil, err
 	}
 
 	productionID, err := uuid.Parse(req.GetProductionId())
@@ -232,10 +224,8 @@ func (h *Handler) CreateLineItem(ctx context.Context, req *budgetv1.CreateLineIt
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
+		return nil, err
 	}
 
 	budgetID, err := uuid.Parse(req.GetBudgetId())
@@ -304,10 +294,8 @@ func (h *Handler) ListLineItems(ctx context.Context, req *budgetv1.ListLineItems
 }
 
 func (h *Handler) UpdateLineItemActuals(ctx context.Context, req *budgetv1.UpdateLineItemActualsRequest) (*budgetv1.BudgetLineItem, error) {
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
+		return nil, err
 	}
 
 	id, err := uuid.Parse(req.GetId())

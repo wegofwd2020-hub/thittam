@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	budgetv1 "github.com/wegofwd2020/thittam/gen/budget/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,13 +15,30 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// ctxWithTenant injects both vertical config and a tenant ID into the context.
+// allowAllPerm grants every permission. Authorization semantics are covered by
+// pkg/interceptor's own tests; these handler tests exercise handler logic.
+type allowAllPerm struct{}
+
+func (allowAllPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	return true, nil
+}
+
+// ctxWithTenant injects vertical config, a tenant ID, and a synthetic caller
+// (RequirePermission now runs unconditionally, so every handler test needs a
+// caller in context or it fails Unauthenticated before reaching handler logic).
 func ctxWithTenant(tenantID uuid.UUID) context.Context {
-	return tenant.WithID(ctxWithVertical(), tenantID)
+	ctx := tenant.WithID(ctxWithVertical(), tenantID)
+	return interceptor.WithCaller(ctx, interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID})
+}
+
+// callerCtx is for handlers that do not check tenant.IDFromContext themselves
+// (e.g. UpdateLineItemActuals) but still hit RequirePermission.
+func callerCtx() context.Context {
+	return interceptor.WithCaller(ctxWithVertical(), interceptor.CallerInfo{UserID: uuid.New(), TenantID: uuid.New()})
 }
 
 func newHandler() *Handler {
-	return NewHandler(NewService(&mockRepo{}))
+	return NewHandler(NewService(&mockRepo{})).WithPermissionChecker(allowAllPerm{})
 }
 
 // --- CreateBudget ---
@@ -71,7 +89,7 @@ func TestHandler_CreateBudget_DefaultCurrency(t *testing.T) {
 		getBudgetFn: func(_ context.Context, tid, id uuid.UUID) (*Budget, error) {
 			return &Budget{ID: id, TenantID: tid, Status: "draft", Currency: "INR"}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.CreateBudget(ctxWithTenant(tenantID), &budgetv1.CreateBudgetRequest{
 		ProductionId: uuid.New().String(),
@@ -166,7 +184,7 @@ func TestHandler_SubmitBudget_Success(t *testing.T) {
 			}
 			return &Budget{ID: id, TenantID: tid, Status: status}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.SubmitBudget(ctxWithTenant(tenantID), &budgetv1.SubmitBudgetRequest{Id: budgetID.String()})
 	require.NoError(t, err)
@@ -201,7 +219,7 @@ func TestHandler_ApproveBudget_Success(t *testing.T) {
 			}
 			return &Budget{ID: id, TenantID: tid, Status: status}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.ApproveBudget(ctxWithTenant(tenantID), &budgetv1.ApproveBudgetRequest{Id: budgetID.String()})
 	require.NoError(t, err)
@@ -363,7 +381,7 @@ func TestHandler_UpdateLineItemActuals_Success(t *testing.T) {
 	itemID := uuid.New()
 	h := newHandler()
 
-	resp, err := h.UpdateLineItemActuals(context.Background(), &budgetv1.UpdateLineItemActualsRequest{
+	resp, err := h.UpdateLineItemActuals(callerCtx(), &budgetv1.UpdateLineItemActualsRequest{
 		Id:              itemID.String(),
 		ActualAmount:    "100000.00",
 		CommittedAmount: "50000.00",
@@ -374,7 +392,7 @@ func TestHandler_UpdateLineItemActuals_Success(t *testing.T) {
 
 func TestHandler_UpdateLineItemActuals_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdateLineItemActuals(context.Background(), &budgetv1.UpdateLineItemActualsRequest{
+	_, err := newHandler().UpdateLineItemActuals(callerCtx(), &budgetv1.UpdateLineItemActualsRequest{
 		Id: "bad", ActualAmount: "100.00", CommittedAmount: "50.00",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -382,7 +400,7 @@ func TestHandler_UpdateLineItemActuals_InvalidID(t *testing.T) {
 
 func TestHandler_UpdateLineItemActuals_InvalidActual(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdateLineItemActuals(context.Background(), &budgetv1.UpdateLineItemActualsRequest{
+	_, err := newHandler().UpdateLineItemActuals(callerCtx(), &budgetv1.UpdateLineItemActualsRequest{
 		Id: uuid.New().String(), ActualAmount: "bad", CommittedAmount: "50.00",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -390,7 +408,7 @@ func TestHandler_UpdateLineItemActuals_InvalidActual(t *testing.T) {
 
 func TestHandler_UpdateLineItemActuals_InvalidCommitted(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdateLineItemActuals(context.Background(), &budgetv1.UpdateLineItemActualsRequest{
+	_, err := newHandler().UpdateLineItemActuals(callerCtx(), &budgetv1.UpdateLineItemActualsRequest{
 		Id: uuid.New().String(), ActualAmount: "100.00", CommittedAmount: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -434,6 +452,24 @@ func TestHandler_GetBudgetTemplates(t *testing.T) {
 	resp, err := newHandler().GetBudgetTemplates(ctxWithVertical(), &budgetv1.GetBudgetTemplatesRequest{})
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
+}
+
+// --- fail-closed regression (#138) ---
+
+// TestCreateBudget_NoPermissionChecker_Denies proves the fail-open is closed:
+// a handler with no PermissionChecker wired must deny writes, not silently
+// skip the check. Without this test, someone could reinstate the
+// the nil-checker guard around RequirePermission and nothing would catch it.
+func TestCreateBudget_NoPermissionChecker_Denies(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{})) // deliberately no WithPermissionChecker
+
+	_, err := h.CreateBudget(ctxWithTenant(uuid.New()), &budgetv1.CreateBudgetRequest{
+		ProductionId: uuid.New().String(),
+		Label:        "Q1 Budget",
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err), "a missing permission checker must deny, not skip the check")
 }
 
 // --- grpcErr ---

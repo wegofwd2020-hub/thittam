@@ -1,46 +1,55 @@
 // Package interceptor provides gRPC server interceptors for the Thittam platform.
 //
-// The auth interceptor sits between the Kong API Gateway and service handlers.
-// Kong validates the JWT, then injects caller identity as HTTP headers that
-// become gRPC metadata (all lowercase per the gRPC metadata spec):
+// UnaryAuthInterceptor verifies the caller's access token against the platform's
+// RSA public key and derives CallerInfo from the signed claims. Any method absent
+// from PublicMethods is rejected with codes.Unauthenticated before it reaches a
+// handler.
 //
-//	x-caller-id    — UUID of the authenticated user
-//	x-caller-role  — highest role of the caller (e.g. "platform_admin", "tenant_admin")
-//	x-caller-email — caller's email address
-//	x-forwarded-for — original client IP
+// Caller identity is NEVER read from request metadata. x-caller-id, x-caller-role,
+// x-caller-email and x-tenant-id confer nothing: only the token does. x-project-id
+// selects a resource and x-forwarded-for names the client for the audit trail.
 //
-// The interceptor populates CallerInfo and pkg/audit.ActorInfo in the request
-// context so handlers and downstream code can read them without re-parsing metadata.
+// RequireRole and RequirePermission remain as defence in depth. They gate on the
+// verified identity the interceptor established.
 package interceptor
 
 import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/wegofwd2020/thittam/pkg/audit"
-	"github.com/wegofwd2020/thittam/pkg/tenant"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
-// Role constants match the values Kong injects via x-caller-role.
+// Role constants match the role names asserted in a verified token's claims.
 const (
 	RolePlatformAdmin = "platform_admin"
 	RoleTenantAdmin   = "tenant_admin"
 	RoleMember        = "member"
 )
 
-// CallerInfo holds the authenticated caller's identity extracted from
-// Kong-injected gRPC metadata.
+// CallerInfo holds the authenticated caller's identity, derived from the
+// verified access token (see UnaryAuthInterceptor).
 type CallerInfo struct {
-	UserID    uuid.UUID
-	TenantID  uuid.UUID
-	ProjectID uuid.UUID // x-project-id; uuid.Nil for non-project-scoped requests
-	Email     string
-	Role      string
-	IP        string
+	UserID      uuid.UUID
+	TenantID    uuid.UUID
+	ProjectID   uuid.UUID // x-project-id; uuid.Nil for non-project-scoped requests
+	Email       string
+	Roles       []string
+	Permissions []string
+	IP          string
+}
+
+// HasRole reports whether the caller holds the named role.
+func (c CallerInfo) HasRole(role string) bool {
+	for _, r := range c.Roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
 }
 
 type callerKey struct{}
@@ -51,15 +60,16 @@ func WithCaller(ctx context.Context, caller CallerInfo) context.Context {
 	return context.WithValue(ctx, callerKey{}, caller)
 }
 
-// CallerFromContext retrieves the CallerInfo set by UnaryCallerInterceptor.
+// CallerFromContext retrieves the CallerInfo set by UnaryAuthInterceptor.
 // Returns zero value and false if the interceptor has not run.
 func CallerFromContext(ctx context.Context) (CallerInfo, bool) {
 	c, ok := ctx.Value(callerKey{}).(CallerInfo)
 	return c, ok
 }
 
-// RequireRole returns a gRPC PermissionDenied error if the caller's role does
-// not match the required role. Call at the top of any admin handler:
+// RequireRole returns PermissionDenied unless the caller's verified roles
+// contain `required`. Membership, not equality: a token asserting
+// [viewer, tenant_admin] satisfies RequireRole(tenant_admin).
 //
 //	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
 //	    return nil, err
@@ -69,79 +79,10 @@ func RequireRole(ctx context.Context, required string) error {
 	if !ok {
 		return status.Error(codes.PermissionDenied, "caller identity not present in context")
 	}
-	if caller.Role != required {
-		return status.Errorf(codes.PermissionDenied, "requires role %s, caller has %s", required, caller.Role)
+	if !caller.HasRole(required) {
+		return status.Errorf(codes.PermissionDenied, "requires role %s", required)
 	}
 	return nil
-}
-
-// UnaryCallerInterceptor reads Kong-injected metadata headers, builds CallerInfo,
-// and stores it (plus audit.ActorInfo) in the request context.
-//
-// Requests that arrive without x-caller-id metadata (e.g. direct gRPC calls
-// that bypassed Kong) are allowed through with an empty CallerInfo — individual
-// handlers that require authentication call RequireRole to enforce access.
-func UnaryCallerInterceptor() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		md, _ := metadata.FromIncomingContext(ctx)
-
-		caller := CallerInfo{
-			UserID:    uuidFromMD(md, "x-caller-id"),
-			TenantID:  uuidFromMD(md, "x-tenant-id"),
-			ProjectID: uuidFromMD(md, "x-project-id"),
-			Email:     firstMD(md, "x-caller-email"),
-			Role:      firstMD(md, "x-caller-role"),
-			IP:        firstMD(md, "x-forwarded-for"),
-		}
-
-		ctx = WithCaller(ctx, caller)
-
-		// Populate tenant context so vertical-aware services and the vertical
-		// middleware can resolve the tenant schema without re-parsing metadata.
-		if caller.TenantID != uuid.Nil {
-			ctx = tenant.WithID(ctx, caller.TenantID)
-		}
-
-		// Also populate the audit context so audit log helpers work throughout
-		// the call stack without needing to thread CallerInfo manually.
-		ctx = audit.WithActor(ctx, audit.ActorInfo{
-			UserID: caller.UserID,
-			Email:  caller.Email,
-			IP:     caller.IP,
-		})
-
-		return handler(ctx, req)
-	}
-}
-
-// StreamCallerInterceptor is the streaming counterpart of UnaryCallerInterceptor.
-// Most Thittam RPCs are unary; this is provided for completeness.
-func StreamCallerInterceptor() grpc.StreamServerInterceptor {
-	return func(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		ctx := ss.Context()
-		md, _ := metadata.FromIncomingContext(ctx)
-
-		caller := CallerInfo{
-			UserID:    uuidFromMD(md, "x-caller-id"),
-			TenantID:  uuidFromMD(md, "x-tenant-id"),
-			ProjectID: uuidFromMD(md, "x-project-id"),
-			Email:     firstMD(md, "x-caller-email"),
-			Role:      firstMD(md, "x-caller-role"),
-			IP:        firstMD(md, "x-forwarded-for"),
-		}
-
-		ctx = WithCaller(ctx, caller)
-		if caller.TenantID != uuid.Nil {
-			ctx = tenant.WithID(ctx, caller.TenantID)
-		}
-		ctx = audit.WithActor(ctx, audit.ActorInfo{
-			UserID: caller.UserID,
-			Email:  caller.Email,
-			IP:     caller.IP,
-		})
-
-		return handler(srv, &wrappedStream{ServerStream: ss, ctx: ctx})
-	}
 }
 
 // wrappedStream overrides Context() so the enriched context flows downstream.

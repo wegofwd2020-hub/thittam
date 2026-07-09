@@ -23,6 +23,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	budgetv1 "github.com/wegofwd2020/thittam/gen/budget/v1"
+	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/pkg/corsutil"
 	"github.com/wegofwd2020/thittam/pkg/events"
 	"github.com/wegofwd2020/thittam/pkg/iamclient"
@@ -94,17 +95,21 @@ func main() {
 	}
 
 	// --- gRPC server ---
-	// UnaryCallerInterceptor reads Kong-injected metadata (x-caller-id,
-	// x-tenant-id, x-project-id, x-caller-role, x-caller-email) and populates
-	// the caller identity, tenant context, and audit actor on every request.
-	// Without it handlers see no tenant and reject with Unauthenticated.
+	// UnaryAuthInterceptor verifies the caller's JWT (#138) and populates the
+	// caller identity, tenant context, and audit actor on every request from
+	// verified claims only. Without it handlers see no tenant and reject with
+	// Unauthenticated.
+	verifier, err := auth.VerifierFromEnv(ctx)
+	if err != nil {
+		log.Fatalf("budget-planning: startup: load JWT public key: %v", err)
+	}
 	srv := server.New(server.Config{
-		Name:        "budget-planning",
-		Port:        8081,
-		MetricsPort: 9091,
-		Loader:      loader,
-		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryCallerInterceptor()},
-		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamCallerInterceptor()},
+		Name:                    "budget-planning",
+		Port:                    8081,
+		MetricsPort:             9091,
+		Loader:                  loader,
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
 	}, nil)
 
 	budgetv1.RegisterBudgetServiceServer(srv.GRPCServer(), handler)
@@ -117,14 +122,12 @@ func main() {
 	// UI calls REST endpoints like GET /api/v1/budgets. The generated mux
 	// lives on :9081 (grpc port 8081 + 1000, parallel to IAM's 8086/9086).
 	go func() {
-		// Forward Kong-style identity headers as gRPC metadata so
-		// pkg/interceptor.UnaryCallerInterceptor can populate tenant and
-		// caller context. Without this the handlers 401 on "tenant ID not
-		// found in context" because grpc-gateway strips custom headers by
-		// default.
+		// x-caller-* and x-tenant-id are deliberately NOT forwarded: identity
+		// comes from the verified token (#138), and forwarding them would let a
+		// browser assert its own role. X-Project-Id selects a resource, not an
+		// identity. Authorization arrives without a matcher (permanent header).
 		headerMatcher := func(key string) (string, bool) {
-			switch key {
-			case "X-Tenant-Id", "X-Caller-Id", "X-Caller-Email", "X-Caller-Role", "X-Project-Id":
+			if key == "X-Project-Id" {
 				return key, true
 			}
 			return runtime.DefaultHeaderMatcher(key)
@@ -153,9 +156,7 @@ func main() {
 				http.MethodPatch, http.MethodDelete, http.MethodOptions,
 			},
 			AllowedHeaders: []string{
-				"Content-Type", "Authorization",
-				"X-Tenant-Id", "X-Project-Id",
-				"X-Caller-Id", "X-Caller-Email", "X-Caller-Role",
+				"Content-Type", "Authorization", "Accept", "X-Project-Id",
 			},
 			AllowCredentials: true,
 		}).Handler(gwMux)

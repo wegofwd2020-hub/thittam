@@ -45,10 +45,8 @@ func (h *Handler) CreateAsset(ctx context.Context, req *inventoryv1.CreateAssetR
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "inventory:write"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "inventory:write"); err != nil {
+		return nil, err
 	}
 
 	purchaseCost := decimal.Zero
@@ -133,10 +131,8 @@ func (h *Handler) CheckOutAsset(ctx context.Context, req *inventoryv1.CheckOutAs
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "inventory:checkout"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "inventory:checkout"); err != nil {
+		return nil, err
 	}
 
 	assetID, err := uuid.Parse(req.GetAssetId())
@@ -185,10 +181,8 @@ func (h *Handler) CheckInAsset(ctx context.Context, req *inventoryv1.CheckInAsse
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if h.perm != nil {
-		if err := interceptor.RequirePermission(ctx, h.perm, "inventory:checkout"); err != nil {
-			return nil, err
-		}
+	if err := interceptor.RequirePermission(ctx, h.perm, "inventory:checkout"); err != nil {
+		return nil, err
 	}
 
 	checkoutID, err := uuid.Parse(req.GetCheckoutId())

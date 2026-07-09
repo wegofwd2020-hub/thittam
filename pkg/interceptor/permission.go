@@ -4,11 +4,22 @@ import (
 	"context"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// checkPermissionTimeout bounds the single CheckPermission RPC to iam. It is
+// one indexed DB lookup behind a gRPC hop, so 5s is generous, not tight — the
+// point is to fail this one call rather than let a hung iam stall every
+// authz'd write in project/budget/expense/inventory until the inbound
+// deadline (which may be much longer, or absent).
+//
+// Variable (not const) so tests can shrink it rather than block for the real
+// 5s; production code never reassigns it.
+var checkPermissionTimeout = 5 * time.Second
 
 // PermissionChecker is the narrow contract the interceptor needs from the IAM
 // service. Defined here (not in services/iam) so this package never imports the
@@ -54,13 +65,23 @@ func RequirePermission(ctx context.Context, checker PermissionChecker, permissio
 		return status.Error(codes.Unauthenticated, "caller identity not present in context")
 	}
 
+	if checker == nil {
+		// Misconfiguration, not authorization: the service could not reach IAM.
+		// Failing closed is the only safe answer — a check that passes because
+		// a dial failed is not a check.
+		return status.Error(codes.Internal, "permission checker unavailable")
+	}
+
 	var projectID *uuid.UUID
 	if ProjectScopedRBACEnabled() && caller.ProjectID != uuid.Nil {
 		pid := caller.ProjectID
 		projectID = &pid
 	}
 
-	allowed, err := checker.CheckPermission(ctx, caller.UserID, permission, projectID)
+	checkCtx, cancel := context.WithTimeout(ctx, checkPermissionTimeout)
+	defer cancel()
+
+	allowed, err := checker.CheckPermission(checkCtx, caller.UserID, permission, projectID)
 	if err != nil {
 		return status.Errorf(codes.Internal, "permission check failed: %v", err)
 	}
