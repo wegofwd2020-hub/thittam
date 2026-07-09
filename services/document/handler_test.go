@@ -5,15 +5,34 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func newHandler() *Handler {
 	return NewHandler(newTestService(&mockRepo{}))
+}
+
+// newHandlerWithRepo builds a Handler backed by the given mock repo — used by
+// tests that need to assert the repository is (or is not) reached.
+func newHandlerWithRepo(r *mockRepo) *Handler {
+	return NewHandler(newTestService(r))
+}
+
+// callerCtx returns a context carrying a verified caller in tenant tid, as
+// UnaryAuthInterceptor would have produced from a valid token (#138).
+// Handler tests bypass the interceptor, so they must inject the caller themselves.
+func callerCtx(tid uuid.UUID) context.Context {
+	return interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
+		UserID:   uuid.New(),
+		TenantID: tid,
+		Email:    "user@example.com",
+		Roles:    []string{"member"},
+	})
 }
 
 // --- InitiateUpload ---
@@ -23,7 +42,7 @@ func TestHandler_InitiateUpload_Success(t *testing.T) {
 	tenantID := uuid.New()
 	uploadedBy := uuid.New()
 
-	resp, err := newHandler().InitiateUpload(context.Background(), &documentv1.InitiateUploadRequest{
+	resp, err := newHandler().InitiateUpload(callerCtx(tenantID), &documentv1.InitiateUploadRequest{
 		TenantId:   tenantID.String(),
 		Name:       "script.pdf",
 		MimeType:   "application/pdf",
@@ -36,8 +55,9 @@ func TestHandler_InitiateUpload_Success(t *testing.T) {
 
 func TestHandler_InitiateUpload_WithProductionAndFolder(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().InitiateUpload(context.Background(), &documentv1.InitiateUploadRequest{
-		TenantId:     uuid.New().String(),
+	tid := uuid.New()
+	resp, err := newHandler().InitiateUpload(callerCtx(tid), &documentv1.InitiateUploadRequest{
+		TenantId:     tid.String(),
 		ProductionId: uuid.New().String(),
 		FolderId:     uuid.New().String(),
 		Name:         "budget.xlsx",
@@ -50,7 +70,7 @@ func TestHandler_InitiateUpload_WithProductionAndFolder(t *testing.T) {
 
 func TestHandler_InitiateUpload_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().InitiateUpload(context.Background(), &documentv1.InitiateUploadRequest{
+	_, err := newHandler().InitiateUpload(callerCtx(uuid.New()), &documentv1.InitiateUploadRequest{
 		TenantId: "bad", UploadedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -58,24 +78,27 @@ func TestHandler_InitiateUpload_InvalidTenantID(t *testing.T) {
 
 func TestHandler_InitiateUpload_InvalidUploadedBy(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().InitiateUpload(context.Background(), &documentv1.InitiateUploadRequest{
-		TenantId: uuid.New().String(), UploadedBy: "bad",
+	tid := uuid.New()
+	_, err := newHandler().InitiateUpload(callerCtx(tid), &documentv1.InitiateUploadRequest{
+		TenantId: tid.String(), UploadedBy: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_InitiateUpload_InvalidProductionID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().InitiateUpload(context.Background(), &documentv1.InitiateUploadRequest{
-		TenantId: uuid.New().String(), ProductionId: "bad", UploadedBy: uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().InitiateUpload(callerCtx(tid), &documentv1.InitiateUploadRequest{
+		TenantId: tid.String(), ProductionId: "bad", UploadedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_InitiateUpload_InvalidFolderID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().InitiateUpload(context.Background(), &documentv1.InitiateUploadRequest{
-		TenantId: uuid.New().String(), FolderId: "bad", UploadedBy: uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().InitiateUpload(callerCtx(tid), &documentv1.InitiateUploadRequest{
+		TenantId: tid.String(), FolderId: "bad", UploadedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -87,7 +110,7 @@ func TestHandler_ConfirmUpload_Success(t *testing.T) {
 	tenantID := uuid.New()
 	docID := uuid.New()
 
-	resp, err := newHandler().ConfirmUpload(context.Background(), &documentv1.ConfirmUploadRequest{
+	resp, err := newHandler().ConfirmUpload(callerCtx(tenantID), &documentv1.ConfirmUploadRequest{
 		TenantId:   tenantID.String(),
 		DocumentId: docID.String(),
 	})
@@ -98,7 +121,7 @@ func TestHandler_ConfirmUpload_Success(t *testing.T) {
 
 func TestHandler_ConfirmUpload_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ConfirmUpload(context.Background(), &documentv1.ConfirmUploadRequest{
+	_, err := newHandler().ConfirmUpload(callerCtx(uuid.New()), &documentv1.ConfirmUploadRequest{
 		TenantId: "bad", DocumentId: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -106,8 +129,9 @@ func TestHandler_ConfirmUpload_InvalidTenantID(t *testing.T) {
 
 func TestHandler_ConfirmUpload_InvalidDocumentID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ConfirmUpload(context.Background(), &documentv1.ConfirmUploadRequest{
-		TenantId: uuid.New().String(), DocumentId: "bad",
+	tid := uuid.New()
+	_, err := newHandler().ConfirmUpload(callerCtx(tid), &documentv1.ConfirmUploadRequest{
+		TenantId: tid.String(), DocumentId: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -124,7 +148,7 @@ func TestHandler_GetDocument_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.GetDocument(context.Background(), &documentv1.GetDocumentRequest{
+	resp, err := h.GetDocument(callerCtx(tenantID), &documentv1.GetDocumentRequest{
 		TenantId: tenantID.String(),
 		Id:       docID.String(),
 	})
@@ -135,7 +159,7 @@ func TestHandler_GetDocument_Success(t *testing.T) {
 
 func TestHandler_GetDocument_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetDocument(context.Background(), &documentv1.GetDocumentRequest{
+	_, err := newHandler().GetDocument(callerCtx(uuid.New()), &documentv1.GetDocumentRequest{
 		TenantId: "bad", Id: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -143,21 +167,23 @@ func TestHandler_GetDocument_InvalidTenantID(t *testing.T) {
 
 func TestHandler_GetDocument_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetDocument(context.Background(), &documentv1.GetDocumentRequest{
-		TenantId: uuid.New().String(), Id: "bad",
+	tid := uuid.New()
+	_, err := newHandler().GetDocument(callerCtx(tid), &documentv1.GetDocumentRequest{
+		TenantId: tid.String(), Id: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_GetDocument_NotFound(t *testing.T) {
 	t.Parallel()
+	tid := uuid.New()
 	h := NewHandler(newTestService(&mockRepo{
 		getDocumentFn: func(_ context.Context, _, _ uuid.UUID) (*Document, error) {
 			return nil, ErrDocumentNotFound
 		},
 	}))
-	_, err := h.GetDocument(context.Background(), &documentv1.GetDocumentRequest{
-		TenantId: uuid.New().String(), Id: uuid.New().String(),
+	_, err := h.GetDocument(callerCtx(tid), &documentv1.GetDocumentRequest{
+		TenantId: tid.String(), Id: uuid.New().String(),
 	})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
@@ -173,29 +199,31 @@ func TestHandler_ListDocuments_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.ListDocuments(context.Background(), &documentv1.ListDocumentsRequest{TenantId: tenantID.String()})
+	resp, err := h.ListDocuments(callerCtx(tenantID), &documentv1.ListDocumentsRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetDocuments(), 1)
 }
 
 func TestHandler_ListDocuments_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListDocuments(context.Background(), &documentv1.ListDocumentsRequest{TenantId: "bad"})
+	_, err := newHandler().ListDocuments(callerCtx(uuid.New()), &documentv1.ListDocumentsRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_ListDocuments_InvalidProductionID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListDocuments(context.Background(), &documentv1.ListDocumentsRequest{
-		TenantId: uuid.New().String(), ProductionId: "bad",
+	tid := uuid.New()
+	_, err := newHandler().ListDocuments(callerCtx(tid), &documentv1.ListDocumentsRequest{
+		TenantId: tid.String(), ProductionId: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_ListDocuments_InvalidFolderID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListDocuments(context.Background(), &documentv1.ListDocumentsRequest{
-		TenantId: uuid.New().String(), FolderId: "bad",
+	tid := uuid.New()
+	_, err := newHandler().ListDocuments(callerCtx(tid), &documentv1.ListDocumentsRequest{
+		TenantId: tid.String(), FolderId: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -204,8 +232,9 @@ func TestHandler_ListDocuments_InvalidFolderID(t *testing.T) {
 
 func TestHandler_DeleteDocument_Success(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().DeleteDocument(context.Background(), &documentv1.DeleteDocumentRequest{
-		TenantId: uuid.New().String(),
+	tid := uuid.New()
+	resp, err := newHandler().DeleteDocument(callerCtx(tid), &documentv1.DeleteDocumentRequest{
+		TenantId: tid.String(),
 		Id:       uuid.New().String(),
 	})
 	require.NoError(t, err)
@@ -214,7 +243,7 @@ func TestHandler_DeleteDocument_Success(t *testing.T) {
 
 func TestHandler_DeleteDocument_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().DeleteDocument(context.Background(), &documentv1.DeleteDocumentRequest{
+	_, err := newHandler().DeleteDocument(callerCtx(uuid.New()), &documentv1.DeleteDocumentRequest{
 		TenantId: "bad", Id: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -222,8 +251,9 @@ func TestHandler_DeleteDocument_InvalidTenantID(t *testing.T) {
 
 func TestHandler_DeleteDocument_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().DeleteDocument(context.Background(), &documentv1.DeleteDocumentRequest{
-		TenantId: uuid.New().String(), Id: "bad",
+	tid := uuid.New()
+	_, err := newHandler().DeleteDocument(callerCtx(tid), &documentv1.DeleteDocumentRequest{
+		TenantId: tid.String(), Id: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -232,8 +262,9 @@ func TestHandler_DeleteDocument_InvalidID(t *testing.T) {
 
 func TestHandler_GetDownloadURL_Success(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().GetDownloadURL(context.Background(), &documentv1.GetDownloadURLRequest{
-		TenantId: uuid.New().String(),
+	tid := uuid.New()
+	resp, err := newHandler().GetDownloadURL(callerCtx(tid), &documentv1.GetDownloadURLRequest{
+		TenantId: tid.String(),
 		Id:       uuid.New().String(),
 	})
 	require.NoError(t, err)
@@ -242,7 +273,7 @@ func TestHandler_GetDownloadURL_Success(t *testing.T) {
 
 func TestHandler_GetDownloadURL_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetDownloadURL(context.Background(), &documentv1.GetDownloadURLRequest{
+	_, err := newHandler().GetDownloadURL(callerCtx(uuid.New()), &documentv1.GetDownloadURLRequest{
 		TenantId: "bad", Id: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -250,8 +281,9 @@ func TestHandler_GetDownloadURL_InvalidTenantID(t *testing.T) {
 
 func TestHandler_GetDownloadURL_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetDownloadURL(context.Background(), &documentv1.GetDownloadURLRequest{
-		TenantId: uuid.New().String(), Id: "bad",
+	tid := uuid.New()
+	_, err := newHandler().GetDownloadURL(callerCtx(tid), &documentv1.GetDownloadURLRequest{
+		TenantId: tid.String(), Id: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -260,6 +292,7 @@ func TestHandler_GetDownloadURL_InvalidID(t *testing.T) {
 
 func TestHandler_MoveDocument_Success(t *testing.T) {
 	t.Parallel()
+	tid := uuid.New()
 	docID := uuid.New()
 	folderID := uuid.New()
 	h := NewHandler(newTestService(&mockRepo{
@@ -268,8 +301,8 @@ func TestHandler_MoveDocument_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.MoveDocument(context.Background(), &documentv1.MoveDocumentRequest{
-		TenantId:   uuid.New().String(),
+	resp, err := h.MoveDocument(callerCtx(tid), &documentv1.MoveDocumentRequest{
+		TenantId:   tid.String(),
 		DocumentId: docID.String(),
 		FolderId:   folderID.String(),
 	})
@@ -279,7 +312,7 @@ func TestHandler_MoveDocument_Success(t *testing.T) {
 
 func TestHandler_MoveDocument_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().MoveDocument(context.Background(), &documentv1.MoveDocumentRequest{
+	_, err := newHandler().MoveDocument(callerCtx(uuid.New()), &documentv1.MoveDocumentRequest{
 		TenantId: "bad", DocumentId: uuid.New().String(), FolderId: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -287,16 +320,18 @@ func TestHandler_MoveDocument_InvalidTenantID(t *testing.T) {
 
 func TestHandler_MoveDocument_InvalidDocumentID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().MoveDocument(context.Background(), &documentv1.MoveDocumentRequest{
-		TenantId: uuid.New().String(), DocumentId: "bad", FolderId: uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().MoveDocument(callerCtx(tid), &documentv1.MoveDocumentRequest{
+		TenantId: tid.String(), DocumentId: "bad", FolderId: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_MoveDocument_InvalidFolderID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().MoveDocument(context.Background(), &documentv1.MoveDocumentRequest{
-		TenantId: uuid.New().String(), DocumentId: uuid.New().String(), FolderId: "bad",
+	tid := uuid.New()
+	_, err := newHandler().MoveDocument(callerCtx(tid), &documentv1.MoveDocumentRequest{
+		TenantId: tid.String(), DocumentId: uuid.New().String(), FolderId: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -305,8 +340,9 @@ func TestHandler_MoveDocument_InvalidFolderID(t *testing.T) {
 
 func TestHandler_CreateVersion_Success(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().CreateVersion(context.Background(), &documentv1.CreateVersionRequest{
-		TenantId:   uuid.New().String(),
+	tid := uuid.New()
+	resp, err := newHandler().CreateVersion(callerCtx(tid), &documentv1.CreateVersionRequest{
+		TenantId:   tid.String(),
 		DocumentId: uuid.New().String(),
 		UploadedBy: uuid.New().String(),
 	})
@@ -316,7 +352,7 @@ func TestHandler_CreateVersion_Success(t *testing.T) {
 
 func TestHandler_CreateVersion_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateVersion(context.Background(), &documentv1.CreateVersionRequest{
+	_, err := newHandler().CreateVersion(callerCtx(uuid.New()), &documentv1.CreateVersionRequest{
 		TenantId: "bad", DocumentId: uuid.New().String(), UploadedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -324,16 +360,18 @@ func TestHandler_CreateVersion_InvalidTenantID(t *testing.T) {
 
 func TestHandler_CreateVersion_InvalidDocumentID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateVersion(context.Background(), &documentv1.CreateVersionRequest{
-		TenantId: uuid.New().String(), DocumentId: "bad", UploadedBy: uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().CreateVersion(callerCtx(tid), &documentv1.CreateVersionRequest{
+		TenantId: tid.String(), DocumentId: "bad", UploadedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_CreateVersion_InvalidUploadedBy(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateVersion(context.Background(), &documentv1.CreateVersionRequest{
-		TenantId: uuid.New().String(), DocumentId: uuid.New().String(), UploadedBy: "bad",
+	tid := uuid.New()
+	_, err := newHandler().CreateVersion(callerCtx(tid), &documentv1.CreateVersionRequest{
+		TenantId: tid.String(), DocumentId: uuid.New().String(), UploadedBy: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -342,9 +380,10 @@ func TestHandler_CreateVersion_InvalidUploadedBy(t *testing.T) {
 
 func TestHandler_ConfirmVersion_Success(t *testing.T) {
 	t.Parallel()
+	tid := uuid.New()
 	// Default doc has CurrentVersion=1; confirm version 2.
-	resp, err := newHandler().ConfirmVersion(context.Background(), &documentv1.ConfirmVersionRequest{
-		TenantId:   uuid.New().String(),
+	resp, err := newHandler().ConfirmVersion(callerCtx(tid), &documentv1.ConfirmVersionRequest{
+		TenantId:   tid.String(),
 		DocumentId: uuid.New().String(),
 		Version:    2,
 		UploadedBy: uuid.New().String(),
@@ -355,7 +394,7 @@ func TestHandler_ConfirmVersion_Success(t *testing.T) {
 
 func TestHandler_ConfirmVersion_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ConfirmVersion(context.Background(), &documentv1.ConfirmVersionRequest{
+	_, err := newHandler().ConfirmVersion(callerCtx(uuid.New()), &documentv1.ConfirmVersionRequest{
 		TenantId: "bad", DocumentId: uuid.New().String(), UploadedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -363,16 +402,18 @@ func TestHandler_ConfirmVersion_InvalidTenantID(t *testing.T) {
 
 func TestHandler_ConfirmVersion_InvalidDocumentID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ConfirmVersion(context.Background(), &documentv1.ConfirmVersionRequest{
-		TenantId: uuid.New().String(), DocumentId: "bad", UploadedBy: uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().ConfirmVersion(callerCtx(tid), &documentv1.ConfirmVersionRequest{
+		TenantId: tid.String(), DocumentId: "bad", UploadedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_ConfirmVersion_InvalidUploadedBy(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ConfirmVersion(context.Background(), &documentv1.ConfirmVersionRequest{
-		TenantId: uuid.New().String(), DocumentId: uuid.New().String(), UploadedBy: "bad",
+	tid := uuid.New()
+	_, err := newHandler().ConfirmVersion(callerCtx(tid), &documentv1.ConfirmVersionRequest{
+		TenantId: tid.String(), DocumentId: uuid.New().String(), UploadedBy: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -381,6 +422,7 @@ func TestHandler_ConfirmVersion_InvalidUploadedBy(t *testing.T) {
 
 func TestHandler_ListVersions_Success(t *testing.T) {
 	t.Parallel()
+	tid := uuid.New()
 	docID := uuid.New()
 	h := NewHandler(newTestService(&mockRepo{
 		listVersionsFn: func(_ context.Context, id uuid.UUID, _, _ int) ([]DocumentVersion, error) {
@@ -388,8 +430,8 @@ func TestHandler_ListVersions_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.ListVersions(context.Background(), &documentv1.ListVersionsRequest{
-		TenantId:   uuid.New().String(),
+	resp, err := h.ListVersions(callerCtx(tid), &documentv1.ListVersionsRequest{
+		TenantId:   tid.String(),
 		DocumentId: docID.String(),
 	})
 	require.NoError(t, err)
@@ -398,7 +440,7 @@ func TestHandler_ListVersions_Success(t *testing.T) {
 
 func TestHandler_ListVersions_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListVersions(context.Background(), &documentv1.ListVersionsRequest{
+	_, err := newHandler().ListVersions(callerCtx(uuid.New()), &documentv1.ListVersionsRequest{
 		TenantId: "bad", DocumentId: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -406,8 +448,9 @@ func TestHandler_ListVersions_InvalidTenantID(t *testing.T) {
 
 func TestHandler_ListVersions_InvalidDocumentID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListVersions(context.Background(), &documentv1.ListVersionsRequest{
-		TenantId: uuid.New().String(), DocumentId: "bad",
+	tid := uuid.New()
+	_, err := newHandler().ListVersions(callerCtx(tid), &documentv1.ListVersionsRequest{
+		TenantId: tid.String(), DocumentId: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -416,10 +459,11 @@ func TestHandler_ListVersions_InvalidDocumentID(t *testing.T) {
 
 func TestHandler_RestoreVersion_Success(t *testing.T) {
 	t.Parallel()
+	tid := uuid.New()
 	// Default doc has CurrentVersion=1; restoring version 2 calls GetVersion.
 	docID := uuid.New()
-	resp, err := newHandler().RestoreVersion(context.Background(), &documentv1.RestoreVersionRequest{
-		TenantId:   uuid.New().String(),
+	resp, err := newHandler().RestoreVersion(callerCtx(tid), &documentv1.RestoreVersionRequest{
+		TenantId:   tid.String(),
 		DocumentId: docID.String(),
 		Version:    2,
 	})
@@ -429,7 +473,7 @@ func TestHandler_RestoreVersion_Success(t *testing.T) {
 
 func TestHandler_RestoreVersion_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().RestoreVersion(context.Background(), &documentv1.RestoreVersionRequest{
+	_, err := newHandler().RestoreVersion(callerCtx(uuid.New()), &documentv1.RestoreVersionRequest{
 		TenantId: "bad", DocumentId: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -437,8 +481,9 @@ func TestHandler_RestoreVersion_InvalidTenantID(t *testing.T) {
 
 func TestHandler_RestoreVersion_InvalidDocumentID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().RestoreVersion(context.Background(), &documentv1.RestoreVersionRequest{
-		TenantId: uuid.New().String(), DocumentId: "bad",
+	tid := uuid.New()
+	_, err := newHandler().RestoreVersion(callerCtx(tid), &documentv1.RestoreVersionRequest{
+		TenantId: tid.String(), DocumentId: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -447,8 +492,9 @@ func TestHandler_RestoreVersion_InvalidDocumentID(t *testing.T) {
 
 func TestHandler_CreateFolder_Success(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().CreateFolder(context.Background(), &documentv1.CreateFolderRequest{
-		TenantId:  uuid.New().String(),
+	tid := uuid.New()
+	resp, err := newHandler().CreateFolder(callerCtx(tid), &documentv1.CreateFolderRequest{
+		TenantId:  tid.String(),
 		Name:      "Scripts",
 		CreatedBy: uuid.New().String(),
 	})
@@ -458,8 +504,9 @@ func TestHandler_CreateFolder_Success(t *testing.T) {
 
 func TestHandler_CreateFolder_WithProductionAndParent(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().CreateFolder(context.Background(), &documentv1.CreateFolderRequest{
-		TenantId:     uuid.New().String(),
+	tid := uuid.New()
+	resp, err := newHandler().CreateFolder(callerCtx(tid), &documentv1.CreateFolderRequest{
+		TenantId:     tid.String(),
 		ProductionId: uuid.New().String(),
 		ParentId:     uuid.New().String(),
 		Name:         "Contracts",
@@ -471,7 +518,7 @@ func TestHandler_CreateFolder_WithProductionAndParent(t *testing.T) {
 
 func TestHandler_CreateFolder_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateFolder(context.Background(), &documentv1.CreateFolderRequest{
+	_, err := newHandler().CreateFolder(callerCtx(uuid.New()), &documentv1.CreateFolderRequest{
 		TenantId: "bad", CreatedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -479,24 +526,27 @@ func TestHandler_CreateFolder_InvalidTenantID(t *testing.T) {
 
 func TestHandler_CreateFolder_InvalidCreatedBy(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateFolder(context.Background(), &documentv1.CreateFolderRequest{
-		TenantId: uuid.New().String(), CreatedBy: "bad",
+	tid := uuid.New()
+	_, err := newHandler().CreateFolder(callerCtx(tid), &documentv1.CreateFolderRequest{
+		TenantId: tid.String(), CreatedBy: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_CreateFolder_InvalidProductionID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateFolder(context.Background(), &documentv1.CreateFolderRequest{
-		TenantId: uuid.New().String(), ProductionId: "bad", CreatedBy: uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().CreateFolder(callerCtx(tid), &documentv1.CreateFolderRequest{
+		TenantId: tid.String(), ProductionId: "bad", CreatedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_CreateFolder_InvalidParentID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateFolder(context.Background(), &documentv1.CreateFolderRequest{
-		TenantId: uuid.New().String(), ParentId: "bad", CreatedBy: uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().CreateFolder(callerCtx(tid), &documentv1.CreateFolderRequest{
+		TenantId: tid.String(), ParentId: "bad", CreatedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -512,7 +562,7 @@ func TestHandler_ListFolders_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.ListFolders(context.Background(), &documentv1.ListFoldersRequest{TenantId: tenantID.String()})
+	resp, err := h.ListFolders(callerCtx(tenantID), &documentv1.ListFoldersRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetFolders(), 1)
 	assert.Equal(t, "Scripts", resp.GetFolders()[0].GetName())
@@ -520,16 +570,58 @@ func TestHandler_ListFolders_Success(t *testing.T) {
 
 func TestHandler_ListFolders_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListFolders(context.Background(), &documentv1.ListFoldersRequest{TenantId: "bad"})
+	_, err := newHandler().ListFolders(callerCtx(uuid.New()), &documentv1.ListFoldersRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_ListFolders_InvalidProductionID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListFolders(context.Background(), &documentv1.ListFoldersRequest{
-		TenantId: uuid.New().String(), ProductionId: "bad",
+	tid := uuid.New()
+	_, err := newHandler().ListFolders(callerCtx(tid), &documentv1.ListFoldersRequest{
+		TenantId: tid.String(), ProductionId: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// --- Tenant boundary (#144) ---
+
+func TestHandler_CrossTenantRead_Denied(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	victimTenant := uuid.New()
+	require.NotEqual(t, callerTenant, victimTenant)
+
+	h := newHandlerWithRepo(&mockRepo{
+		getDocumentFn: func(context.Context, uuid.UUID, uuid.UUID) (*Document, error) {
+			t.Fatal("repository must not be reached on a cross-tenant request")
+			return nil, nil
+		},
+	})
+
+	_, err := h.GetDocument(callerCtx(callerTenant), &documentv1.GetDocumentRequest{
+		TenantId: victimTenant.String(),
+		Id:       uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListDocuments_UsesTokenTenant(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	var gotTenant uuid.UUID
+	h := newHandlerWithRepo(&mockRepo{
+		listDocumentsFn: func(_ context.Context, tenantID uuid.UUID, _, _ *uuid.UUID, _, _ int) ([]Document, error) {
+			gotTenant = tenantID
+			return nil, nil
+		},
+	})
+
+	// Request carries NO tenant at all: the token supplies it.
+	_, err := h.ListDocuments(callerCtx(tid), &documentv1.ListDocumentsRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, tid, gotTenant, "the repository must receive the token's tenant")
 }
 
 // --- grpcErr ---
