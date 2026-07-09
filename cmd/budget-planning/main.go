@@ -122,12 +122,12 @@ func main() {
 	// UI calls REST endpoints like GET /api/v1/budgets. The generated mux
 	// lives on :9081 (grpc port 8081 + 1000, parallel to IAM's 8086/9086).
 	go func() {
-		// Forward Kong-style identity headers as gRPC metadata. grpc-gateway
-		// strips custom headers by default; without this, tenant/project
-		// scoping headers never reach the handler.
+		// x-caller-* and x-tenant-id are deliberately NOT forwarded: identity
+		// comes from the verified token (#138), and forwarding them would let a
+		// browser assert its own role. X-Project-Id selects a resource, not an
+		// identity. Authorization arrives without a matcher (permanent header).
 		headerMatcher := func(key string) (string, bool) {
-			switch key {
-			case "X-Tenant-Id", "X-Caller-Id", "X-Caller-Email", "X-Caller-Role", "X-Project-Id":
+			if key == "X-Project-Id" {
 				return key, true
 			}
 			return runtime.DefaultHeaderMatcher(key)

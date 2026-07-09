@@ -23,7 +23,11 @@ import (
 	nats "github.com/nats-io/nats.go"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/grpc"
+
 	reportingv1 "github.com/wegofwd2020/thittam/gen/reporting/v1"
+	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	verticaldb "github.com/wegofwd2020/thittam/pkg/vertical/db"
@@ -88,11 +92,17 @@ func main() {
 	defer sub.drain()
 
 	// --- gRPC server ---
+	verifier, err := auth.VerifierFromEnv(ctx)
+	if err != nil {
+		log.Fatalf("reporting-analytics: startup: load JWT public key: %v", err)
+	}
 	srv := server.New(server.Config{
-		Name:        "reporting-analytics",
-		Port:        8085,
-		MetricsPort: 9095,
-		Loader:      loader,
+		Name:                    "reporting-analytics",
+		Port:                    8085,
+		MetricsPort:             9095,
+		Loader:                  loader,
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
 	}, nil)
 
 	reportingv1.RegisterReportingServiceServer(srv.GRPCServer(), handler)

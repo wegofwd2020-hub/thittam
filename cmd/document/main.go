@@ -15,7 +15,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	// "github.com/nats-io/nats.go"  // uncomment when NATS publisher is wired
+	"google.golang.org/grpc"
+
 	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
+	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/document"
 	documentdb "github.com/wegofwd2020/thittam/services/document/db"
@@ -77,10 +81,16 @@ func main() {
 
 	// --- gRPC server ---
 	// Document is a universal service — no vertical interceptor needed.
+	verifier, err := auth.VerifierFromEnv(ctx)
+	if err != nil {
+		log.Fatalf("document: startup: load JWT public key: %v", err)
+	}
 	srv := server.New(server.Config{
-		Name:        "document",
-		Port:        8088,
-		MetricsPort: 9098,
+		Name:                    "document",
+		Port:                    8088,
+		MetricsPort:             9098,
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
 	}, nil)
 
 	documentv1.RegisterDocumentServiceServer(srv.GRPCServer(), handler)

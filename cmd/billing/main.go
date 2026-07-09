@@ -13,6 +13,8 @@ import (
 	"github.com/nats-io/nats.go"
 	billingv1 "github.com/wegofwd2020/thittam/gen/billing/v1"
 	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
+	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/billing"
@@ -96,11 +98,17 @@ func main() {
 	handler := billing.NewHandlerWithDeps(svc, docClient)
 
 	// --- gRPC server ---
+	verifier, err := auth.VerifierFromEnv(ctx)
+	if err != nil {
+		log.Fatalf("billing: startup: load JWT public key: %v", err)
+	}
 	srv := server.New(server.Config{
 		Name:        "billing",
 		Port:        8089,
 		MetricsPort: 9099,
 		// Loader: nil — vertical interceptor is not used for this service.
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
 	}, nil)
 
 	billingv1.RegisterBillingServiceServer(srv.GRPCServer(), handler)

@@ -17,7 +17,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	nats "github.com/nats-io/nats.go"
+	"google.golang.org/grpc"
+
 	notificationsv1 "github.com/wegofwd2020/thittam/gen/notifications/v1"
+	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/notifications"
@@ -102,10 +106,16 @@ func main() {
 
 	// --- gRPC server ---
 	// Notifications is a universal service — no vertical interceptor needed.
+	verifier, err := auth.VerifierFromEnv(ctx)
+	if err != nil {
+		log.Fatalf("notifications: startup: load JWT public key: %v", err)
+	}
 	srv := server.New(server.Config{
-		Name:        "notifications",
-		Port:        8087,
-		MetricsPort: 9097,
+		Name:                    "notifications",
+		Port:                    8087,
+		MetricsPort:             9097,
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
 	}, nil)
 
 	notificationsv1.RegisterNotificationsServiceServer(srv.GRPCServer(), handler)
