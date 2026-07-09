@@ -259,7 +259,13 @@ func (h *Handler) RevokeRole(ctx context.Context, req *iamv1.RevokeRoleRequest) 
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid role_id")
 	}
-	if err := h.svc.RevokeRole(ctx, userID, roleID); err != nil {
+	// RevokeRoleRequest carries no tenant_id — derive it from the caller's verified
+	// token. Task 2 restructures this handler to also gate on user:manage.
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not present in context")
+	}
+	if err := h.svc.RevokeRole(ctx, caller.TenantID, userID, roleID); err != nil {
 		return nil, grpcError(err)
 	}
 	return &iamv1.RevokeRoleResponse{}, nil
