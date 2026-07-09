@@ -1384,6 +1384,44 @@ func TestAcceptInvitation_RoleGrantFails_ReturnsError(t *testing.T) {
 	})
 	_, err := svc.AcceptInvitation(context.Background(), "valid-token", "newpass")
 	require.Error(t, err, "a failed grant must not yield a token")
+	// Pin the failure to the grant. Without this the test would still pass if a later
+	// step (MarkInvitationAccepted, token issue) were the one erroring.
+	require.ErrorContains(t, err, "assign role")
+}
+
+// AssignRole takes four consecutive uuid.UUID, so a transposed argument compiles
+// silently and the mock's defaults echo any id back as a valid in-tenant object.
+// Capture the UserRole actually written and pin each field. The dangerous swap is
+// userID <-> assignedBy: it would grant the invited role to the inviter.
+func TestAcceptInvitation_GrantsInvitedRoleToTheNewUser(t *testing.T) {
+	t.Parallel()
+	roleID := fixedRoleID
+	var createdUserID uuid.UUID
+	var granted *UserRole
+	svc := newTestService(&mockRepo{
+		getInvitationByTokenFn: func(context.Context, string) (*Invitation, error) {
+			return &Invitation{
+				ID: fixedInviteID, TenantID: fixedTenantID, Email: "invited@example.com",
+				RoleID: &roleID, Status: "pending", InvitedBy: fixedUserID,
+				ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+			}, nil
+		},
+		createUserFn: func(_ context.Context, u *User) error {
+			createdUserID = u.ID
+			return nil
+		},
+		assignRoleFn: func(_ context.Context, ur *UserRole) error {
+			granted = ur
+			return nil
+		},
+	})
+	_, err := svc.AcceptInvitation(context.Background(), "valid-token", "newpass")
+	require.NoError(t, err)
+	require.NotNil(t, granted, "the invited role must be granted")
+	require.NotEqual(t, uuid.Nil, createdUserID)
+	assert.Equal(t, createdUserID, granted.UserID, "the role goes to the new user, not the inviter")
+	assert.Equal(t, fixedRoleID, granted.RoleID)
+	assert.Equal(t, fixedUserID, granted.AssignedBy, "attributed to the inviter")
 }
 
 // A seven-day-old invitation may name a role that has since been deleted.
