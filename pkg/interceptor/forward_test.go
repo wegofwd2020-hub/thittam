@@ -49,7 +49,10 @@ func TestForwardAuthUnaryClientInterceptor_DoesNotForwardCallerHeaders(t *testin
 	incoming := metadata.Pairs(
 		"authorization", "Bearer abc",
 		"x-caller-role", "platform_admin",
+		"x-caller-id", "22222222-2222-2222-2222-222222222222",
+		"x-caller-email", "attacker@evil.example",
 		"x-tenant-id", "11111111-1111-1111-1111-111111111111",
+		"x-project-id", "33333333-3333-3333-3333-333333333333",
 	)
 	ctx := metadata.NewIncomingContext(context.Background(), incoming)
 
@@ -58,6 +61,14 @@ func TestForwardAuthUnaryClientInterceptor_DoesNotForwardCallerHeaders(t *testin
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"Bearer abc"}, captured.Get("authorization"))
+
+	// Nothing but authorization and x-forwarded-for may cross the boundary.
+	// Forwarding any identity header would relocate the header-trust that #138
+	// removed, rather than remove it.
+	for k := range *captured {
+		assert.Contains(t, []string{"authorization", "x-forwarded-for"}, k,
+			"forwarded unexpected metadata key %q", k)
+	}
 	assert.Empty(t, captured.Get("x-caller-role"), "x-caller-role must never be forwarded downstream")
 	assert.Empty(t, captured.Get("x-tenant-id"), "x-tenant-id must never be forwarded downstream")
 }

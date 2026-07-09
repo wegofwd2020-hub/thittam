@@ -72,9 +72,10 @@ class ApiClient {
     this.token = token;
   }
 
-  // tenantId is no longer sent as a header (#138) — the field survives only
-  // because web/src/lib/auth/context.tsx still calls setTenantId(me.tenant.id)
-  // and other UI code reads it for display/routing.
+  // tenantId is no longer sent as a header (#138) — the field is unread now,
+  // but setTenantId is still called from web/src/lib/auth/context.tsx, so it
+  // stays rather than breaking those call sites. UI code reads the tenant from
+  // useAuth(), not from here.
   setTenantId(tenantId: string | null): void {
     this.tenantId = tenantId;
   }
