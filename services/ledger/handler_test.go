@@ -6,16 +6,29 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	ledgerv1 "github.com/wegofwd2020/thittam/gen/ledger/v1"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	ledgerv1 "github.com/wegofwd2020/thittam/gen/ledger/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func newHandler() *Handler {
 	return NewHandler(NewService(&mockRepo{}))
+}
+
+// callerCtx returns a context carrying a verified caller in tenant tid, as
+// UnaryAuthInterceptor would have produced from a valid token (#138).
+// Handler tests bypass the interceptor, so they must inject the caller themselves.
+func callerCtx(tid uuid.UUID) context.Context {
+	return interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
+		UserID:   uuid.New(),
+		TenantID: tid,
+		Email:    "user@example.com",
+		Roles:    []string{"member"},
+	})
 }
 
 // --- CreateAccount ---
@@ -33,7 +46,7 @@ func TestHandler_CreateAccount_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.CreateAccount(context.Background(), &ledgerv1.CreateAccountRequest{
+	resp, err := h.CreateAccount(callerCtx(tenantID), &ledgerv1.CreateAccountRequest{
 		TenantId:    tenantID.String(),
 		Code:        "5100",
 		Name:        "Production Costs",
@@ -45,14 +58,15 @@ func TestHandler_CreateAccount_Success(t *testing.T) {
 
 func TestHandler_CreateAccount_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateAccount(context.Background(), &ledgerv1.CreateAccountRequest{TenantId: "bad"})
+	_, err := newHandler().CreateAccount(callerCtx(uuid.New()), &ledgerv1.CreateAccountRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_CreateAccount_InvalidParentID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateAccount(context.Background(), &ledgerv1.CreateAccountRequest{
-		TenantId:    uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().CreateAccount(callerCtx(tid), &ledgerv1.CreateAccountRequest{
+		TenantId:    tid.String(),
 		Code:        "5100",
 		AccountType: "expense",
 		ParentId:    "not-a-uuid",
@@ -72,7 +86,7 @@ func TestHandler_GetAccount_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.GetAccount(context.Background(), &ledgerv1.GetAccountRequest{
+	resp, err := h.GetAccount(callerCtx(tenantID), &ledgerv1.GetAccountRequest{
 		TenantId: tenantID.String(),
 		Id:       accountID.String(),
 	})
@@ -82,13 +96,14 @@ func TestHandler_GetAccount_Success(t *testing.T) {
 
 func TestHandler_GetAccount_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetAccount(context.Background(), &ledgerv1.GetAccountRequest{TenantId: "bad", Id: uuid.New().String()})
+	_, err := newHandler().GetAccount(callerCtx(uuid.New()), &ledgerv1.GetAccountRequest{TenantId: "bad", Id: uuid.New().String()})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_GetAccount_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetAccount(context.Background(), &ledgerv1.GetAccountRequest{TenantId: uuid.New().String(), Id: "bad"})
+	tid := uuid.New()
+	_, err := newHandler().GetAccount(callerCtx(tid), &ledgerv1.GetAccountRequest{TenantId: tid.String(), Id: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -103,14 +118,14 @@ func TestHandler_ListAccounts_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.ListAccounts(context.Background(), &ledgerv1.ListAccountsRequest{TenantId: tenantID.String()})
+	resp, err := h.ListAccounts(callerCtx(tenantID), &ledgerv1.ListAccountsRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetAccounts(), 1)
 }
 
 func TestHandler_ListAccounts_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListAccounts(context.Background(), &ledgerv1.ListAccountsRequest{TenantId: "bad"})
+	_, err := newHandler().ListAccounts(callerCtx(uuid.New()), &ledgerv1.ListAccountsRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -125,7 +140,7 @@ func TestHandler_SeedChartOfAccounts_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.SeedChartOfAccounts(context.Background(), &ledgerv1.SeedChartOfAccountsRequest{
+	resp, err := h.SeedChartOfAccounts(callerCtx(tenantID), &ledgerv1.SeedChartOfAccountsRequest{
 		TenantId: tenantID.String(),
 		Entries: []*ledgerv1.ChartOfAccountEntry{
 			{Code: "5100", Name: "Production Costs", AccountType: "expense"},
@@ -137,7 +152,7 @@ func TestHandler_SeedChartOfAccounts_Success(t *testing.T) {
 
 func TestHandler_SeedChartOfAccounts_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().SeedChartOfAccounts(context.Background(), &ledgerv1.SeedChartOfAccountsRequest{TenantId: "bad"})
+	_, err := newHandler().SeedChartOfAccounts(callerCtx(uuid.New()), &ledgerv1.SeedChartOfAccountsRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -152,7 +167,7 @@ func TestHandler_OpenAccountingPeriod_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.OpenAccountingPeriod(context.Background(), &ledgerv1.OpenAccountingPeriodRequest{
+	resp, err := h.OpenAccountingPeriod(callerCtx(tenantID), &ledgerv1.OpenAccountingPeriodRequest{
 		TenantId: tenantID.String(),
 		Year:     2026,
 		Month:    4,
@@ -163,7 +178,7 @@ func TestHandler_OpenAccountingPeriod_Success(t *testing.T) {
 
 func TestHandler_OpenAccountingPeriod_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().OpenAccountingPeriod(context.Background(), &ledgerv1.OpenAccountingPeriodRequest{TenantId: "bad"})
+	_, err := newHandler().OpenAccountingPeriod(callerCtx(uuid.New()), &ledgerv1.OpenAccountingPeriodRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -181,7 +196,7 @@ func TestHandler_CloseAccountingPeriod_Success(t *testing.T) {
 		closePeriodFn: func(_ context.Context, _, _, _ uuid.UUID, _ time.Time) error { return nil },
 	}))
 
-	resp, err := h.CloseAccountingPeriod(context.Background(), &ledgerv1.CloseAccountingPeriodRequest{
+	resp, err := h.CloseAccountingPeriod(callerCtx(tenantID), &ledgerv1.CloseAccountingPeriodRequest{
 		TenantId: tenantID.String(),
 		PeriodId: periodID.String(),
 		ClosedBy: closedBy.String(),
@@ -192,7 +207,7 @@ func TestHandler_CloseAccountingPeriod_Success(t *testing.T) {
 
 func TestHandler_CloseAccountingPeriod_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CloseAccountingPeriod(context.Background(), &ledgerv1.CloseAccountingPeriodRequest{
+	_, err := newHandler().CloseAccountingPeriod(callerCtx(uuid.New()), &ledgerv1.CloseAccountingPeriodRequest{
 		TenantId: "bad", PeriodId: uuid.New().String(), ClosedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -200,16 +215,18 @@ func TestHandler_CloseAccountingPeriod_InvalidTenantID(t *testing.T) {
 
 func TestHandler_CloseAccountingPeriod_InvalidPeriodID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CloseAccountingPeriod(context.Background(), &ledgerv1.CloseAccountingPeriodRequest{
-		TenantId: uuid.New().String(), PeriodId: "bad", ClosedBy: uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().CloseAccountingPeriod(callerCtx(tid), &ledgerv1.CloseAccountingPeriodRequest{
+		TenantId: tid.String(), PeriodId: "bad", ClosedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_CloseAccountingPeriod_InvalidClosedBy(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CloseAccountingPeriod(context.Background(), &ledgerv1.CloseAccountingPeriodRequest{
-		TenantId: uuid.New().String(), PeriodId: uuid.New().String(), ClosedBy: "bad",
+	tid := uuid.New()
+	_, err := newHandler().CloseAccountingPeriod(callerCtx(tid), &ledgerv1.CloseAccountingPeriodRequest{
+		TenantId: tid.String(), PeriodId: uuid.New().String(), ClosedBy: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -238,7 +255,7 @@ func TestHandler_CreateJournalEntry_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.CreateJournalEntry(context.Background(), &ledgerv1.CreateJournalEntryRequest{
+	resp, err := h.CreateJournalEntry(callerCtx(tenantID), &ledgerv1.CreateJournalEntryRequest{
 		TenantId:  tenantID.String(),
 		PeriodId:  periodID.String(),
 		Reference: "REF-001",
@@ -253,22 +270,24 @@ func TestHandler_CreateJournalEntry_Success(t *testing.T) {
 
 func TestHandler_CreateJournalEntry_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateJournalEntry(context.Background(), &ledgerv1.CreateJournalEntryRequest{TenantId: "bad"})
+	_, err := newHandler().CreateJournalEntry(callerCtx(uuid.New()), &ledgerv1.CreateJournalEntryRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_CreateJournalEntry_InvalidPeriodID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateJournalEntry(context.Background(), &ledgerv1.CreateJournalEntryRequest{
-		TenantId: uuid.New().String(), PeriodId: "bad",
+	tid := uuid.New()
+	_, err := newHandler().CreateJournalEntry(callerCtx(tid), &ledgerv1.CreateJournalEntryRequest{
+		TenantId: tid.String(), PeriodId: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_CreateJournalEntry_InvalidLineAccountID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateJournalEntry(context.Background(), &ledgerv1.CreateJournalEntryRequest{
-		TenantId: uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().CreateJournalEntry(callerCtx(tid), &ledgerv1.CreateJournalEntryRequest{
+		TenantId: tid.String(),
 		PeriodId: uuid.New().String(),
 		Lines:    []*ledgerv1.JournalLineInput{{AccountId: "bad", DebitAmount: "100.00", CreditAmount: "0.00"}},
 	})
@@ -294,7 +313,7 @@ func TestHandler_PostJournalEntry_Success(t *testing.T) {
 		updateJournalStatusFn: func(_ context.Context, _ uuid.UUID, _ string, _ uuid.UUID, _ time.Time) error { return nil },
 	}))
 
-	resp, err := h.PostJournalEntry(context.Background(), &ledgerv1.PostJournalEntryRequest{
+	resp, err := h.PostJournalEntry(callerCtx(tenantID), &ledgerv1.PostJournalEntryRequest{
 		TenantId: tenantID.String(),
 		Id:       jeID.String(),
 		PostedBy: postedBy.String(),
@@ -305,7 +324,7 @@ func TestHandler_PostJournalEntry_Success(t *testing.T) {
 
 func TestHandler_PostJournalEntry_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().PostJournalEntry(context.Background(), &ledgerv1.PostJournalEntryRequest{
+	_, err := newHandler().PostJournalEntry(callerCtx(uuid.New()), &ledgerv1.PostJournalEntryRequest{
 		TenantId: "bad", Id: uuid.New().String(), PostedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -323,7 +342,7 @@ func TestHandler_GetJournalEntry_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.GetJournalEntry(context.Background(), &ledgerv1.GetJournalEntryRequest{
+	resp, err := h.GetJournalEntry(callerCtx(tenantID), &ledgerv1.GetJournalEntryRequest{
 		TenantId: tenantID.String(),
 		Id:       jeID.String(),
 	})
@@ -333,7 +352,7 @@ func TestHandler_GetJournalEntry_Success(t *testing.T) {
 
 func TestHandler_GetJournalEntry_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetJournalEntry(context.Background(), &ledgerv1.GetJournalEntryRequest{TenantId: "bad", Id: uuid.New().String()})
+	_, err := newHandler().GetJournalEntry(callerCtx(uuid.New()), &ledgerv1.GetJournalEntryRequest{TenantId: "bad", Id: uuid.New().String()})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -348,21 +367,22 @@ func TestHandler_ListJournalEntries_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.ListJournalEntries(context.Background(), &ledgerv1.ListJournalEntriesRequest{TenantId: tenantID.String()})
+	resp, err := h.ListJournalEntries(callerCtx(tenantID), &ledgerv1.ListJournalEntriesRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetEntries(), 1)
 }
 
 func TestHandler_ListJournalEntries_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListJournalEntries(context.Background(), &ledgerv1.ListJournalEntriesRequest{TenantId: "bad"})
+	_, err := newHandler().ListJournalEntries(callerCtx(uuid.New()), &ledgerv1.ListJournalEntriesRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_ListJournalEntries_InvalidPeriodID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListJournalEntries(context.Background(), &ledgerv1.ListJournalEntriesRequest{
-		TenantId: uuid.New().String(), PeriodId: "not-a-uuid",
+	tid := uuid.New()
+	_, err := newHandler().ListJournalEntries(callerCtx(tid), &ledgerv1.ListJournalEntriesRequest{
+		TenantId: tid.String(), PeriodId: "not-a-uuid",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -392,11 +412,11 @@ func TestHandler_VoidJournalEntry_Success(t *testing.T) {
 		allocateEntryNumberFn: func(_ context.Context, _ uuid.UUID, _ int) (string, error) {
 			return "JE-2026-002", nil
 		},
-		createJournalEntryFn: func(_ context.Context, _ *JournalEntry) error { return nil },
+		createJournalEntryFn:  func(_ context.Context, _ *JournalEntry) error { return nil },
 		updateJournalStatusFn: func(_ context.Context, _ uuid.UUID, _ string, _ uuid.UUID, _ time.Time) error { return nil },
 	}))
 
-	resp, err := h.VoidJournalEntry(context.Background(), &ledgerv1.VoidJournalEntryRequest{
+	resp, err := h.VoidJournalEntry(callerCtx(tenantID), &ledgerv1.VoidJournalEntryRequest{
 		TenantId: tenantID.String(),
 		Id:       jeID.String(),
 		VoidedBy: voidedBy.String(),
@@ -407,7 +427,7 @@ func TestHandler_VoidJournalEntry_Success(t *testing.T) {
 
 func TestHandler_VoidJournalEntry_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().VoidJournalEntry(context.Background(), &ledgerv1.VoidJournalEntryRequest{
+	_, err := newHandler().VoidJournalEntry(callerCtx(uuid.New()), &ledgerv1.VoidJournalEntryRequest{
 		TenantId: "bad", Id: uuid.New().String(), VoidedBy: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -424,15 +444,55 @@ func TestHandler_GetTrialBalance_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.GetTrialBalance(context.Background(), &ledgerv1.GetTrialBalanceRequest{TenantId: tenantID.String()})
+	resp, err := h.GetTrialBalance(callerCtx(tenantID), &ledgerv1.GetTrialBalanceRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetEntries(), 1)
 }
 
 func TestHandler_GetTrialBalance_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetTrialBalance(context.Background(), &ledgerv1.GetTrialBalanceRequest{TenantId: "bad"})
+	_, err := newHandler().GetTrialBalance(callerCtx(uuid.New()), &ledgerv1.GetTrialBalanceRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// --- Tenant boundary (#144) ---
+
+func TestHandler_CrossTenantRead_Denied(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	victimTenant := uuid.New()
+	require.NotEqual(t, callerTenant, victimTenant)
+
+	h := NewHandler(NewService(&mockRepo{
+		listJournalEntriesFn: func(context.Context, uuid.UUID, *uuid.UUID, string, int, int) ([]JournalEntry, error) {
+			t.Fatal("repository must not be reached on a cross-tenant request")
+			return nil, nil
+		},
+	}))
+
+	_, err := h.ListJournalEntries(callerCtx(callerTenant), &ledgerv1.ListJournalEntriesRequest{
+		TenantId: victimTenant.String(),
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListJournalEntries_UsesTokenTenant(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	var gotTenant uuid.UUID
+	h := NewHandler(NewService(&mockRepo{
+		listJournalEntriesFn: func(_ context.Context, tenantID uuid.UUID, _ *uuid.UUID, _ string, _, _ int) ([]JournalEntry, error) {
+			gotTenant = tenantID
+			return nil, nil
+		},
+	}))
+
+	// Request carries NO tenant at all: the token supplies it.
+	_, err := h.ListJournalEntries(callerCtx(tid), &ledgerv1.ListJournalEntriesRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, tid, gotTenant, "the repository must receive the token's tenant")
 }
 
 // --- grpcErr ---
