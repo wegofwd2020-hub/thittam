@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	notificationsv1 "github.com/wegofwd2020/thittam/gen/notifications/v1"
-	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	notificationsv1 "github.com/wegofwd2020/thittam/gen/notifications/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

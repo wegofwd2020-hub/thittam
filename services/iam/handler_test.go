@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
 	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
