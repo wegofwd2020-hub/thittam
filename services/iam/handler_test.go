@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -45,6 +46,14 @@ func memberCtx(tid uuid.UUID) context.Context {
 		Email:    "member@example.com",
 		Roles:    []string{interceptor.RoleMember},
 	})
+}
+
+// grantUserManage returns a mockRepo option granting the caller user:manage, as a
+// super_admin would hold. The gate calls CheckPermission → repo.GetUserPermissions.
+func grantUserManage() func(context.Context, uuid.UUID, *uuid.UUID) ([]string, error) {
+	return func(context.Context, uuid.UUID, *uuid.UUID) ([]string, error) {
+		return []string{"user:manage"}, nil
+	}
 }
 
 // --- Login ---
@@ -280,10 +289,28 @@ func TestHandler_ChangePassword_InvalidUserID(t *testing.T) {
 
 // --- AssignRole ---
 
-func TestHandler_AssignRole_Success(t *testing.T) {
+// A bare member may not assign roles. Before #146 this test asserted the opposite.
+func TestHandler_AssignRole_MemberDenied(t *testing.T) {
 	t.Parallel()
 	tid := uuid.New()
-	resp, err := newHandler().AssignRole(memberCtx(tid), &iamv1.AssignRoleRequest{
+	h := newHandlerWithRepo(&mockRepo{
+		assignRoleFn: func(context.Context, *UserRole) error {
+			t.Fatal("repository must not be reached without user:manage")
+			return nil
+		},
+	})
+	_, err := h.AssignRole(memberCtx(tid), &iamv1.AssignRoleRequest{
+		TenantId: tid.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_AssignRole_WithUserManage_Succeeds(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := newHandlerWithRepo(&mockRepo{getUserPermissionsFn: grantUserManage()})
+	resp, err := h.AssignRole(memberCtx(tid), &iamv1.AssignRoleRequest{
 		TenantId:   tid.String(),
 		UserId:     uuid.New().String(),
 		RoleId:     uuid.New().String(),
@@ -291,6 +318,37 @@ func TestHandler_AssignRole_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
+}
+
+// No caller at all → Unauthenticated, never a uuid.Nil actor.
+func TestHandler_AssignRole_NoCaller_Unauthenticated(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	_, err := newHandler().AssignRole(context.Background(), &iamv1.AssignRoleRequest{
+		TenantId: tid.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// A repository failure during the permission lookup is a misconfiguration, not a grant.
+func TestHandler_AssignRole_PermissionLookupFails_Internal(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := newHandlerWithRepo(&mockRepo{
+		getUserPermissionsFn: func(context.Context, uuid.UUID, *uuid.UUID) ([]string, error) {
+			return nil, errors.New("db down")
+		},
+		assignRoleFn: func(context.Context, *UserRole) error {
+			t.Fatal("repository must not be written when the permission check errored")
+			return nil
+		},
+	})
+	_, err := h.AssignRole(memberCtx(tid), &iamv1.AssignRoleRequest{
+		TenantId: tid.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
 }
 
 func TestHandler_AssignRole_InvalidTenantID(t *testing.T) {
@@ -315,13 +373,31 @@ func TestHandler_AssignRole_InvalidUserID(t *testing.T) {
 func TestHandler_RevokeRole_Success(t *testing.T) {
 	t.Parallel()
 	// RevokeRoleRequest carries no tenant_id, so the handler derives the tenant from the
-	// caller's verified token (#146). A caller-less context is now Unauthenticated.
-	resp, err := newHandler().RevokeRole(memberCtx(uuid.New()), &iamv1.RevokeRoleRequest{
+	// caller's verified token (#146). A caller-less context is now Unauthenticated, and a
+	// caller without user:manage is PermissionDenied.
+	h := newHandlerWithRepo(&mockRepo{getUserPermissionsFn: grantUserManage()})
+	resp, err := h.RevokeRole(memberCtx(uuid.New()), &iamv1.RevokeRoleRequest{
 		UserId: uuid.New().String(),
 		RoleId: uuid.New().String(),
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
+}
+
+// A bare member may not revoke roles.
+func TestHandler_RevokeRole_MemberDenied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepo(&mockRepo{
+		revokeRoleFn: func(context.Context, uuid.UUID, uuid.UUID) error {
+			t.Fatal("repository must not be reached without user:manage")
+			return nil
+		},
+	})
+	_, err := h.RevokeRole(memberCtx(uuid.New()), &iamv1.RevokeRoleRequest{
+		UserId: uuid.New().String(), RoleId: uuid.New().String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 func TestHandler_RevokeRole_NoCaller_Unauthenticated(t *testing.T) {
@@ -429,6 +505,7 @@ func TestHandler_AssignProjectRole_Success(t *testing.T) {
 		getRoleByIDFn: func(_ context.Context, tenantID, roleID uuid.UUID) (*Role, error) {
 			return &Role{ID: roleID, TenantID: tenantID, Name: "project_supervisor", IsSystem: true}, nil
 		},
+		getUserPermissionsFn: grantUserManage(),
 	}))
 
 	tid := uuid.New()
@@ -443,12 +520,33 @@ func TestHandler_AssignProjectRole_Success(t *testing.T) {
 	assert.NotNil(t, resp)
 }
 
+// A bare member may not assign project roles.
+func TestHandler_AssignProjectRole_MemberDenied(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := newHandlerWithRepo(&mockRepo{
+		assignRoleFn: func(context.Context, *UserRole) error {
+			t.Fatal("repository must not be reached without user:manage")
+			return nil
+		},
+	})
+	_, err := h.AssignProjectRole(memberCtx(tid), &iamv1.AssignProjectRoleRequest{
+		TenantId: tid.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(), ProjectId: uuid.New().String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+// Requires user:manage (grantUserManage) so the gate does not mask the tenant-wide-role
+// rejection this test is actually about; without it, every bare member gets PermissionDenied
+// before the service layer's role-scope check ever runs.
 func TestHandler_AssignProjectRole_RejectsTenantWideRole(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(newTestService(&mockRepo{
 		getRoleByIDFn: func(_ context.Context, tenantID, roleID uuid.UUID) (*Role, error) {
 			return &Role{ID: roleID, TenantID: tenantID, Name: "manager", IsSystem: true}, nil
 		},
+		getUserPermissionsFn: grantUserManage(),
 	}))
 
 	tid := uuid.New()
@@ -959,13 +1057,31 @@ func TestHandler_CancelTenantPurge_NoOpenRequest_NotFound(t *testing.T) {
 func TestHandler_InviteUser_Success(t *testing.T) {
 	t.Parallel()
 	tid := uuid.New()
-	resp, err := newHandler().InviteUser(memberCtx(tid), &iamv1.InviteUserRequest{
+	h := newHandlerWithRepo(&mockRepo{getUserPermissionsFn: grantUserManage()})
+	resp, err := h.InviteUser(memberCtx(tid), &iamv1.InviteUserRequest{
 		TenantId:  tid.String(),
 		Email:     "invite@example.com",
 		InvitedBy: uuid.New().String(),
 	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.GetId())
+}
+
+// A bare member may not invite users.
+func TestHandler_InviteUser_MemberDenied(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := newHandlerWithRepo(&mockRepo{
+		createInvitationFn: func(context.Context, *Invitation) error {
+			t.Fatal("repository must not be reached without user:manage")
+			return nil
+		},
+	})
+	_, err := h.InviteUser(memberCtx(tid), &iamv1.InviteUserRequest{
+		TenantId: tid.String(), Email: "invite@example.com",
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 func TestHandler_InviteUser_InvalidTenantID(t *testing.T) {
@@ -1248,6 +1364,7 @@ func TestAssignRole_AssignedByIsTheCaller(t *testing.T) {
 			gotAssignedBy = ur.AssignedBy
 			return nil
 		},
+		getUserPermissionsFn: grantUserManage(),
 	})
 	ctx := interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
 		UserID: callerID, TenantID: tid, Roles: []string{interceptor.RoleMember},
@@ -1282,6 +1399,7 @@ func TestAssignProjectRole_AssignedByIsTheCaller(t *testing.T) {
 			gotProjectID = ur.ProjectID
 			return nil
 		},
+		getUserPermissionsFn: grantUserManage(),
 	})
 	ctx := interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
 		UserID: callerID, TenantID: tid, Roles: []string{interceptor.RoleMember},
@@ -1314,6 +1432,7 @@ func TestInviteUser_InvitedByIsTheCaller(t *testing.T) {
 			gotInvitedBy = inv.InvitedBy
 			return nil
 		},
+		getUserPermissionsFn: grantUserManage(),
 	})
 	ctx := interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
 		UserID: callerID, TenantID: tid, Roles: []string{interceptor.RoleMember},

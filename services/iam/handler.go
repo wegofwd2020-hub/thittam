@@ -226,6 +226,30 @@ func (h *Handler) ChangePassword(ctx context.Context, req *iamv1.ChangePasswordR
 
 // --- Roles & Permissions ---
 
+// requireUserManage authorizes a role-management RPC.
+//
+// iam answers this from its own repository rather than dialling itself: the four other
+// gated services hold a gRPC PermissionChecker (wired via interceptor) backed by a call
+// to iam, and iam holding one would mean iam calling itself. After #138 a nil checker
+// makes that interceptor path return Internal for every gated RPC.
+//
+// Fails closed on every path: no caller, a repository error, and a negative answer all deny.
+func (h *Handler) requireUserManage(ctx context.Context) error {
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "caller identity not present in context")
+	}
+	allowed, err := h.svc.CheckPermission(ctx, caller.UserID, permUserManage, nil)
+	if err != nil {
+		// A failed permission lookup is a misconfiguration, not an authorization decision.
+		return status.Error(codes.Internal, "permission check failed")
+	}
+	if !allowed {
+		return status.Errorf(codes.PermissionDenied, "requires permission %s", permUserManage)
+	}
+	return nil
+}
+
 func (h *Handler) AssignRole(ctx context.Context, req *iamv1.AssignRoleRequest) (*iamv1.AssignRoleResponse, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
@@ -242,6 +266,9 @@ func (h *Handler) AssignRole(ctx context.Context, req *iamv1.AssignRoleRequest) 
 	caller, ok := interceptor.CallerFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "caller identity not present in context")
+	}
+	if err := h.requireUserManage(ctx); err != nil {
+		return nil, err
 	}
 	assignedBy := caller.UserID
 	if err := h.svc.AssignRole(ctx, tenantID, userID, roleID, assignedBy); err != nil {
@@ -260,10 +287,13 @@ func (h *Handler) RevokeRole(ctx context.Context, req *iamv1.RevokeRoleRequest) 
 		return nil, status.Error(codes.InvalidArgument, "invalid role_id")
 	}
 	// RevokeRoleRequest carries no tenant_id — derive it from the caller's verified
-	// token. Task 2 restructures this handler to also gate on user:manage.
+	// token.
 	caller, ok := interceptor.CallerFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "caller identity not present in context")
+	}
+	if err := h.requireUserManage(ctx); err != nil {
+		return nil, err
 	}
 	if err := h.svc.RevokeRole(ctx, caller.TenantID, userID, roleID); err != nil {
 		return nil, grpcError(err)
@@ -327,6 +357,9 @@ func (h *Handler) AssignProjectRole(ctx context.Context, req *iamv1.AssignProjec
 	caller, ok := interceptor.CallerFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "caller identity not present in context")
+	}
+	if err := h.requireUserManage(ctx); err != nil {
+		return nil, err
 	}
 	assignedBy := caller.UserID
 	if err := h.svc.AssignProjectRole(ctx, tenantID, userID, roleID, projectID, assignedBy); err != nil {
@@ -526,22 +559,26 @@ func (h *Handler) InviteUser(ctx context.Context, req *iamv1.InviteUserRequest) 
 	if err != nil {
 		return nil, err
 	}
+	var roleID *uuid.UUID
+	if roleIDStr := req.GetRoleId(); roleIDStr != "" {
+		parsed, err := uuid.Parse(roleIDStr)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid role_id")
+		}
+		roleID = &parsed
+	}
 	caller, ok := interceptor.CallerFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "caller identity not present in context")
 	}
-	invitedBy := caller.UserID
+	if err := h.requireUserManage(ctx); err != nil {
+		return nil, err
+	}
 	inv := &Invitation{
 		TenantID:  tenantID,
 		Email:     req.GetEmail(),
-		InvitedBy: invitedBy,
-	}
-	if roleIDStr := req.GetRoleId(); roleIDStr != "" {
-		roleID, err := uuid.Parse(roleIDStr)
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, "invalid role_id")
-		}
-		inv.RoleID = &roleID
+		InvitedBy: caller.UserID,
+		RoleID:    roleID,
 	}
 	created, err := h.svc.InviteUser(ctx, inv)
 	if err != nil {
