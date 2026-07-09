@@ -56,27 +56,42 @@ message Subscription {
 }
 
 message GetSubscriptionRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
 }
 
 message CreateSubscriptionRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id      = 1;
   string plan           = 2; // starter | professional | enterprise
   string billing_cycle  = 3; // monthly | annual
 }
 
 message UpgradeSubscriptionRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string new_plan  = 2;
 }
 
 message CancelSubscriptionRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
 }
 
 // ── Plan enforcement ──────────────────────────────────────────────────────────
 
 message CheckPlanLimitRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id            = 1;
   string resource             = 2; // "production" | "user"
   int32  current_productions  = 3;
@@ -111,6 +126,9 @@ message Invoice {
 }
 
 message ListInvoicesRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   int32  limit     = 2;
   int32  offset    = 3;
@@ -122,11 +140,17 @@ message ListInvoicesResponse {
 }
 
 message GetInvoiceRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id  = 1;
   string invoice_id = 2;
 }
 
 message DownloadInvoiceRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id  = 1;
   string invoice_id = 2;
 }
@@ -152,6 +176,9 @@ message PaymentMethod {
 }
 
 message AddPaymentMethodRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id       = 1;
   string type            = 2;
   string display_name    = 3;
@@ -166,6 +193,9 @@ message RemovePaymentMethodRequest {
 }
 
 message ListPaymentMethodsRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
 }
 
@@ -174,6 +204,9 @@ message ListPaymentMethodsResponse {
 }
 
 message SetDefaultPaymentMethodRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id         = 1;
   string payment_method_id = 2;
 }
@@ -181,6 +214,9 @@ message SetDefaultPaymentMethodRequest {
 // ── Usage ─────────────────────────────────────────────────────────────────────
 
 message GetUsageSummaryRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
 }
 

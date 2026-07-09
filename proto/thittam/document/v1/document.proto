@@ -124,6 +124,9 @@ message DownloadURL {
 
 // Upload lifecycle
 message InitiateUploadRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string production_id = 2; // optional
   string folder_id = 3;     // optional
@@ -133,17 +136,26 @@ message InitiateUploadRequest {
 }
 
 message ConfirmUploadRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string document_id = 2;
 }
 
 // Document management
 message GetDocumentRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string id = 2;
 }
 
 message ListDocumentsRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string production_id = 2; // optional filter
   string folder_id = 3;     // optional filter
@@ -156,6 +168,9 @@ message ListDocumentsResponse {
 }
 
 message DeleteDocumentRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string id = 2;
 }
@@ -163,11 +178,17 @@ message DeleteDocumentRequest {
 message DeleteDocumentResponse {}
 
 message GetDownloadURLRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string id = 2;
 }
 
 message MoveDocumentRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string document_id = 2;
   string folder_id = 3;
@@ -175,12 +196,18 @@ message MoveDocumentRequest {
 
 // Versioning
 message CreateVersionRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string document_id = 2;
   string uploaded_by = 3;
 }
 
 message ConfirmVersionRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string document_id = 2;
   int32 version = 3;
@@ -188,6 +215,9 @@ message ConfirmVersionRequest {
 }
 
 message ListVersionsRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string document_id = 2;
 }
@@ -197,6 +227,9 @@ message ListVersionsResponse {
 }
 
 message RestoreVersionRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string document_id = 2;
   int32 version = 3;
@@ -204,6 +237,9 @@ message RestoreVersionRequest {
 
 // Folders
 message CreateFolderRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string production_id = 2; // optional
   string name = 3;
@@ -212,6 +248,9 @@ message CreateFolderRequest {
 }
 
 message ListFoldersRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string production_id = 2; // optional filter
 }

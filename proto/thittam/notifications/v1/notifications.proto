@@ -79,6 +79,9 @@ message ChannelError {
 
 // Synchronous send
 message SendRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string recipient_id = 2;       // user UUID
   string recipient_contact = 3;  // email address or phone number
@@ -88,6 +91,9 @@ message SendRequest {
 }
 
 message DispatchRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string recipient_id = 2;
   string recipient_contact = 3;
@@ -103,6 +109,9 @@ message DispatchResponse {
 
 // Templates
 message CreateTemplateRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string event_type = 2;
   string channel = 3;
@@ -111,6 +120,9 @@ message CreateTemplateRequest {
 }
 
 message UpdateTemplateRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string id = 2;
   string subject = 3;       // optional
@@ -119,11 +131,17 @@ message UpdateTemplateRequest {
 }
 
 message GetTemplateRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string id = 2;
 }
 
 message ListTemplatesRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
 }
 
@@ -133,11 +151,17 @@ message ListTemplatesResponse {
 
 // Delivery history
 message GetNotificationRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string id = 2;
 }
 
 message ListNotificationsRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string channel = 2; // optional filter
   string status = 3;  // optional filter: pending|sent|delivered|failed
