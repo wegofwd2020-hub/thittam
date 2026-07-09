@@ -60,7 +60,7 @@ scrape_configs:
   #   8086 → 9096  iam
   #   8087 → 9097  notifications
   #   8088 → 9098  document
-  #   TBD  → 9099  billing (cmd/billing not yet created)
+  #   9099 billing
 
   - job_name: project-management
     static_configs:
@@ -126,10 +126,12 @@ scrape_configs:
       - target_label: service
         replacement: document
 
-  # billing: cmd/billing not yet created; add port 9099 when wired up.
-  # - job_name: billing
-  #   static_configs:
-  #     - targets: ["host.docker.internal:9099"]
+  - job_name: billing
+    static_configs:
+      - targets: ["host.docker.internal:9099"]
+    relabel_configs:
+      - target_label: service
+        replacement: billing
 
   # ── NATS JetStream ────────────────────────────────────────────────────────
   # prometheus-nats-exporter scrapes the NATS monitoring endpoint (:8222)

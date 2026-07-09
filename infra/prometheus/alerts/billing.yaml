@@ -15,8 +15,17 @@ groups:
   #   billing_subscriptions_total{status}       — "active" | "suspended" | "cancelled"
   #   billing_plan_limit_rejections_total{plan, resource}
   #
-  # Note: billing metrics port is 9099 (TBD — cmd/billing not yet created).
-  # These alerts will become active once the billing service is wired up.
+  # Billing metrics are served on port 9099 (see cmd/billing/main.go,
+  # server.Config{MetricsPort: 9099}) and scraped as job="billing".
+  #
+  # Outbox relay metrics (#134), defined in services/billing/outbox_relay.go:
+  #
+  #   thittam_billing_outbox_published_total
+  #   thittam_billing_outbox_failed_total
+  #   thittam_billing_outbox_dead_lettered_total
+  #   thittam_billing_outbox_pending              (gauge)
+  #   thittam_billing_outbox_oldest_pending_seconds (gauge)
+  #   thittam_billing_outbox_dead                 (gauge)
 
   - name: thittam_billing
     interval: 60s
@@ -116,3 +125,80 @@ groups:
             or plan enforcement. Investigate immediately — revenue and tenant
             access may be at risk.
           runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#billing-errors"
+
+      # ── Outbox dead-letter queue non-empty ───────────────────────────────
+      # A dead-lettered event is one the relay could not publish after
+      # maxOutboxAttempts tries while OTHER events in its batch published
+      # fine — so the event itself is bad, not the broker. Nothing drains
+      # this queue automatically.
+      #
+      # This is a correctness alert, not hygiene. The only event on the
+      # outbox today is subscription.suspended; until it is delivered, iam's
+      # consumer never starts that tenant's retention clock, and the tenant
+      # keeps its data past the retention window. Silently.
+      - alert: BillingOutboxDeadLetter
+        expr: |
+          thittam_billing_outbox_dead > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+          component: billing
+        annotations:
+          summary: "{{ $value }} billing outbox event(s) dead-lettered — delivery has stopped for them"
+          description: >
+            {{ $value }} event(s) are parked in event_outbox_dead. Each one is
+            a domain event that will never be delivered until a human replays
+            it. For subscription.suspended events this means the affected
+            tenant's retention clock never starts.
+            Inspect with `outbox-admin list` (run with the runtime DSN), fix
+            the underlying cause, then `outbox-admin replay --id <uuid>`.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#billing-outbox-dead-letter"
+
+      # ── Outbox backlog going stale ───────────────────────────────────────
+      # The relay ticks every 15s and claims 100 rows, so a healthy oldest-
+      # pending age stays well under a minute. 15 minutes means the relay is
+      # not running, NATS is down, or publishes are failing wholesale (the
+      # systemic guard deliberately does NOT dead-letter in that case, so the
+      # backlog simply grows — this alert is what surfaces it).
+      - alert: BillingOutboxBacklogStale
+        expr: |
+          thittam_billing_outbox_oldest_pending_seconds > 900
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+          component: billing
+        annotations:
+          summary: "Oldest unpublished billing outbox event is {{ $value | humanizeDuration }} old (> 15m)"
+          description: >
+            The billing outbox relay has not drained its backlog. Either the
+            relay goroutine is not running (check that cmd/billing started with
+            NATS configured — the relay is gated on a non-nil publisher), or
+            NATS is unreachable.
+            Check thittam_billing_outbox_pending for depth and the billing
+            service logs for "outbox batch failed".
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#billing-outbox-backlog"
+
+      # ── Outbox publish failures ──────────────────────────────────────────
+      # Any sustained publish failure. Transient NATS blips resolve within a
+      # tick or two, so the 15m `for` avoids paging on noise while still
+      # catching a broker that is down but not yet stale enough to trip
+      # BillingOutboxBacklogStale.
+      - alert: BillingOutboxPublishFailing
+        expr: |
+          increase(thittam_billing_outbox_failed_total[15m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+          team: platform
+          component: billing
+        annotations:
+          summary: "Billing outbox publishes failing ({{ $value | printf \"%.0f\" }} in 15m)"
+          description: >
+            The outbox relay is failing to publish events to NATS. Events are
+            retried on each 15s tick and are not lost. If the whole batch is
+            failing, nothing is dead-lettered by design — the backlog grows
+            until NATS recovers.
+            Check NATS JetStream health and the FINANCIAL stream.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#billing-outbox-publish-failures"
