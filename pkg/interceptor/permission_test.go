@@ -132,3 +132,11 @@ func TestRequirePermission_CheckerError_Internal(t *testing.T) {
 	st, _ := status.FromError(err)
 	assert.Equal(t, codes.Internal, st.Code())
 }
+
+func TestRequirePermission_NilChecker_Denies(t *testing.T) {
+	t.Parallel()
+	ctx := WithCaller(context.Background(), CallerInfo{UserID: uuid.New(), TenantID: uuid.New()})
+	err := RequirePermission(ctx, nil, "budget:write")
+	require.Error(t, err, "a permission check must never pass because the checker is missing")
+	assert.Equal(t, codes.Internal, status.Code(err))
+}

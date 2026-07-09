@@ -54,6 +54,13 @@ func RequirePermission(ctx context.Context, checker PermissionChecker, permissio
 		return status.Error(codes.Unauthenticated, "caller identity not present in context")
 	}
 
+	if checker == nil {
+		// Misconfiguration, not authorization: the service could not reach IAM.
+		// Failing closed is the only safe answer — a check that passes because
+		// a dial failed is not a check.
+		return status.Error(codes.Internal, "permission checker unavailable")
+	}
+
 	var projectID *uuid.UUID
 	if ProjectScopedRBACEnabled() && caller.ProjectID != uuid.Nil {
 		pid := caller.ProjectID
