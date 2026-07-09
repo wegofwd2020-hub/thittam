@@ -12,11 +12,24 @@ import (
 	"github.com/stretchr/testify/require"
 	billingv1 "github.com/wegofwd2020/thittam/gen/billing/v1"
 	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// callerCtx returns a context carrying a verified caller in tenant tid, as
+// UnaryAuthInterceptor would have produced from a valid token (#138).
+// Handler tests bypass the interceptor, so they must inject the caller themselves.
+func callerCtx(tid uuid.UUID) context.Context {
+	return interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
+		UserID:   uuid.New(),
+		TenantID: tid,
+		Email:    "user@example.com",
+		Roles:    []string{"member"},
+	})
+}
 
 // Deterministic UUIDs for handler test fixtures.
 // fixedTenantID, fixedInvID, fixedPMID are shared with service_test.go.
@@ -143,7 +156,7 @@ func TestHandler_GetSubscription(t *testing.T) {
 				return sub, nil
 			},
 		})
-		resp, err := h.GetSubscription(context.Background(), &billingv1.GetSubscriptionRequest{
+		resp, err := h.GetSubscription(callerCtx(fixedTenantID), &billingv1.GetSubscriptionRequest{
 			TenantId: fixedTenantID.String(),
 		})
 		require.NoError(t, err)
@@ -156,7 +169,7 @@ func TestHandler_GetSubscription(t *testing.T) {
 	t.Run("not_found", func(t *testing.T) {
 		t.Parallel()
 		h := newHandlerWithRepo(&mockRepo{})
-		_, err := h.GetSubscription(context.Background(), &billingv1.GetSubscriptionRequest{
+		_, err := h.GetSubscription(callerCtx(fixedTenantID), &billingv1.GetSubscriptionRequest{
 			TenantId: fixedTenantID.String(),
 		})
 		require.Error(t, err)
@@ -166,7 +179,7 @@ func TestHandler_GetSubscription(t *testing.T) {
 	t.Run("invalid_tenant_id", func(t *testing.T) {
 		t.Parallel()
 		h := newHandlerWithRepo(&mockRepo{})
-		_, err := h.GetSubscription(context.Background(), &billingv1.GetSubscriptionRequest{
+		_, err := h.GetSubscription(callerCtx(fixedTenantID), &billingv1.GetSubscriptionRequest{
 			TenantId: "not-a-uuid",
 		})
 		require.Error(t, err)
@@ -187,7 +200,7 @@ func TestHandler_CreateSubscription(t *testing.T) {
 				return nil, ErrSubscriptionNotFound
 			},
 		})
-		resp, err := h.CreateSubscription(context.Background(), &billingv1.CreateSubscriptionRequest{
+		resp, err := h.CreateSubscription(callerCtx(fixedTenantID), &billingv1.CreateSubscriptionRequest{
 			TenantId:     fixedTenantID.String(),
 			Plan:         "professional",
 			BillingCycle: "annual",
@@ -205,7 +218,7 @@ func TestHandler_CreateSubscription(t *testing.T) {
 				return fixedSub(), nil
 			},
 		})
-		_, err := h.CreateSubscription(context.Background(), &billingv1.CreateSubscriptionRequest{
+		_, err := h.CreateSubscription(callerCtx(fixedTenantID), &billingv1.CreateSubscriptionRequest{
 			TenantId: fixedTenantID.String(),
 			Plan:     "starter",
 		})
@@ -220,7 +233,7 @@ func TestHandler_CreateSubscription(t *testing.T) {
 				return nil, ErrSubscriptionNotFound
 			},
 		})
-		_, err := h.CreateSubscription(context.Background(), &billingv1.CreateSubscriptionRequest{
+		_, err := h.CreateSubscription(callerCtx(fixedTenantID), &billingv1.CreateSubscriptionRequest{
 			TenantId: fixedTenantID.String(),
 			Plan:     "ultra",
 		})
@@ -242,7 +255,7 @@ func TestHandler_UpgradeSubscription(t *testing.T) {
 				return sub, nil
 			},
 		})
-		resp, err := h.UpgradeSubscription(context.Background(), &billingv1.UpgradeSubscriptionRequest{
+		resp, err := h.UpgradeSubscription(callerCtx(fixedTenantID), &billingv1.UpgradeSubscriptionRequest{
 			TenantId: fixedTenantID.String(),
 			NewPlan:  "professional",
 		})
@@ -261,7 +274,7 @@ func TestHandler_UpgradeSubscription(t *testing.T) {
 				return sub, nil
 			},
 		})
-		_, err := h.UpgradeSubscription(context.Background(), &billingv1.UpgradeSubscriptionRequest{
+		_, err := h.UpgradeSubscription(callerCtx(fixedTenantID), &billingv1.UpgradeSubscriptionRequest{
 			TenantId: fixedTenantID.String(),
 			NewPlan:  "professional",
 		})
@@ -283,7 +296,7 @@ func TestHandler_CancelSubscription(t *testing.T) {
 				return sub, nil
 			},
 		})
-		resp, err := h.CancelSubscription(context.Background(), &billingv1.CancelSubscriptionRequest{
+		resp, err := h.CancelSubscription(callerCtx(fixedTenantID), &billingv1.CancelSubscriptionRequest{
 			TenantId: fixedTenantID.String(),
 		})
 		require.NoError(t, err)
@@ -306,7 +319,7 @@ func TestHandler_CheckPlanLimit(t *testing.T) {
 				return sub, nil
 			},
 		})
-		resp, err := h.CheckPlanLimit(context.Background(), &billingv1.CheckPlanLimitRequest{
+		resp, err := h.CheckPlanLimit(callerCtx(fixedTenantID), &billingv1.CheckPlanLimitRequest{
 			TenantId:           fixedTenantID.String(),
 			Resource:           "production",
 			CurrentProductions: 1, // starter allows 2
@@ -324,7 +337,7 @@ func TestHandler_CheckPlanLimit(t *testing.T) {
 				return sub, nil
 			},
 		})
-		resp, err := h.CheckPlanLimit(context.Background(), &billingv1.CheckPlanLimitRequest{
+		resp, err := h.CheckPlanLimit(callerCtx(fixedTenantID), &billingv1.CheckPlanLimitRequest{
 			TenantId:           fixedTenantID.String(),
 			Resource:           "production",
 			CurrentProductions: 2, // at limit
@@ -348,7 +361,7 @@ func TestHandler_ListInvoices(t *testing.T) {
 				return []Invoice{*inv}, nil
 			},
 		})
-		resp, err := h.ListInvoices(context.Background(), &billingv1.ListInvoicesRequest{
+		resp, err := h.ListInvoices(callerCtx(fixedTenantID), &billingv1.ListInvoicesRequest{
 			TenantId: fixedTenantID.String(),
 		})
 		require.NoError(t, err)
@@ -373,7 +386,7 @@ func TestHandler_GetInvoice(t *testing.T) {
 				return inv, nil
 			},
 		})
-		resp, err := h.GetInvoice(context.Background(), &billingv1.GetInvoiceRequest{
+		resp, err := h.GetInvoice(callerCtx(fixedTenantID), &billingv1.GetInvoiceRequest{
 			TenantId:  fixedTenantID.String(),
 			InvoiceId: fixedInvID.String(),
 		})
@@ -391,7 +404,7 @@ func TestHandler_AddPaymentMethod(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 		h := newHandlerWithRepo(&mockRepo{})
-		resp, err := h.AddPaymentMethod(context.Background(), &billingv1.AddPaymentMethodRequest{
+		resp, err := h.AddPaymentMethod(callerCtx(fixedTenantID), &billingv1.AddPaymentMethodRequest{
 			TenantId:      fixedTenantID.String(),
 			Type:          "card",
 			DisplayName:   "Visa ending 4242",
@@ -405,7 +418,7 @@ func TestHandler_AddPaymentMethod(t *testing.T) {
 	t.Run("invalid_expires_at", func(t *testing.T) {
 		t.Parallel()
 		h := newHandlerWithRepo(&mockRepo{})
-		_, err := h.AddPaymentMethod(context.Background(), &billingv1.AddPaymentMethodRequest{
+		_, err := h.AddPaymentMethod(callerCtx(fixedTenantID), &billingv1.AddPaymentMethodRequest{
 			TenantId:    fixedTenantID.String(),
 			Type:        "card",
 			DisplayName: "Visa ending 4242",
@@ -429,7 +442,7 @@ func TestHandler_RemovePaymentMethod(t *testing.T) {
 				return pm, nil
 			},
 		})
-		_, err := h.RemovePaymentMethod(context.Background(), &billingv1.RemovePaymentMethodRequest{
+		_, err := h.RemovePaymentMethod(callerCtx(fixedTenantID), &billingv1.RemovePaymentMethodRequest{
 			TenantId:        fixedTenantID.String(),
 			PaymentMethodId: fixedPMID.String(),
 		})
@@ -443,7 +456,7 @@ func TestHandler_RemovePaymentMethod(t *testing.T) {
 				return nil, ErrPaymentMethodNotFound
 			},
 		})
-		_, err := h.RemovePaymentMethod(context.Background(), &billingv1.RemovePaymentMethodRequest{
+		_, err := h.RemovePaymentMethod(callerCtx(fixedTenantID), &billingv1.RemovePaymentMethodRequest{
 			TenantId:        fixedTenantID.String(),
 			PaymentMethodId: fixedPMID.String(),
 		})
@@ -465,7 +478,7 @@ func TestHandler_ListPaymentMethods(t *testing.T) {
 				return []PaymentMethod{*pm}, nil
 			},
 		})
-		resp, err := h.ListPaymentMethods(context.Background(), &billingv1.ListPaymentMethodsRequest{
+		resp, err := h.ListPaymentMethods(callerCtx(fixedTenantID), &billingv1.ListPaymentMethodsRequest{
 			TenantId: fixedTenantID.String(),
 		})
 		require.NoError(t, err)
@@ -500,7 +513,7 @@ func TestHandler_GetUsageSummary(t *testing.T) {
 				return usage, nil
 			},
 		})
-		resp, err := h.GetUsageSummary(context.Background(), &billingv1.GetUsageSummaryRequest{
+		resp, err := h.GetUsageSummary(callerCtx(fixedTenantID), &billingv1.GetUsageSummaryRequest{
 			TenantId: fixedTenantID.String(),
 		})
 		require.NoError(t, err)
@@ -519,7 +532,7 @@ func TestHandler_HandlePaymentWebhook(t *testing.T) {
 	t.Parallel()
 
 	h := newHandlerWithRepo(&mockRepo{})
-	_, err := h.HandlePaymentWebhook(context.Background(), &billingv1.WebhookPayload{
+	_, err := h.HandlePaymentWebhook(callerCtx(fixedTenantID), &billingv1.WebhookPayload{
 		Gateway: "razorpay",
 		Event:   "payment.captured",
 	})
@@ -577,7 +590,7 @@ func TestHandler_DownloadInvoice_Success(t *testing.T) {
 		},
 	}, &mockDocClient{})
 
-	resp, err := h.DownloadInvoice(context.Background(), &billingv1.DownloadInvoiceRequest{
+	resp, err := h.DownloadInvoice(callerCtx(fixedTenantID), &billingv1.DownloadInvoiceRequest{
 		TenantId:  fixedTenantID.String(),
 		InvoiceId: fixedInvID.String(),
 	})
@@ -596,7 +609,7 @@ func TestHandler_DownloadInvoice_NoPDF_ReturnsNotFound(t *testing.T) {
 		},
 	}, &mockDocClient{})
 
-	_, err := h.DownloadInvoice(context.Background(), &billingv1.DownloadInvoiceRequest{
+	_, err := h.DownloadInvoice(callerCtx(fixedTenantID), &billingv1.DownloadInvoiceRequest{
 		TenantId:  fixedTenantID.String(),
 		InvoiceId: fixedInvID.String(),
 	})
@@ -617,7 +630,7 @@ func TestHandler_DownloadInvoice_NilDocClient_ReturnsUnavailable(t *testing.T) {
 		},
 	}, nil)
 
-	_, err := h.DownloadInvoice(context.Background(), &billingv1.DownloadInvoiceRequest{
+	_, err := h.DownloadInvoice(callerCtx(fixedTenantID), &billingv1.DownloadInvoiceRequest{
 		TenantId:  fixedTenantID.String(),
 		InvoiceId: fixedInvID.String(),
 	})
@@ -641,7 +654,7 @@ func TestHandler_DownloadInvoice_DocServiceError_ReturnsInternal(t *testing.T) {
 		},
 	})
 
-	_, err := h.DownloadInvoice(context.Background(), &billingv1.DownloadInvoiceRequest{
+	_, err := h.DownloadInvoice(callerCtx(fixedTenantID), &billingv1.DownloadInvoiceRequest{
 		TenantId:  fixedTenantID.String(),
 		InvoiceId: fixedInvID.String(),
 	})
@@ -652,7 +665,7 @@ func TestHandler_DownloadInvoice_DocServiceError_ReturnsInternal(t *testing.T) {
 func TestHandler_DownloadInvoice_InvalidTenantID(t *testing.T) {
 	t.Parallel()
 	h := newHandlerWithDocClient(&mockRepo{}, &mockDocClient{})
-	_, err := h.DownloadInvoice(context.Background(), &billingv1.DownloadInvoiceRequest{
+	_, err := h.DownloadInvoice(callerCtx(fixedTenantID), &billingv1.DownloadInvoiceRequest{
 		TenantId:  "not-a-uuid",
 		InvoiceId: fixedInvID.String(),
 	})
@@ -663,10 +676,50 @@ func TestHandler_DownloadInvoice_InvalidTenantID(t *testing.T) {
 func TestHandler_DownloadInvoice_InvoiceNotFound(t *testing.T) {
 	t.Parallel()
 	h := newHandlerWithDocClient(&mockRepo{}, &mockDocClient{})
-	_, err := h.DownloadInvoice(context.Background(), &billingv1.DownloadInvoiceRequest{
+	_, err := h.DownloadInvoice(callerCtx(fixedTenantID), &billingv1.DownloadInvoiceRequest{
 		TenantId:  fixedTenantID.String(),
 		InvoiceId: fixedInvID.String(),
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+// --- Tenant boundary (#144) ---
+
+func TestHandler_CrossTenantRead_Denied(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	victimTenant := uuid.New()
+	require.NotEqual(t, callerTenant, victimTenant)
+
+	h := newHandlerWithRepo(&mockRepo{
+		listInvoicesFn: func(context.Context, uuid.UUID, int, int) ([]Invoice, error) {
+			t.Fatal("repository must not be reached on a cross-tenant request")
+			return nil, nil
+		},
+	})
+
+	_, err := h.ListInvoices(callerCtx(callerTenant), &billingv1.ListInvoicesRequest{
+		TenantId: victimTenant.String(),
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListInvoices_UsesTokenTenant(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	var gotTenant uuid.UUID
+	h := newHandlerWithRepo(&mockRepo{
+		listInvoicesFn: func(_ context.Context, tenantID uuid.UUID, _, _ int) ([]Invoice, error) {
+			gotTenant = tenantID
+			return nil, nil
+		},
+	})
+
+	// Request carries NO tenant at all: the token supplies it.
+	_, err := h.ListInvoices(callerCtx(tid), &billingv1.ListInvoicesRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, tid, gotTenant, "the repository must receive the token's tenant")
 }

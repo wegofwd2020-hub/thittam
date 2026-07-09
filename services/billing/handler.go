@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	billingv1 "github.com/wegofwd2020/thittam/gen/billing/v1"
 	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -34,9 +35,9 @@ func NewHandlerWithDeps(svc *Service, docClient documentv1.DocumentServiceClient
 // --- Subscriptions ---
 
 func (h *Handler) GetSubscription(ctx context.Context, req *billingv1.GetSubscriptionRequest) (*billingv1.Subscription, error) {
-	tenantID, err := uuid.Parse(req.TenantId)
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+		return nil, err
 	}
 	sub, err := h.svc.GetSubscription(ctx, tenantID)
 	if err != nil {
@@ -46,9 +47,9 @@ func (h *Handler) GetSubscription(ctx context.Context, req *billingv1.GetSubscri
 }
 
 func (h *Handler) CreateSubscription(ctx context.Context, req *billingv1.CreateSubscriptionRequest) (*billingv1.Subscription, error) {
-	tenantID, err := uuid.Parse(req.TenantId)
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+		return nil, err
 	}
 	sub, err := h.svc.CreateSubscription(ctx, tenantID, req.Plan, req.BillingCycle)
 	if err != nil {
@@ -58,9 +59,9 @@ func (h *Handler) CreateSubscription(ctx context.Context, req *billingv1.CreateS
 }
 
 func (h *Handler) UpgradeSubscription(ctx context.Context, req *billingv1.UpgradeSubscriptionRequest) (*billingv1.Subscription, error) {
-	tenantID, err := uuid.Parse(req.TenantId)
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+		return nil, err
 	}
 	sub, err := h.svc.UpgradeSubscription(ctx, tenantID, req.NewPlan)
 	if err != nil {
@@ -70,9 +71,9 @@ func (h *Handler) UpgradeSubscription(ctx context.Context, req *billingv1.Upgrad
 }
 
 func (h *Handler) CancelSubscription(ctx context.Context, req *billingv1.CancelSubscriptionRequest) (*billingv1.Subscription, error) {
-	tenantID, err := uuid.Parse(req.TenantId)
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+		return nil, err
 	}
 	sub, err := h.svc.CancelSubscription(ctx, tenantID)
 	if err != nil {
@@ -84,9 +85,9 @@ func (h *Handler) CancelSubscription(ctx context.Context, req *billingv1.CancelS
 // --- Plan enforcement ---
 
 func (h *Handler) CheckPlanLimit(ctx context.Context, req *billingv1.CheckPlanLimitRequest) (*billingv1.CheckPlanLimitResponse, error) {
-	tenantID, err := uuid.Parse(req.TenantId)
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+		return nil, err
 	}
 	result, err := h.svc.CheckPlanLimit(ctx, CheckLimitRequest{
 		TenantID:           tenantID,
@@ -106,9 +107,9 @@ func (h *Handler) CheckPlanLimit(ctx context.Context, req *billingv1.CheckPlanLi
 // --- Invoices ---
 
 func (h *Handler) ListInvoices(ctx context.Context, req *billingv1.ListInvoicesRequest) (*billingv1.ListInvoicesResponse, error) {
-	tenantID, err := uuid.Parse(req.TenantId)
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+		return nil, err
 	}
 	invoices, err := h.svc.ListInvoices(ctx, tenantID, int(req.Limit), int(req.Offset))
 	if err != nil {
@@ -125,9 +126,9 @@ func (h *Handler) ListInvoices(ctx context.Context, req *billingv1.ListInvoicesR
 }
 
 func (h *Handler) GetInvoice(ctx context.Context, req *billingv1.GetInvoiceRequest) (*billingv1.Invoice, error) {
-	tenantID, err := uuid.Parse(req.TenantId)
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+		return nil, err
 	}
 	invoiceID, err := uuid.Parse(req.InvoiceId)
 	if err != nil {
@@ -144,9 +145,9 @@ func (h *Handler) GetInvoice(ctx context.Context, req *billingv1.GetInvoiceReque
 // The PDF is stored in the document service; we proxy the presigned URL from there.
 // Returns NotFound when no PDF has been generated yet for the invoice.
 func (h *Handler) DownloadInvoice(ctx context.Context, req *billingv1.DownloadInvoiceRequest) (*billingv1.InvoiceDownloadURL, error) {
-	tenantID, err := uuid.Parse(req.TenantId)
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+		return nil, err
 	}
 	invoiceID, err := uuid.Parse(req.InvoiceId)
 	if err != nil {
@@ -187,9 +188,9 @@ func (h *Handler) DownloadInvoice(ctx context.Context, req *billingv1.DownloadIn
 // --- Payment methods ---
 
 func (h *Handler) AddPaymentMethod(ctx context.Context, req *billingv1.AddPaymentMethodRequest) (*billingv1.PaymentMethod, error) {
-	tenantID, err := uuid.Parse(req.TenantId)
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+		return nil, err
 	}
 
 	pm := &PaymentMethod{
@@ -225,9 +226,9 @@ func (h *Handler) RemovePaymentMethod(ctx context.Context, req *billingv1.Remove
 }
 
 func (h *Handler) ListPaymentMethods(ctx context.Context, req *billingv1.ListPaymentMethodsRequest) (*billingv1.ListPaymentMethodsResponse, error) {
-	tenantID, err := uuid.Parse(req.TenantId)
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+		return nil, err
 	}
 	methods, err := h.svc.ListPaymentMethods(ctx, tenantID)
 	if err != nil {
@@ -241,9 +242,9 @@ func (h *Handler) ListPaymentMethods(ctx context.Context, req *billingv1.ListPay
 }
 
 func (h *Handler) SetDefaultPaymentMethod(ctx context.Context, req *billingv1.SetDefaultPaymentMethodRequest) (*billingv1.PaymentMethod, error) {
-	tenantID, err := uuid.Parse(req.TenantId)
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+		return nil, err
 	}
 	pmID, err := uuid.Parse(req.PaymentMethodId)
 	if err != nil {
@@ -268,9 +269,9 @@ func (h *Handler) SetDefaultPaymentMethod(ctx context.Context, req *billingv1.Se
 // --- Usage ---
 
 func (h *Handler) GetUsageSummary(ctx context.Context, req *billingv1.GetUsageSummaryRequest) (*billingv1.UsageSummary, error) {
-	tenantID, err := uuid.Parse(req.TenantId)
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid tenant_id: %v", err)
+		return nil, err
 	}
 	summary, err := h.svc.GetUsageSummary(ctx, tenantID)
 	if err != nil {
