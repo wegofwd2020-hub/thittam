@@ -314,7 +314,9 @@ func TestHandler_AssignRole_InvalidUserID(t *testing.T) {
 
 func TestHandler_RevokeRole_Success(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().RevokeRole(context.Background(), &iamv1.RevokeRoleRequest{
+	// RevokeRoleRequest carries no tenant_id, so the handler derives the tenant from the
+	// caller's verified token (#146). A caller-less context is now Unauthenticated.
+	resp, err := newHandler().RevokeRole(memberCtx(uuid.New()), &iamv1.RevokeRoleRequest{
 		UserId: uuid.New().String(),
 		RoleId: uuid.New().String(),
 	})
@@ -322,6 +324,19 @@ func TestHandler_RevokeRole_Success(t *testing.T) {
 	assert.NotNil(t, resp)
 }
 
+func TestHandler_RevokeRole_NoCaller_Unauthenticated(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().RevokeRole(context.Background(), &iamv1.RevokeRoleRequest{
+		UserId: uuid.New().String(),
+		RoleId: uuid.New().String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// The parses precede the caller check, so a malformed argument is InvalidArgument rather
+// than Unauthenticated. That guard order is load-bearing — reversing it silently converts
+// four argument-validation tests across the gated RPCs into permission failures.
 func TestHandler_RevokeRole_InvalidUserID(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().RevokeRole(context.Background(), &iamv1.RevokeRoleRequest{UserId: "bad", RoleId: uuid.New().String()})
