@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	projectv1 "github.com/wegofwd2020/thittam/gen/project/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,12 +14,30 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// allowAllPerm grants every permission. Authorization semantics are covered by
+// pkg/interceptor's own tests; these handler tests exercise handler logic.
+type allowAllPerm struct{}
+
+func (allowAllPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	return true, nil
+}
+
+// ctxWithTenant injects vertical config, a tenant ID, and a synthetic caller
+// (RequirePermission now runs unconditionally, so every handler test needs a
+// caller in context or it fails Unauthenticated before reaching handler logic).
 func ctxWithTenant(tenantID uuid.UUID) context.Context {
-	return tenant.WithID(ctxWithVertical(), tenantID)
+	ctx := tenant.WithID(ctxWithVertical(), tenantID)
+	return interceptor.WithCaller(ctx, interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID})
+}
+
+// callerCtx is for handlers that do not check tenant.IDFromContext themselves
+// (e.g. UpdatePhaseStatus, RemoveCrewMember) but still hit RequirePermission.
+func callerCtx() context.Context {
+	return interceptor.WithCaller(ctxWithVertical(), interceptor.CallerInfo{UserID: uuid.New(), TenantID: uuid.New()})
 }
 
 func newHandler() *Handler {
-	return NewHandler(NewService(&mockRepo{}))
+	return NewHandler(NewService(&mockRepo{})).WithPermissionChecker(allowAllPerm{})
 }
 
 // --- CreateProduction ---
@@ -169,7 +188,7 @@ func TestHandler_CreatePhase_Success(t *testing.T) {
 		getPhaseFn: func(_ context.Context, id uuid.UUID) (*Phase, error) {
 			return &Phase{ID: id, PhaseType: "production", Status: "pending"}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.CreatePhase(ctxWithTenant(tenantID), &projectv1.CreatePhaseRequest{
 		ProductionId: prodID.String(),
@@ -230,9 +249,9 @@ func TestHandler_UpdatePhaseStatus_Success(t *testing.T) {
 			}
 			return &Phase{ID: id, PhaseType: phaseType, Status: "active"}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
-	resp, err := h.UpdatePhaseStatus(ctxWithVertical(), &projectv1.UpdatePhaseStatusRequest{
+	resp, err := h.UpdatePhaseStatus(callerCtx(), &projectv1.UpdatePhaseStatusRequest{
 		PhaseId:      phaseID.String(),
 		NewPhaseType: "post_production",
 	})
@@ -242,7 +261,7 @@ func TestHandler_UpdatePhaseStatus_Success(t *testing.T) {
 
 func TestHandler_UpdatePhaseStatus_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdatePhaseStatus(context.Background(), &projectv1.UpdatePhaseStatusRequest{PhaseId: "bad"})
+	_, err := newHandler().UpdatePhaseStatus(callerCtx(), &projectv1.UpdatePhaseStatusRequest{PhaseId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -319,14 +338,14 @@ func TestHandler_ListCrewMembers_InvalidProductionID(t *testing.T) {
 func TestHandler_RemoveCrewMember_Success(t *testing.T) {
 	t.Parallel()
 	memberID := uuid.New()
-	resp, err := newHandler().RemoveCrewMember(context.Background(), &projectv1.RemoveCrewMemberRequest{Id: memberID.String()})
+	resp, err := newHandler().RemoveCrewMember(callerCtx(), &projectv1.RemoveCrewMemberRequest{Id: memberID.String()})
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 }
 
 func TestHandler_RemoveCrewMember_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().RemoveCrewMember(context.Background(), &projectv1.RemoveCrewMemberRequest{Id: "bad"})
+	_, err := newHandler().RemoveCrewMember(callerCtx(), &projectv1.RemoveCrewMemberRequest{Id: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -346,6 +365,23 @@ func TestHandler_GetPhaseTypes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, resp.GetPhaseTypes(), 5)
 	assert.Equal(t, "development", resp.GetPhaseTypes()[0].GetId())
+}
+
+// --- fail-closed regression (#138) ---
+
+// TestCreateProduction_NoPermissionChecker_Denies proves the fail-open is
+// closed: a handler with no PermissionChecker wired must deny writes, not
+// silently skip the check. Without this test, someone could reinstate the
+// the nil-checker guard around RequirePermission and nothing would catch it.
+func TestCreateProduction_NoPermissionChecker_Denies(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{})) // deliberately no WithPermissionChecker
+
+	_, err := h.CreateProduction(ctxWithTenant(uuid.New()), &projectv1.CreateProductionRequest{
+		Title: "Ponniyin Selvan 3",
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err), "a missing permission checker must deny, not skip the check")
 }
 
 // --- grpcErr ---

@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	inventoryv1 "github.com/wegofwd2020/thittam/gen/inventory/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,12 +14,24 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// allowAllPerm grants every permission. Authorization semantics are covered by
+// pkg/interceptor's own tests; these handler tests exercise handler logic.
+type allowAllPerm struct{}
+
+func (allowAllPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	return true, nil
+}
+
+// ctxWithTenant injects vertical config, a tenant ID, and a synthetic caller
+// (RequirePermission now runs unconditionally, so every handler test needs a
+// caller in context or it fails Unauthenticated before reaching handler logic).
 func ctxWithTenant(tenantID uuid.UUID) context.Context {
-	return tenant.WithID(ctxWithVertical(), tenantID)
+	ctx := tenant.WithID(ctxWithVertical(), tenantID)
+	return interceptor.WithCaller(ctx, interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID})
 }
 
 func newHandler() *Handler {
-	return NewHandler(NewService(&mockRepo{}))
+	return NewHandler(NewService(&mockRepo{})).WithPermissionChecker(allowAllPerm{})
 }
 
 // --- CreateAsset ---
@@ -109,7 +122,7 @@ func TestHandler_CheckOutAsset_Success(t *testing.T) {
 		getAssetFn: func(_ context.Context, tid, id uuid.UUID) (*Asset, error) {
 			return &Asset{ID: id, TenantID: tid, Status: "available"}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.CheckOutAsset(ctxWithTenant(tenantID), &inventoryv1.CheckOutAssetRequest{
 		AssetId:      assetID.String(),
@@ -227,6 +240,26 @@ func TestHandler_GetInventoryCategories(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, resp.GetCategories(), 2)
 	assert.Equal(t, "camera", resp.GetCategories()[0].GetId())
+}
+
+// --- fail-closed regression (#138) ---
+
+// TestCreateAsset_NoPermissionChecker_Denies proves the fail-open is closed:
+// a handler with no PermissionChecker wired must deny writes, not silently
+// skip the check. Without this test, someone could reinstate the
+// the nil-checker guard around RequirePermission and nothing would catch it.
+func TestCreateAsset_NoPermissionChecker_Denies(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{})) // deliberately no WithPermissionChecker
+
+	_, err := h.CreateAsset(ctxWithTenant(uuid.New()), &inventoryv1.CreateAssetRequest{
+		AssetCode:     "CAM-001",
+		Name:          "RED V-Raptor",
+		CategoryId:    "camera",
+		OwnershipType: "owned",
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err), "a missing permission checker must deny, not skip the check")
 }
 
 // --- grpcErr ---
