@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	notificationsv1 "github.com/wegofwd2020/thittam/gen/notifications/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -14,6 +15,22 @@ import (
 
 func newHandler() *Handler {
 	return NewHandler(NewService(&mockRepo{}, map[string]ChannelSender{}))
+}
+
+func newHandlerWithRepo(r *mockRepo) *Handler {
+	return NewHandler(NewService(r, map[string]ChannelSender{}))
+}
+
+// callerCtx returns a context carrying a verified caller in tenant tid, as
+// UnaryAuthInterceptor would have produced from a valid token (#138).
+// Handler tests bypass the interceptor, so they must inject the caller themselves.
+func callerCtx(tid uuid.UUID) context.Context {
+	return interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
+		UserID:   uuid.New(),
+		TenantID: tid,
+		Email:    "user@example.com",
+		Roles:    []string{"member"},
+	})
 }
 
 // --- Send ---
@@ -34,7 +51,7 @@ func TestHandler_Send_Success(t *testing.T) {
 		},
 	}, map[string]ChannelSender{}))
 
-	_, err := h.Send(context.Background(), &notificationsv1.SendRequest{
+	_, err := h.Send(callerCtx(tenantID), &notificationsv1.SendRequest{
 		TenantId:         tenantID.String(),
 		RecipientId:      uuid.New().String(),
 		RecipientContact: "user@example.com",
@@ -49,7 +66,7 @@ func TestHandler_Send_Success(t *testing.T) {
 
 func TestHandler_Send_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().Send(context.Background(), &notificationsv1.SendRequest{
+	_, err := newHandler().Send(callerCtx(uuid.New()), &notificationsv1.SendRequest{
 		TenantId:    "bad",
 		RecipientId: uuid.New().String(),
 	})
@@ -58,8 +75,9 @@ func TestHandler_Send_InvalidTenantID(t *testing.T) {
 
 func TestHandler_Send_InvalidRecipientID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().Send(context.Background(), &notificationsv1.SendRequest{
-		TenantId:    uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().Send(callerCtx(tid), &notificationsv1.SendRequest{
+		TenantId:    tid.String(),
 		RecipientId: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -69,8 +87,9 @@ func TestHandler_Send_InvalidRecipientID(t *testing.T) {
 
 func TestHandler_Dispatch_Success(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().Dispatch(context.Background(), &notificationsv1.DispatchRequest{
-		TenantId:    uuid.New().String(),
+	tid := uuid.New()
+	resp, err := newHandler().Dispatch(callerCtx(tid), &notificationsv1.DispatchRequest{
+		TenantId:    tid.String(),
 		RecipientId: uuid.New().String(),
 		EventType:   "expense.approved",
 	})
@@ -80,7 +99,7 @@ func TestHandler_Dispatch_Success(t *testing.T) {
 
 func TestHandler_Dispatch_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().Dispatch(context.Background(), &notificationsv1.DispatchRequest{
+	_, err := newHandler().Dispatch(callerCtx(uuid.New()), &notificationsv1.DispatchRequest{
 		TenantId:    "bad",
 		RecipientId: uuid.New().String(),
 	})
@@ -89,8 +108,9 @@ func TestHandler_Dispatch_InvalidTenantID(t *testing.T) {
 
 func TestHandler_Dispatch_InvalidRecipientID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().Dispatch(context.Background(), &notificationsv1.DispatchRequest{
-		TenantId:    uuid.New().String(),
+	tid := uuid.New()
+	_, err := newHandler().Dispatch(callerCtx(tid), &notificationsv1.DispatchRequest{
+		TenantId:    tid.String(),
 		RecipientId: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -103,7 +123,7 @@ func TestHandler_CreateTemplate_Success(t *testing.T) {
 	tenantID := uuid.New()
 	h := newHandler()
 
-	resp, err := h.CreateTemplate(context.Background(), &notificationsv1.CreateTemplateRequest{
+	resp, err := h.CreateTemplate(callerCtx(tenantID), &notificationsv1.CreateTemplateRequest{
 		TenantId:     tenantID.String(),
 		EventType:    "expense.approved",
 		Channel:      "email",
@@ -117,7 +137,7 @@ func TestHandler_CreateTemplate_Success(t *testing.T) {
 
 func TestHandler_CreateTemplate_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreateTemplate(context.Background(), &notificationsv1.CreateTemplateRequest{
+	_, err := newHandler().CreateTemplate(callerCtx(uuid.New()), &notificationsv1.CreateTemplateRequest{
 		TenantId: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -135,7 +155,7 @@ func TestHandler_UpdateTemplate_Success(t *testing.T) {
 		},
 	}, map[string]ChannelSender{}))
 
-	resp, err := h.UpdateTemplate(context.Background(), &notificationsv1.UpdateTemplateRequest{
+	resp, err := h.UpdateTemplate(callerCtx(tenantID), &notificationsv1.UpdateTemplateRequest{
 		TenantId:     tenantID.String(),
 		Id:           tmplID.String(),
 		Subject:      "Updated Subject",
@@ -148,7 +168,7 @@ func TestHandler_UpdateTemplate_Success(t *testing.T) {
 
 func TestHandler_UpdateTemplate_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdateTemplate(context.Background(), &notificationsv1.UpdateTemplateRequest{
+	_, err := newHandler().UpdateTemplate(callerCtx(uuid.New()), &notificationsv1.UpdateTemplateRequest{
 		TenantId: "bad", Id: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -156,8 +176,9 @@ func TestHandler_UpdateTemplate_InvalidTenantID(t *testing.T) {
 
 func TestHandler_UpdateTemplate_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdateTemplate(context.Background(), &notificationsv1.UpdateTemplateRequest{
-		TenantId: uuid.New().String(), Id: "bad",
+	tid := uuid.New()
+	_, err := newHandler().UpdateTemplate(callerCtx(tid), &notificationsv1.UpdateTemplateRequest{
+		TenantId: tid.String(), Id: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -174,7 +195,7 @@ func TestHandler_GetTemplate_Success(t *testing.T) {
 		},
 	}, map[string]ChannelSender{}))
 
-	resp, err := h.GetTemplate(context.Background(), &notificationsv1.GetTemplateRequest{
+	resp, err := h.GetTemplate(callerCtx(tenantID), &notificationsv1.GetTemplateRequest{
 		TenantId: tenantID.String(),
 		Id:       tmplID.String(),
 	})
@@ -184,7 +205,7 @@ func TestHandler_GetTemplate_Success(t *testing.T) {
 
 func TestHandler_GetTemplate_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetTemplate(context.Background(), &notificationsv1.GetTemplateRequest{
+	_, err := newHandler().GetTemplate(callerCtx(uuid.New()), &notificationsv1.GetTemplateRequest{
 		TenantId: "bad", Id: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -192,22 +213,24 @@ func TestHandler_GetTemplate_InvalidTenantID(t *testing.T) {
 
 func TestHandler_GetTemplate_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetTemplate(context.Background(), &notificationsv1.GetTemplateRequest{
-		TenantId: uuid.New().String(), Id: "bad",
+	tid := uuid.New()
+	_, err := newHandler().GetTemplate(callerCtx(tid), &notificationsv1.GetTemplateRequest{
+		TenantId: tid.String(), Id: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_GetTemplate_NotFound(t *testing.T) {
 	t.Parallel()
+	tid := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
 		getTemplateFn: func(_ context.Context, _, _ uuid.UUID) (*Template, error) {
 			return nil, ErrTemplateNotFound
 		},
 	}, map[string]ChannelSender{}))
 
-	_, err := h.GetTemplate(context.Background(), &notificationsv1.GetTemplateRequest{
-		TenantId: uuid.New().String(), Id: uuid.New().String(),
+	_, err := h.GetTemplate(callerCtx(tid), &notificationsv1.GetTemplateRequest{
+		TenantId: tid.String(), Id: uuid.New().String(),
 	})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
@@ -223,14 +246,14 @@ func TestHandler_ListTemplates_Success(t *testing.T) {
 		},
 	}, map[string]ChannelSender{}))
 
-	resp, err := h.ListTemplates(context.Background(), &notificationsv1.ListTemplatesRequest{TenantId: tenantID.String()})
+	resp, err := h.ListTemplates(callerCtx(tenantID), &notificationsv1.ListTemplatesRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetTemplates(), 1)
 }
 
 func TestHandler_ListTemplates_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListTemplates(context.Background(), &notificationsv1.ListTemplatesRequest{TenantId: "bad"})
+	_, err := newHandler().ListTemplates(callerCtx(uuid.New()), &notificationsv1.ListTemplatesRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -246,7 +269,7 @@ func TestHandler_GetNotification_Success(t *testing.T) {
 		},
 	}, map[string]ChannelSender{}))
 
-	resp, err := h.GetNotification(context.Background(), &notificationsv1.GetNotificationRequest{
+	resp, err := h.GetNotification(callerCtx(tenantID), &notificationsv1.GetNotificationRequest{
 		TenantId: tenantID.String(),
 		Id:       notifID.String(),
 	})
@@ -256,7 +279,7 @@ func TestHandler_GetNotification_Success(t *testing.T) {
 
 func TestHandler_GetNotification_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetNotification(context.Background(), &notificationsv1.GetNotificationRequest{
+	_, err := newHandler().GetNotification(callerCtx(uuid.New()), &notificationsv1.GetNotificationRequest{
 		TenantId: "bad", Id: uuid.New().String(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -264,8 +287,9 @@ func TestHandler_GetNotification_InvalidTenantID(t *testing.T) {
 
 func TestHandler_GetNotification_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetNotification(context.Background(), &notificationsv1.GetNotificationRequest{
-		TenantId: uuid.New().String(), Id: "bad",
+	tid := uuid.New()
+	_, err := newHandler().GetNotification(callerCtx(tid), &notificationsv1.GetNotificationRequest{
+		TenantId: tid.String(), Id: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -281,15 +305,53 @@ func TestHandler_ListNotifications_Success(t *testing.T) {
 		},
 	}, map[string]ChannelSender{}))
 
-	resp, err := h.ListNotifications(context.Background(), &notificationsv1.ListNotificationsRequest{TenantId: tenantID.String()})
+	resp, err := h.ListNotifications(callerCtx(tenantID), &notificationsv1.ListNotificationsRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetNotifications(), 1)
 }
 
 func TestHandler_ListNotifications_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListNotifications(context.Background(), &notificationsv1.ListNotificationsRequest{TenantId: "bad"})
+	_, err := newHandler().ListNotifications(callerCtx(uuid.New()), &notificationsv1.ListNotificationsRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_CrossTenantRead_Denied(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	victimTenant := uuid.New()
+	require.NotEqual(t, callerTenant, victimTenant)
+
+	h := newHandlerWithRepo(&mockRepo{
+		listNotificationsFn: func(context.Context, uuid.UUID, string, string, int, int) ([]Notification, error) {
+			t.Fatal("repository must not be reached on a cross-tenant request")
+			return nil, nil
+		},
+	})
+
+	_, err := h.ListNotifications(callerCtx(callerTenant), &notificationsv1.ListNotificationsRequest{
+		TenantId: victimTenant.String(),
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListNotifications_UsesTokenTenant(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	var gotTenant uuid.UUID
+	h := newHandlerWithRepo(&mockRepo{
+		listNotificationsFn: func(_ context.Context, tenantID uuid.UUID, _, _ string, _, _ int) ([]Notification, error) {
+			gotTenant = tenantID
+			return nil, nil
+		},
+	})
+
+	// Request carries NO tenant at all: the token supplies it.
+	_, err := h.ListNotifications(callerCtx(tid), &notificationsv1.ListNotificationsRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, tid, gotTenant, "the repository must receive the token's tenant")
 }
 
 // --- grpcErr ---
