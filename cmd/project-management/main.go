@@ -23,6 +23,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	projectv1 "github.com/wegofwd2020/thittam/gen/project/v1"
+	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/pkg/corsutil"
 	"github.com/wegofwd2020/thittam/pkg/events"
 	"github.com/wegofwd2020/thittam/pkg/iamclient"
@@ -95,6 +96,10 @@ func main() {
 	}
 
 	// --- gRPC server ---
+	verifier, err := auth.VerifierFromEnv(ctx)
+	if err != nil {
+		log.Fatalf("project-management: startup: load JWT public key: %v", err)
+	}
 	srv := server.New(server.Config{
 		Name: "project-management",
 		// Ports shifted from 8080/9090 to 8090/9100 to avoid conflicts with
@@ -103,8 +108,8 @@ func main() {
 		Port:        8090,
 		MetricsPort: 9100,
 		Loader:      loader,
-		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryCallerInterceptor()},
-		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamCallerInterceptor()},
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
 	}, nil)
 
 	projectv1.RegisterProjectServiceServer(srv.GRPCServer(), handler)
@@ -119,15 +124,12 @@ func main() {
 	// original 9090 slot is taken by a neighbouring process on this host
 	// (see Port=8090 comment above for the same 8080→8090 rationale).
 	go func() {
-		// IncomingHeaderMatcher forwards X-Tenant-Id (and caller identity
-		// headers Kong normally injects) as gRPC metadata with the lower-
-		// cased name, which is what pkg/interceptor.UnaryCallerInterceptor
-		// reads via metadata.FromIncomingContext. Without this, tenant
-		// context never reaches the handler and every RPC 401s on
-		// "tenant ID not found in context".
+		// x-caller-* and x-tenant-id are deliberately NOT forwarded: identity
+		// comes from the verified token (#138), and forwarding them would let a
+		// browser assert its own role. X-Project-Id selects a resource, not an
+		// identity. Authorization arrives without a matcher (permanent header).
 		headerMatcher := func(key string) (string, bool) {
-			switch key {
-			case "X-Tenant-Id", "X-Caller-Id", "X-Caller-Email", "X-Caller-Role", "X-Project-Id":
+			if key == "X-Project-Id" {
 				return key, true
 			}
 			return runtime.DefaultHeaderMatcher(key)

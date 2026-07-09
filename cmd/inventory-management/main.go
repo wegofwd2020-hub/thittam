@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 
 	inventoryv1 "github.com/wegofwd2020/thittam/gen/inventory/v1"
+	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/pkg/iamclient"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/server"
@@ -65,13 +66,17 @@ func main() {
 	}
 
 	// --- gRPC server ---
+	verifier, err := auth.VerifierFromEnv(ctx)
+	if err != nil {
+		log.Fatalf("inventory-management: startup: load JWT public key: %v", err)
+	}
 	srv := server.New(server.Config{
 		Name:        "inventory-management",
 		Port:        8084,
 		MetricsPort: 9094,
 		Loader:      loader,
-		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryCallerInterceptor()},
-		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamCallerInterceptor()},
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
 	}, nil)
 
 	inventoryv1.RegisterInventoryServiceServer(srv.GRPCServer(), handler)

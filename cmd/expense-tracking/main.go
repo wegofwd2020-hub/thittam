@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc"
 
 	expensev1 "github.com/wegofwd2020/thittam/gen/expense/v1"
+	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/pkg/events"
 	"github.com/wegofwd2020/thittam/pkg/iamclient"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
@@ -86,13 +87,17 @@ func main() {
 	}
 
 	// --- gRPC server ---
+	verifier, err := auth.VerifierFromEnv(ctx)
+	if err != nil {
+		log.Fatalf("expense-tracking: startup: load JWT public key: %v", err)
+	}
 	srv := server.New(server.Config{
 		Name:        "expense-tracking",
 		Port:        8082,
 		MetricsPort: 9092,
 		Loader:      loader,
-		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryCallerInterceptor()},
-		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamCallerInterceptor()},
+		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
+		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
 	}, nil)
 
 	expensev1.RegisterExpenseServiceServer(srv.GRPCServer(), handler)
