@@ -42,6 +42,12 @@ type mockRepo struct {
 	markOutboxSentFn                func(ctx context.Context, id uuid.UUID) error
 	recordOutboxFailureFn           func(ctx context.Context, id uuid.UUID, errMsg string) error
 	deleteSentOutboxOlderThanFn     func(ctx context.Context, cutoff time.Time) (int64, error)
+
+	// Outbox DLQ (#134)
+	moveOutboxToDeadFn func(ctx context.Context, id uuid.UUID, errMsg string) error
+	outboxStatsFn      func(ctx context.Context) (*OutboxStats, error)
+	listDeadOutboxFn   func(ctx context.Context, limit int) ([]*OutboxEvent, error)
+	replayDeadOutboxFn func(ctx context.Context, id uuid.UUID) error
 }
 
 func (m *mockRepo) CreateSubscription(ctx context.Context, s *Subscription) error {
@@ -184,6 +190,36 @@ func (m *mockRepo) DeleteSentOutboxOlderThan(ctx context.Context, cutoff time.Ti
 		return m.deleteSentOutboxOlderThanFn(ctx, cutoff)
 	}
 	return 0, nil
+}
+
+// --- Outbox DLQ (#134) ---
+
+func (m *mockRepo) MoveOutboxToDead(ctx context.Context, id uuid.UUID, errMsg string) error {
+	if m.moveOutboxToDeadFn != nil {
+		return m.moveOutboxToDeadFn(ctx, id, errMsg)
+	}
+	return nil
+}
+
+func (m *mockRepo) OutboxStats(ctx context.Context) (*OutboxStats, error) {
+	if m.outboxStatsFn != nil {
+		return m.outboxStatsFn(ctx)
+	}
+	return &OutboxStats{}, nil
+}
+
+func (m *mockRepo) ListDeadOutbox(ctx context.Context, limit int) ([]*OutboxEvent, error) {
+	if m.listDeadOutboxFn != nil {
+		return m.listDeadOutboxFn(ctx, limit)
+	}
+	return nil, nil
+}
+
+func (m *mockRepo) ReplayDeadOutbox(ctx context.Context, id uuid.UUID) error {
+	if m.replayDeadOutboxFn != nil {
+		return m.replayDeadOutboxFn(ctx, id)
+	}
+	return nil
 }
 
 // --- Fixtures ---

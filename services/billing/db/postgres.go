@@ -216,6 +216,103 @@ func (p *Postgres) DeleteSentOutboxOlderThan(ctx context.Context, cutoff time.Ti
 	return ct.RowsAffected(), nil
 }
 
+// MoveOutboxToDead parks a poison event: copy it into event_outbox_dead and
+// delete it from event_outbox, in one tx. Idempotent — if a concurrent relay
+// already moved the row, zero rows are copied and the tx commits as a no-op.
+func (p *Postgres) MoveOutboxToDead(ctx context.Context, id uuid.UUID, errMsg string) error {
+	tx, err := p.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("billing: begin move-to-dead tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO event_outbox_dead (id, subject, tenant_id, payload, created_at, attempts, last_error, died_at)
+		SELECT id, subject, tenant_id, payload, created_at, attempts, $2, now()
+		FROM event_outbox WHERE id = $1
+		ON CONFLICT (id) DO NOTHING`, id, errMsg); err != nil {
+		return fmt.Errorf("billing: insert dead outbox: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM event_outbox WHERE id = $1`, id); err != nil {
+		return fmt.Errorf("billing: delete moved outbox: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
+// OutboxStats reads pending depth, oldest-pending age, and dead depth in one
+// round trip. The first two subqueries ride idx_event_outbox_unsent.
+func (p *Postgres) OutboxStats(ctx context.Context) (*billing.OutboxStats, error) {
+	var s billing.OutboxStats
+	err := p.db.QueryRow(ctx, `
+		SELECT
+		  (SELECT count(*) FROM event_outbox WHERE sent_at IS NULL),
+		  (SELECT coalesce(extract(epoch FROM now() - min(created_at)), 0)::double precision
+		     FROM event_outbox WHERE sent_at IS NULL),
+		  (SELECT count(*) FROM event_outbox_dead)`).
+		Scan(&s.Pending, &s.OldestPendingSeconds, &s.Dead)
+	if err != nil {
+		return nil, fmt.Errorf("billing: outbox stats: %w", err)
+	}
+	return &s, nil
+}
+
+// ListDeadOutbox returns parked events, most recently died first.
+func (p *Postgres) ListDeadOutbox(ctx context.Context, limit int) ([]*billing.OutboxEvent, error) {
+	rows, err := p.db.Query(ctx, `
+		SELECT id, subject, tenant_id, payload, created_at, attempts, last_error
+		FROM event_outbox_dead
+		ORDER BY died_at DESC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("billing: list dead outbox: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*billing.OutboxEvent
+	for rows.Next() {
+		var e billing.OutboxEvent
+		var lastErr pgtype.Text
+		if err := rows.Scan(&e.ID, &e.Subject, &e.TenantID, &e.Payload, &e.CreatedAt, &e.Attempts, &lastErr); err != nil {
+			return nil, fmt.Errorf("billing: scan dead outbox: %w", err)
+		}
+		if lastErr.Valid {
+			e.LastError = &lastErr.String
+		}
+		out = append(out, &e)
+	}
+	return out, rows.Err()
+}
+
+// ReplayDeadOutbox re-arms a parked event: move it back to event_outbox with
+// attempts reset and last_error cleared, preserving id and created_at so
+// age-based alerts stay honest. Unknown id → ErrOutboxEventNotFound.
+func (p *Postgres) ReplayDeadOutbox(ctx context.Context, id uuid.UUID) error {
+	tx, err := p.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("billing: begin replay tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	ct, err := tx.Exec(ctx, `
+		INSERT INTO event_outbox (id, subject, tenant_id, payload, created_at, sent_at, attempts, last_error)
+		SELECT id, subject, tenant_id, payload, created_at, NULL, 0, NULL
+		FROM event_outbox_dead WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("billing: reinsert outbox: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return billing.ErrOutboxEventNotFound
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM event_outbox_dead WHERE id = $1`, id); err != nil {
+		return fmt.Errorf("billing: delete replayed outbox: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
 // --- Invoices ---
 
 func (p *Postgres) CreateInvoice(ctx context.Context, inv *billing.Invoice) error {

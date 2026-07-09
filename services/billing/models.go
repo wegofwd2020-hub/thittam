@@ -141,3 +141,11 @@ type OutboxEvent struct {
 	Attempts  int
 	LastError *string
 }
+
+// OutboxStats is a point-in-time snapshot of outbox health, read once per
+// relay tick to drive the pending/oldest/dead gauges (#134).
+type OutboxStats struct {
+	Pending              int64
+	OldestPendingSeconds float64
+	Dead                 int64
+}
