@@ -102,6 +102,19 @@ func (v *Verifier) Verify(accessToken string) (*Claims, error) {
 		return nil, ErrTokenInvalid
 	}
 
+	// iat is not required (only jwt.WithExpirationRequired() is enforced), and
+	// exp/IssuedAt/ExpiresAt are *jwt.NumericDate — nil-dereferencing here would
+	// panic in the request path of a security boundary. exp is guaranteed
+	// non-nil today because the parser rejects a missing exp, but that guard
+	// still gets a nil check in case it is ever loosened.
+	var issuedAt, expiresAt time.Time
+	if c.IssuedAt != nil {
+		issuedAt = c.IssuedAt.Time
+	}
+	if c.ExpiresAt != nil {
+		expiresAt = c.ExpiresAt.Time
+	}
+
 	return &Claims{
 		Subject:     userID,
 		TenantID:    tenantID,
@@ -109,8 +122,8 @@ func (v *Verifier) Verify(accessToken string) (*Claims, error) {
 		Roles:       c.Roles,
 		Permissions: c.Permissions,
 		AuthMethod:  c.AuthMethod,
-		IssuedAt:    c.IssuedAt.Time,
-		ExpiresAt:   c.ExpiresAt.Time,
+		IssuedAt:    issuedAt,
+		ExpiresAt:   expiresAt,
 	}, nil
 }
 
