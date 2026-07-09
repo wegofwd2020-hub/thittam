@@ -23,7 +23,7 @@ func platformAdminCtx() context.Context {
 	return interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
 		UserID: uuid.MustParse("a0000000-0000-0000-0000-000000000001"),
 		Email:  "admin@platform.internal",
-		Role:   interceptor.RolePlatformAdmin,
+		Roles:  []string{interceptor.RolePlatformAdmin},
 		IP:     "127.0.0.1",
 	})
 }

@@ -32,15 +32,26 @@ const (
 	RoleMember        = "member"
 )
 
-// CallerInfo holds the authenticated caller's identity extracted from
-// Kong-injected gRPC metadata.
+// CallerInfo holds the authenticated caller's identity, derived from the
+// verified access token (see UnaryAuthInterceptor).
 type CallerInfo struct {
-	UserID    uuid.UUID
-	TenantID  uuid.UUID
-	ProjectID uuid.UUID // x-project-id; uuid.Nil for non-project-scoped requests
-	Email     string
-	Role      string
-	IP        string
+	UserID      uuid.UUID
+	TenantID    uuid.UUID
+	ProjectID   uuid.UUID // x-project-id; uuid.Nil for non-project-scoped requests
+	Email       string
+	Roles       []string
+	Permissions []string
+	IP          string
+}
+
+// HasRole reports whether the caller holds the named role.
+func (c CallerInfo) HasRole(role string) bool {
+	for _, r := range c.Roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
 }
 
 type callerKey struct{}
@@ -58,8 +69,9 @@ func CallerFromContext(ctx context.Context) (CallerInfo, bool) {
 	return c, ok
 }
 
-// RequireRole returns a gRPC PermissionDenied error if the caller's role does
-// not match the required role. Call at the top of any admin handler:
+// RequireRole returns PermissionDenied unless the caller's verified roles
+// contain `required`. Membership, not equality: a token asserting
+// [viewer, tenant_admin] satisfies RequireRole(tenant_admin).
 //
 //	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
 //	    return nil, err
@@ -69,8 +81,8 @@ func RequireRole(ctx context.Context, required string) error {
 	if !ok {
 		return status.Error(codes.PermissionDenied, "caller identity not present in context")
 	}
-	if caller.Role != required {
-		return status.Errorf(codes.PermissionDenied, "requires role %s, caller has %s", required, caller.Role)
+	if !caller.HasRole(required) {
+		return status.Errorf(codes.PermissionDenied, "requires role %s", required)
 	}
 	return nil
 }
@@ -90,7 +102,7 @@ func UnaryCallerInterceptor() grpc.UnaryServerInterceptor {
 			TenantID:  uuidFromMD(md, "x-tenant-id"),
 			ProjectID: uuidFromMD(md, "x-project-id"),
 			Email:     firstMD(md, "x-caller-email"),
-			Role:      firstMD(md, "x-caller-role"),
+			Roles:     rolesFromMD(md, "x-caller-role"),
 			IP:        firstMD(md, "x-forwarded-for"),
 		}
 
@@ -126,7 +138,7 @@ func StreamCallerInterceptor() grpc.StreamServerInterceptor {
 			TenantID:  uuidFromMD(md, "x-tenant-id"),
 			ProjectID: uuidFromMD(md, "x-project-id"),
 			Email:     firstMD(md, "x-caller-email"),
-			Role:      firstMD(md, "x-caller-role"),
+			Roles:     rolesFromMD(md, "x-caller-role"),
 			IP:        firstMD(md, "x-forwarded-for"),
 		}
 
@@ -159,6 +171,15 @@ func firstMD(md metadata.MD, key string) string {
 		return ""
 	}
 	return vals[0]
+}
+
+// rolesFromMD reads the legacy single-valued x-caller-role header into a slice.
+// Transitional: both header-trusting interceptors are deleted in #138 Task 7.
+func rolesFromMD(md metadata.MD, key string) []string {
+	if v := firstMD(md, key); v != "" {
+		return []string{v}
+	}
+	return nil
 }
 
 // uuidFromMD parses a UUID from gRPC metadata. Returns uuid.Nil on missing or

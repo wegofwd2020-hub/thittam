@@ -47,7 +47,7 @@ func TestCallerFromContext_AbsentReturnsZeroAndFalse(t *testing.T) {
 
 func TestWithCaller_RoundTrip(t *testing.T) {
 	t.Parallel()
-	want := CallerInfo{UserID: fixedCallerID, TenantID: fixedTenantID, Email: "a@b.com", Role: RolePlatformAdmin, IP: "1.2.3.4"}
+	want := CallerInfo{UserID: fixedCallerID, TenantID: fixedTenantID, Email: "a@b.com", Roles: []string{RolePlatformAdmin}, IP: "1.2.3.4"}
 	got, ok := CallerFromContext(WithCaller(context.Background(), want))
 	require.True(t, ok)
 	assert.Equal(t, want, got)
@@ -71,7 +71,7 @@ func TestUnaryCallerInterceptor_PopulatesCallerInfo(t *testing.T) {
 	assert.Equal(t, fixedCallerID, caller.UserID)
 	assert.Equal(t, fixedTenantID, caller.TenantID)
 	assert.Equal(t, "admin@example.com", caller.Email)
-	assert.Equal(t, RolePlatformAdmin, caller.Role)
+	assert.Equal(t, []string{RolePlatformAdmin}, caller.Roles)
 	assert.Equal(t, "10.0.0.1", caller.IP)
 }
 
@@ -120,7 +120,7 @@ func TestUnaryCallerInterceptor_NoMetadata_EmptyCaller(t *testing.T) {
 	caller, ok := CallerFromContext(enriched)
 	require.True(t, ok)
 	assert.Equal(t, uuid.Nil, caller.UserID)
-	assert.Empty(t, caller.Role)
+	assert.Empty(t, caller.Roles)
 }
 
 func TestUnaryCallerInterceptor_InvalidUUID_TreatedAsNil(t *testing.T) {
@@ -181,7 +181,7 @@ func TestStreamCallerInterceptor_PopulatesCallerInfo(t *testing.T) {
 	assert.Equal(t, fixedCallerID, caller.UserID)
 	assert.Equal(t, fixedTenantID, caller.TenantID)
 	assert.Equal(t, "stream@example.com", caller.Email)
-	assert.Equal(t, RoleTenantAdmin, caller.Role)
+	assert.Equal(t, []string{RoleTenantAdmin}, caller.Roles)
 	assert.Equal(t, "10.0.0.3", caller.IP)
 }
 
@@ -229,7 +229,7 @@ func TestStreamCallerInterceptor_NoMetadata_EmptyCaller(t *testing.T) {
 	caller, ok := CallerFromContext(enriched)
 	require.True(t, ok)
 	assert.Equal(t, uuid.Nil, caller.UserID)
-	assert.Empty(t, caller.Role)
+	assert.Empty(t, caller.Roles)
 }
 
 func TestStreamCallerInterceptor_HandlerErrorPassedThrough(t *testing.T) {
@@ -259,13 +259,13 @@ func TestWrappedStream_ContextReturnsEnrichedContext(t *testing.T) {
 
 func TestRequireRole_CorrectRole_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	ctx := WithCaller(context.Background(), CallerInfo{Role: RolePlatformAdmin})
+	ctx := WithCaller(context.Background(), CallerInfo{Roles: []string{RolePlatformAdmin}})
 	assert.NoError(t, RequireRole(ctx, RolePlatformAdmin))
 }
 
 func TestRequireRole_WrongRole_ReturnsPermissionDenied(t *testing.T) {
 	t.Parallel()
-	ctx := WithCaller(context.Background(), CallerInfo{Role: RoleMember})
+	ctx := WithCaller(context.Background(), CallerInfo{Roles: []string{RoleMember}})
 	err := RequireRole(ctx, RolePlatformAdmin)
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -280,8 +280,16 @@ func TestRequireRole_NoCaller_ReturnsPermissionDenied(t *testing.T) {
 
 func TestRequireRole_TenantAdmin_NotSufficientForPlatformAdmin(t *testing.T) {
 	t.Parallel()
-	ctx := WithCaller(context.Background(), CallerInfo{Role: RoleTenantAdmin})
+	ctx := WithCaller(context.Background(), CallerInfo{Roles: []string{RoleTenantAdmin}})
 	err := RequireRole(ctx, RolePlatformAdmin)
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestRequireRole_MembershipInMultiRoleCaller(t *testing.T) {
+	t.Parallel()
+	ctx := WithCaller(context.Background(), CallerInfo{Roles: []string{RoleMember, RoleTenantAdmin}})
+	assert.NoError(t, RequireRole(ctx, RoleTenantAdmin), "membership, not equality")
+	assert.NoError(t, RequireRole(ctx, RoleMember))
+	assert.Error(t, RequireRole(ctx, RolePlatformAdmin))
 }
