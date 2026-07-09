@@ -204,6 +204,9 @@ message GetCurrentUserResponse {
 
 // Users
 message CreateUserRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string email = 2;
   string display_name = 3;
@@ -211,11 +214,17 @@ message CreateUserRequest {
 }
 
 message GetUserRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string id = 2;
 }
 
 message ListUsersRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string status = 2; // optional filter: active|invited|deactivated
   int32 limit = 3;
@@ -227,6 +236,9 @@ message ListUsersResponse {
 }
 
 message UpdateUserRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string id = 2;
   string display_name = 3;
@@ -250,6 +262,9 @@ message ChangePasswordResponse {}
 
 // Roles & Permissions
 message AssignRoleRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string user_id = 2;
   string role_id = 3;
@@ -262,6 +277,9 @@ message AssignRoleResponse {}
 // must be a project-scopable role (project_supervisor or a custom role); the
 // IAM service rejects attempts to project-scope tenant-wide system roles.
 message AssignProjectRoleRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id   = 1;
   string user_id     = 2;
   string role_id     = 3;
@@ -279,6 +297,9 @@ message RevokeRoleRequest {
 message RevokeRoleResponse {}
 
 message ListRolesRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
 }
 
@@ -318,6 +339,9 @@ message CreateTenantRequest {
 }
 
 message SetTenantAddressRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id              = 1;
   string address_line1          = 2;
   string address_line2          = 3;
@@ -385,6 +409,9 @@ message TenantPurgeRequest {
 
 // Invitations
 message InviteUserRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
   string tenant_id = 1;
   string email = 2;
   string role_id = 3; // optional; empty means no pre-assigned role

@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	ledgerv1 "github.com/wegofwd2020/thittam/gen/ledger/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -16,8 +17,11 @@ import (
 
 // Handler implements the gRPC LedgerService.
 // The general-ledger is a universal service — it does not load vertical config
-// per request. Tenant IDs are taken directly from the request fields, enabling
-// calls from other services (IAM seeder, reporting) without an HTTP context.
+// per request. The tenant is always taken from the caller's verified token
+// (interceptor.TenantFromRequest), never from the request body; a request that
+// names a different tenant is rejected. Internal callers that need to act
+// across tenants (seeders, cross-tenant reporting) must go through the Service
+// layer directly — there is no caller-less path into these handlers.
 type Handler struct {
 	ledgerv1.UnimplementedLedgerServiceServer
 	svc *Service
@@ -34,9 +38,9 @@ var _ ledgerv1.LedgerServiceServer = (*Handler)(nil)
 // --- Accounts ---
 
 func (h *Handler) CreateAccount(ctx context.Context, req *ledgerv1.CreateAccountRequest) (*ledgerv1.Account, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	account := &Account{
@@ -62,9 +66,9 @@ func (h *Handler) CreateAccount(ctx context.Context, req *ledgerv1.CreateAccount
 }
 
 func (h *Handler) GetAccount(ctx context.Context, req *ledgerv1.GetAccountRequest) (*ledgerv1.Account, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	id, err := uuid.Parse(req.GetId())
@@ -80,9 +84,9 @@ func (h *Handler) GetAccount(ctx context.Context, req *ledgerv1.GetAccountReques
 }
 
 func (h *Handler) ListAccounts(ctx context.Context, req *ledgerv1.ListAccountsRequest) (*ledgerv1.ListAccountsResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	// Proto does not carry limit/offset yet — apply a server-side cap.
@@ -100,9 +104,9 @@ func (h *Handler) ListAccounts(ctx context.Context, req *ledgerv1.ListAccountsRe
 }
 
 func (h *Handler) SeedChartOfAccounts(ctx context.Context, req *ledgerv1.SeedChartOfAccountsRequest) (*ledgerv1.SeedChartOfAccountsResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	protoEntries := req.GetEntries()
@@ -133,9 +137,9 @@ func (h *Handler) SeedChartOfAccounts(ctx context.Context, req *ledgerv1.SeedCha
 // --- Accounting Periods ---
 
 func (h *Handler) OpenAccountingPeriod(ctx context.Context, req *ledgerv1.OpenAccountingPeriodRequest) (*ledgerv1.OpenAccountingPeriodResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	if err := h.svc.OpenAccountingPeriod(ctx, tenantID, int(req.GetYear()), time.Month(req.GetMonth())); err != nil {
@@ -148,9 +152,9 @@ func (h *Handler) OpenAccountingPeriod(ctx context.Context, req *ledgerv1.OpenAc
 }
 
 func (h *Handler) CloseAccountingPeriod(ctx context.Context, req *ledgerv1.CloseAccountingPeriodRequest) (*ledgerv1.AccountingPeriod, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	periodID, err := uuid.Parse(req.GetPeriodId())
@@ -173,9 +177,9 @@ func (h *Handler) CloseAccountingPeriod(ctx context.Context, req *ledgerv1.Close
 // --- Journal Entries ---
 
 func (h *Handler) CreateJournalEntry(ctx context.Context, req *ledgerv1.CreateJournalEntryRequest) (*ledgerv1.JournalEntry, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	periodID, err := uuid.Parse(req.GetPeriodId())
@@ -230,9 +234,9 @@ func (h *Handler) CreateJournalEntry(ctx context.Context, req *ledgerv1.CreateJo
 }
 
 func (h *Handler) PostJournalEntry(ctx context.Context, req *ledgerv1.PostJournalEntryRequest) (*ledgerv1.JournalEntry, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	id, err := uuid.Parse(req.GetId())
@@ -253,9 +257,9 @@ func (h *Handler) PostJournalEntry(ctx context.Context, req *ledgerv1.PostJourna
 }
 
 func (h *Handler) GetJournalEntry(ctx context.Context, req *ledgerv1.GetJournalEntryRequest) (*ledgerv1.JournalEntry, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	id, err := uuid.Parse(req.GetId())
@@ -271,9 +275,9 @@ func (h *Handler) GetJournalEntry(ctx context.Context, req *ledgerv1.GetJournalE
 }
 
 func (h *Handler) ListJournalEntries(ctx context.Context, req *ledgerv1.ListJournalEntriesRequest) (*ledgerv1.ListJournalEntriesResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	var periodID *uuid.UUID
@@ -298,9 +302,9 @@ func (h *Handler) ListJournalEntries(ctx context.Context, req *ledgerv1.ListJour
 }
 
 func (h *Handler) VoidJournalEntry(ctx context.Context, req *ledgerv1.VoidJournalEntryRequest) (*ledgerv1.JournalEntry, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	id, err := uuid.Parse(req.GetId())
@@ -323,9 +327,9 @@ func (h *Handler) VoidJournalEntry(ctx context.Context, req *ledgerv1.VoidJourna
 // --- Trial Balance ---
 
 func (h *Handler) GetTrialBalance(ctx context.Context, req *ledgerv1.GetTrialBalanceRequest) (*ledgerv1.GetTrialBalanceResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	asOf := time.Now().UTC()

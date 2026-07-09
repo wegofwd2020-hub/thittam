@@ -6,12 +6,19 @@ import (
 
 	"github.com/google/uuid"
 	notificationsv1 "github.com/wegofwd2020/thittam/gen/notifications/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Handler implements the gRPC NotificationsService.
+// The tenant is always taken from the caller's verified token
+// (interceptor.TenantFromRequest), never from the request body; a request
+// that names a different tenant is rejected. NATS consumers (Send/Dispatch
+// triggered by events) call the Service layer directly and never construct
+// or go through a Handler, so there is no caller-less path into these
+// handler methods.
 type Handler struct {
 	notificationsv1.UnimplementedNotificationsServiceServer
 	svc *Service
@@ -28,9 +35,9 @@ var _ notificationsv1.NotificationsServiceServer = (*Handler)(nil)
 // --- Send / Dispatch ---
 
 func (h *Handler) Send(ctx context.Context, req *notificationsv1.SendRequest) (*notificationsv1.Notification, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	recipientID, err := uuid.Parse(req.GetRecipientId())
 	if err != nil {
@@ -52,9 +59,9 @@ func (h *Handler) Send(ctx context.Context, req *notificationsv1.SendRequest) (*
 }
 
 func (h *Handler) Dispatch(ctx context.Context, req *notificationsv1.DispatchRequest) (*notificationsv1.DispatchResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	recipientID, err := uuid.Parse(req.GetRecipientId())
 	if err != nil {
@@ -75,9 +82,9 @@ func (h *Handler) Dispatch(ctx context.Context, req *notificationsv1.DispatchReq
 // --- Templates ---
 
 func (h *Handler) CreateTemplate(ctx context.Context, req *notificationsv1.CreateTemplateRequest) (*notificationsv1.Template, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	tmpl, err := h.svc.CreateTemplate(ctx, &Template{
@@ -94,9 +101,9 @@ func (h *Handler) CreateTemplate(ctx context.Context, req *notificationsv1.Creat
 }
 
 func (h *Handler) UpdateTemplate(ctx context.Context, req *notificationsv1.UpdateTemplateRequest) (*notificationsv1.Template, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
@@ -121,9 +128,9 @@ func (h *Handler) UpdateTemplate(ctx context.Context, req *notificationsv1.Updat
 }
 
 func (h *Handler) GetTemplate(ctx context.Context, req *notificationsv1.GetTemplateRequest) (*notificationsv1.Template, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
@@ -138,9 +145,9 @@ func (h *Handler) GetTemplate(ctx context.Context, req *notificationsv1.GetTempl
 }
 
 func (h *Handler) ListTemplates(ctx context.Context, req *notificationsv1.ListTemplatesRequest) (*notificationsv1.ListTemplatesResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	templates, err := h.svc.ListTemplates(ctx, tenantID)
@@ -158,9 +165,9 @@ func (h *Handler) ListTemplates(ctx context.Context, req *notificationsv1.ListTe
 // --- Delivery history ---
 
 func (h *Handler) GetNotification(ctx context.Context, req *notificationsv1.GetNotificationRequest) (*notificationsv1.Notification, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
@@ -175,9 +182,9 @@ func (h *Handler) GetNotification(ctx context.Context, req *notificationsv1.GetN
 }
 
 func (h *Handler) ListNotifications(ctx context.Context, req *notificationsv1.ListNotificationsRequest) (*notificationsv1.ListNotificationsResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	notifs, err := h.svc.ListNotifications(ctx, tenantID, req.GetChannel(), req.GetStatus(), int(req.GetLimit()), int(req.GetOffset()))

@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -25,9 +26,9 @@ func NewHandler(svc *Service) *Handler {
 // --- Upload lifecycle ---
 
 func (h *Handler) InitiateUpload(ctx context.Context, req *documentv1.InitiateUploadRequest) (*documentv1.UploadURL, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	uploadedBy, err := uuid.Parse(req.GetUploadedBy())
 	if err != nil {
@@ -67,9 +68,9 @@ func (h *Handler) InitiateUpload(ctx context.Context, req *documentv1.InitiateUp
 }
 
 func (h *Handler) ConfirmUpload(ctx context.Context, req *documentv1.ConfirmUploadRequest) (*documentv1.Document, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetDocumentId())
 	if err != nil {
@@ -86,9 +87,9 @@ func (h *Handler) ConfirmUpload(ctx context.Context, req *documentv1.ConfirmUplo
 // --- Document management ---
 
 func (h *Handler) GetDocument(ctx context.Context, req *documentv1.GetDocumentRequest) (*documentv1.Document, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetId())
 	if err != nil {
@@ -103,9 +104,9 @@ func (h *Handler) GetDocument(ctx context.Context, req *documentv1.GetDocumentRe
 }
 
 func (h *Handler) ListDocuments(ctx context.Context, req *documentv1.ListDocumentsRequest) (*documentv1.ListDocumentsResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	var productionID, folderID *uuid.UUID
@@ -137,9 +138,9 @@ func (h *Handler) ListDocuments(ctx context.Context, req *documentv1.ListDocumen
 }
 
 func (h *Handler) DeleteDocument(ctx context.Context, req *documentv1.DeleteDocumentRequest) (*documentv1.DeleteDocumentResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetId())
 	if err != nil {
@@ -153,9 +154,9 @@ func (h *Handler) DeleteDocument(ctx context.Context, req *documentv1.DeleteDocu
 }
 
 func (h *Handler) GetDownloadURL(ctx context.Context, req *documentv1.GetDownloadURLRequest) (*documentv1.DownloadURL, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetId())
 	if err != nil {
@@ -173,9 +174,9 @@ func (h *Handler) GetDownloadURL(ctx context.Context, req *documentv1.GetDownloa
 }
 
 func (h *Handler) MoveDocument(ctx context.Context, req *documentv1.MoveDocumentRequest) (*documentv1.Document, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetDocumentId())
 	if err != nil {
@@ -196,9 +197,9 @@ func (h *Handler) MoveDocument(ctx context.Context, req *documentv1.MoveDocument
 // --- Versioning ---
 
 func (h *Handler) CreateVersion(ctx context.Context, req *documentv1.CreateVersionRequest) (*documentv1.UploadURL, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetDocumentId())
 	if err != nil {
@@ -221,9 +222,9 @@ func (h *Handler) CreateVersion(ctx context.Context, req *documentv1.CreateVersi
 }
 
 func (h *Handler) ConfirmVersion(ctx context.Context, req *documentv1.ConfirmVersionRequest) (*documentv1.DocumentVersion, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetDocumentId())
 	if err != nil {
@@ -242,9 +243,9 @@ func (h *Handler) ConfirmVersion(ctx context.Context, req *documentv1.ConfirmVer
 }
 
 func (h *Handler) ListVersions(ctx context.Context, req *documentv1.ListVersionsRequest) (*documentv1.ListVersionsResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetDocumentId())
 	if err != nil {
@@ -266,9 +267,9 @@ func (h *Handler) ListVersions(ctx context.Context, req *documentv1.ListVersions
 }
 
 func (h *Handler) RestoreVersion(ctx context.Context, req *documentv1.RestoreVersionRequest) (*documentv1.Document, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetDocumentId())
 	if err != nil {
@@ -285,9 +286,9 @@ func (h *Handler) RestoreVersion(ctx context.Context, req *documentv1.RestoreVer
 // --- Folders ---
 
 func (h *Handler) CreateFolder(ctx context.Context, req *documentv1.CreateFolderRequest) (*documentv1.Folder, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 	createdBy, err := uuid.Parse(req.GetCreatedBy())
 	if err != nil {
@@ -322,9 +323,9 @@ func (h *Handler) CreateFolder(ctx context.Context, req *documentv1.CreateFolder
 }
 
 func (h *Handler) ListFolders(ctx context.Context, req *documentv1.ListFoldersRequest) (*documentv1.ListFoldersResponse, error) {
-	tenantID, err := uuid.Parse(req.GetTenantId())
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+		return nil, err
 	}
 
 	var productionID *uuid.UUID
