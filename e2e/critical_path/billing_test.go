@@ -42,6 +42,7 @@ type billingRepo struct {
 	usageRecords  []*billing.UsageRecord
 	dunning       []*billing.DunningAttempt
 	outbox        []*billing.OutboxEvent
+	dead          []*billing.OutboxEvent
 	seq           int
 }
 
@@ -280,6 +281,69 @@ func (r *billingRepo) DeleteSentOutboxOlderThan(_ context.Context, cutoff time.T
 	}
 	r.outbox = kept
 	return deleted, nil
+}
+
+func (r *billingRepo) MoveOutboxToDead(_ context.Context, id uuid.UUID, errMsg string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var kept []*billing.OutboxEvent
+	for _, e := range r.outbox {
+		if e.ID == id {
+			e.LastError = &errMsg
+			r.dead = append(r.dead, e)
+			continue
+		}
+		kept = append(kept, e)
+	}
+	r.outbox = kept
+	return nil
+}
+
+func (r *billingRepo) OutboxStats(_ context.Context) (*billing.OutboxStats, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	s := &billing.OutboxStats{Dead: int64(len(r.dead))}
+	var oldest time.Time
+	for _, e := range r.outbox {
+		if e.SentAt != nil {
+			continue
+		}
+		s.Pending++
+		if oldest.IsZero() || e.CreatedAt.Before(oldest) {
+			oldest = e.CreatedAt
+		}
+	}
+	if !oldest.IsZero() {
+		s.OldestPendingSeconds = time.Since(oldest).Seconds()
+	}
+	return s, nil
+}
+
+func (r *billingRepo) ListDeadOutbox(_ context.Context, limit int) ([]*billing.OutboxEvent, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if limit > len(r.dead) {
+		limit = len(r.dead)
+	}
+	out := make([]*billing.OutboxEvent, limit)
+	copy(out, r.dead[:limit])
+	return out, nil
+}
+
+func (r *billingRepo) ReplayDeadOutbox(_ context.Context, id uuid.UUID) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, e := range r.dead {
+		if e.ID == id {
+			e.Attempts = 0
+			e.LastError = nil
+			e.SentAt = nil
+			r.outbox = append(r.outbox, e)
+			r.dead = append(r.dead[:i], r.dead[i+1:]...)
+			return nil
+		}
+	}
+	return billing.ErrOutboxEventNotFound
 }
 
 // ── Test: subscription lifecycle ─────────────────────────────────────────

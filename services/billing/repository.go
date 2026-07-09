@@ -48,4 +48,10 @@ type Repository interface {
 	MarkOutboxSent(ctx context.Context, id uuid.UUID) error
 	RecordOutboxFailure(ctx context.Context, id uuid.UUID, errMsg string) error
 	DeleteSentOutboxOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
+
+	// Outbox DLQ + observability (#134)
+	MoveOutboxToDead(ctx context.Context, id uuid.UUID, errMsg string) error
+	OutboxStats(ctx context.Context) (*OutboxStats, error)
+	ListDeadOutbox(ctx context.Context, limit int) ([]*OutboxEvent, error)
+	ReplayDeadOutbox(ctx context.Context, id uuid.UUID) error
 }
