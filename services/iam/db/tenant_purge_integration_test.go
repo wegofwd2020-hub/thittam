@@ -14,26 +14,34 @@ import (
 )
 
 func TestPurgeTenant_SQL_DropsSchema_Tombstones_PreservesAudit(t *testing.T) {
-	pool := testdb.Open(t)
-	tx := testdb.NewTx(t, pool) // owner role; DDL is transactional → auto rollback
+	// Owner role: this test does CREATE SCHEMA / DROP SCHEMA, which the runtime
+	// role thittam_app is deliberately denied (#120/#122). testdb.Open connects
+	// as thittam_app since #122, so it cannot be used here.
+	pool := testdb.OpenOwner(t)
+	tx := testdb.NewTx(t, pool) // DDL is transactional → auto rollback
 	ctx := context.Background()
 
 	id := uuid.New()
 	reqID := uuid.New()
 	schema := "tenant_" + id.String()
+	slug := "slug-" + id.String()[:8]
 
 	// Seed: a purge_eligible tenant, its schema, an approved purge request,
 	// and an audit row.
 	_, err := tx.Exec(ctx, `INSERT INTO tenants (id, name, slug, country_code, primary_currency_code, status, deactivated_at)
 		VALUES ($1, $2, $3, 'US', 'USD', 'purge_eligible', now() - INTERVAL '200 days')`,
-		id, "Doomed Studios", "slug-"+id.String()[:8])
+		id, "Doomed Studios", slug)
 	require.NoError(t, err)
 	_, err = tx.Exec(ctx, `CREATE SCHEMA "`+schema+`"`)
 	require.NoError(t, err)
+	// tenant_slug takes its own parameter: interpolating it as 'slug-'||$2::text
+	// makes Postgres deduce text for $2, which it also has to deduce as uuid for
+	// tenant_id/requested_by/approved_by — "inconsistent types deduced for
+	// parameter $2" (SQLSTATE 42P08).
 	_, err = tx.Exec(ctx, `INSERT INTO tenant_purge_requests
 		(id, tenant_id, status, requested_by, request_reason, tenant_name, tenant_slug, approved_by, approved_at)
-		VALUES ($1, $2, 'approved', $2, 'gdpr erasure', 'Doomed Studios', 'slug-'||$2::text, $2, now())`,
-		reqID, id)
+		VALUES ($1, $2, 'approved', $2, 'gdpr erasure', 'Doomed Studios', $3, $2, now())`,
+		reqID, id, slug)
 	require.NoError(t, err)
 	_, err = tx.Exec(ctx, `INSERT INTO audit_log (id, tenant_id, actor_id, actor_email, action, resource_type, resource_id, occurred_at)
 		VALUES (gen_random_uuid(), $1, $1, 'a@b.c', 'tenant_purged', 'tenant', $1, now())`, id)
