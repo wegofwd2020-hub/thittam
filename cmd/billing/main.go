@@ -85,7 +85,14 @@ func main() {
 	// inside the mesh and let Envoy handle TLS termination.
 	var docClient documentv1.DocumentServiceClient
 	if addr := os.Getenv("DOCUMENT_SERVICE_ADDR"); addr != "" {
-		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		// ForwardAuthUnaryClientInterceptor forwards the caller's bearer token
+		// so document verifies the same token and authorizes the same caller
+		// (#138). Without it, document's fail-closed auth interceptor rejects
+		// this call as Unauthenticated.
+		conn, err := grpc.NewClient(addr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithUnaryInterceptor(interceptor.ForwardAuthUnaryClientInterceptor()),
+		)
 		if err != nil {
 			log.Fatalf("billing: startup: connect to document service: %v", err)
 		}

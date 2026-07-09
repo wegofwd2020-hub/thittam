@@ -104,10 +104,10 @@ func main() {
 		log.Fatalf("budget-planning: startup: load JWT public key: %v", err)
 	}
 	srv := server.New(server.Config{
-		Name:        "budget-planning",
-		Port:        8081,
-		MetricsPort: 9091,
-		Loader:      loader,
+		Name:                    "budget-planning",
+		Port:                    8081,
+		MetricsPort:             9091,
+		Loader:                  loader,
 		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
 		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
 	}, nil)

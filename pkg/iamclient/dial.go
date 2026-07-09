@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 )
 
 // EnvAddr is the env var that holds the IAM service gRPC address.
@@ -32,7 +33,14 @@ func DialFromEnv(serviceName string) (*PermissionChecker, func() error, error) {
 		return nil, func() error { return nil }, nil
 	}
 
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// ForwardAuthUnaryClientInterceptor forwards the caller's bearer token so
+	// iam verifies the same token. CheckPermission is currently allowlisted
+	// (interceptor.PublicMethods) so this is strictly safer today, and it lets
+	// #139 remove that allowlist entry without another change here.
+	conn, err := grpc.NewClient(addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(interceptor.ForwardAuthUnaryClientInterceptor()),
+	)
 	if err != nil {
 		return nil, func() error { return nil }, fmt.Errorf("iamclient: dial %s: %w", addr, err)
 	}
