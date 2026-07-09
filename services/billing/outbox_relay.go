@@ -62,6 +62,10 @@ var (
 		Namespace: "thittam", Subsystem: "billing", Name: "outbox_dead",
 		Help: "Events currently parked in the outbox dead-letter queue.",
 	})
+	outboxStatsLastSuccess = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "thittam", Subsystem: "billing", Name: "outbox_stats_last_success_timestamp_seconds",
+		Help: "Unix timestamp of the last successful outbox stats read. Staleness means the relay cannot see the queue.",
+	})
 )
 
 // Relay drains the event_outbox to NATS. Run it as a goroutine in cmd/billing.
@@ -170,4 +174,5 @@ func (r *Relay) updateGauges(ctx context.Context) {
 	outboxPending.Set(float64(stats.Pending))
 	outboxOldestPending.Set(stats.OldestPendingSeconds)
 	outboxDead.Set(float64(stats.Dead))
+	outboxStatsLastSuccess.SetToCurrentTime()
 }

@@ -201,14 +201,26 @@ func TestRelay_UpdateGauges_SetsFromStats(t *testing.T) {
 	assert.Equal(t, float64(3), testutil.ToFloat64(outboxPending))
 	assert.Equal(t, 12.5, testutil.ToFloat64(outboxOldestPending))
 	assert.Equal(t, float64(2), testutil.ToFloat64(outboxDead))
+
+	lastSuccess := testutil.ToFloat64(outboxStatsLastSuccess)
+	assert.NotZero(t, lastSuccess, "last-success timestamp must be set on a successful read")
+	assert.InDelta(t, float64(time.Now().Unix()), lastSuccess, 5,
+		"last-success timestamp should be approximately now")
 }
 
 // A stats error is swallowed: observability must never take down delivery.
+// The last-success timestamp gauge must NOT advance — that frozen value is
+// exactly what BillingOutboxStatsStale alerts on.
 func TestRelay_UpdateGauges_StatsErrorSwallowed(t *testing.T) {
 	repo := &mockRepo{
 		outboxStatsFn: func(_ context.Context) (*OutboxStats, error) { return nil, fmt.Errorf("db down") },
 	}
 	r := NewRelay(repo, &fakeOutboxPublisher{})
 
+	before := testutil.ToFloat64(outboxStatsLastSuccess)
+
 	require.NotPanics(t, func() { r.updateGauges(context.Background()) })
+
+	assert.Equal(t, before, testutil.ToFloat64(outboxStatsLastSuccess),
+		"a failed stats read must leave the last-success timestamp unchanged")
 }

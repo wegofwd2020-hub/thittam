@@ -18,6 +18,16 @@ groups:
   # Billing metrics are served on port 9099 (see cmd/billing/main.go,
   # server.Config{MetricsPort: 9099}) and scraped as job="billing".
   #
+  # KNOWN DORMANT RULES: four rules below reference metrics nothing in this
+  # tree emits, and cannot fire: BillingDunningFailureSpike
+  # (billing_dunning_attempts_total), BillingSuspendedSubscriptionsHigh
+  # (billing_subscriptions_total), BillingPlanLimitRejectionsHigh
+  # (billing_plan_limit_rejections_total), and BillingServiceErrorRateElevated
+  # (grpc_server_handled_total, which comes from go-grpc-prometheus — this
+  # repo's gRPC metrics are exported under different names by
+  # pkg/observability/metrics.go). Left in place as the documented intent for
+  # when those metrics are wired up; do not treat their silence as health.
+  #
   # Outbox relay metrics (#134), defined in services/billing/outbox_relay.go:
   #
   #   thittam_billing_outbox_published_total
@@ -26,6 +36,7 @@ groups:
   #   thittam_billing_outbox_pending              (gauge)
   #   thittam_billing_outbox_oldest_pending_seconds (gauge)
   #   thittam_billing_outbox_dead                 (gauge)
+  #   thittam_billing_outbox_stats_last_success_timestamp_seconds (gauge)
 
   - name: thittam_billing
     interval: 60s
@@ -161,6 +172,14 @@ groups:
       # not running, NATS is down, or publishes are failing wholesale (the
       # systemic guard deliberately does NOT dead-letter in that case, so the
       # backlog simply grows — this alert is what surfaces it).
+      #
+      # This alert depends on fresh stats: thittam_billing_outbox_oldest_pending_seconds
+      # is only as current as the relay's last successful OutboxStats read. If
+      # that read is failing (e.g. Postgres is down), the gauge FREEZES at its
+      # last value and this alert cannot fire no matter how stale the backlog
+      # actually is. It is paired with BillingOutboxStatsStale below, which
+      # detects exactly that condition — when both could apply, trust
+      # BillingOutboxStatsStale and treat this alert's silence as uninformative.
       - alert: BillingOutboxBacklogStale
         expr: |
           thittam_billing_outbox_oldest_pending_seconds > 900
@@ -181,20 +200,32 @@ groups:
           runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#billing-outbox-backlog"
 
       # ── Outbox publish failures ──────────────────────────────────────────
-      # Any sustained publish failure. Transient NATS blips resolve within a
-      # tick or two, so the 15m `for` avoids paging on noise while still
-      # catching a broker that is down but not yet stale enough to trip
-      # BillingOutboxBacklogStale.
+      # Any sustained publish failure, not a single blip. The window (5m) is
+      # deliberately SHORTER than the dwell (10m): a lone failure ages out of
+      # the trailing 5m increase() window long before the 10m `for` elapses,
+      # so only a failure that keeps recurring tick after tick — i.e. genuine
+      # sustained failure — can hold the condition true for the full dwell.
+      # (Making the window equal to or longer than the dwell would let one
+      # transient failure at t=0 keep increase(...) > 0 true for the entire
+      # dwell period, turning "paged or not" into a coin-flip on evaluation
+      # alignment — exactly what this alert must not do.)
+      #
+      # This also defangs a false-page source: on an ordinary cmd/billing
+      # deploy or OOM restart, the counter resets to 0 and Prometheus's
+      # counter-reset compensation can read the pre-restart count as a fresh
+      # increase for up to one window length. With a 5m window that can only
+      # sustain the condition for 5m, well short of the 10m dwell — so a
+      # routine restart cannot page.
       - alert: BillingOutboxPublishFailing
         expr: |
-          increase(thittam_billing_outbox_failed_total[15m]) > 0
-        for: 15m
+          increase(thittam_billing_outbox_failed_total[5m]) > 0
+        for: 10m
         labels:
           severity: warning
           team: platform
           component: billing
         annotations:
-          summary: "Billing outbox publishes failing ({{ $value | printf \"%.0f\" }} in 15m)"
+          summary: "Billing outbox publishes failing ({{ $value | printf \"%.0f\" }} in 5m)"
           description: >
             The outbox relay is failing to publish events to NATS. Events are
             retried on each 15s tick and are not lost. If the whole batch is
@@ -202,3 +233,36 @@ groups:
             until NATS recovers.
             Check NATS JetStream health and the FINANCIAL stream.
           runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#billing-outbox-publish-failures"
+
+      # ── Outbox stats read stale (relay is blind) ─────────────────────────
+      # thittam_billing_outbox_oldest_pending_seconds and
+      # thittam_billing_outbox_dead are only updated after a successful
+      # OutboxStats read. ClaimUnsentOutbox and OutboxStats hit the same
+      # Postgres, so a DB outage breaks both simultaneously — the gauges
+      # freeze at their last value (0 at process start) while the process
+      # stays up (up{job="billing"} == 1), so no other billing alert fires.
+      # The relay ticks every 15s; 300s is ~20 missed ticks — unambiguous,
+      # not flappy.
+      - alert: BillingOutboxStatsStale
+        expr: |
+          (time() - thittam_billing_outbox_stats_last_success_timestamp_seconds) > 300
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+          component: billing
+        annotations:
+          summary: "Billing outbox stats have not updated in {{ $value | humanizeDuration }} — the relay is blind"
+          description: >
+            The outbox relay has not completed a successful OutboxStats read
+            in over 5 minutes. This almost always means the database backing
+            the billing outbox is unreachable or the relay goroutine has
+            stopped. Because the read is failing, thittam_billing_outbox_oldest_pending_seconds
+            and thittam_billing_outbox_dead are FROZEN at their last known
+            values — BillingOutboxBacklogStale and BillingOutboxDeadLetter
+            CANNOT FIRE right now no matter how bad things actually are.
+            Their silence means nothing while this alert is active — do not
+            read it as "backlog is fine." Check Postgres health first;
+            ClaimUnsentOutbox uses the same connection and is very likely
+            failing too, so the real backlog may already be growing unseen.
+          runbook_url: "https://github.com/wegofwd2020-hub/thittam_docs/blob/main/docs/developers/operations/runbook.md#billing-outbox-stats-stale"
