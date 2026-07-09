@@ -699,14 +699,15 @@ func (s *Service) AcceptInvitation(ctx context.Context, token, plainPassword str
 		return nil, fmt.Errorf("iam: accept invitation — create user: %w", err)
 	}
 
-	// Assign the pre-selected role if the invitation carried one.
+	// Assign the pre-selected role if the invitation carried one. Route through
+	// s.AssignRole, not s.repo.AssignRole: the invitation may be seven days old and its
+	// role may have been deleted, and s.AssignRole re-checks that both the role and the
+	// new user belong to the invitation's tenant. A failed grant fails the acceptance —
+	// a role-less user holding a valid token is worse than a rejected invitation.
 	if inv.RoleID != nil {
-		_ = s.repo.AssignRole(ctx, &UserRole{
-			UserID:     user.ID,
-			RoleID:     *inv.RoleID,
-			AssignedBy: inv.InvitedBy,
-			AssignedAt: time.Now().UTC(),
-		})
+		if err := s.AssignRole(ctx, inv.TenantID, user.ID, *inv.RoleID, inv.InvitedBy); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := s.repo.MarkInvitationAccepted(ctx, inv.ID); err != nil {

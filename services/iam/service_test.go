@@ -1368,6 +1368,48 @@ func TestAcceptInvitation_TokenNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInvitationNotFound)
 }
 
+// A failed role grant must fail the acceptance, not return a token to a role-less user.
+func TestAcceptInvitation_RoleGrantFails_ReturnsError(t *testing.T) {
+	t.Parallel()
+	roleID := fixedRoleID
+	svc := newTestService(&mockRepo{
+		getInvitationByTokenFn: func(context.Context, string) (*Invitation, error) {
+			return &Invitation{
+				ID: fixedInviteID, TenantID: fixedTenantID, Email: "invited@example.com",
+				RoleID: &roleID, Status: "pending", InvitedBy: fixedUserID,
+				ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+			}, nil
+		},
+		assignRoleFn: func(context.Context, *UserRole) error { return errors.New("insert failed") },
+	})
+	_, err := svc.AcceptInvitation(context.Background(), "valid-token", "newpass")
+	require.Error(t, err, "a failed grant must not yield a token")
+}
+
+// A seven-day-old invitation may name a role that has since been deleted.
+func TestAcceptInvitation_RoleGone_ReturnsError(t *testing.T) {
+	t.Parallel()
+	roleID := fixedRoleID
+	svc := newTestService(&mockRepo{
+		getInvitationByTokenFn: func(context.Context, string) (*Invitation, error) {
+			return &Invitation{
+				ID: fixedInviteID, TenantID: fixedTenantID, Email: "invited@example.com",
+				RoleID: &roleID, Status: "pending", InvitedBy: fixedUserID,
+				ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+			}, nil
+		},
+		getRoleByIDFn: func(context.Context, uuid.UUID, uuid.UUID) (*Role, error) {
+			return nil, ErrRoleNotFound
+		},
+		assignRoleFn: func(context.Context, *UserRole) error {
+			t.Fatal("must not assign a role that no longer exists")
+			return nil
+		},
+	})
+	_, err := svc.AcceptInvitation(context.Background(), "valid-token", "newpass")
+	require.ErrorIs(t, err, ErrRoleNotFound)
+}
+
 // --- Additional coverage tests ---
 
 func TestGetUser_Success(t *testing.T) {
