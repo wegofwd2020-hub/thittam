@@ -38,14 +38,17 @@ func newListCmd() *cobra.Command {
 				return nil
 			}
 
+			// tabwriter buffers; a write to it cannot fail independently of the
+			// Flush below, which is where any real I/O error surfaces. Discard
+			// these returns explicitly so errcheck sees the decision.
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tSUBJECT\tTENANT\tATTEMPTS\tLAST ERROR")
+			_, _ = fmt.Fprintln(w, "ID\tSUBJECT\tTENANT\tATTEMPTS\tLAST ERROR")
 			for _, e := range dead {
 				lastErr := ""
 				if e.LastError != nil {
 					lastErr = truncate(*e.LastError, 60)
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", e.ID, e.Subject, e.TenantID, e.Attempts, lastErr)
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", e.ID, e.Subject, e.TenantID, e.Attempts, lastErr)
 			}
 			if err := w.Flush(); err != nil {
 				return err

@@ -14,8 +14,11 @@ import (
 )
 
 func TestPurgeTenant_SQL_DropsSchema_Tombstones_PreservesAudit(t *testing.T) {
-	pool := testdb.Open(t)
-	tx := testdb.NewTx(t, pool) // owner role; DDL is transactional → auto rollback
+	// Owner role: this test does CREATE SCHEMA / DROP SCHEMA, which the runtime
+	// role thittam_app is deliberately denied (#120/#122). testdb.Open connects
+	// as thittam_app since #122, so it cannot be used here.
+	pool := testdb.OpenOwner(t)
+	tx := testdb.NewTx(t, pool) // DDL is transactional → auto rollback
 	ctx := context.Background()
 
 	id := uuid.New()

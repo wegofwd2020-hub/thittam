@@ -21,7 +21,7 @@ import (
 // (suspended_at, status='suspended') that migration 001 was missing before the
 // reconcile. Guards against re-drift between code and migration.
 func TestSubscriptionRoundTrip_SuspendFields(t *testing.T) {
-	pool := testdb.Open(t) // owner role; connects to a migrated thittam_test
+	pool := testdb.Open(t) // runtime role (thittam_app since #122); DML only
 	ctx := context.Background()
 	repo := billingdb.NewPostgres(pool)
 
