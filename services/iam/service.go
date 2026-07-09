@@ -39,6 +39,15 @@ type Authenticator interface {
 	Authenticate(ctx context.Context, req auth.AuthRequest) (*auth.AuthResult, error)
 }
 
+// permUserManage gates role management. Only super_admin holds it (see systemRoles),
+// and no RPC creates roles — CreateRole exists only at the repository layer, called by
+// seedSystemRoles. So "holds user:manage" is exactly "is a super_admin of this tenant".
+//
+// That equivalence is contingent: a future custom-role feature could mint a role carrying
+// user:manage without carrying everything else, reopening escalation. There is no
+// "you may only grant permissions you hold" subset rule anywhere. See the spec, §2 and §8.
+const permUserManage = "user:manage"
+
 // systemRoles are seeded for every new tenant at creation time.
 // Permissions follow the {resource}:{action} convention.
 var systemRoles = []struct {
@@ -51,7 +60,7 @@ var systemRoles = []struct {
 		"expense:submit", "expense:approve",
 		"inventory:checkout",
 		"report:read",
-		"user:manage",
+		permUserManage,
 	}},
 	{"manager", []string{
 		"production:read", "production:write",
@@ -313,8 +322,16 @@ func (s *Service) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassw
 
 // --- Roles & Permissions ---
 
-// AssignRole grants a role to a user.
+// AssignRole grants a role to a user. Both the role and the target user must belong to
+// tenantID: repo.AssignRole is a bare INSERT with no tenant column, so this is the only
+// place the boundary can be enforced.
 func (s *Service) AssignRole(ctx context.Context, tenantID, userID, roleID, assignedBy uuid.UUID) error {
+	if _, err := s.repo.GetRoleByID(ctx, tenantID, roleID); err != nil {
+		return err // ErrRoleNotFound for a role in another tenant
+	}
+	if _, err := s.repo.GetUser(ctx, tenantID, userID); err != nil {
+		return err // ErrUserNotFound for a user in another tenant
+	}
 	ur := &UserRole{
 		UserID:     userID,
 		RoleID:     roleID,
@@ -327,8 +344,15 @@ func (s *Service) AssignRole(ctx context.Context, tenantID, userID, roleID, assi
 	return nil
 }
 
-// RevokeRole removes a role from a user.
-func (s *Service) RevokeRole(ctx context.Context, userID, roleID uuid.UUID) error {
+// RevokeRole removes a role from a user. RevokeRoleRequest carries no tenant_id, so the
+// handler supplies the caller's tenant from the verified token.
+func (s *Service) RevokeRole(ctx context.Context, tenantID, userID, roleID uuid.UUID) error {
+	if _, err := s.repo.GetRoleByID(ctx, tenantID, roleID); err != nil {
+		return err // ErrRoleNotFound for a role in another tenant
+	}
+	if _, err := s.repo.GetUser(ctx, tenantID, userID); err != nil {
+		return err // ErrUserNotFound for a user in another tenant
+	}
 	if err := s.repo.RevokeRole(ctx, userID, roleID); err != nil {
 		return fmt.Errorf("iam: revoke role %s from user %s: %w", roleID, userID, err)
 	}
@@ -384,6 +408,9 @@ func (s *Service) AssignProjectRole(ctx context.Context, tenantID, userID, roleI
 	}
 	if role.IsSystem && !projectScopedRoles[role.Name] {
 		return ErrRoleNotProjectScoped
+	}
+	if _, err := s.repo.GetUser(ctx, tenantID, userID); err != nil {
+		return err // ErrUserNotFound for a user in another tenant
 	}
 	ur := &UserRole{
 		UserID:     userID,
@@ -623,6 +650,13 @@ func (s *Service) ClearTenantLegalHold(
 // The caller is responsible for sending the invitation email via the
 // notifications service (the IAM service publishes a NATS event for this).
 func (s *Service) InviteUser(ctx context.Context, inv *Invitation) (*Invitation, error) {
+	if inv.RoleID != nil {
+		// The invitation's role is assigned at accept time, when there is no caller to
+		// authorize. Validate it here, where there is one.
+		if _, err := s.repo.GetRoleByID(ctx, inv.TenantID, *inv.RoleID); err != nil {
+			return nil, err
+		}
+	}
 	if inv.ID == uuid.Nil {
 		inv.ID = uuid.New()
 	}
@@ -665,14 +699,15 @@ func (s *Service) AcceptInvitation(ctx context.Context, token, plainPassword str
 		return nil, fmt.Errorf("iam: accept invitation — create user: %w", err)
 	}
 
-	// Assign the pre-selected role if the invitation carried one.
+	// Assign the pre-selected role if the invitation carried one. Route through
+	// s.AssignRole, not s.repo.AssignRole: the invitation may be seven days old and its
+	// role may have been deleted, and s.AssignRole re-checks that both the role and the
+	// new user belong to the invitation's tenant. A failed grant fails the acceptance —
+	// a role-less user holding a valid token is worse than a rejected invitation.
 	if inv.RoleID != nil {
-		_ = s.repo.AssignRole(ctx, &UserRole{
-			UserID:     user.ID,
-			RoleID:     *inv.RoleID,
-			AssignedBy: inv.InvitedBy,
-			AssignedAt: time.Now().UTC(),
-		})
+		if err := s.AssignRole(ctx, inv.TenantID, user.ID, *inv.RoleID, inv.InvitedBy); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := s.repo.MarkInvitationAccepted(ctx, inv.ID); err != nil {

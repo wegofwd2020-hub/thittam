@@ -738,6 +738,25 @@ func TestAssignProjectRole_AllowsCustomRole(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestAssignProjectRole_ForeignUser_Denied(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getRoleByIDFn: func(_ context.Context, tenantID, roleID uuid.UUID) (*Role, error) {
+			return &Role{ID: roleID, TenantID: tenantID, Name: "project_supervisor", IsSystem: true}, nil
+		},
+		getUserFn: func(context.Context, uuid.UUID, uuid.UUID) (*User, error) {
+			return nil, ErrUserNotFound // the target user belongs to another tenant
+		},
+		assignRoleFn: func(context.Context, *UserRole) error {
+			t.Fatal("repository must not be written for a foreign target user")
+			return nil
+		},
+	})
+	err := svc.AssignProjectRole(context.Background(),
+		fixedTenantID, uuid.New(), fixedRoleID, uuid.New(), fixedUserID)
+	require.ErrorIs(t, err, ErrUserNotFound)
+}
+
 func TestCreateTenant_RequiresCountry(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{})
@@ -1246,6 +1265,29 @@ func TestInviteUser_SetsTokenAndExpiry(t *testing.T) {
 	assert.True(t, saved.ExpiresAt.After(time.Now()))
 }
 
+func TestInviteUser_ForeignRole_Denied(t *testing.T) {
+	t.Parallel()
+	foreignRoleID := uuid.New()
+	svc := newTestService(&mockRepo{
+		getRoleByIDFn: func(context.Context, uuid.UUID, uuid.UUID) (*Role, error) {
+			return nil, ErrRoleNotFound // the role belongs to another tenant
+		},
+		createInvitationFn: func(context.Context, *Invitation) error {
+			t.Fatal("repository must not be written for a foreign role")
+			return nil
+		},
+	})
+
+	inv := &Invitation{
+		TenantID:  fixedTenantID,
+		Email:     "new@example.com",
+		InvitedBy: fixedUserID,
+		RoleID:    &foreignRoleID,
+	}
+	_, err := svc.InviteUser(context.Background(), inv)
+	require.ErrorIs(t, err, ErrRoleNotFound)
+}
+
 func TestAcceptInvitation_ExpiredToken(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{
@@ -1324,6 +1366,86 @@ func TestAcceptInvitation_TokenNotFound(t *testing.T) {
 	_, err := svc.AcceptInvitation(context.Background(), "bad-token", "pass")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrInvitationNotFound)
+}
+
+// A failed role grant must fail the acceptance, not return a token to a role-less user.
+func TestAcceptInvitation_RoleGrantFails_ReturnsError(t *testing.T) {
+	t.Parallel()
+	roleID := fixedRoleID
+	svc := newTestService(&mockRepo{
+		getInvitationByTokenFn: func(context.Context, string) (*Invitation, error) {
+			return &Invitation{
+				ID: fixedInviteID, TenantID: fixedTenantID, Email: "invited@example.com",
+				RoleID: &roleID, Status: "pending", InvitedBy: fixedUserID,
+				ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+			}, nil
+		},
+		assignRoleFn: func(context.Context, *UserRole) error { return errors.New("insert failed") },
+	})
+	_, err := svc.AcceptInvitation(context.Background(), "valid-token", "newpass")
+	require.Error(t, err, "a failed grant must not yield a token")
+	// Pin the failure to the grant. Without this the test would still pass if a later
+	// step (MarkInvitationAccepted, token issue) were the one erroring.
+	require.ErrorContains(t, err, "assign role")
+}
+
+// AssignRole takes four consecutive uuid.UUID, so a transposed argument compiles
+// silently and the mock's defaults echo any id back as a valid in-tenant object.
+// Capture the UserRole actually written and pin each field. The dangerous swap is
+// userID <-> assignedBy: it would grant the invited role to the inviter.
+func TestAcceptInvitation_GrantsInvitedRoleToTheNewUser(t *testing.T) {
+	t.Parallel()
+	roleID := fixedRoleID
+	var createdUserID uuid.UUID
+	var granted *UserRole
+	svc := newTestService(&mockRepo{
+		getInvitationByTokenFn: func(context.Context, string) (*Invitation, error) {
+			return &Invitation{
+				ID: fixedInviteID, TenantID: fixedTenantID, Email: "invited@example.com",
+				RoleID: &roleID, Status: "pending", InvitedBy: fixedUserID,
+				ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+			}, nil
+		},
+		createUserFn: func(_ context.Context, u *User) error {
+			createdUserID = u.ID
+			return nil
+		},
+		assignRoleFn: func(_ context.Context, ur *UserRole) error {
+			granted = ur
+			return nil
+		},
+	})
+	_, err := svc.AcceptInvitation(context.Background(), "valid-token", "newpass")
+	require.NoError(t, err)
+	require.NotNil(t, granted, "the invited role must be granted")
+	require.NotEqual(t, uuid.Nil, createdUserID)
+	assert.Equal(t, createdUserID, granted.UserID, "the role goes to the new user, not the inviter")
+	assert.Equal(t, fixedRoleID, granted.RoleID)
+	assert.Equal(t, fixedUserID, granted.AssignedBy, "attributed to the inviter")
+}
+
+// A seven-day-old invitation may name a role that has since been deleted.
+func TestAcceptInvitation_RoleGone_ReturnsError(t *testing.T) {
+	t.Parallel()
+	roleID := fixedRoleID
+	svc := newTestService(&mockRepo{
+		getInvitationByTokenFn: func(context.Context, string) (*Invitation, error) {
+			return &Invitation{
+				ID: fixedInviteID, TenantID: fixedTenantID, Email: "invited@example.com",
+				RoleID: &roleID, Status: "pending", InvitedBy: fixedUserID,
+				ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+			}, nil
+		},
+		getRoleByIDFn: func(context.Context, uuid.UUID, uuid.UUID) (*Role, error) {
+			return nil, ErrRoleNotFound
+		},
+		assignRoleFn: func(context.Context, *UserRole) error {
+			t.Fatal("must not assign a role that no longer exists")
+			return nil
+		},
+	})
+	_, err := svc.AcceptInvitation(context.Background(), "valid-token", "newpass")
+	require.ErrorIs(t, err, ErrRoleNotFound)
 }
 
 // --- Additional coverage tests ---
@@ -1425,6 +1547,58 @@ func TestAssignRole_Error(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestAssignRole_ForeignRole_Denied(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getRoleByIDFn: func(context.Context, uuid.UUID, uuid.UUID) (*Role, error) {
+			return nil, ErrRoleNotFound // the role belongs to another tenant
+		},
+		assignRoleFn: func(context.Context, *UserRole) error {
+			t.Fatal("repository must not be written for a foreign role")
+			return nil
+		},
+	})
+	err := svc.AssignRole(context.Background(), uuid.New(), uuid.New(), uuid.New(), uuid.New())
+	require.ErrorIs(t, err, ErrRoleNotFound)
+}
+
+func TestAssignRole_ForeignUser_Denied(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getUserFn: func(context.Context, uuid.UUID, uuid.UUID) (*User, error) {
+			return nil, ErrUserNotFound // the target user belongs to another tenant
+		},
+		assignRoleFn: func(context.Context, *UserRole) error {
+			t.Fatal("repository must not be written for a foreign target user")
+			return nil
+		},
+	})
+	err := svc.AssignRole(context.Background(), uuid.New(), uuid.New(), uuid.New(), uuid.New())
+	require.ErrorIs(t, err, ErrUserNotFound)
+}
+
+func TestAssignRole_InTenant_Succeeds(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	var gotTenantOnRoleLookup, gotTenantOnUserLookup uuid.UUID
+	assigned := false
+	svc := newTestService(&mockRepo{
+		getRoleByIDFn: func(_ context.Context, tenantID, roleID uuid.UUID) (*Role, error) {
+			gotTenantOnRoleLookup = tenantID
+			return &Role{ID: roleID, TenantID: tenantID, Name: "member", IsSystem: true}, nil
+		},
+		getUserFn: func(_ context.Context, tenantID, id uuid.UUID) (*User, error) {
+			gotTenantOnUserLookup = tenantID
+			return &User{ID: id, TenantID: tenantID, Status: "active"}, nil
+		},
+		assignRoleFn: func(context.Context, *UserRole) error { assigned = true; return nil },
+	})
+	require.NoError(t, svc.AssignRole(context.Background(), tid, uuid.New(), uuid.New(), uuid.New()))
+	assert.True(t, assigned)
+	assert.Equal(t, tid, gotTenantOnRoleLookup, "the role must be looked up in the caller's tenant")
+	assert.Equal(t, tid, gotTenantOnUserLookup, "the target user must be looked up in the caller's tenant")
+}
+
 func TestRevokeRole_Success(t *testing.T) {
 	t.Parallel()
 	var capturedRoleID uuid.UUID
@@ -1435,9 +1609,61 @@ func TestRevokeRole_Success(t *testing.T) {
 		},
 	})
 
-	err := svc.RevokeRole(context.Background(), fixedUserID, fixedRoleID)
+	err := svc.RevokeRole(context.Background(), fixedTenantID, fixedUserID, fixedRoleID)
 	require.NoError(t, err)
 	assert.Equal(t, fixedRoleID, capturedRoleID)
+}
+
+func TestRevokeRole_ForeignRole_Denied(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getRoleByIDFn: func(context.Context, uuid.UUID, uuid.UUID) (*Role, error) {
+			return nil, ErrRoleNotFound // the role belongs to another tenant
+		},
+		revokeRoleFn: func(context.Context, uuid.UUID, uuid.UUID) error {
+			t.Fatal("repository must not be written for a foreign role")
+			return nil
+		},
+	})
+	err := svc.RevokeRole(context.Background(), uuid.New(), uuid.New(), uuid.New())
+	require.ErrorIs(t, err, ErrRoleNotFound)
+}
+
+func TestRevokeRole_ForeignUser_Denied(t *testing.T) {
+	t.Parallel()
+	svc := newTestService(&mockRepo{
+		getUserFn: func(context.Context, uuid.UUID, uuid.UUID) (*User, error) {
+			return nil, ErrUserNotFound // the target user belongs to another tenant
+		},
+		revokeRoleFn: func(context.Context, uuid.UUID, uuid.UUID) error {
+			t.Fatal("repository must not be written for a foreign target user")
+			return nil
+		},
+	})
+	err := svc.RevokeRole(context.Background(), uuid.New(), uuid.New(), uuid.New())
+	require.ErrorIs(t, err, ErrUserNotFound)
+}
+
+func TestRevokeRole_InTenant_Succeeds(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	var gotTenantOnRoleLookup, gotTenantOnUserLookup uuid.UUID
+	revoked := false
+	svc := newTestService(&mockRepo{
+		getRoleByIDFn: func(_ context.Context, tenantID, roleID uuid.UUID) (*Role, error) {
+			gotTenantOnRoleLookup = tenantID
+			return &Role{ID: roleID, TenantID: tenantID, Name: "member", IsSystem: true}, nil
+		},
+		getUserFn: func(_ context.Context, tenantID, id uuid.UUID) (*User, error) {
+			gotTenantOnUserLookup = tenantID
+			return &User{ID: id, TenantID: tenantID, Status: "active"}, nil
+		},
+		revokeRoleFn: func(context.Context, uuid.UUID, uuid.UUID) error { revoked = true; return nil },
+	})
+	require.NoError(t, svc.RevokeRole(context.Background(), tid, uuid.New(), uuid.New()))
+	assert.True(t, revoked)
+	assert.Equal(t, tid, gotTenantOnRoleLookup, "the role must be looked up in the caller's tenant")
+	assert.Equal(t, tid, gotTenantOnUserLookup, "the target user must be looked up in the caller's tenant")
 }
 
 func TestListRoles_Success(t *testing.T) {
@@ -1633,7 +1859,7 @@ func TestRevokeRole_Error(t *testing.T) {
 		},
 	})
 
-	err := svc.RevokeRole(context.Background(), fixedUserID, fixedRoleID)
+	err := svc.RevokeRole(context.Background(), fixedTenantID, fixedUserID, fixedRoleID)
 	require.Error(t, err)
 }
 
