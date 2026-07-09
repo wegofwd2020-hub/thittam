@@ -177,6 +177,7 @@ start_svc() {
     "REDIS_URL=${REDIS_URL}"
     "NATS_URL=${NATS_URL}"
     "IAM_KEY_DIR=${IAM_KEY_DIR}"
+    "GRPC_REFLECTION=${GRPC_REFLECTION:-1}"
   )
   # Append any caller-supplied extras
   for extra in "$@"; do

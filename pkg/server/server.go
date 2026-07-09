@@ -35,6 +35,11 @@ type Config struct {
 	// interceptor or any service-specific middleware.
 	ExtraUnaryInterceptors  []grpc.UnaryServerInterceptor
 	ExtraStreamInterceptors []grpc.StreamServerInterceptor
+
+	// EnableReflection registers the gRPC reflection service. Default false.
+	// Reflection lets any client enumerate every RPC and message; it is a
+	// local-development convenience. Set from GRPC_REFLECTION in dev-start.sh.
+	EnableReflection bool
 }
 
 // Server wraps a gRPC server with interceptors and lifecycle management.
@@ -65,6 +70,9 @@ func New(cfg Config, logger Logger) *Server {
 	}
 	if cfg.MetricsPort == 0 {
 		cfg.MetricsPort = 9090
+	}
+	if v := os.Getenv("GRPC_REFLECTION"); v == "1" || v == "true" {
+		cfg.EnableReflection = true
 	}
 
 	// Create metrics collectors
@@ -109,7 +117,9 @@ func New(cfg Config, logger Logger) *Server {
 		}),
 	)
 
-	reflection.Register(gs)
+	if cfg.EnableReflection {
+		reflection.Register(gs)
+	}
 
 	// Create health server
 	health := observability.NewHealthServer(cfg.Name, cfg.MetricsPort)
