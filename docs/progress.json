@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-07-09T06:11:05+00:00",
+  "generated": "2026-07-10T06:10:05+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -733,7 +733,7 @@
     {
       "id": "#122",
       "name": "infra(db): split DATABASE_URL into migrator (owner) vs runtime (thittam_app) DSN",
-      "status": "in-progress",
+      "status": "done",
       "commits": 5
     },
     {
@@ -805,6 +805,96 @@
     {
       "id": "#134",
       "name": "observability(billing): alert on stuck/poison outbox rows + add pending gauge",
+      "status": "done",
+      "commits": 11
+    },
+    {
+      "id": "#135",
+      "name": "Vulnerabilities detected in dependencies (2026-07-09)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#136",
+      "name": "observability(billing): outbox dead-letter queue, gauges, alerts + operator CLI (#134)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#137",
+      "name": "billing: outbox guard defeated at batch saturation; DLQ follow-ups",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#138",
+      "name": "security(iam): services trust unverified x-caller-* headers \u2014 verify JWT in-process, fail closed",
+      "status": "done",
+      "commits": 17
+    },
+    {
+      "id": "#139",
+      "name": "security(platform): ~100 RPCs enforce no authorization; iam AssignRole is a self-promotion primitive",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#140",
+      "name": "security(iam): verify the JWT in-process, fail closed (#138)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#141",
+      "name": "chore: follow-ups banked during #138 (fail-closed auth)",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#142",
+      "name": "chore(infra): pin Go toolchain to 1.25.12 (#135)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#143",
+      "name": "fix(ci): unbreak main \u2014 errcheck in outbox-admin, owner DSN for the purge test",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#144",
+      "name": "security(platform): enforce the tenant boundary \u2014 61 RPCs take tenant_id from the request body",
+      "status": "done",
+      "commits": 12
+    },
+    {
+      "id": "#145",
+      "name": "security(platform): enforce the tenant boundary \u2014 61 RPCs took tenant_id from the request body (#144)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#146",
+      "name": "security(iam): AssignRole has no authorization \u2014 any member can grant themselves super_admin",
+      "status": "done",
+      "commits": 7
+    },
+    {
+      "id": "#147",
+      "name": "fix(iam): role assignment requires authority and stays in-tenant (#146)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#148",
+      "name": "AcceptInvitation is not transactional: a failed role grant leaves a committed user row",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#149",
+      "name": "security(ledger): 12 accounting RPCs enforce no authorization, and three take their actor from the request body",
       "status": "pending",
       "commits": 0
     }
