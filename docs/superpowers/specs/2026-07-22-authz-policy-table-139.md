@@ -60,7 +60,7 @@ Seven defaults. Each row below cites the rule that produced it, so a disagreemen
 
 Legend — **AUTH** = any authenticated tenant member; **PUBLIC** = no caller by design; **MACHINE** = service-to-service (R7); ✅ = already enforced, no change; 🔴 = change required.
 
-### 4.1 iam — 30 RPCs (17 enforced)
+### 4.1 iam — 30 RPCs (17 enforced, plus `GetCurrentUser` self-scoped by construction)
 
 | RPC | Current | Policy | Rule | |
 |---|---|---|---|---|
@@ -70,7 +70,7 @@ Legend — **AUTH** = any authenticated tenant member; **PUBLIC** = no caller by
 | `CheckPermission` | — | MACHINE | R7 | 🔴 today anyone reaching iam's port can probe whether a user holds a permission |
 | `AcceptInvitation` | — | PUBLIC | — | ✅ the invitee holds no token; its privileged decision lives upstream at `InviteUser` (#146) |
 | `Logout` | — | AUTH | R4 | 🔴 |
-| `GetCurrentUser` | — | AUTH | R4 | 🔴 must read the token subject |
+| `GetCurrentUser` | — | AUTH | R4 | ✅ **already correct** — `handler.go:83` derives user and tenant from the bearer token and reads no request field |
 | `ChangePassword` | — | AUTH, self-only | R4 | 🔴 **see D1 — live defect** |
 | `GetUser` | — | `user:manage` OR self | R4/R6 | 🔴 |
 | `ListUsers` | — | `user:manage` | R6 | 🔴 |
