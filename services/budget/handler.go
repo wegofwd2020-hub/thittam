@@ -84,6 +84,10 @@ func (h *Handler) GetBudget(ctx context.Context, req *budgetv1.GetBudgetRequest)
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, "budget:read"); err != nil {
+		return nil, err
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid budget ID")
@@ -100,6 +104,10 @@ func (h *Handler) ListBudgets(ctx context.Context, req *budgetv1.ListBudgetsRequ
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, "budget:read"); err != nil {
+		return nil, err
 	}
 
 	var productionID uuid.UUID
@@ -259,6 +267,10 @@ func (h *Handler) CreateLineItem(ctx context.Context, req *budgetv1.CreateLineIt
 }
 
 func (h *Handler) GetLineItem(ctx context.Context, req *budgetv1.GetLineItemRequest) (*budgetv1.BudgetLineItem, error) {
+	if err := interceptor.RequirePermission(ctx, h.perm, "budget:read"); err != nil {
+		return nil, err
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid line item ID")
@@ -272,6 +284,10 @@ func (h *Handler) GetLineItem(ctx context.Context, req *budgetv1.GetLineItemRequ
 }
 
 func (h *Handler) ListLineItems(ctx context.Context, req *budgetv1.ListLineItemsRequest) (*budgetv1.ListLineItemsResponse, error) {
+	if err := interceptor.RequirePermission(ctx, h.perm, "budget:read"); err != nil {
+		return nil, err
+	}
+
 	budgetID, err := uuid.Parse(req.GetBudgetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid budget ID")
@@ -325,6 +341,10 @@ func (h *Handler) UpdateLineItemActuals(ctx context.Context, req *budgetv1.Updat
 }
 
 func (h *Handler) CheckLineAvailability(ctx context.Context, req *budgetv1.CheckLineAvailabilityRequest) (*budgetv1.CheckLineAvailabilityResponse, error) {
+	if err := interceptor.RequirePermission(ctx, h.perm, "budget:read"); err != nil {
+		return nil, err
+	}
+
 	id, err := uuid.Parse(req.GetLineItemId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid line_item_id")
