@@ -214,9 +214,13 @@ func (h *Handler) DeactivateUser(ctx context.Context, req *iamv1.DeactivateUserR
 }
 
 func (h *Handler) ChangePassword(ctx context.Context, req *iamv1.ChangePasswordRequest) (*iamv1.ChangePasswordResponse, error) {
-	userID, err := uuid.Parse(req.GetUserId())
+	// The subject comes from the verified token, never the request body: this RPC
+	// previously accepted any user_id, so a caller who knew another user's password
+	// could change it in any tenant (#139 slice A). ActorFromRequest returns the
+	// caller's own id, so Service.ChangePassword cannot be aimed at anyone else.
+	userID, err := interceptor.ActorFromRequest(ctx, req.GetUserId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
+		return nil, err
 	}
 	if err := h.svc.ChangePassword(ctx, userID, req.GetOldPassword(), req.GetNewPassword()); err != nil {
 		return nil, grpcError(err)

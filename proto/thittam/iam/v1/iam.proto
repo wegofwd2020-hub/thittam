@@ -253,6 +253,9 @@ message DeactivateUserRequest {
 message DeactivateUserResponse {}
 
 message ChangePasswordRequest {
+  // Deprecated: ignored. The subject is derived from the caller's verified token
+  // (#139). Sending a value that differs from the authenticated caller is rejected
+  // with PermissionDenied.
   string user_id = 1;
   string old_password = 2;
   string new_password = 3;

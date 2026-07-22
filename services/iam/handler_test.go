@@ -48,6 +48,18 @@ func memberCtx(tid uuid.UUID) context.Context {
 	})
 }
 
+// memberCtxAs returns a member caller in tenant tid with a specific user id.
+// memberCtx mints a random UserID, so a test that asserts on the recorded
+// subject must name its caller. Mirrors callerCtxAs in services/ledger (#149).
+func memberCtxAs(tid, uid uuid.UUID) context.Context {
+	return interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
+		UserID:   uid,
+		TenantID: tid,
+		Email:    "member@example.com",
+		Roles:    []string{interceptor.RoleMember},
+	})
+}
+
 // grantUserManage returns a mockRepo option granting the caller user:manage, as a
 // super_admin would hold. The gate calls CheckPermission → repo.GetUserPermissions.
 func grantUserManage() func(context.Context, uuid.UUID, *uuid.UUID) ([]string, error) {
@@ -262,6 +274,7 @@ func TestHandler_DeactivateUser_InvalidID(t *testing.T) {
 
 func TestHandler_ChangePassword_Success(t *testing.T) {
 	t.Parallel()
+	tenantID := uuid.New()
 	userID := uuid.New()
 	h := NewHandler(newTestService(&mockRepo{
 		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*auth.UserRecord, error) {
@@ -270,7 +283,7 @@ func TestHandler_ChangePassword_Success(t *testing.T) {
 		updatePasswordHashFn: func(_ context.Context, _ uuid.UUID, _ string) error { return nil },
 	}))
 
-	resp, err := h.ChangePassword(context.Background(), &iamv1.ChangePasswordRequest{
+	resp, err := h.ChangePassword(memberCtxAs(tenantID, userID), &iamv1.ChangePasswordRequest{
 		UserId:      userID.String(),
 		OldPassword: "old",
 		NewPassword: "newpass",
@@ -281,10 +294,98 @@ func TestHandler_ChangePassword_Success(t *testing.T) {
 
 func TestHandler_ChangePassword_InvalidUserID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ChangePassword(context.Background(), &iamv1.ChangePasswordRequest{
+	_, err := newHandler().ChangePassword(memberCtx(uuid.New()), &iamv1.ChangePasswordRequest{
 		UserId: "bad", OldPassword: "old", NewPassword: "new",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// --- #139 slice A: ChangePassword actor integrity ---
+
+// A caller may not change somebody else's password. mockRepo's unset fn-fields
+// return benign zero values and never panic, so asserting only the status code
+// would pass against the vulnerable handler too — updatePasswordHashFn must
+// carry a t.Fatal body to prove the guard fires before the write.
+func TestHandler_ChangePassword_ForgedSubjectDenied(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	callerID := uuid.New()
+	victimID := uuid.New()
+
+	h := NewHandler(newTestService(&mockRepo{
+		getUserByIDFn: func(context.Context, uuid.UUID) (*auth.UserRecord, error) {
+			t.Fatal("a forged subject must be refused before the user is read")
+			return nil, nil
+		},
+		updatePasswordHashFn: func(context.Context, uuid.UUID, string) error {
+			t.Fatal("a forged subject must never reach the password write")
+			return nil
+		},
+	}))
+
+	_, err := h.ChangePassword(memberCtxAs(tenantID, callerID), &iamv1.ChangePasswordRequest{
+		UserId:      victimID.String(),
+		OldPassword: "old",
+		NewPassword: "newpass",
+	})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+// With user_id empty — the path a client takes once the field is deprecated —
+// the password changed must be the caller's own.
+func TestHandler_ChangePassword_UsesTheCallerAsSubject(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	callerID := uuid.New()
+	var gotReadID, gotWriteID uuid.UUID
+
+	h := NewHandler(newTestService(&mockRepo{
+		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*auth.UserRecord, error) {
+			gotReadID = id
+			return &auth.UserRecord{ID: id, PasswordHash: "hashed:old"}, nil
+		},
+		updatePasswordHashFn: func(_ context.Context, id uuid.UUID, _ string) error {
+			gotWriteID = id
+			return nil
+		},
+	}))
+
+	_, err := h.ChangePassword(memberCtxAs(tenantID, callerID), &iamv1.ChangePasswordRequest{
+		OldPassword: "old",
+		NewPassword: "newpass",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, callerID, gotReadID, "the user read must be the caller")
+	assert.Equal(t, callerID, gotWriteID, "the password written must be the caller's")
+}
+
+// Without the interceptor chain there is no caller, and the RPC must not proceed.
+//
+// getUserByIDFn carries the t.Fatal, not just the write fn. grpcError maps
+// auth.ErrInvalidCredentials to codes.Unauthenticated (handler.go:848), and
+// mockRepo's default GetUserByID returns PasswordHash "hashed", which the test
+// verifier rejects — so the VULNERABLE handler also answers Unauthenticated here,
+// by a completely different route. Asserting the code alone would be a tautology.
+// The real requirement is that a tokenless call reaches no repository at all.
+func TestHandler_ChangePassword_NoCallerUnauthenticated(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(newTestService(&mockRepo{
+		getUserByIDFn: func(context.Context, uuid.UUID) (*auth.UserRecord, error) {
+			t.Fatal("a tokenless call must never reach the repository")
+			return nil, nil
+		},
+		updatePasswordHashFn: func(context.Context, uuid.UUID, string) error {
+			t.Fatal("a tokenless call must never reach the password write")
+			return nil
+		},
+	}))
+
+	_, err := h.ChangePassword(context.Background(), &iamv1.ChangePasswordRequest{
+		UserId:      uuid.New().String(),
+		OldPassword: "old",
+		NewPassword: "newpass",
+	})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
 // --- AssignRole ---
