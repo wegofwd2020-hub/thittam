@@ -27,6 +27,7 @@ import (
 
 	reportingv1 "github.com/wegofwd2020/thittam/gen/reporting/v1"
 	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/iamclient"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
@@ -78,7 +79,26 @@ func main() {
 	// --- Repository and service ---
 	repo := reportingdb.NewPostgres(pool)
 	svc := reporting.NewService(repo)
-	handler := reporting.NewHandler(svc)
+
+	// --- IAM permission checker ---
+	// reporting-analytics cannot authorize without IAM. #138/#149's convention for the
+	// JWT public key applies here too: a service that cannot enforce its guarantees does
+	// not start. Starting would serve codes.Internal on every fact RPC, which reads as a
+	// bug rather than as a misconfiguration.
+	//
+	// iamPerm is the concrete *iamclient.PermissionChecker here, so this is a plain
+	// pointer comparison. Assigning it to an interface field first would produce a
+	// non-nil interface wrapping a nil pointer, and the check would never fire.
+	iamPerm, closeIAM, err := iamclient.DialFromEnv("reporting-analytics")
+	if err != nil {
+		log.Fatalf("reporting-analytics: startup: dial IAM: %v", err)
+	}
+	defer func() { _ = closeIAM() }()
+	if iamPerm == nil {
+		log.Fatalf("reporting-analytics: startup: %s is not set; reporting cannot authorize without a permission checker", iamclient.EnvAddr)
+	}
+
+	handler := reporting.NewHandler(svc, iamPerm)
 
 	// --- Projection consumer ---
 	// ProjectionConsumer maintains six read-model tables by consuming domain

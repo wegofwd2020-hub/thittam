@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	reportingv1 "github.com/wegofwd2020/thittam/gen/reporting/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/tenant"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	"google.golang.org/grpc/codes"
@@ -16,12 +17,17 @@ import (
 // Handler implements the gRPC ReportingService.
 type Handler struct {
 	reportingv1.UnimplementedReportingServiceServer
-	svc *Service
+	svc  *Service
+	perm interceptor.PermissionChecker
 }
 
 // NewHandler creates a Handler wrapping the given Service.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+//
+// perm is required, not optional. cmd/reporting-analytics refuses to start when the
+// checker is nil, so a live handler always has one; a nil here is a test or a bug, and
+// RequirePermission fails such a call closed with Internal.
+func NewHandler(svc *Service, perm interceptor.PermissionChecker) *Handler {
+	return &Handler{svc: svc, perm: perm}
 }
 
 // Compile-time interface check.
@@ -50,6 +56,10 @@ func (h *Handler) GetExpenseFacts(ctx context.Context, req *reportingv1.GetExpen
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, "report:read"); err != nil {
+		return nil, err
+	}
+
 	productionID, err := uuid.Parse(req.GetProductionId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production_id")
@@ -73,6 +83,10 @@ func (h *Handler) GetBudgetFacts(ctx context.Context, req *reportingv1.GetBudget
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, "report:read"); err != nil {
+		return nil, err
+	}
+
 	productionID, err := uuid.Parse(req.GetProductionId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production_id")
@@ -94,6 +108,10 @@ func (h *Handler) GetDashboardSummary(ctx context.Context, _ *reportingv1.GetDas
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, "report:read"); err != nil {
+		return nil, err
 	}
 
 	summary, err := h.svc.GetDashboardSummary(ctx, tenantID)
