@@ -1,3 +1,5 @@
+import { isDemo } from "@/demo/flag";
+
 // Local-dev routing for the grpc-gateway HTTP ports. Each service exposes its
 // own gateway on a dedicated port (iam: 9086, project-management: 9080,
 // budget-planning: 9081). Once Kong (#60 Phase B) is in front of everything,
@@ -20,6 +22,11 @@ export const env = {
   /** Single gateway URL (Kong). When unset, client routes per-service in dev. */
   get apiUrl(): string {
     return process.env.NEXT_PUBLIC_API_URL || "";
+  },
+
+  /** True when this build serves recorded fixtures instead of live services. */
+  get demoMode(): boolean {
+    return isDemo();
   },
 
   /** IAM grpc-gateway — default for auth, users, tenants. */
