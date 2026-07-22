@@ -98,3 +98,19 @@ jobs:
           name: vuln-report
           path: vuln-report.md
           retention-days: 30
+
+      # Fail the run when the scan found something. This is deliberately the
+      # LAST step: the issue upsert and the artifact upload must both happen
+      # first, or a red run would lose the report that explains it.
+      #
+      # Without this the job ends green while a CVE is open, so `gh run list
+      # --branch main` shows success next to an unfixed vulnerability. The
+      # vuln-scan issue is the real notification, but a green run beside it
+      # invites exactly the wrong conclusion.
+      - name: Fail if vulnerabilities were found
+        if: steps.audit.outputs.exit_code != '0'
+        env:
+          AUDIT_EXIT: ${{ steps.audit.outputs.exit_code }}
+        run: |
+          echo "::error::govulncheck exited ${AUDIT_EXIT} — see the vuln-scan issue and the vuln-report artifact."
+          exit 1
