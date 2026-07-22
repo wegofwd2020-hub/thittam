@@ -71,7 +71,7 @@ Legend — **AUTH** = any authenticated tenant member; **PUBLIC** = no caller by
 | `AcceptInvitation` | — | PUBLIC | — | ✅ the invitee holds no token; its privileged decision lives upstream at `InviteUser` (#146) |
 | `Logout` | — | AUTH | R4 | 🔴 |
 | `GetCurrentUser` | — | AUTH | R4 | ✅ **already correct** — `handler.go:83` derives user and tenant from the bearer token and reads no request field |
-| `ChangePassword` | — | AUTH, self-only | R4 | 🔴 **see D1 — live defect** |
+| `ChangePassword` | — | AUTH, self-only | R4 | ✅ **fixed by slice A (PR #155)** — subject now from the token via `ActorFromRequest` |
 | `GetUser` | — | `user:manage` OR self | R4/R6 | 🔴 |
 | `ListUsers` | — | `user:manage` | R6 | 🔴 |
 | `CreateUser` | — | `user:manage` | R6 | 🔴 |
@@ -92,7 +92,7 @@ Legend — **AUTH** = any authenticated tenant member; **PUBLIC** = no caller by
 | `ApproveTenantPurge` | `RolePlatformAdmin` | unchanged | R5 | ✅ |
 | `CancelTenantPurge` | `RolePlatformAdmin` | unchanged | R5 | ✅ |
 | `SetOIDCConfig` | `RolePlatformAdmin` | unchanged | R5 | ✅ |
-| `StartImpersonation` | `RolePlatformAdmin` | unchanged | R5 | ✅ gate is right; the **feature** is broken — see D8 |
+| `StartImpersonation` | `RolePlatformAdmin` | unchanged **gate**, but 🔴 **actor** | R5/R4 | 🔴 the gate is right and the **actor is forged**: `platform_user_id` comes from the request body (`handler.go:608`) and becomes `AuditEntry.ActorID`; `ip_address` is self-reported too. Third instance of #149's defect class — see **#156**. `EndImpersonation` does it correctly. Closes with D8 if that is executed |
 | `EndImpersonation` | `RolePlatformAdmin` | unchanged | R5 | ✅ |
 
 ### 4.2 project — 13 RPCs (7 enforced)
