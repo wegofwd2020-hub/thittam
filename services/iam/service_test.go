@@ -3,6 +3,7 @@ package iam
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -2318,4 +2319,45 @@ func TestGetCurrentUser_TenantLookupFails(t *testing.T) {
 	)
 	_, _, err := svc.GetCurrentUser(context.Background(), "tok")
 	require.Error(t, err)
+}
+
+// The ledger permissions encode separation of duties. This test is the only guard
+// against the strings drifting from services/ledger/handler.go's own copies, so it
+// asserts literals rather than constants.
+func TestSystemRoles_LedgerGrants(t *testing.T) {
+	t.Parallel()
+
+	want := map[string][]string{
+		"super_admin": {"ledger:read", "ledger:write", "ledger:post", "ledger:admin"},
+		"accountant":  {"ledger:read", "ledger:write", "ledger:post"},
+		"manager":     {"ledger:read"},
+		"coordinator": {"ledger:read"},
+	}
+	// Roles that must hold NO ledger permission at all.
+	none := []string{"member", "inventory_manager", "project_supervisor"}
+
+	got := map[string][]string{}
+	for _, r := range systemRoles {
+		for _, p := range r.permissions {
+			if strings.HasPrefix(p, "ledger:") {
+				got[r.name] = append(got[r.name], p)
+			}
+		}
+	}
+
+	for role, perms := range want {
+		assert.ElementsMatch(t, perms, got[role], "role %s", role)
+	}
+	for _, role := range none {
+		assert.Empty(t, got[role], "role %s must hold no ledger permission", role)
+	}
+
+	// Separation of duties: nobody but super_admin may close a period.
+	for _, r := range systemRoles {
+		if r.name == "super_admin" {
+			continue
+		}
+		assert.NotContains(t, r.permissions, "ledger:admin",
+			"only super_admin may hold ledger:admin — closing a period is a separately-privileged act")
+	}
 }

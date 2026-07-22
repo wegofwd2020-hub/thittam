@@ -48,6 +48,19 @@ type Authenticator interface {
 // "you may only grant permissions you hold" subset rule anywhere. See the spec, §2 and §8.
 const permUserManage = "user:manage"
 
+// Ledger permissions encode separation of duties: drafting an entry (ledger:write),
+// committing it (ledger:post), and controlling the books (ledger:admin) are three
+// distinct grants. Collapsing them would remove the control an auditor looks for.
+//
+// services/ledger/handler.go declares its own identical copies — Go cannot share
+// unexported identifiers across packages. Both packages' tests assert the literals.
+const (
+	permLedgerRead  = "ledger:read"
+	permLedgerWrite = "ledger:write"
+	permLedgerPost  = "ledger:post"
+	permLedgerAdmin = "ledger:admin"
+)
+
 // systemRoles are seeded for every new tenant at creation time.
 // Permissions follow the {resource}:{action} convention.
 var systemRoles = []struct {
@@ -60,6 +73,7 @@ var systemRoles = []struct {
 		"expense:submit", "expense:approve",
 		"inventory:checkout",
 		"report:read",
+		permLedgerRead, permLedgerWrite, permLedgerPost, permLedgerAdmin,
 		permUserManage,
 	}},
 	{"manager", []string{
@@ -68,6 +82,7 @@ var systemRoles = []struct {
 		"expense:approve",
 		"inventory:checkout",
 		"report:read",
+		permLedgerRead,
 	}},
 	{"coordinator", []string{
 		"production:read", "production:write",
@@ -75,11 +90,13 @@ var systemRoles = []struct {
 		"expense:approve",
 		"inventory:checkout",
 		"report:read",
+		permLedgerRead,
 	}},
 	{"accountant", []string{
 		"budget:read",
 		"expense:submit", "expense:approve",
 		"report:read",
+		permLedgerRead, permLedgerWrite, permLedgerPost,
 	}},
 	{"member", []string{
 		"production:read",
