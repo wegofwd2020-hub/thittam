@@ -15,6 +15,20 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// Ledger permissions encode separation of duties: drafting an entry (permLedgerWrite),
+// committing it (permLedgerPost), and controlling the books (permLedgerAdmin) are three
+// distinct grants.
+//
+// These duplicate the unexported constants in services/iam/service.go, where systemRoles
+// grants them. Go cannot share unexported identifiers across packages; both packages'
+// tests assert the string literals, which is the only guard against drift.
+const (
+	permLedgerRead  = "ledger:read"
+	permLedgerWrite = "ledger:write"
+	permLedgerPost  = "ledger:post"
+	permLedgerAdmin = "ledger:admin"
+)
+
 // Handler implements the gRPC LedgerService.
 // The general-ledger is a universal service — it does not load vertical config
 // per request. The tenant is always taken from the caller's verified token
@@ -24,12 +38,18 @@ import (
 // layer directly — there is no caller-less path into these handlers.
 type Handler struct {
 	ledgerv1.UnimplementedLedgerServiceServer
-	svc *Service
+	svc  *Service
+	perm interceptor.PermissionChecker
 }
 
 // NewHandler creates a Handler wrapping the given Service.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+//
+// perm is required, not optional. The four other permission-gated services take it via
+// a WithPermissionChecker setter, which compiles fine when nobody calls it — yielding a
+// handler whose every RPC returns Internal. Here, forgetting the checker is a build error.
+// cmd/general-ledger refuses to start when the checker is nil.
+func NewHandler(svc *Service, perm interceptor.PermissionChecker) *Handler {
+	return &Handler{svc: svc, perm: perm}
 }
 
 // Compile-time interface check.
@@ -40,6 +60,10 @@ var _ ledgerv1.LedgerServiceServer = (*Handler)(nil)
 func (h *Handler) CreateAccount(ctx context.Context, req *ledgerv1.CreateAccountRequest) (*ledgerv1.Account, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerWrite); err != nil {
 		return nil, err
 	}
 
@@ -71,6 +95,10 @@ func (h *Handler) GetAccount(ctx context.Context, req *ledgerv1.GetAccountReques
 		return nil, err
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerRead); err != nil {
+		return nil, err
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid account ID")
@@ -86,6 +114,10 @@ func (h *Handler) GetAccount(ctx context.Context, req *ledgerv1.GetAccountReques
 func (h *Handler) ListAccounts(ctx context.Context, req *ledgerv1.ListAccountsRequest) (*ledgerv1.ListAccountsResponse, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerRead); err != nil {
 		return nil, err
 	}
 
@@ -106,6 +138,10 @@ func (h *Handler) ListAccounts(ctx context.Context, req *ledgerv1.ListAccountsRe
 func (h *Handler) SeedChartOfAccounts(ctx context.Context, req *ledgerv1.SeedChartOfAccountsRequest) (*ledgerv1.SeedChartOfAccountsResponse, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerAdmin); err != nil {
 		return nil, err
 	}
 
@@ -142,6 +178,10 @@ func (h *Handler) OpenAccountingPeriod(ctx context.Context, req *ledgerv1.OpenAc
 		return nil, err
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerAdmin); err != nil {
+		return nil, err
+	}
+
 	if err := h.svc.OpenAccountingPeriod(ctx, tenantID, int(req.GetYear()), time.Month(req.GetMonth())); err != nil {
 		return nil, grpcErr(err)
 	}
@@ -157,14 +197,18 @@ func (h *Handler) CloseAccountingPeriod(ctx context.Context, req *ledgerv1.Close
 		return nil, err
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerAdmin); err != nil {
+		return nil, err
+	}
+
 	periodID, err := uuid.Parse(req.GetPeriodId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid period_id")
 	}
 
-	closedBy, err := uuid.Parse(req.GetClosedBy())
+	closedBy, err := interceptor.ActorFromRequest(ctx, req.GetClosedBy())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid closed_by")
+		return nil, err
 	}
 
 	period, err := h.svc.CloseAccountingPeriod(ctx, tenantID, periodID, closedBy)
@@ -179,6 +223,10 @@ func (h *Handler) CloseAccountingPeriod(ctx context.Context, req *ledgerv1.Close
 func (h *Handler) CreateJournalEntry(ctx context.Context, req *ledgerv1.CreateJournalEntryRequest) (*ledgerv1.JournalEntry, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerWrite); err != nil {
 		return nil, err
 	}
 
@@ -239,14 +287,18 @@ func (h *Handler) PostJournalEntry(ctx context.Context, req *ledgerv1.PostJourna
 		return nil, err
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerPost); err != nil {
+		return nil, err
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid journal entry ID")
 	}
 
-	postedBy, err := uuid.Parse(req.GetPostedBy())
+	postedBy, err := interceptor.ActorFromRequest(ctx, req.GetPostedBy())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid posted_by")
+		return nil, err
 	}
 
 	je, err := h.svc.PostJournalEntry(ctx, tenantID, id, postedBy)
@@ -259,6 +311,10 @@ func (h *Handler) PostJournalEntry(ctx context.Context, req *ledgerv1.PostJourna
 func (h *Handler) GetJournalEntry(ctx context.Context, req *ledgerv1.GetJournalEntryRequest) (*ledgerv1.JournalEntry, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerRead); err != nil {
 		return nil, err
 	}
 
@@ -277,6 +333,10 @@ func (h *Handler) GetJournalEntry(ctx context.Context, req *ledgerv1.GetJournalE
 func (h *Handler) ListJournalEntries(ctx context.Context, req *ledgerv1.ListJournalEntriesRequest) (*ledgerv1.ListJournalEntriesResponse, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerRead); err != nil {
 		return nil, err
 	}
 
@@ -307,14 +367,18 @@ func (h *Handler) VoidJournalEntry(ctx context.Context, req *ledgerv1.VoidJourna
 		return nil, err
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerPost); err != nil {
+		return nil, err
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid journal entry ID")
 	}
 
-	voidedBy, err := uuid.Parse(req.GetVoidedBy())
+	voidedBy, err := interceptor.ActorFromRequest(ctx, req.GetVoidedBy())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid voided_by")
+		return nil, err
 	}
 
 	reversing, err := h.svc.VoidJournalEntry(ctx, tenantID, id, voidedBy)
@@ -329,6 +393,10 @@ func (h *Handler) VoidJournalEntry(ctx context.Context, req *ledgerv1.VoidJourna
 func (h *Handler) GetTrialBalance(ctx context.Context, req *ledgerv1.GetTrialBalanceRequest) (*ledgerv1.GetTrialBalanceResponse, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerRead); err != nil {
 		return nil, err
 	}
 

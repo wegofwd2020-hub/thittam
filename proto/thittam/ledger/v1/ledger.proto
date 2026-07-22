@@ -183,6 +183,9 @@ message CloseAccountingPeriodRequest {
   // with PermissionDenied.
   string tenant_id = 1;
   string period_id = 2;
+  // Deprecated: ignored. The actor is derived from the caller's verified token
+  // (#149). Sending a value that differs from the authenticated caller is rejected
+  // with PermissionDenied.
   string closed_by = 3;
 }
 
@@ -215,6 +218,9 @@ message PostJournalEntryRequest {
   // with PermissionDenied.
   string tenant_id = 1;
   string id = 2;
+  // Deprecated: ignored. The actor is derived from the caller's verified token
+  // (#149). Sending a value that differs from the authenticated caller is rejected
+  // with PermissionDenied.
   string posted_by = 3;
 }
 
@@ -247,6 +253,9 @@ message VoidJournalEntryRequest {
   // with PermissionDenied.
   string tenant_id = 1;
   string id = 2;
+  // Deprecated: ignored. The actor is derived from the caller's verified token
+  // (#149). Sending a value that differs from the authenticated caller is rejected
+  // with PermissionDenied.
   string voided_by = 3;
 }
 

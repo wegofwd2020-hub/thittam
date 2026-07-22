@@ -19,7 +19,7 @@ import (
 type Handler struct {
 	projectv1.UnimplementedProjectServiceServer
 	svc  *Service
-	perm interceptor.PermissionChecker // optional; nil skips RequirePermission
+	perm interceptor.PermissionChecker // nil fails closed: RequirePermission returns Internal (#138)
 }
 
 // NewHandler creates a Handler wrapping the given Service.
