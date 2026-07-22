@@ -64,7 +64,9 @@ Established by reading the tree at `1147f4c`. Trust these; do not re-derive them
 
 2. **`TestHandler_ChangePassword_InvalidUserID` is the subtle one.** `ActorFromRequest` checks the caller **before** parsing, so with no caller the test can no longer reach the parse. Once given a caller, it reaches the parse and still asserts `InvalidArgument`. The assertion is unchanged; only the context is. This is the hazard #146 shipped and #149 documented.
 
-3. **`mockRepo`'s unset fn-fields do NOT all return benign zero values — `GetUserByID` returns a usable record** (`service_test.go:90`: `&auth.UserRecord{ID: userID, PasswordHash: "hashed"}`), which the test verifier then rejects with `auth.ErrInvalidCredentials`, which `grpcError` maps to `codes.Unauthenticated` (`handler.go:848`). So a denial test asserting only a status code can pass against the vulnerable handler by an unrelated route. **Every denial test in this task must install a `t.Fatal` fn on the first repository call it should never reach** — `getUserByIDFn`, not only `updatePasswordHashFn`.\n\n   The write-side statement still holds: `updatePasswordHashFn` unset returns `nil`. So a forgery test that asserts only `PermissionDenied` **would also pass against the vulnerable handler**, which parses the body and writes. The forgery test **must** install `updatePasswordHashFn` with a `t.Fatal` body.
+3. **`mockRepo`'s unset fn-fields do NOT all return benign zero values — `GetUserByID` returns a usable record** (`service_test.go:90`: `&auth.UserRecord{ID: userID, PasswordHash: "hashed"}`), which the test verifier then rejects with `auth.ErrInvalidCredentials`, which `grpcError` maps to `codes.Unauthenticated` (`handler.go:848`). So a denial test asserting only a status code can pass against the vulnerable handler by an unrelated route. **Every denial test in this task must install a `t.Fatal` fn on the first repository call it should never reach** — `getUserByIDFn`, not only `updatePasswordHashFn`.
+
+   The write-side statement still holds: `updatePasswordHashFn` unset returns `nil`. So a forgery test that asserts only `PermissionDenied` **would also pass against the vulnerable handler**, which parses the body and writes. The forgery test **must** install `updatePasswordHashFn` with a `t.Fatal` body.
 
 4. **`Service.ChangePassword` takes the id positionally** among two strings. A wrong id threaded through still compiles. Only an assertion on what reaches `updatePasswordHashFn` catches it.
 
@@ -417,7 +419,7 @@ git commit -m "docs(proto): deprecate ChangePasswordRequest.user_id (#139)"
 - [ ] `git diff --stat gen/` — **empty**.
 - [ ] `git diff --stat 1147f4c..HEAD -- migrations/` — **empty**.
 - [ ] `grep -c 'uuid.Parse(req.GetUserId())' services/iam/handler.go` — must **not** match inside `ChangePassword`. Other RPCs legitimately parse a `user_id` for a target user (e.g. `AssignRole`); confirm with `grep -n` that the remaining matches are those, not this one.
-- [ ] `grep -n 'ActorFromRequest' services/iam/handler.go` — exactly **1** occurrence, in `ChangePassword`.
+- [ ] `grep -n 'ActorFromRequest' services/iam/handler.go` — exactly **2** occurrences, both inside `ChangePassword`: the call itself and the explanatory comment above it.
 - [ ] `gofmt -l services/iam/handler.go services/iam/handler_test.go` — no output.
 - [ ] Coverage `services/iam` — **≥ 87.2%** (baseline). Record before and after.
 - [ ] **`gh pr checks <n>` after opening the PR.** Local green is not CI green.
