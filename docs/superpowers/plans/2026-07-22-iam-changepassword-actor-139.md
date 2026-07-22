@@ -64,7 +64,7 @@ Established by reading the tree at `1147f4c`. Trust these; do not re-derive them
 
 2. **`TestHandler_ChangePassword_InvalidUserID` is the subtle one.** `ActorFromRequest` checks the caller **before** parsing, so with no caller the test can no longer reach the parse. Once given a caller, it reaches the parse and still asserts `InvalidArgument`. The assertion is unchanged; only the context is. This is the hazard #146 shipped and #149 documented.
 
-3. **`mockRepo`'s unset fn-fields return benign zero values and never panic.** `updatePasswordHashFn` unset returns `nil`. So a forgery test that asserts only `PermissionDenied` **would also pass against the vulnerable handler**, which parses the body and writes. The forgery test **must** install `updatePasswordHashFn` with a `t.Fatal` body.
+3. **`mockRepo`'s unset fn-fields do NOT all return benign zero values — `GetUserByID` returns a usable record** (`service_test.go:90`: `&auth.UserRecord{ID: userID, PasswordHash: "hashed"}`), which the test verifier then rejects with `auth.ErrInvalidCredentials`, which `grpcError` maps to `codes.Unauthenticated` (`handler.go:848`). So a denial test asserting only a status code can pass against the vulnerable handler by an unrelated route. **Every denial test in this task must install a `t.Fatal` fn on the first repository call it should never reach** — `getUserByIDFn`, not only `updatePasswordHashFn`.\n\n   The write-side statement still holds: `updatePasswordHashFn` unset returns `nil`. So a forgery test that asserts only `PermissionDenied` **would also pass against the vulnerable handler**, which parses the body and writes. The forgery test **must** install `updatePasswordHashFn` with a `t.Fatal` body.
 
 4. **`Service.ChangePassword` takes the id positionally** among two strings. A wrong id threaded through still compiles. Only an assertion on what reaches `updatePasswordHashFn` catches it.
 
@@ -165,9 +165,20 @@ func TestHandler_ChangePassword_UsesTheCallerAsSubject(t *testing.T) {
 }
 
 // Without the interceptor chain there is no caller, and the RPC must not proceed.
+//
+// getUserByIDFn carries the t.Fatal, not just the write fn. grpcError maps
+// auth.ErrInvalidCredentials to codes.Unauthenticated (handler.go:848), and
+// mockRepo's default GetUserByID returns PasswordHash "hashed", which the test
+// verifier rejects — so the VULNERABLE handler also answers Unauthenticated here,
+// by a completely different route. Asserting the code alone would be a tautology.
+// The real requirement is that a tokenless call reaches no repository at all.
 func TestHandler_ChangePassword_NoCallerUnauthenticated(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(newTestService(&mockRepo{
+		getUserByIDFn: func(context.Context, uuid.UUID) (*auth.UserRecord, error) {
+			t.Fatal("a tokenless call must never reach the repository")
+			return nil, nil
+		},
 		updatePasswordHashFn: func(context.Context, uuid.UUID, string) error {
 			t.Fatal("a tokenless call must never reach the password write")
 			return nil
@@ -291,7 +302,7 @@ git worktree remove "$WT" --force; git worktree prune
 Expected against the **vulnerable** handler:
 - `TestHandler_ChangePassword_ForgedSubjectDenied` **FAILS** (fires `t.Fatal` — the forged subject reached the repository).
 - `TestHandler_ChangePassword_UsesTheCallerAsSubject` **FAILS** (`InvalidArgument` from `uuid.Parse("")`).
-- `TestHandler_ChangePassword_NoCallerUnauthenticated` **FAILS**.
+- `TestHandler_ChangePassword_NoCallerUnauthenticated` **FAILS** — it fires its `getUserByIDFn` `t.Fatal`, because the vulnerable handler parses the body and reads the user. It must NOT be allowed to pass by asserting `Unauthenticated` alone: `grpcError` maps `auth.ErrInvalidCredentials` to that same code (`handler.go:848`), so the vulnerable handler reaches it by a different route.
 - `TestHandler_ChangePassword_Success` and `_InvalidUserID` **PASS** — the old handler ignores the caller the repairs added.
 
 Paste the transcript into your report. Confirm `git worktree list` shows no leftovers. **If any check does not behave as described, stop and report — do not proceed.**
