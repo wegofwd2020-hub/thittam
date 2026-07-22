@@ -80,6 +80,10 @@ func (h *Handler) GetProduction(ctx context.Context, req *projectv1.GetProductio
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, "production:read"); err != nil {
+		return nil, err
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")
@@ -96,6 +100,10 @@ func (h *Handler) ListProductions(ctx context.Context, req *projectv1.ListProduc
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, "production:read"); err != nil {
+		return nil, err
 	}
 
 	limit := int(req.GetLimit())
@@ -213,6 +221,10 @@ func (h *Handler) CreatePhase(ctx context.Context, req *projectv1.CreatePhaseReq
 }
 
 func (h *Handler) ListPhases(ctx context.Context, req *projectv1.ListPhasesRequest) (*projectv1.ListPhasesResponse, error) {
+	if err := interceptor.RequirePermission(ctx, h.perm, "production:read"); err != nil {
+		return nil, err
+	}
+
 	productionID, err := uuid.Parse(req.GetProductionId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")
@@ -305,6 +317,10 @@ func (h *Handler) AddCrewMember(ctx context.Context, req *projectv1.AddCrewMembe
 }
 
 func (h *Handler) ListCrewMembers(ctx context.Context, req *projectv1.ListCrewMembersRequest) (*projectv1.ListCrewMembersResponse, error) {
+	if err := interceptor.RequirePermission(ctx, h.perm, "production:read"); err != nil {
+		return nil, err
+	}
+
 	productionID, err := uuid.Parse(req.GetProductionId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")

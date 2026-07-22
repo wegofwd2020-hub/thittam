@@ -22,6 +22,14 @@ func (allowAllPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ 
 	return true, nil
 }
 
+// denyPerm denies every permission, so a denial test can prove the gate fires
+// before the repository is reached.
+type denyPerm struct{}
+
+func (denyPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	return false, nil
+}
+
 // ctxWithTenant injects vertical config, a tenant ID, and a synthetic caller
 // (RequirePermission now runs unconditionally, so every handler test needs a
 // caller in context or it fails Unauthenticated before reaching handler logic).
@@ -73,7 +81,7 @@ func TestHandler_GetProduction_Success(t *testing.T) {
 		getProductionFn: func(_ context.Context, tid, id uuid.UUID) (*Production, error) {
 			return &Production{ID: id, TenantID: tid, Title: "Test", Status: "active"}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.GetProduction(ctxWithTenant(tenantID), &projectv1.GetProductionRequest{Id: prodID.String()})
 	require.NoError(t, err)
@@ -98,9 +106,25 @@ func TestHandler_GetProduction_NotFound(t *testing.T) {
 		getProductionFn: func(_ context.Context, _, _ uuid.UUID) (*Production, error) {
 			return nil, ErrProductionNotFound
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 	_, err := h.GetProduction(ctxWithTenant(uuid.New()), &projectv1.GetProductionRequest{Id: uuid.New().String()})
 	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+func TestHandler_GetProduction_Denied(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getProductionFn: func(context.Context, uuid.UUID, uuid.UUID) (*Production, error) {
+			t.Fatal("gate must fire before the repository is read")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.GetProduction(ctxWithTenant(tenantID), &projectv1.GetProductionRequest{
+		Id: uuid.New().String(),
+	})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 // --- ListProductions ---
@@ -112,7 +136,7 @@ func TestHandler_ListProductions_Success(t *testing.T) {
 		listProductionsFn: func(_ context.Context, _ uuid.UUID, _ string, _, _ int) ([]Production, error) {
 			return []Production{{ID: uuid.New(), TenantID: tenantID, Status: "active"}}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.ListProductions(ctxWithTenant(tenantID), &projectv1.ListProductionsRequest{})
 	require.NoError(t, err)
@@ -123,6 +147,20 @@ func TestHandler_ListProductions_NoTenant(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().ListProductions(ctxWithVertical(), &projectv1.ListProductionsRequest{})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestHandler_ListProductions_Denied(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		listProductionsFn: func(context.Context, uuid.UUID, string, int, int) ([]Production, error) {
+			t.Fatal("gate must fire before the repository is read")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.ListProductions(ctxWithTenant(tenantID), &projectv1.ListProductionsRequest{})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 // --- UpdateProduction ---
@@ -221,17 +259,43 @@ func TestHandler_CreatePhase_InvalidProductionID(t *testing.T) {
 func TestHandler_ListPhases_Success(t *testing.T) {
 	t.Parallel()
 	prodID := uuid.New()
-	h := NewHandler(NewService(&mockRepo{}))
+	h := newHandler()
 
-	resp, err := h.ListPhases(context.Background(), &projectv1.ListPhasesRequest{ProductionId: prodID.String()})
+	resp, err := h.ListPhases(ctxWithTenant(uuid.New()), &projectv1.ListPhasesRequest{ProductionId: prodID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetPhases(), 0)
 }
 
 func TestHandler_ListPhases_InvalidProductionID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListPhases(context.Background(), &projectv1.ListPhasesRequest{ProductionId: "bad"})
+	_, err := newHandler().ListPhases(ctxWithTenant(uuid.New()), &projectv1.ListPhasesRequest{ProductionId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// tripwireListPhasesRepo wraps mockRepo to trap ListPhases. Unlike the other
+// Repository methods, mockRepo.ListPhases has no injectable *Fn hook — it
+// always returns (nil, nil) — so a denial test cannot prove the gate fires
+// before the read via the usual field-override pattern. Embedding mockRepo
+// and overriding just this one method gets the same tripwire guarantee.
+type tripwireListPhasesRepo struct {
+	mockRepo
+	t *testing.T
+}
+
+func (r *tripwireListPhasesRepo) ListPhases(context.Context, uuid.UUID, int, int) ([]Phase, error) {
+	r.t.Fatal("gate must fire before the repository is read")
+	return nil, nil
+}
+
+func TestHandler_ListPhases_Denied(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&tripwireListPhasesRepo{t: t})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.ListPhases(ctxWithTenant(tenantID), &projectv1.ListPhasesRequest{
+		ProductionId: uuid.New().String(),
+	})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 // --- UpdatePhaseStatus ---
@@ -320,17 +384,33 @@ func TestHandler_ListCrewMembers_Success(t *testing.T) {
 		listCrewFn: func(_ context.Context, _ uuid.UUID) ([]CrewMember, error) {
 			return []CrewMember{{ID: uuid.New(), Name: "John", Role: "DP"}}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
-	resp, err := h.ListCrewMembers(context.Background(), &projectv1.ListCrewMembersRequest{ProductionId: prodID.String()})
+	resp, err := h.ListCrewMembers(ctxWithTenant(uuid.New()), &projectv1.ListCrewMembersRequest{ProductionId: prodID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetMembers(), 1)
 }
 
 func TestHandler_ListCrewMembers_InvalidProductionID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListCrewMembers(context.Background(), &projectv1.ListCrewMembersRequest{ProductionId: "bad"})
+	_, err := newHandler().ListCrewMembers(ctxWithTenant(uuid.New()), &projectv1.ListCrewMembersRequest{ProductionId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_ListCrewMembers_Denied(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		listCrewFn: func(context.Context, uuid.UUID) ([]CrewMember, error) {
+			t.Fatal("gate must fire before the repository is read")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.ListCrewMembers(ctxWithTenant(tenantID), &projectv1.ListCrewMembersRequest{
+		ProductionId: uuid.New().String(),
+	})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 // --- RemoveCrewMember ---
