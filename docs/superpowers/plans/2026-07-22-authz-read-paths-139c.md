@@ -411,7 +411,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - [ ] `go test -race ./services/project/ ./services/budget/ ./services/reporting/` — PASS.
 - [ ] `go build ./cmd/...` — all ten entrypoints build (reporting's signature change).
 - [ ] `git diff --stat gen/` — empty. `git diff --stat <base>..HEAD -- migrations/` — empty.
-- [ ] `grep -c 'RequirePermission' services/project/handler.go` increased by 4; `services/budget/handler.go` by 5; `services/reporting/handler.go` is 3.
+- [ ] `grep -c 'interceptor.RequirePermission(ctx' services/project/handler.go` increased by 4; `services/budget/handler.go` by 5; `services/reporting/handler.go` is 3. (Plain `grep -c RequirePermission` on reporting returns 4 — the 4th match is the word in the `NewHandler` doc comment, not a gate.)
 - [ ] `grep -c 'report:read' services/reporting/handler.go` — 3, and NOT present in `GetReportDefinition`/`ListReportDefinitions`.
 - [ ] Coverage project/budget/reporting — no regression. Record before and after per service.
 - [ ] `gofmt -l` on every touched file — no output.
