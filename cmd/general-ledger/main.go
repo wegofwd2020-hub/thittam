@@ -21,6 +21,7 @@ import (
 	ledgerv1 "github.com/wegofwd2020/thittam/gen/ledger/v1"
 	"github.com/wegofwd2020/thittam/pkg/auth"
 	"github.com/wegofwd2020/thittam/pkg/events"
+	"github.com/wegofwd2020/thittam/pkg/iamclient"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
@@ -67,7 +68,26 @@ func main() {
 	// look up per-tenant vertical config on the request path.
 	repo := ledgerdb.NewPostgres(pool)
 	svc := ledger.NewService(repo, &ledgerPublisher{pub: pub})
-	handler := ledger.NewHandler(svc)
+
+	// --- IAM permission checker ---
+	// The ledger cannot authorize without IAM. #138's convention for the JWT public
+	// key applies here too: a service that cannot enforce its guarantees does not
+	// start. Starting would serve codes.Internal on every accounting RPC, which reads
+	// as a bug rather than as a misconfiguration.
+	//
+	// iamPerm is the concrete *iamclient.PermissionChecker here, so this is a plain
+	// pointer comparison. Assigning it to an interface field first would produce a
+	// non-nil interface wrapping a nil pointer, and the check would never fire.
+	iamPerm, closeIAM, err := iamclient.DialFromEnv("general-ledger")
+	if err != nil {
+		log.Fatalf("general-ledger: startup: dial IAM: %v", err)
+	}
+	defer func() { _ = closeIAM() }()
+	if iamPerm == nil {
+		log.Fatalf("general-ledger: startup: %s is not set; the ledger cannot authorize without a permission checker", iamclient.EnvAddr)
+	}
+
+	handler := ledger.NewHandler(svc, iamPerm)
 
 	// --- gRPC server ---
 	verifier, err := auth.VerifierFromEnv(ctx)
