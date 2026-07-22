@@ -77,11 +77,16 @@ for id in $prod_ids; do
   record "GET /api/v1/productions/$id/crew"   "$PROJECT" "/api/v1/productions/$id/crew"
 done
 
-echo "==> budgets"
-record "GET /api/v1/budgets" "$BUDGET" "/api/v1/budgets"
-budget_ids=$(jq -r 'select(.key == "GET /api/v1/budgets")
-  | .value.budgets[]?.id' "$work/pairs.jsonl")
-[[ -n "$budget_ids" ]] || { echo "FATAL: budgets list is empty — is the seed loaded?"; exit 1; }
+echo "==> budgets (per production — no tenant-wide list endpoint exists)"
+# The web tier fans out one budgets query per production; there is NO bare
+# GET /api/v1/budgets (see web/src/app/(dashboard)/budgets/page.tsx:47 and
+# listBudgets(), which sends ?production_id=). Mirror that here.
+for pid in $prod_ids; do
+  record "GET /api/v1/budgets?production_id=$pid" "$BUDGET" "/api/v1/budgets?production_id=$pid"
+done
+budget_ids=$(jq -r 'select(.key | startswith("GET /api/v1/budgets?production_id="))
+  | .value.budgets[]?.id' "$work/pairs.jsonl" | sort -u)
+[[ -n "$budget_ids" ]] || { echo "FATAL: no budgets across any production — is the seed loaded?"; exit 1; }
 
 for id in $budget_ids; do
   record "GET /api/v1/budgets/$id" "$BUDGET" "/api/v1/budgets/$id"
