@@ -1,6 +1,6 @@
 # Authorization policy table — all 127 RPCs (#139)
 
-**Issue:** #139. **Status:** proposal — §5 needs rulings before any slice starts.
+**Issue:** #139. **Status:** D1, D3, D8, D10 ruled 2026-07-22 — slices A and C are unblocked. D2, D4, D5, D6, D7, D9 remain open and block only their own slices.
 **Measured against:** `main` @ `1147f4c` (after #138 authentication, #144 tenant boundary, #146 role-assignment, #149 ledger).
 
 Issue #139's step 1 says the policy table comes first, because "the code has no opinion to read off — this is a decision, not a discovery." This document is that decision, proposed. Every row has a default so the table is complete; the rows that are genuinely contested are collected in §5 and should be ruled on rather than absorbed.
@@ -228,29 +228,37 @@ Legend — **AUTH** = any authenticated tenant member; **PUBLIC** = no caller by
 
 `report:read` is granted to `super_admin`, `manager`, `coordinator` and `accountant` and checked nowhere. `services/reporting/consumer.go` is NATS-driven against the service layer, so gating the handlers is safe.
 
-## 5. Decisions required
+## 5. Decisions
 
-Nothing should be implemented until these are ruled on. Each has a recommendation; the recommendation is what the table above already applies.
+**D1, D3, D8 and D10 were ruled on 2026-07-22; the rulings are recorded inline below.** D2, D4, D5, D6, D7 and D9 remain open but block only their own slices, not the sequence.
 
-**D1 — `ChangePassword` is a live defect, not a policy question.** `services/iam/handler.go:216` takes `user_id` from the **request body**, never calls `CallerFromContext`, and `repo.GetUserByID` has no tenant filter. Any authenticated user can change any user's password in any tenant, given the old password. Same defect class as #149's `posted_by`. **Recommend:** self-only from the token; a `user:manage` admin reset is a separate RPC if wanted. Should this jump ahead of the whole table as its own fix?
+Each has a recommendation; the recommendation is what the table above already applies.
+
+**D1 — `ChangePassword` is a live defect, not a policy question.** `services/iam/handler.go:216` takes `user_id` from the **request body**, never calls `CallerFromContext`, and `repo.GetUserByID` has no tenant filter. Any authenticated user can change any user's password in any tenant, given the old password. Same defect class as #149's `posted_by`. **RULED 2026-07-22: fix it first, standalone — slice A.** Self-only, subject taken from the token via the #149 pattern. An admin reset, if wanted, is a separate RPC with `user:manage`. This does not wait behind the remaining decisions.
 
 **D2 — may a user update their own profile?** If `UpdateUser` is `user:manage`-only, a user cannot change their own display name without an admin. **Recommend:** `user:manage` OR self, with the self path restricted to non-privileged fields.
 
-**D3 — R3, the seven vertical-config lookups.** AUTH, or fold each into the matching `:read`? **Recommend:** AUTH. They are configuration every form needs; gating them buys no confidentiality.
+**D3 — R3, the seven vertical-config lookups.** AUTH, or fold each into the matching `:read`? **RULED 2026-07-22: AUTH.** Rule R3 stands. They are configuration every form needs; gating them buys no confidentiality and guarantees UI breakage.
 
 **D4 — `SetTenantAddress`: tenant self-service or platform-admin?** It feeds #61's country-driven currency. **Recommend:** `user:manage`, so a tenant admin completes their own onboarding.
 
 **D5 — `DeactivateUser` is `RolePlatformAdmin` while `AssignRole` is `user:manage`.** So a tenant admin can strip a user's roles but not deactivate them, and deactivating requires Thittam staff. **Recommend:** `user:manage`. One of the two is wrong; pick which.
 
-**D6 — `CheckPlanLimit`.** Called to enforce quotas. If only services call it, MACHINE (R7); if the UI shows "you are at 8/10 seats", it also needs `billing:read`. **Recommend:** confirm the caller first — the answer changes the row.
+**D6 — `CheckPlanLimit`.** Called to enforce quotas. If only services call it, MACHINE (R7); if the UI shows "you are at 8/10 seats", it also needs `billing:read`. **Recommend:** confirm the caller first — the answer changes the row. (Open.)
 
 **D7 — `inventory:retire` ☠ is granted to `inventory_manager` and no RPC retires an asset.** Either the permission is dead vocabulary to delete, or `RetireAsset` is a missing RPC. **Recommend:** delete the string; add it back with the RPC.
 
-**D8 — impersonation (#139 §5).** `StartImpersonation` writes a session row and an audit entry but mints no token and sets no `act` claim, so subsequent requests carry the admin's own identity. The audit log therefore records something the request path knows nothing about. **Recommend:** delete the feature until act-as is implemented — a misleading audit trail is worse than no feature.
+**D8 — impersonation (#139 §5).** `StartImpersonation` writes a session row and an audit entry but mints no token and sets no `act` claim, so subsequent requests carry the admin's own identity. The audit log therefore records something the request path knows nothing about. **RULED 2026-07-22: remove the feature — but NOT by deleting the RPCs.**
+
+`proto/buf.yaml` enables the `FILE` breaking category and CI runs `buf breaking proto --against '.git#branch=main,subdir=proto'`. Removing an RPC from a service is breaking under `FILE`, so deleting `StartImpersonation`/`EndImpersonation` from the proto fails CI.
+
+The harm is the misleading audit trail, not the RPC's existence. So: strip the implementation and the `impersonation_session` write, return `codes.Unimplemented`, and mark both RPCs `// Deprecated:` by comment — the same treatment #144 and #149 gave the fields they retired. The audit log stops recording sessions the request path knows nothing about, the proto stays compatible, and the RPCs can be reclaimed if act-as is ever implemented properly.
 
 **D9 — notification scope.** `ListNotifications` is tenant-scoped but not user-scoped: any member lists every notification in the tenant, contents included. **Recommend:** self-scoped from the token, with a `notification:admin` path for tenant-wide views.
 
 **D10 — do the new permissions need a migration?** `seedSystemRoles` runs only at tenant creation, so new strings reach **new tenants only**. #149 avoided this by inventing no role. Eight new permissions across existing roles need a backfill across every `tenant_<uuid>` schema, or existing tenants silently lose access the moment the gate lands. **This is the single largest hidden cost in #139 and it is not in the issue.**
+
+**RULED 2026-07-22: design the backfill once, in slice D, and reuse it in E/F/G.** Slice D (`expense:read`) is the first slice needing new vocabulary, so it carries the cost of building a per-tenant-schema permission backfill that the later slices reuse. One cross-schema loop to get right instead of four.
 
 ## 6. Slice mapping
 
