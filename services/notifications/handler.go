@@ -21,12 +21,14 @@ import (
 // handler methods.
 type Handler struct {
 	notificationsv1.UnimplementedNotificationsServiceServer
-	svc *Service
+	svc  *Service
+	perm interceptor.PermissionChecker
 }
 
-// NewHandler creates a Handler wrapping the given Service.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+// NewHandler creates a Handler. perm is required; cmd/notifications refuses to
+// start without a permission checker, so it is never nil in production.
+func NewHandler(svc *Service, perm interceptor.PermissionChecker) *Handler {
+	return &Handler{svc: svc, perm: perm}
 }
 
 // Compile-time interface check.
@@ -35,6 +37,9 @@ var _ notificationsv1.NotificationsServiceServer = (*Handler)(nil)
 // --- Send / Dispatch ---
 
 func (h *Handler) Send(ctx context.Context, req *notificationsv1.SendRequest) (*notificationsv1.Notification, error) {
+	if err := interceptor.RequirePermission(ctx, h.perm, "notifications:manage"); err != nil {
+		return nil, err
+	}
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
 		return nil, err
@@ -59,6 +64,9 @@ func (h *Handler) Send(ctx context.Context, req *notificationsv1.SendRequest) (*
 }
 
 func (h *Handler) Dispatch(ctx context.Context, req *notificationsv1.DispatchRequest) (*notificationsv1.DispatchResponse, error) {
+	if err := interceptor.RequirePermission(ctx, h.perm, "notifications:manage"); err != nil {
+		return nil, err
+	}
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
 		return nil, err
@@ -82,6 +90,9 @@ func (h *Handler) Dispatch(ctx context.Context, req *notificationsv1.DispatchReq
 // --- Templates ---
 
 func (h *Handler) CreateTemplate(ctx context.Context, req *notificationsv1.CreateTemplateRequest) (*notificationsv1.Template, error) {
+	if err := interceptor.RequirePermission(ctx, h.perm, "notifications:manage"); err != nil {
+		return nil, err
+	}
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
 		return nil, err
@@ -101,6 +112,9 @@ func (h *Handler) CreateTemplate(ctx context.Context, req *notificationsv1.Creat
 }
 
 func (h *Handler) UpdateTemplate(ctx context.Context, req *notificationsv1.UpdateTemplateRequest) (*notificationsv1.Template, error) {
+	if err := interceptor.RequirePermission(ctx, h.perm, "notifications:manage"); err != nil {
+		return nil, err
+	}
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
 		return nil, err
@@ -128,6 +142,9 @@ func (h *Handler) UpdateTemplate(ctx context.Context, req *notificationsv1.Updat
 }
 
 func (h *Handler) GetTemplate(ctx context.Context, req *notificationsv1.GetTemplateRequest) (*notificationsv1.Template, error) {
+	if err := interceptor.RequirePermission(ctx, h.perm, "notifications:read"); err != nil {
+		return nil, err
+	}
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
 		return nil, err
@@ -145,6 +162,9 @@ func (h *Handler) GetTemplate(ctx context.Context, req *notificationsv1.GetTempl
 }
 
 func (h *Handler) ListTemplates(ctx context.Context, req *notificationsv1.ListTemplatesRequest) (*notificationsv1.ListTemplatesResponse, error) {
+	if err := interceptor.RequirePermission(ctx, h.perm, "notifications:read"); err != nil {
+		return nil, err
+	}
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
 		return nil, err

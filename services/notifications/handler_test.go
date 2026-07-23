@@ -14,11 +14,25 @@ import (
 )
 
 func newHandler() *Handler {
-	return NewHandler(NewService(&mockRepo{}, map[string]ChannelSender{}))
+	return NewHandler(NewService(&mockRepo{}, map[string]ChannelSender{}), allowAllPerm{})
 }
 
 func newHandlerWithRepo(r *mockRepo) *Handler {
-	return NewHandler(NewService(r, map[string]ChannelSender{}))
+	return NewHandler(NewService(r, map[string]ChannelSender{}), allowAllPerm{})
+}
+
+// allowAllPerm is a PermissionChecker double that grants every check.
+type allowAllPerm struct{}
+
+func (allowAllPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	return true, nil
+}
+
+// denyPerm is a PermissionChecker double that denies every check.
+type denyPerm struct{}
+
+func (denyPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	return false, nil
 }
 
 // callerCtx returns a context carrying a verified caller in tenant tid, as
@@ -60,7 +74,7 @@ func TestHandler_Send_Success(t *testing.T) {
 				IsActive:     true,
 			}, nil
 		},
-	}, map[string]ChannelSender{}))
+	}, map[string]ChannelSender{}), allowAllPerm{})
 
 	_, err := h.Send(callerCtx(tenantID), &notificationsv1.SendRequest{
 		TenantId:         tenantID.String(),
@@ -164,7 +178,7 @@ func TestHandler_UpdateTemplate_Success(t *testing.T) {
 		getTemplateFn: func(_ context.Context, tid, id uuid.UUID) (*Template, error) {
 			return &Template{ID: id, TenantID: tid, EventType: "expense.approved", Channel: "email", IsActive: true}, nil
 		},
-	}, map[string]ChannelSender{}))
+	}, map[string]ChannelSender{}), allowAllPerm{})
 
 	resp, err := h.UpdateTemplate(callerCtx(tenantID), &notificationsv1.UpdateTemplateRequest{
 		TenantId:     tenantID.String(),
@@ -204,7 +218,7 @@ func TestHandler_GetTemplate_Success(t *testing.T) {
 		getTemplateFn: func(_ context.Context, tid, id uuid.UUID) (*Template, error) {
 			return &Template{ID: id, TenantID: tid, EventType: "budget.approved", Channel: "sms"}, nil
 		},
-	}, map[string]ChannelSender{}))
+	}, map[string]ChannelSender{}), allowAllPerm{})
 
 	resp, err := h.GetTemplate(callerCtx(tenantID), &notificationsv1.GetTemplateRequest{
 		TenantId: tenantID.String(),
@@ -238,7 +252,7 @@ func TestHandler_GetTemplate_NotFound(t *testing.T) {
 		getTemplateFn: func(_ context.Context, _, _ uuid.UUID) (*Template, error) {
 			return nil, ErrTemplateNotFound
 		},
-	}, map[string]ChannelSender{}))
+	}, map[string]ChannelSender{}), allowAllPerm{})
 
 	_, err := h.GetTemplate(callerCtx(tid), &notificationsv1.GetTemplateRequest{
 		TenantId: tid.String(), Id: uuid.New().String(),
@@ -255,7 +269,7 @@ func TestHandler_ListTemplates_Success(t *testing.T) {
 		listTemplatesFn: func(_ context.Context, _ uuid.UUID) ([]Template, error) {
 			return []Template{{ID: uuid.New(), TenantID: tenantID, EventType: "x", Channel: "email"}}, nil
 		},
-	}, map[string]ChannelSender{}))
+	}, map[string]ChannelSender{}), allowAllPerm{})
 
 	resp, err := h.ListTemplates(callerCtx(tenantID), &notificationsv1.ListTemplatesRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
@@ -278,7 +292,7 @@ func TestHandler_GetNotification_Success(t *testing.T) {
 		getNotificationFn: func(_ context.Context, tid, _, id uuid.UUID) (*Notification, error) {
 			return &Notification{ID: id, TenantID: tid, Channel: "email", Status: "sent"}, nil
 		},
-	}, map[string]ChannelSender{}))
+	}, map[string]ChannelSender{}), allowAllPerm{})
 
 	resp, err := h.GetNotification(callerCtx(tenantID), &notificationsv1.GetNotificationRequest{
 		TenantId: tenantID.String(),
@@ -332,7 +346,7 @@ func TestHandler_ListNotifications_Success(t *testing.T) {
 		listNotificationsFn: func(_ context.Context, _, _ uuid.UUID, _, _ string, _, _ int) ([]Notification, error) {
 			return []Notification{{ID: uuid.New(), TenantID: tenantID, Channel: "email", Status: "sent"}}, nil
 		},
-	}, map[string]ChannelSender{}))
+	}, map[string]ChannelSender{}), allowAllPerm{})
 
 	resp, err := h.ListNotifications(callerCtx(tenantID), &notificationsv1.ListNotificationsRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
@@ -397,6 +411,76 @@ func TestHandler_ListNotifications_UsesTokenTenant(t *testing.T) {
 	_, err := h.ListNotifications(callerCtx(tid), &notificationsv1.ListNotificationsRequest{})
 	require.NoError(t, err)
 	assert.Equal(t, tid, gotTenant, "the repository must receive the token's tenant")
+}
+
+// --- permission gates ---
+
+func TestHandler_Templates_Denied(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := NewHandler(NewService(&mockRepo{}, map[string]ChannelSender{}), denyPerm{})
+	_, err := h.ListTemplates(callerCtx(tid), &notificationsv1.ListTemplatesRequest{TenantId: tid.String()})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	_, err = h.Send(callerCtx(tid), &notificationsv1.SendRequest{TenantId: tid.String(), RecipientId: uuid.New().String(), Channel: "email", EventType: "x"})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+// TestHandler_AllGatedRPCs_Denied is the complete #139 slice G grant-matrix
+// check on the code side: every one of the six config/send RPCs must reject
+// a denied caller with PermissionDenied, and it must do so before touching
+// the repository (mockRepo has no functions set, so a repository call would
+// panic on a nil func field, not just return a wrong value).
+func TestHandler_AllGatedRPCs_Denied(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := NewHandler(NewService(&mockRepo{}, map[string]ChannelSender{}), denyPerm{})
+
+	cases := []struct {
+		name string
+		call func() error
+	}{
+		{"CreateTemplate", func() error {
+			_, err := h.CreateTemplate(callerCtx(tid), &notificationsv1.CreateTemplateRequest{TenantId: tid.String()})
+			return err
+		}},
+		{"UpdateTemplate", func() error {
+			_, err := h.UpdateTemplate(callerCtx(tid), &notificationsv1.UpdateTemplateRequest{TenantId: tid.String(), Id: uuid.New().String()})
+			return err
+		}},
+		{"Send", func() error {
+			_, err := h.Send(callerCtx(tid), &notificationsv1.SendRequest{TenantId: tid.String(), RecipientId: uuid.New().String(), Channel: "email", EventType: "x"})
+			return err
+		}},
+		{"Dispatch", func() error {
+			_, err := h.Dispatch(callerCtx(tid), &notificationsv1.DispatchRequest{TenantId: tid.String(), RecipientId: uuid.New().String(), EventType: "x"})
+			return err
+		}},
+		{"GetTemplate", func() error {
+			_, err := h.GetTemplate(callerCtx(tid), &notificationsv1.GetTemplateRequest{TenantId: tid.String(), Id: uuid.New().String()})
+			return err
+		}},
+		{"ListTemplates", func() error {
+			_, err := h.ListTemplates(callerCtx(tid), &notificationsv1.ListTemplatesRequest{TenantId: tid.String()})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		err := tc.call()
+		require.Error(t, err, tc.name)
+		assert.Equal(t, codes.PermissionDenied, status.Code(err), tc.name)
+	}
+}
+
+func TestHandler_Inbox_NotGated(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		listNotificationsFn: func(context.Context, uuid.UUID, uuid.UUID, string, string, int, int) ([]Notification, error) {
+			return nil, nil
+		},
+	}, map[string]ChannelSender{}), denyPerm{})
+	_, err := h.ListNotifications(callerCtx(tid), &notificationsv1.ListNotificationsRequest{TenantId: tid.String()})
+	require.NoError(t, err) // denyPerm must not block a self-scoped read
 }
 
 // --- grpcErr ---

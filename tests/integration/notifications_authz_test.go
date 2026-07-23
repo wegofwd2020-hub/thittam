@@ -22,8 +22,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
+	notificationsv1 "github.com/wegofwd2020/thittam/gen/notifications/v1"
+	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/testdb"
+	"github.com/wegofwd2020/thittam/services/iam"
+	iamdb "github.com/wegofwd2020/thittam/services/iam/db"
 	"github.com/wegofwd2020/thittam/services/notifications"
 	notificationsdb "github.com/wegofwd2020/thittam/services/notifications/db"
 )
@@ -170,6 +176,194 @@ func countOccurrences(xs []string, want string) int {
 		}
 	}
 	return n
+}
+
+// TestNotifications_GrantMatrix is the #139 slice G grant matrix, exercised
+// against real Postgres-backed IAM and notifications repositories (no
+// doubles): iam.Service.CheckPermission has the exact signature
+// interceptor.PermissionChecker requires, so it can be handed to
+// notifications.NewHandler directly, the same way iamclient.PermissionChecker
+// wraps the gRPC hop in production. This proves the actual permission-lookup
+// SQL (roles/user_roles), not just that the handler calls RequirePermission.
+//
+//   - A role holding neither notifications:read nor notifications:manage is
+//     denied on all six config/send RPCs.
+//   - super_admin and manager (holding both) pass all six.
+//   - The two inbox reads succeed for the caller with neither permission —
+//     they are self-scoped AUTH, not gated on notifications:*.
+func TestNotifications_GrantMatrix(t *testing.T) {
+	pool := testdb.Open(t)
+	ctx := context.Background()
+
+	iamRepo := iamdb.NewPostgres(pool)
+	iamSvc := iam.NewService(iamRepo, nil, nil, nil, nil)
+
+	notifRepo := notificationsdb.NewPostgres(pool)
+	notifSvc := notifications.NewService(notifRepo, map[string]notifications.ChannelSender{})
+	handler := notifications.NewHandler(notifSvc, iamSvc)
+
+	tenantID := seedGrantMatrixTenant(t, pool)
+
+	noneUser := seedGrantMatrixUser(t, pool, tenantID, "member", []string{"production:read"}, false)
+	superAdminUser := seedGrantMatrixUser(t, pool, tenantID, "super_admin", []string{"notifications:read", "notifications:manage"}, true)
+	managerUser := seedGrantMatrixUser(t, pool, tenantID, "manager", []string{"notifications:read", "notifications:manage"}, true)
+
+	callerCtx := func(userID uuid.UUID) context.Context {
+		return interceptor.WithCaller(ctx, interceptor.CallerInfo{
+			UserID:   userID,
+			TenantID: tenantID,
+			Email:    userID.String() + "@grant-matrix.test",
+			Roles:    []string{"member"},
+		})
+	}
+
+	// gatedCalls returns the six config/send RPCs, freshly bound to cctx, so
+	// each subtest gets its own set of unique event_type values (CreateTemplate
+	// is UNIQUE on (tenant_id, event_type, channel)).
+	gatedCalls := func(cctx context.Context, suffix string) []struct {
+		name string
+		call func() error
+	} {
+		return []struct {
+			name string
+			call func() error
+		}{
+			{"CreateTemplate", func() error {
+				_, err := handler.CreateTemplate(cctx, &notificationsv1.CreateTemplateRequest{
+					TenantId: tenantID.String(), EventType: "grant.matrix." + suffix, Channel: "email",
+					Subject: "s", BodyTemplate: "b",
+				})
+				return err
+			}},
+			{"UpdateTemplate", func() error {
+				_, err := handler.UpdateTemplate(cctx, &notificationsv1.UpdateTemplateRequest{
+					TenantId: tenantID.String(), Id: uuid.New().String(), Subject: "s", BodyTemplate: "b",
+				})
+				return err
+			}},
+			{"Send", func() error {
+				_, err := handler.Send(cctx, &notificationsv1.SendRequest{
+					TenantId: tenantID.String(), RecipientId: uuid.New().String(), Channel: "email", EventType: "grant.matrix." + suffix,
+				})
+				return err
+			}},
+			{"Dispatch", func() error {
+				_, err := handler.Dispatch(cctx, &notificationsv1.DispatchRequest{
+					TenantId: tenantID.String(), RecipientId: uuid.New().String(), EventType: "grant.matrix." + suffix,
+				})
+				return err
+			}},
+			{"GetTemplate", func() error {
+				_, err := handler.GetTemplate(cctx, &notificationsv1.GetTemplateRequest{
+					TenantId: tenantID.String(), Id: uuid.New().String(),
+				})
+				return err
+			}},
+			{"ListTemplates", func() error {
+				_, err := handler.ListTemplates(cctx, &notificationsv1.ListTemplatesRequest{TenantId: tenantID.String()})
+				return err
+			}},
+		}
+	}
+
+	t.Run("role holding neither permission is denied on all six", func(t *testing.T) {
+		cctx := callerCtx(noneUser)
+		for _, tc := range gatedCalls(cctx, "none") {
+			err := tc.call()
+			require.Error(t, err, tc.name)
+			assert.Equal(t, codes.PermissionDenied, status.Code(err), tc.name)
+		}
+	})
+
+	for _, tc := range []struct {
+		roleLabel string
+		userID    uuid.UUID
+	}{
+		{"super_admin", superAdminUser},
+		{"manager", managerUser},
+	} {
+		tc := tc
+		t.Run(tc.roleLabel+" passes all six", func(t *testing.T) {
+			cctx := callerCtx(tc.userID)
+			for _, call := range gatedCalls(cctx, tc.roleLabel) {
+				err := call.call()
+				assert.NotEqual(t, codes.PermissionDenied, status.Code(err), call.name)
+			}
+		})
+	}
+
+	t.Run("inbox reads succeed for any authenticated member regardless of notifications:*", func(t *testing.T) {
+		cctx := callerCtx(noneUser)
+
+		_, err := handler.ListNotifications(cctx, &notificationsv1.ListNotificationsRequest{TenantId: tenantID.String()})
+		require.NoError(t, err)
+
+		// The caller's own recipient id has no matching row, so this is
+		// ErrNotificationNotFound (NotFound) — the point is it is never
+		// PermissionDenied, proving the read is ungated.
+		_, err = handler.GetNotification(cctx, &notificationsv1.GetNotificationRequest{
+			TenantId: tenantID.String(), Id: uuid.New().String(),
+		})
+		if err != nil {
+			assert.Equal(t, codes.NotFound, status.Code(err))
+		}
+	})
+}
+
+// seedGrantMatrixTenant inserts a tenant for TestNotifications_GrantMatrix and
+// registers cleanup for it and any notification rows the test writes under it.
+// Deleting the tenant cascades users/roles/user_roles (migrations/iam
+// 002/007/008 ON DELETE CASCADE); notification_templates/notification_log
+// carry no FK to tenants (cross-service, #139 D9 header), so those are
+// deleted explicitly first.
+func seedGrantMatrixTenant(t *testing.T, pool *pgxpool.Pool) uuid.UUID {
+	t.Helper()
+	tenantID := uuid.New()
+	_, err := pool.Exec(context.Background(),
+		`INSERT INTO tenants (id, name, slug, country_code, primary_currency_code)
+		 VALUES ($1, $2, $3, 'IN', 'INR')`,
+		tenantID, "Notifications Grant Matrix "+tenantID.String(), "notif-grant-"+tenantID.String())
+	require.NoError(t, err, "insert tenant")
+	t.Cleanup(func() {
+		ctx := context.Background()
+		_, err := pool.Exec(ctx, `DELETE FROM notification_templates WHERE tenant_id = $1`, tenantID)
+		assert.NoError(t, err, "cleanup: delete notification_templates")
+		_, err = pool.Exec(ctx, `DELETE FROM notification_log WHERE tenant_id = $1`, tenantID)
+		assert.NoError(t, err, "cleanup: delete notification_log")
+		_, err = pool.Exec(ctx, `DELETE FROM tenants WHERE id = $1`, tenantID)
+		assert.NoError(t, err, "cleanup: delete tenant (cascades users/roles/user_roles)")
+	})
+	return tenantID
+}
+
+// seedGrantMatrixUser inserts a user in tenantID holding a single role named
+// roleName with the given permissions, and returns the user's id. isSystem
+// controls whether migration 012's user_roles scope trigger applies to the
+// role — true for the real system role names (super_admin, manager), false
+// for an arbitrary custom role so it is unconstrained by that trigger's
+// tenant-wide-only name list.
+func seedGrantMatrixUser(t *testing.T, pool *pgxpool.Pool, tenantID uuid.UUID, roleName string, permissions []string, isSystem bool) uuid.UUID {
+	t.Helper()
+	ctx := context.Background()
+	userID := uuid.New()
+	roleID := uuid.New()
+
+	_, err := pool.Exec(ctx,
+		`INSERT INTO users (id, tenant_id, email, display_name, password_hash) VALUES ($1, $2, $3, $4, 'x')`,
+		userID, tenantID, userID.String()+"@grant-matrix.test", "Grant Matrix User")
+	require.NoError(t, err, "insert user")
+
+	_, err = pool.Exec(ctx,
+		`INSERT INTO roles (id, tenant_id, name, permissions, is_system) VALUES ($1, $2, $3, $4, $5)`,
+		roleID, tenantID, roleName, permissions, isSystem)
+	require.NoError(t, err, "insert role")
+
+	_, err = pool.Exec(ctx,
+		`INSERT INTO user_roles (user_id, role_id, project_id, assigned_by) VALUES ($1, $2, NULL, $1)`,
+		userID, roleID)
+	require.NoError(t, err, "insert user_role")
+
+	return userID
 }
 
 // insertNotificationLog inserts a notification_log row directly via the pool

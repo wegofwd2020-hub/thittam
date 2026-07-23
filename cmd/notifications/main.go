@@ -21,6 +21,7 @@ import (
 
 	notificationsv1 "github.com/wegofwd2020/thittam/gen/notifications/v1"
 	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/iamclient"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
@@ -75,7 +76,26 @@ func main() {
 	// --- Repository and service ---
 	repo := notificationsdb.NewPostgres(pool)
 	svc := notifications.NewService(repo, senders)
-	handler := notifications.NewHandler(svc)
+
+	// --- IAM permission checker ---
+	// notifications cannot authorize without IAM. #138/#149's convention for the
+	// JWT public key applies here too: a service that cannot enforce its
+	// guarantees does not start.
+	//
+	// iamPerm is the concrete *iamclient.PermissionChecker here, so this is a
+	// plain pointer comparison. Assigning it to an interface field first would
+	// produce a non-nil interface wrapping a nil pointer, and the check would
+	// never fire.
+	iamPerm, closeIAM, err := iamclient.DialFromEnv("notifications")
+	if err != nil {
+		log.Fatalf("notifications: startup: dial IAM: %v", err)
+	}
+	defer func() { _ = closeIAM() }()
+	if iamPerm == nil {
+		log.Fatalf("notifications: startup: %s is not set; notifications cannot authorize without a permission checker", iamclient.EnvAddr)
+	}
+
+	handler := notifications.NewHandler(svc, iamPerm)
 
 	// --- JetStream consumers ---
 	// Two durable consumers provide at-least-once delivery with DLQ fallback:
