@@ -15,12 +15,16 @@ import (
 // Handler implements documentv1.DocumentServiceServer by delegating to Service.
 type Handler struct {
 	documentv1.UnimplementedDocumentServiceServer
-	svc *Service
+	svc  *Service
+	perm interceptor.PermissionChecker
 }
 
-// NewHandler creates a document handler.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+// NewHandler creates a document handler. perm is required, not optional:
+// forgetting it is a build error, and cmd/document refuses to start when the
+// checker is nil. document dials iam over gRPC (the reporting/ledger pattern),
+// so it uses interceptor.RequirePermission — not iam's in-process helper.
+func NewHandler(svc *Service, perm interceptor.PermissionChecker) *Handler {
+	return &Handler{svc: svc, perm: perm}
 }
 
 // --- Upload lifecycle ---
@@ -28,6 +32,9 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) InitiateUpload(ctx context.Context, req *documentv1.InitiateUploadRequest) (*documentv1.UploadURL, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:write"); err != nil {
 		return nil, err
 	}
 	uploadedBy, err := uuid.Parse(req.GetUploadedBy())
@@ -72,6 +79,9 @@ func (h *Handler) ConfirmUpload(ctx context.Context, req *documentv1.ConfirmUplo
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:write"); err != nil {
+		return nil, err
+	}
 	docID, err := uuid.Parse(req.GetDocumentId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid document_id")
@@ -91,6 +101,9 @@ func (h *Handler) GetDocument(ctx context.Context, req *documentv1.GetDocumentRe
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:read"); err != nil {
+		return nil, err
+	}
 	docID, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
@@ -106,6 +119,9 @@ func (h *Handler) GetDocument(ctx context.Context, req *documentv1.GetDocumentRe
 func (h *Handler) ListDocuments(ctx context.Context, req *documentv1.ListDocumentsRequest) (*documentv1.ListDocumentsResponse, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:read"); err != nil {
 		return nil, err
 	}
 
@@ -142,6 +158,9 @@ func (h *Handler) DeleteDocument(ctx context.Context, req *documentv1.DeleteDocu
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:delete"); err != nil {
+		return nil, err
+	}
 	docID, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
@@ -156,6 +175,9 @@ func (h *Handler) DeleteDocument(ctx context.Context, req *documentv1.DeleteDocu
 func (h *Handler) GetDownloadURL(ctx context.Context, req *documentv1.GetDownloadURLRequest) (*documentv1.DownloadURL, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:read"); err != nil {
 		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetId())
@@ -176,6 +198,9 @@ func (h *Handler) GetDownloadURL(ctx context.Context, req *documentv1.GetDownloa
 func (h *Handler) MoveDocument(ctx context.Context, req *documentv1.MoveDocumentRequest) (*documentv1.Document, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:write"); err != nil {
 		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetDocumentId())
@@ -199,6 +224,9 @@ func (h *Handler) MoveDocument(ctx context.Context, req *documentv1.MoveDocument
 func (h *Handler) CreateVersion(ctx context.Context, req *documentv1.CreateVersionRequest) (*documentv1.UploadURL, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:write"); err != nil {
 		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetDocumentId())
@@ -226,6 +254,9 @@ func (h *Handler) ConfirmVersion(ctx context.Context, req *documentv1.ConfirmVer
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:write"); err != nil {
+		return nil, err
+	}
 	docID, err := uuid.Parse(req.GetDocumentId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid document_id")
@@ -245,6 +276,9 @@ func (h *Handler) ConfirmVersion(ctx context.Context, req *documentv1.ConfirmVer
 func (h *Handler) ListVersions(ctx context.Context, req *documentv1.ListVersionsRequest) (*documentv1.ListVersionsResponse, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:read"); err != nil {
 		return nil, err
 	}
 	docID, err := uuid.Parse(req.GetDocumentId())
@@ -271,6 +305,9 @@ func (h *Handler) RestoreVersion(ctx context.Context, req *documentv1.RestoreVer
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:delete"); err != nil {
+		return nil, err
+	}
 	docID, err := uuid.Parse(req.GetDocumentId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid document_id")
@@ -288,6 +325,9 @@ func (h *Handler) RestoreVersion(ctx context.Context, req *documentv1.RestoreVer
 func (h *Handler) CreateFolder(ctx context.Context, req *documentv1.CreateFolderRequest) (*documentv1.Folder, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:write"); err != nil {
 		return nil, err
 	}
 	createdBy, err := uuid.Parse(req.GetCreatedBy())
@@ -325,6 +365,9 @@ func (h *Handler) CreateFolder(ctx context.Context, req *documentv1.CreateFolder
 func (h *Handler) ListFolders(ctx context.Context, req *documentv1.ListFoldersRequest) (*documentv1.ListFoldersResponse, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "document:read"); err != nil {
 		return nil, err
 	}
 

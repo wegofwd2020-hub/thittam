@@ -13,14 +13,37 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// allowAllPerm grants every permission; authz semantics are covered by
+// pkg/interceptor's own tests.
+type allowAllPerm struct{}
+
+func (allowAllPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	return true, nil
+}
+
+// denyPerm denies every permission, so a denial test proves the gate fires
+// before the repository is reached.
+type denyPerm struct{}
+
+func (denyPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	return false, nil
+}
+
 func newHandler() *Handler {
-	return NewHandler(newTestService(&mockRepo{}))
+	return NewHandler(newTestService(&mockRepo{}), allowAllPerm{})
 }
 
 // newHandlerWithRepo builds a Handler backed by the given mock repo — used by
 // tests that need to assert the repository is (or is not) reached.
 func newHandlerWithRepo(r *mockRepo) *Handler {
-	return NewHandler(newTestService(r))
+	return NewHandler(newTestService(r), allowAllPerm{})
+}
+
+// newHandlerWithRepoDeny builds a Handler backed by the given mock repo whose
+// permission checker denies every check — used by the denial tests to prove
+// the gate fires before the repository is reached.
+func newHandlerWithRepoDeny(r *mockRepo) *Handler {
+	return NewHandler(newTestService(r), denyPerm{})
 }
 
 // callerCtx returns a context carrying a verified caller in tenant tid, as
@@ -146,7 +169,7 @@ func TestHandler_GetDocument_Success(t *testing.T) {
 		getDocumentFn: func(_ context.Context, tid, id uuid.UUID) (*Document, error) {
 			return &Document{ID: id, TenantID: tid, Name: "budget.pdf", SizeBytes: 5000, CurrentVersion: 1, UploadedBy: fixedUserID}, nil
 		},
-	}))
+	}), allowAllPerm{})
 
 	resp, err := h.GetDocument(callerCtx(tenantID), &documentv1.GetDocumentRequest{
 		TenantId: tenantID.String(),
@@ -181,7 +204,7 @@ func TestHandler_GetDocument_NotFound(t *testing.T) {
 		getDocumentFn: func(_ context.Context, _, _ uuid.UUID) (*Document, error) {
 			return nil, ErrDocumentNotFound
 		},
-	}))
+	}), allowAllPerm{})
 	_, err := h.GetDocument(callerCtx(tid), &documentv1.GetDocumentRequest{
 		TenantId: tid.String(), Id: uuid.New().String(),
 	})
@@ -197,7 +220,7 @@ func TestHandler_ListDocuments_Success(t *testing.T) {
 		listDocumentsFn: func(_ context.Context, _ uuid.UUID, _, _ *uuid.UUID, _, _ int) ([]Document, error) {
 			return []Document{{ID: uuid.New(), TenantID: tenantID, Name: "script.pdf", CurrentVersion: 1, UploadedBy: fixedUserID}}, nil
 		},
-	}))
+	}), allowAllPerm{})
 
 	resp, err := h.ListDocuments(callerCtx(tenantID), &documentv1.ListDocumentsRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
@@ -299,7 +322,7 @@ func TestHandler_MoveDocument_Success(t *testing.T) {
 		getDocumentFn: func(_ context.Context, tid, id uuid.UUID) (*Document, error) {
 			return &Document{ID: id, TenantID: tid, Name: "file.pdf", SizeBytes: 100, CurrentVersion: 1, UploadedBy: fixedUserID}, nil
 		},
-	}))
+	}), allowAllPerm{})
 
 	resp, err := h.MoveDocument(callerCtx(tid), &documentv1.MoveDocumentRequest{
 		TenantId:   tid.String(),
@@ -428,7 +451,7 @@ func TestHandler_ListVersions_Success(t *testing.T) {
 		listVersionsFn: func(_ context.Context, id uuid.UUID, _, _ int) ([]DocumentVersion, error) {
 			return []DocumentVersion{{ID: uuid.New(), DocumentID: id, Version: 1}}, nil
 		},
-	}))
+	}), allowAllPerm{})
 
 	resp, err := h.ListVersions(callerCtx(tid), &documentv1.ListVersionsRequest{
 		TenantId:   tid.String(),
@@ -560,7 +583,7 @@ func TestHandler_ListFolders_Success(t *testing.T) {
 		listFoldersFn: func(_ context.Context, _ uuid.UUID, _ *uuid.UUID, _, _ int) ([]Folder, error) {
 			return []Folder{{ID: uuid.New(), TenantID: tenantID, Name: "Scripts"}}, nil
 		},
-	}))
+	}), allowAllPerm{})
 
 	resp, err := h.ListFolders(callerCtx(tenantID), &documentv1.ListFoldersRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
@@ -622,6 +645,241 @@ func TestHandler_ListDocuments_UsesTokenTenant(t *testing.T) {
 	_, err := h.ListDocuments(callerCtx(tid), &documentv1.ListDocumentsRequest{})
 	require.NoError(t, err)
 	assert.Equal(t, tid, gotTenant, "the repository must receive the token's tenant")
+}
+
+// --- Authorization denial (#139) ---
+//
+// One test per RPC. Each installs t.Fatal on the first repository fn its
+// happy path reaches when only that field is overridden (every other field
+// on mockRepo falls back to its zero-error default). A PASS here before the
+// gates are inserted (Step 6) would mean the tripwire is unreachable and the
+// test proves nothing; a PASS after the gates are inserted (Step 8) is the
+// intended outcome — the permission check must short-circuit before the
+// repository is ever touched.
+
+func TestHandler_GetDocument_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		getDocumentFn: func(_ context.Context, _, _ uuid.UUID) (*Document, error) {
+			t.Fatal("repository reached: GetDocument must deny before querying")
+			return nil, nil
+		},
+	})
+
+	_, err := h.GetDocument(callerCtx(uuid.New()), &documentv1.GetDocumentRequest{
+		Id: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListDocuments_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		listDocumentsFn: func(_ context.Context, _ uuid.UUID, _, _ *uuid.UUID, _, _ int) ([]Document, error) {
+			t.Fatal("repository reached: ListDocuments must deny before querying")
+			return nil, nil
+		},
+	})
+
+	_, err := h.ListDocuments(callerCtx(uuid.New()), &documentv1.ListDocumentsRequest{})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_GetDownloadURL_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		getDocumentFn: func(_ context.Context, _, _ uuid.UUID) (*Document, error) {
+			t.Fatal("repository reached: GetDownloadURL must deny before querying (calls GetDocument first)")
+			return nil, nil
+		},
+	})
+
+	_, err := h.GetDownloadURL(callerCtx(uuid.New()), &documentv1.GetDownloadURLRequest{
+		Id: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListVersions_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		listVersionsFn: func(_ context.Context, _ uuid.UUID, _, _ int) ([]DocumentVersion, error) {
+			t.Fatal("repository reached: ListVersions must deny before querying")
+			return nil, nil
+		},
+	})
+
+	_, err := h.ListVersions(callerCtx(uuid.New()), &documentv1.ListVersionsRequest{
+		DocumentId: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListFolders_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		listFoldersFn: func(_ context.Context, _ uuid.UUID, _ *uuid.UUID, _, _ int) ([]Folder, error) {
+			t.Fatal("repository reached: ListFolders must deny before querying")
+			return nil, nil
+		},
+	})
+
+	_, err := h.ListFolders(callerCtx(uuid.New()), &documentv1.ListFoldersRequest{})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_InitiateUpload_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		createDocumentFn: func(_ context.Context, _ *Document) error {
+			t.Fatal("repository reached: InitiateUpload must deny before creating a record")
+			return nil
+		},
+	})
+
+	_, err := h.InitiateUpload(callerCtx(uuid.New()), &documentv1.InitiateUploadRequest{
+		Name:       "script.pdf",
+		MimeType:   "application/pdf",
+		UploadedBy: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ConfirmUpload_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		getDocumentFn: func(_ context.Context, _, _ uuid.UUID) (*Document, error) {
+			t.Fatal("repository reached: ConfirmUpload must deny before querying")
+			return nil, nil
+		},
+	})
+
+	_, err := h.ConfirmUpload(callerCtx(uuid.New()), &documentv1.ConfirmUploadRequest{
+		DocumentId: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_MoveDocument_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		getFolderFn: func(_ context.Context, _, _ uuid.UUID) (*Folder, error) {
+			t.Fatal("repository reached: MoveDocument must deny before querying the target folder")
+			return nil, nil
+		},
+	})
+
+	_, err := h.MoveDocument(callerCtx(uuid.New()), &documentv1.MoveDocumentRequest{
+		DocumentId: uuid.New().String(),
+		FolderId:   uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_CreateVersion_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		getDocumentFn: func(_ context.Context, _, _ uuid.UUID) (*Document, error) {
+			t.Fatal("repository reached: CreateVersion must deny before querying (calls GetDocument first)")
+			return nil, nil
+		},
+	})
+
+	_, err := h.CreateVersion(callerCtx(uuid.New()), &documentv1.CreateVersionRequest{
+		DocumentId: uuid.New().String(),
+		UploadedBy: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ConfirmVersion_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		createVersionFn: func(_ context.Context, _ *DocumentVersion) error {
+			t.Fatal("repository reached: ConfirmVersion must deny before creating a version record")
+			return nil
+		},
+	})
+
+	_, err := h.ConfirmVersion(callerCtx(uuid.New()), &documentv1.ConfirmVersionRequest{
+		DocumentId: uuid.New().String(),
+		Version:    2,
+		UploadedBy: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_CreateFolder_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		createFolderFn: func(_ context.Context, _ *Folder) error {
+			t.Fatal("repository reached: CreateFolder must deny before creating a record")
+			return nil
+		},
+	})
+
+	_, err := h.CreateFolder(callerCtx(uuid.New()), &documentv1.CreateFolderRequest{
+		Name:      "Scripts",
+		CreatedBy: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_DeleteDocument_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		getDocumentFn: func(_ context.Context, _, _ uuid.UUID) (*Document, error) {
+			t.Fatal("repository reached: DeleteDocument must deny before querying")
+			return nil, nil
+		},
+	})
+
+	_, err := h.DeleteDocument(callerCtx(uuid.New()), &documentv1.DeleteDocumentRequest{
+		Id: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_RestoreVersion_Denied(t *testing.T) {
+	t.Parallel()
+	h := newHandlerWithRepoDeny(&mockRepo{
+		getDocumentFn: func(_ context.Context, _, _ uuid.UUID) (*Document, error) {
+			t.Fatal("repository reached: RestoreVersion must deny before querying (calls GetDocument first)")
+			return nil, nil
+		},
+	})
+
+	_, err := h.RestoreVersion(callerCtx(uuid.New()), &documentv1.RestoreVersionRequest{
+		DocumentId: uuid.New().String(),
+		Version:    2,
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 // --- grpcErr ---
