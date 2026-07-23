@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-07-22T05:24:46+00:00",
+  "generated": "2026-07-23T05:30:34+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -835,8 +835,8 @@
     {
       "id": "#139",
       "name": "security(platform): ~100 RPCs enforce no authorization; iam AssignRole is a self-promotion primitive",
-      "status": "pending",
-      "commits": 0
+      "status": "in-progress",
+      "commits": 10
     },
     {
       "id": "#140",
@@ -895,6 +895,60 @@
     {
       "id": "#149",
       "name": "security(ledger): 12 accounting RPCs enforce no authorization, and three take their actor from the request body",
+      "status": "done",
+      "commits": 6
+    },
+    {
+      "id": "#150",
+      "name": "Vulnerabilities detected in dependencies (2026-07-22)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#151",
+      "name": "security(ledger): accounting RPCs require authority, and the actor comes from the token (#149)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#152",
+      "name": "fix(deps): x/text v0.39.0 for GO-2026-5970, and fail the nightly scan on an open CVE (#150)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#153",
+      "name": "docs(security): authorization policy table for all 127 RPCs (#139)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#154",
+      "name": "security(iam): changing a password revokes no sessions; a stolen refresh token survives it",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#155",
+      "name": "security(iam): ChangePassword takes its subject from the token, not the request body (#139)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#156",
+      "name": "security(iam): StartImpersonation takes its actor from the request body and writes it to the audit log",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#157",
+      "name": "security(project): phase and crew RPCs have no tenant filter \u2014 cross-tenant read and write by id",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#158",
+      "name": "security(project/budget/reporting): gate read RPCs on <resource>:read; reporting fails closed (#139)",
       "status": "pending",
       "commits": 0
     }
