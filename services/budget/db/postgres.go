@@ -16,13 +16,12 @@ import (
 
 // Postgres implements budget.Repository backed by PostgreSQL.
 type Postgres struct {
-	q  *Queries
-	db *pgxpool.Pool
+	q *Queries
 }
 
 // NewPostgres creates a Postgres-backed budget repository.
 func NewPostgres(db *pgxpool.Pool) *Postgres {
-	return &Postgres{q: New(db), db: db}
+	return &Postgres{q: New(db)}
 }
 
 // Compile-time interface check.
