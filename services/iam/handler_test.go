@@ -769,15 +769,75 @@ func TestHandler_GetTenant_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.GetTenant(context.Background(), &iamv1.GetTenantRequest{Id: tenantID.String()})
+	resp, err := h.GetTenant(memberCtx(tenantID), &iamv1.GetTenantRequest{Id: tenantID.String()})
 	require.NoError(t, err)
 	assert.Equal(t, tenantID.String(), resp.GetId())
 }
 
 func TestHandler_GetTenant_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetTenant(context.Background(), &iamv1.GetTenantRequest{Id: "bad"})
+	_, err := newHandler().GetTenant(memberCtx(uuid.New()), &iamv1.GetTenantRequest{Id: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_GetTenant_CrossTenantDenied(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	victimTenant := uuid.New()
+
+	h := newHandlerWithRepo(&mockRepo{
+		getTenantFn: func(_ context.Context, _ uuid.UUID) (*Tenant, error) {
+			t.Fatal("repository reached: GetTenant must refuse a foreign tenant id before querying")
+			return nil, nil
+		},
+	})
+
+	_, err := h.GetTenant(memberCtx(callerTenant), &iamv1.GetTenantRequest{
+		Id: victimTenant.String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_GetTenant_OwnTenantSucceeds(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	var got uuid.UUID
+
+	h := newHandlerWithRepo(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			got = id
+			return &Tenant{ID: id, Name: "Acme", Status: "active"}, nil
+		},
+	})
+
+	out, err := h.GetTenant(memberCtx(callerTenant), &iamv1.GetTenantRequest{
+		Id: callerTenant.String(),
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, callerTenant, got, "must query the caller's own tenant")
+	require.Equal(t, callerTenant.String(), out.GetId())
+}
+
+func TestHandler_GetTenant_EmptyIDUsesCallerTenant(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	var got uuid.UUID
+
+	h := newHandlerWithRepo(&mockRepo{
+		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
+			got = id
+			return &Tenant{ID: id, Name: "Acme", Status: "active"}, nil
+		},
+	})
+
+	// TenantFromRequest falls back to the caller's tenant when the field is empty.
+	_, err := h.GetTenant(memberCtx(callerTenant), &iamv1.GetTenantRequest{Id: ""})
+
+	require.NoError(t, err)
+	require.Equal(t, callerTenant, got)
 }
 
 // --- SuspendTenant ---

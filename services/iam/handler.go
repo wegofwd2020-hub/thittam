@@ -421,11 +421,16 @@ func (h *Handler) SetTenantAddress(ctx context.Context, req *iamv1.SetTenantAddr
 }
 
 func (h *Handler) GetTenant(ctx context.Context, req *iamv1.GetTenantRequest) (*iamv1.Tenant, error) {
-	id, err := uuid.Parse(req.GetId())
+	// The id IS the tenant id: derive it from the caller's verified token rather
+	// than the request body. #144 scoped itself to fields named tenant_id and so
+	// missed this one, leaving any authenticated user able to read any tenant's
+	// record by UUID (#139 slice B). TenantFromRequest returns the caller's tenant
+	// when the field is empty and PermissionDenied when it differs.
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid id")
+		return nil, err
 	}
-	tenant, err := h.svc.GetTenant(ctx, id)
+	tenant, err := h.svc.GetTenant(ctx, tenantID)
 	if err != nil {
 		return nil, grpcError(err)
 	}
