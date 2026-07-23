@@ -39,6 +39,8 @@ Stating this explicitly matters: a reviewer expecting eight code changes should 
 
 iam gates in-process via `h.requireUserManage(ctx)` (`services/iam/handler.go:241`), which calls `h.svc.CheckPermission` against its own repository. The interceptor path would make iam dial itself, and after #138 a nil checker makes it return `Internal` for every gated RPC. The helper already fails closed on all three paths — no caller, lookup error, negative answer. Four RPCs use it today (`AssignRole`, `RevokeRole`, `AssignProjectRole`, `InviteUser`); this slice adds three more.
 
+**Guard order differs between the two groups, deliberately.** In the four pre-existing RPCs the `requireUserManage` call comes *after* the `uuid.Parse` calls on the path's ids (`AssignRole` ~263-282, `RevokeRole` ~290-307, `AssignProjectRole` ~350-373, `InviteUser` ~575-594). The three new gates (`CreateUser`, `UpdateUser`, `SetTenantAddress`) put `requireUserManage` *before* their `uuid.Parse` calls. The new order is the better one — it denies an unauthorized caller without first telling them whether their argument was well-formed — and it is not being changed to match the old four. Aligning the older four to gate-before-parse is a possible follow-up, not done in this slice.
+
 ## 3. `GetTenant` — a cross-tenant read
 
 ```go
@@ -82,14 +84,26 @@ const q = `UPDATE users SET display_name = $2, status = $3 WHERE id = $1 AND ten
 
 `status` is security-critical: `pkg/auth/local.go:84-89` refuses login for `deactivated` and `invited` accounts.
 
-Two consequences, both live:
+**Correction (post-review):** an earlier draft of this section claimed that `status: ""` wiped the column to the empty string and that the login switch then matched neither `deactivated` nor `invited`, letting a deactivated account log in again through an ordinary profile edit. **That chain is unreachable and the claim was wrong.** `migrations/iam/002_create_users.up.sql:11-12` declares:
 
-1. **Explicit escalation.** Any authenticated member can call `UpdateUser` with a colleague's id and `status: "active"`, reactivating an account that `DeactivateUser` — gated on `platform_admin`, the strictest control in the service — had disabled.
-2. **Silent escalation.** A client updating only a display name sends `status: ""`. The column is set to the empty string, which matches neither `deactivated` nor `invited` in the login switch. **A deactivated account becomes loginable through an ordinary profile edit.**
+```sql
+status        TEXT        NOT NULL DEFAULT 'active'
+                          CHECK (status IN ('active', 'invited', 'deactivated')),
+```
+
+and no `ALTER TABLE users` or `DROP CONSTRAINT users_status_check` exists anywhere in `migrations/`, `seeds/` or `infra/`. The pre-fix `UPDATE users SET display_name = $2, status = $3 ...` with `$3 = ''` therefore raised Postgres error `23514 check_violation` — it never wrote an empty string, and the login-switch scenario never happened.
+
+**What the pre-fix code really did:** every `UpdateUser` call that changed only a display name sent `status: ""` and **failed with a constraint violation**, because the old SQL wrote `$3` unconditionally. That is a real functional break — any legitimate display-name edit errored out — and `COALESCE(NULLIF($3, ''), status)` is the correct fix for it. It is also defence-in-depth if the CHECK constraint were ever dropped or the value set changed elsewhere.
+
+**Where the genuine privilege escalation is:** the *ungated* `UpdateUser` let any authenticated member send `status: "active"` — a CHECK-legal value — on a deactivated colleague, undoing `DeactivateUser`, which is gated on `platform_admin`, the strictest control in the service. That escalation is closed by the `user:manage` gate, not by the `NULLIF` change; `NULLIF` alone would still let a gate-holder or (pre-gate) any member flip a colleague back to `active`.
+
+`pkg/auth/local.go:84-89` is a default-allow switch — it rejects only `deactivated` and `invited`, so any value outside that pair falls through to login-allowed. It is the CHECK constraint, not the login switch, that actually prevents an out-of-set value from ever reaching it: the switch's default-allow shape only matters for values Postgres would accept, and `active`/`invited`/`deactivated` is the whole set.
+
+The integration test for this has teeth in both worlds: before the fix it fails at `require.NoError` on the constraint violation from a display-name-only update; after the fix, that same call passes and the stored status is unchanged.
 
 This is the #146 shape: a strict gate rendered decorative by an ungated sibling writing the same column.
 
-**Gating alone does not fix (2).** A legitimate `user:manage` holder editing a display name would still wipe the status. Both halves are needed:
+**Gating alone does not fix the constraint-violation break.** A legitimate `user:manage` holder editing a display name would still hit the CHECK violation. Both halves are needed:
 
 - Add `h.requireUserManage(ctx)` to the handler.
 - Make the write preserve an unspecified status:
@@ -143,7 +157,7 @@ Repair by stubbing `getUserPermissionsFn` to return `[]string{"user:manage"}` �
 
 **If the actual count is not 5, stop and report.** Slice C predicted 3 and got 5; the discrepancy was benign but was only known to be benign because it was investigated rather than absorbed.
 
-**Guard order** is tenant → permission → parse, matching the four RPCs that already use `requireUserManage`. The order is what keeps the three `_InvalidTenantID` tests unchanged, and it is why `_InvalidID` flips.
+**Guard order** for the three new gates is tenant → permission → parse. This does **not** match the four RPCs that already use `requireUserManage` (`AssignRole`, `RevokeRole`, `AssignProjectRole`, `InviteUser`), which parse their ids *before* checking the permission (see §2.2) — the new order is deliberately different and better, denying an unauthorized caller before revealing whether their argument was well-formed. Aligning the older four is a possible follow-up, out of scope here. The tenant → permission → parse order on the new three is what keeps the three `_InvalidTenantID` tests unchanged, and it is why `_InvalidID` flips.
 
 **Coverage** on `services/iam` must not regress. Baseline **87.2%**; the tier floor for iam is 85%.
 
