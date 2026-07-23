@@ -70,8 +70,8 @@ var systemRoles = []struct {
 	{"super_admin", []string{
 		"production:read", "production:write",
 		"budget:read", "budget:write", "budget:approve",
-		"expense:submit", "expense:approve",
-		"inventory:checkout",
+		"expense:read", "expense:submit", "expense:approve",
+		"inventory:read", "inventory:checkout",
 		"report:read",
 		permLedgerRead, permLedgerWrite, permLedgerPost, permLedgerAdmin,
 		permUserManage,
@@ -79,22 +79,22 @@ var systemRoles = []struct {
 	{"manager", []string{
 		"production:read", "production:write",
 		"budget:read", "budget:approve",
-		"expense:approve",
-		"inventory:checkout",
+		"expense:read", "expense:approve",
+		"inventory:read", "inventory:checkout",
 		"report:read",
 		permLedgerRead,
 	}},
 	{"coordinator", []string{
 		"production:read", "production:write",
 		"budget:read", "budget:write",
-		"expense:approve",
-		"inventory:checkout",
+		"expense:read", "expense:approve",
+		"inventory:read", "inventory:checkout",
 		"report:read",
 		permLedgerRead,
 	}},
 	{"accountant", []string{
 		"budget:read",
-		"expense:submit", "expense:approve",
+		"expense:read", "expense:submit", "expense:approve",
 		"report:read",
 		permLedgerRead, permLedgerWrite, permLedgerPost,
 	}},
@@ -110,9 +110,9 @@ var systemRoles = []struct {
 	{"project_supervisor", []string{
 		"production:read",
 		"budget:read",
-		"expense:submit", "expense:approve",
+		"expense:read", "expense:submit", "expense:approve",
 		"resource:manage",
-		"inventory:checkout",
+		"inventory:read", "inventory:checkout",
 	}},
 }
 

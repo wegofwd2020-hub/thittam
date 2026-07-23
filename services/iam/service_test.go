@@ -858,9 +858,9 @@ func TestSystemRoles_ProjectSupervisorPermissions(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"production:read",
 		"budget:read",
-		"expense:submit", "expense:approve",
+		"expense:read", "expense:submit", "expense:approve",
 		"resource:manage",
-		"inventory:checkout",
+		"inventory:read", "inventory:checkout",
 	}, ps)
 }
 
