@@ -75,6 +75,7 @@ var systemRoles = []struct {
 		"report:read",
 		permLedgerRead, permLedgerWrite, permLedgerPost, permLedgerAdmin,
 		permUserManage,
+		"document:read", "document:write", "document:delete",
 	}},
 	{"manager", []string{
 		"production:read", "production:write",
@@ -83,6 +84,7 @@ var systemRoles = []struct {
 		"inventory:read", "inventory:checkout",
 		"report:read",
 		permLedgerRead,
+		"document:read", "document:write", "document:delete",
 	}},
 	{"coordinator", []string{
 		"production:read", "production:write",
@@ -91,19 +93,23 @@ var systemRoles = []struct {
 		"inventory:read", "inventory:checkout",
 		"report:read",
 		permLedgerRead,
+		"document:read", "document:write",
 	}},
 	{"accountant", []string{
 		"budget:read",
 		"expense:read", "expense:submit", "expense:approve",
 		"report:read",
 		permLedgerRead, permLedgerWrite, permLedgerPost,
+		"document:read", "document:write",
 	}},
 	{"member", []string{
 		"production:read",
 		"expense:submit",
+		"document:read",
 	}},
 	{"inventory_manager", []string{
 		"inventory:read", "inventory:write", "inventory:checkout", "inventory:retire",
+		"document:read",
 	}},
 	// project_supervisor permissions are seeded tenant-wide in Phase 1.
 	// Phase 2 (#42) adds project_id scoping when user_roles.project_id lands.
@@ -113,6 +119,7 @@ var systemRoles = []struct {
 		"expense:read", "expense:submit", "expense:approve",
 		"resource:manage",
 		"inventory:read", "inventory:checkout",
+		"document:read", "document:write",
 	}},
 }
 

@@ -844,6 +844,7 @@ func TestSystemRoles_InventoryManagerPermissions(t *testing.T) {
 	}
 	assert.ElementsMatch(t, []string{
 		"inventory:read", "inventory:write", "inventory:checkout", "inventory:retire",
+		"document:read",
 	}, inv.perms)
 }
 
@@ -861,6 +862,7 @@ func TestSystemRoles_ProjectSupervisorPermissions(t *testing.T) {
 		"expense:read", "expense:submit", "expense:approve",
 		"resource:manage",
 		"inventory:read", "inventory:checkout",
+		"document:read", "document:write",
 	}, ps)
 }
 
