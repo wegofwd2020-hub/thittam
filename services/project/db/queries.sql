@@ -58,7 +58,7 @@ ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: ListCrewMembers :many
-SELECT * FROM crew_members WHERE production_id = $1 ORDER BY name ASC LIMIT $2 OFFSET $3;
+SELECT * FROM crew_members WHERE production_id = $1 AND tenant_id = $2 ORDER BY name ASC LIMIT $3 OFFSET $4;
 
 -- name: RemoveCrewMember :exec
-DELETE FROM crew_members WHERE id = $1;
+DELETE FROM crew_members WHERE id = $1 AND tenant_id = $2;

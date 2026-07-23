@@ -314,7 +314,7 @@ func (h *Handler) AddCrewMember(ctx context.Context, req *projectv1.AddCrewMembe
 	// Fetch the persisted crew member to return accurate DB-assigned fields.
 	// Use a generous limit — we only need to find the one just inserted.
 	const addLookupLimit = 200
-	members, err := h.svc.ListCrewMembers(ctx, productionID, addLookupLimit, 0)
+	members, err := h.svc.ListCrewMembers(ctx, tenantID, productionID, addLookupLimit, 0)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -327,6 +327,11 @@ func (h *Handler) AddCrewMember(ctx context.Context, req *projectv1.AddCrewMembe
 }
 
 func (h *Handler) ListCrewMembers(ctx context.Context, req *projectv1.ListCrewMembersRequest) (*projectv1.ListCrewMembersResponse, error) {
+	tenantID, ok := tenant.IDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
 	if err := interceptor.RequirePermission(ctx, h.perm, "production:read"); err != nil {
 		return nil, err
 	}
@@ -339,7 +344,7 @@ func (h *Handler) ListCrewMembers(ctx context.Context, req *projectv1.ListCrewMe
 	// Proto does not carry limit/offset yet; apply a server-side default.
 	// Update the proto and pass through req fields when pagination is added.
 	const defaultLimit = 50
-	members, err := h.svc.ListCrewMembers(ctx, productionID, defaultLimit, 0)
+	members, err := h.svc.ListCrewMembers(ctx, tenantID, productionID, defaultLimit, 0)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -352,6 +357,11 @@ func (h *Handler) ListCrewMembers(ctx context.Context, req *projectv1.ListCrewMe
 }
 
 func (h *Handler) RemoveCrewMember(ctx context.Context, req *projectv1.RemoveCrewMemberRequest) (*projectv1.RemoveCrewMemberResponse, error) {
+	tenantID, ok := tenant.IDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
 	if err := interceptor.RequirePermission(ctx, h.perm, "resource:manage"); err != nil {
 		return nil, err
 	}
@@ -361,7 +371,7 @@ func (h *Handler) RemoveCrewMember(ctx context.Context, req *projectv1.RemoveCre
 		return nil, status.Error(codes.InvalidArgument, "invalid crew member ID")
 	}
 
-	if err := h.svc.RemoveCrewMember(ctx, id); err != nil {
+	if err := h.svc.RemoveCrewMember(ctx, tenantID, id); err != nil {
 		return nil, grpcErr(err)
 	}
 	return &projectv1.RemoveCrewMemberResponse{}, nil

@@ -23,7 +23,8 @@ type mockRepo struct {
 	getPhaseFn          func(ctx context.Context, tenantID, id uuid.UUID) (*Phase, error)
 	updatePhaseStatusFn func(ctx context.Context, tenantID, id uuid.UUID, status string) error
 	addCrewFn           func(ctx context.Context, c *CrewMember) error
-	listCrewFn          func(ctx context.Context, prodID uuid.UUID) ([]CrewMember, error)
+	listCrewFn          func(ctx context.Context, tenantID, prodID uuid.UUID) ([]CrewMember, error)
+	removeCrewFn        func(ctx context.Context, tenantID, id uuid.UUID) error
 }
 
 func (m *mockRepo) CreateProduction(ctx context.Context, p *Production) error {
@@ -78,13 +79,18 @@ func (m *mockRepo) AddCrewMember(ctx context.Context, c *CrewMember) error {
 	}
 	return nil
 }
-func (m *mockRepo) ListCrewMembers(ctx context.Context, prodID uuid.UUID, limit, offset int) ([]CrewMember, error) {
+func (m *mockRepo) ListCrewMembers(ctx context.Context, tenantID, prodID uuid.UUID, limit, offset int) ([]CrewMember, error) {
 	if m.listCrewFn != nil {
-		return m.listCrewFn(ctx, prodID)
+		return m.listCrewFn(ctx, tenantID, prodID)
 	}
 	return nil, nil
 }
-func (m *mockRepo) RemoveCrewMember(ctx context.Context, id uuid.UUID) error { return nil }
+func (m *mockRepo) RemoveCrewMember(ctx context.Context, tenantID, id uuid.UUID) error {
+	if m.removeCrewFn != nil {
+		return m.removeCrewFn(ctx, tenantID, id)
+	}
+	return nil
+}
 
 // --- Vertical config fixture (movie-production) ---
 
@@ -351,7 +357,7 @@ func TestListCrewMembers_Success(t *testing.T) {
 	t.Parallel()
 	prodID := uuid.New()
 	svc := NewService(&mockRepo{
-		listCrewFn: func(_ context.Context, pid uuid.UUID) ([]CrewMember, error) {
+		listCrewFn: func(_ context.Context, _, pid uuid.UUID) ([]CrewMember, error) {
 			return []CrewMember{
 				{ID: uuid.New(), ProductionID: pid, Name: "Alice", Role: "Director"},
 				{ID: uuid.New(), ProductionID: pid, Name: "Bob", Role: "DoP"},
@@ -359,7 +365,7 @@ func TestListCrewMembers_Success(t *testing.T) {
 		},
 	})
 
-	crew, err := svc.ListCrewMembers(context.Background(), prodID, 50, 0)
+	crew, err := svc.ListCrewMembers(context.Background(), uuid.New(), prodID, 50, 0)
 	require.NoError(t, err)
 	assert.Len(t, crew, 2)
 	assert.Equal(t, "Alice", crew[0].Name)
@@ -370,7 +376,7 @@ func TestListCrewMembers_Success(t *testing.T) {
 func TestRemoveCrewMember_Success(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{})
-	err := svc.RemoveCrewMember(context.Background(), uuid.New())
+	err := svc.RemoveCrewMember(context.Background(), uuid.New(), uuid.New())
 	require.NoError(t, err)
 }
 

@@ -253,17 +253,23 @@ func (q *Queries) GetProduction(ctx context.Context, arg GetProductionParams) (P
 }
 
 const listCrewMembers = `-- name: ListCrewMembers :many
-SELECT id, production_id, tenant_id, user_id, name, role, department, day_rate, currency, start_date, end_date, created_at FROM crew_members WHERE production_id = $1 ORDER BY name ASC LIMIT $2 OFFSET $3
+SELECT id, production_id, tenant_id, user_id, name, role, department, day_rate, currency, start_date, end_date, created_at FROM crew_members WHERE production_id = $1 AND tenant_id = $2 ORDER BY name ASC LIMIT $3 OFFSET $4
 `
 
 type ListCrewMembersParams struct {
 	ProductionID uuid.UUID `json:"production_id"`
+	TenantID     uuid.UUID `json:"tenant_id"`
 	Limit        int32     `json:"limit"`
 	Offset       int32     `json:"offset"`
 }
 
 func (q *Queries) ListCrewMembers(ctx context.Context, arg ListCrewMembersParams) ([]CrewMember, error) {
-	rows, err := q.db.Query(ctx, listCrewMembers, arg.ProductionID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listCrewMembers,
+		arg.ProductionID,
+		arg.TenantID,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -396,11 +402,16 @@ func (q *Queries) ListProductions(ctx context.Context, arg ListProductionsParams
 }
 
 const removeCrewMember = `-- name: RemoveCrewMember :exec
-DELETE FROM crew_members WHERE id = $1
+DELETE FROM crew_members WHERE id = $1 AND tenant_id = $2
 `
 
-func (q *Queries) RemoveCrewMember(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, removeCrewMember, id)
+type RemoveCrewMemberParams struct {
+	ID       uuid.UUID `json:"id"`
+	TenantID uuid.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) RemoveCrewMember(ctx context.Context, arg RemoveCrewMemberParams) error {
+	_, err := q.db.Exec(ctx, removeCrewMember, arg.ID, arg.TenantID)
 	return err
 }
 

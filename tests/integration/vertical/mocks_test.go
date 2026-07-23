@@ -26,8 +26,8 @@ func (m *projectMock) ListPhases(ctx context.Context, tid, pid uuid.UUID, limit,
 func (m *projectMock) GetPhase(ctx context.Context, tid, id uuid.UUID) (*project.Phase, error) { return nil, nil }
 func (m *projectMock) UpdatePhaseStatus(ctx context.Context, tid, id uuid.UUID, status string) error { return nil }
 func (m *projectMock) AddCrewMember(ctx context.Context, c *project.CrewMember) error { return nil }
-func (m *projectMock) ListCrewMembers(ctx context.Context, pid uuid.UUID, limit, offset int) ([]project.CrewMember, error) { return nil, nil }
-func (m *projectMock) RemoveCrewMember(ctx context.Context, id uuid.UUID) error { return nil }
+func (m *projectMock) ListCrewMembers(ctx context.Context, tid, pid uuid.UUID, limit, offset int) ([]project.CrewMember, error) { return nil, nil }
+func (m *projectMock) RemoveCrewMember(ctx context.Context, tid, id uuid.UUID) error { return nil }
 
 type phaseReturnMock struct {
 	projectMock

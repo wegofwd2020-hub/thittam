@@ -381,7 +381,7 @@ func TestHandler_ListCrewMembers_Success(t *testing.T) {
 	t.Parallel()
 	prodID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listCrewFn: func(_ context.Context, _ uuid.UUID) ([]CrewMember, error) {
+		listCrewFn: func(_ context.Context, _, _ uuid.UUID) ([]CrewMember, error) {
 			return []CrewMember{{ID: uuid.New(), Name: "John", Role: "DP"}}, nil
 		},
 	})).WithPermissionChecker(allowAllPerm{})
@@ -401,7 +401,7 @@ func TestHandler_ListCrewMembers_Denied(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listCrewFn: func(context.Context, uuid.UUID) ([]CrewMember, error) {
+		listCrewFn: func(context.Context, uuid.UUID, uuid.UUID) ([]CrewMember, error) {
 			t.Fatal("gate must fire before the repository is read")
 			return nil, nil
 		},
@@ -418,14 +418,14 @@ func TestHandler_ListCrewMembers_Denied(t *testing.T) {
 func TestHandler_RemoveCrewMember_Success(t *testing.T) {
 	t.Parallel()
 	memberID := uuid.New()
-	resp, err := newHandler().RemoveCrewMember(callerCtx(), &projectv1.RemoveCrewMemberRequest{Id: memberID.String()})
+	resp, err := newHandler().RemoveCrewMember(ctxWithTenant(uuid.New()), &projectv1.RemoveCrewMemberRequest{Id: memberID.String()})
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 }
 
 func TestHandler_RemoveCrewMember_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().RemoveCrewMember(callerCtx(), &projectv1.RemoveCrewMemberRequest{Id: "bad"})
+	_, err := newHandler().RemoveCrewMember(ctxWithTenant(uuid.New()), &projectv1.RemoveCrewMemberRequest{Id: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -565,4 +565,69 @@ func TestHandler_UpdatePhaseStatus_NoTenantUnauthenticated(t *testing.T) {
 	require.Equal(t, codes.Unauthenticated, status.Code(err))
 	require.Equal(t, uuid.Nil, repo.gotUpdateTenant,
 		"the repository must not be reached without a tenant")
+}
+
+// crewRecordingRepo records the tenant ID each crew query receives.
+type crewRecordingRepo struct {
+	mockRepo
+	gotListTenant   uuid.UUID
+	gotRemoveTenant uuid.UUID
+	removeCalled    bool
+}
+
+func (r *crewRecordingRepo) ListCrewMembers(ctx context.Context, tenantID, prodID uuid.UUID, limit, offset int) ([]CrewMember, error) {
+	r.gotListTenant = tenantID
+	return nil, nil
+}
+
+func (r *crewRecordingRepo) RemoveCrewMember(ctx context.Context, tenantID, id uuid.UUID) error {
+	r.gotRemoveTenant = tenantID
+	r.removeCalled = true
+	return nil
+}
+
+func TestHandler_ListCrewMembers_PassesCallerTenantToRepo(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	repo := &crewRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	_, err := h.ListCrewMembers(ctxWithTenant(callerTenant), &projectv1.ListCrewMembersRequest{
+		ProductionId: uuid.New().String(),
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, callerTenant, repo.gotListTenant,
+		"ListCrewMembers must query with the caller's tenant")
+}
+
+func TestHandler_RemoveCrewMember_PassesCallerTenantToRepo(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	repo := &crewRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	_, err := h.RemoveCrewMember(ctxWithTenant(callerTenant), &projectv1.RemoveCrewMemberRequest{
+		Id: uuid.New().String(),
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, callerTenant, repo.gotRemoveTenant,
+		"RemoveCrewMember is a DELETE: it must be scoped to the caller's tenant")
+}
+
+func TestHandler_RemoveCrewMember_NoTenantDoesNotDelete(t *testing.T) {
+	t.Parallel()
+	repo := &crewRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	// callerCtx() carries a caller but NO tenant.
+	_, err := h.RemoveCrewMember(callerCtx(), &projectv1.RemoveCrewMemberRequest{
+		Id: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.Unauthenticated, status.Code(err))
+	require.False(t, repo.removeCalled,
+		"the DELETE must not be reached without a tenant")
 }

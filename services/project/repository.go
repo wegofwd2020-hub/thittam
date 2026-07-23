@@ -23,6 +23,6 @@ type Repository interface {
 
 	// Crew
 	AddCrewMember(ctx context.Context, c *CrewMember) error
-	ListCrewMembers(ctx context.Context, productionID uuid.UUID, limit, offset int) ([]CrewMember, error)
-	RemoveCrewMember(ctx context.Context, id uuid.UUID) error
+	ListCrewMembers(ctx context.Context, tenantID, productionID uuid.UUID, limit, offset int) ([]CrewMember, error)
+	RemoveCrewMember(ctx context.Context, tenantID, id uuid.UUID) error
 }

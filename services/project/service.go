@@ -146,17 +146,18 @@ func (s *Service) AddCrewMember(ctx context.Context, c *CrewMember) error {
 	return nil
 }
 
-// ListCrewMembers lists crew for a production, capped at 200 per page.
-func (s *Service) ListCrewMembers(ctx context.Context, productionID uuid.UUID, limit, offset int) ([]CrewMember, error) {
+// ListCrewMembers lists crew for a production, scoped to the caller's tenant
+// and capped at 200 per page.
+func (s *Service) ListCrewMembers(ctx context.Context, tenantID, productionID uuid.UUID, limit, offset int) ([]CrewMember, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	return s.repo.ListCrewMembers(ctx, productionID, limit, offset)
+	return s.repo.ListCrewMembers(ctx, tenantID, productionID, limit, offset)
 }
 
-// RemoveCrewMember removes a crew member.
-func (s *Service) RemoveCrewMember(ctx context.Context, id uuid.UUID) error {
-	return s.repo.RemoveCrewMember(ctx, id)
+// RemoveCrewMember removes a crew member, scoped to the caller's tenant.
+func (s *Service) RemoveCrewMember(ctx context.Context, tenantID, id uuid.UUID) error {
+	return s.repo.RemoveCrewMember(ctx, tenantID, id)
 }
 
 // publish calls fn only when a publisher is configured; errors are best-effort.

@@ -196,9 +196,10 @@ func (p *Postgres) AddCrewMember(ctx context.Context, c *project.CrewMember) err
 	return nil
 }
 
-func (p *Postgres) ListCrewMembers(ctx context.Context, productionID uuid.UUID, limit, offset int) ([]project.CrewMember, error) {
+func (p *Postgres) ListCrewMembers(ctx context.Context, tenantID, productionID uuid.UUID, limit, offset int) ([]project.CrewMember, error) {
 	rows, err := p.q.ListCrewMembers(ctx, ListCrewMembersParams{
 		ProductionID: productionID,
+		TenantID:     tenantID,
 		Limit:        int32(limit),
 		Offset:       int32(offset),
 	})
@@ -213,10 +214,10 @@ func (p *Postgres) ListCrewMembers(ctx context.Context, productionID uuid.UUID, 
 }
 
 // RemoveCrewMember deletes a crew member and returns ErrCrewNotFound if the row
-// did not exist. The sqlc-generated query is :exec with no affected-row count,
-// so we use a direct Exec call instead.
-func (p *Postgres) RemoveCrewMember(ctx context.Context, id uuid.UUID) error {
-	tag, err := p.db.Exec(ctx, "DELETE FROM crew_members WHERE id = $1", id)
+// does not exist in the caller's tenant. The sqlc-generated query is :exec with
+// no affected-row count, so we use a direct Exec call instead.
+func (p *Postgres) RemoveCrewMember(ctx context.Context, tenantID, id uuid.UUID) error {
+	tag, err := p.db.Exec(ctx, "DELETE FROM crew_members WHERE id = $1 AND tenant_id = $2", id, tenantID)
 	if err != nil {
 		return fmt.Errorf("project: remove crew member: %w", err)
 	}
