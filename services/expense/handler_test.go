@@ -24,6 +24,14 @@ func (allowAllPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ 
 	return true, nil
 }
 
+// denyPerm denies every permission, so a denial test can prove the gate fires
+// before the repository is reached.
+type denyPerm struct{}
+
+func (denyPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	return false, nil
+}
+
 // ctxWithTenant injects vertical config, a tenant ID, and a synthetic caller
 // (RequirePermission now runs unconditionally, so every handler test needs a
 // caller in context or it fails Unauthenticated before reaching handler logic).
@@ -117,7 +125,7 @@ func TestHandler_GetPurchaseOrder_Success(t *testing.T) {
 		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
 			return &PurchaseOrder{ID: id, TenantID: tid, Status: "draft"}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.GetPurchaseOrder(ctxWithTenant(tenantID), &expensev1.GetPurchaseOrderRequest{Id: poID.String()})
 	require.NoError(t, err)
@@ -136,6 +144,23 @@ func TestHandler_GetPurchaseOrder_InvalidID(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestHandler_GetPurchaseOrder_Denied(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		getPOFn: func(_ context.Context, _, _ uuid.UUID) (*PurchaseOrder, error) {
+			t.Fatal("repository reached: GetPurchaseOrder must deny before querying")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.GetPurchaseOrder(ctxWithTenant(uuid.New()), &expensev1.GetPurchaseOrderRequest{
+		Id: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
 // --- ListPurchaseOrders ---
 
 func TestHandler_ListPurchaseOrders_Success(t *testing.T) {
@@ -145,7 +170,7 @@ func TestHandler_ListPurchaseOrders_Success(t *testing.T) {
 		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]PurchaseOrder, error) {
 			return []PurchaseOrder{{ID: uuid.New(), TenantID: tenantID}}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.ListPurchaseOrders(ctxWithTenant(tenantID), &expensev1.ListPurchaseOrdersRequest{})
 	require.NoError(t, err)
@@ -162,6 +187,21 @@ func TestHandler_ListPurchaseOrders_InvalidProductionID(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().ListPurchaseOrders(ctxWithTenant(uuid.New()), &expensev1.ListPurchaseOrdersRequest{ProductionId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_ListPurchaseOrders_Denied(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]PurchaseOrder, error) {
+			t.Fatal("repository reached: ListPurchaseOrders must deny before querying")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.ListPurchaseOrders(ctxWithTenant(uuid.New()), &expensev1.ListPurchaseOrdersRequest{})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 // --- SubmitExpense ---
@@ -239,7 +279,7 @@ func TestHandler_GetExpense_Success(t *testing.T) {
 		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
 			return &Expense{ID: id, TenantID: tid, Status: "pending"}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.GetExpense(ctxWithTenant(tenantID), &expensev1.GetExpenseRequest{Id: expID.String()})
 	require.NoError(t, err)
@@ -258,6 +298,23 @@ func TestHandler_GetExpense_InvalidID(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestHandler_GetExpense_Denied(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, _, _ uuid.UUID) (*Expense, error) {
+			t.Fatal("repository reached: GetExpense must deny before querying")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.GetExpense(ctxWithTenant(uuid.New()), &expensev1.GetExpenseRequest{
+		Id: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
 // --- ListExpenses ---
 
 func TestHandler_ListExpenses_Success(t *testing.T) {
@@ -267,7 +324,7 @@ func TestHandler_ListExpenses_Success(t *testing.T) {
 		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]Expense, error) {
 			return []Expense{{ID: uuid.New(), TenantID: tenantID}}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.ListExpenses(ctxWithTenant(tenantID), &expensev1.ListExpensesRequest{})
 	require.NoError(t, err)
@@ -278,6 +335,21 @@ func TestHandler_ListExpenses_NoTenant(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().ListExpenses(ctxWithVertical(), &expensev1.ListExpensesRequest{})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestHandler_ListExpenses_Denied(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]Expense, error) {
+			t.Fatal("repository reached: ListExpenses must deny before querying")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.ListExpenses(ctxWithTenant(uuid.New()), &expensev1.ListExpensesRequest{})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 // --- ApproveExpense ---
@@ -394,7 +466,7 @@ func TestHandler_GetPettyCashAdvance_Success(t *testing.T) {
 		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
 			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "open"}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.GetPettyCashAdvance(ctxWithTenant(tenantID), &expensev1.GetPettyCashAdvanceRequest{Id: pcID.String()})
 	require.NoError(t, err)
@@ -413,6 +485,23 @@ func TestHandler_GetPettyCashAdvance_InvalidID(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestHandler_GetPettyCashAdvance_Denied(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, _, _ uuid.UUID) (*PettyCashAdvance, error) {
+			t.Fatal("repository reached: GetPettyCashAdvance must deny before querying")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.GetPettyCashAdvance(ctxWithTenant(uuid.New()), &expensev1.GetPettyCashAdvanceRequest{
+		Id: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
 // --- ListPettyCashAdvances ---
 
 func TestHandler_ListPettyCashAdvances_Success(t *testing.T) {
@@ -422,7 +511,7 @@ func TestHandler_ListPettyCashAdvances_Success(t *testing.T) {
 		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]PettyCashAdvance, error) {
 			return []PettyCashAdvance{{ID: uuid.New(), TenantID: tenantID}}, nil
 		},
-	}))
+	})).WithPermissionChecker(allowAllPerm{})
 
 	resp, err := h.ListPettyCashAdvances(ctxWithTenant(tenantID), &expensev1.ListPettyCashAdvancesRequest{})
 	require.NoError(t, err)
@@ -433,6 +522,21 @@ func TestHandler_ListPettyCashAdvances_NoTenant(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().ListPettyCashAdvances(ctxWithVertical(), &expensev1.ListPettyCashAdvancesRequest{})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestHandler_ListPettyCashAdvances_Denied(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]PettyCashAdvance, error) {
+			t.Fatal("repository reached: ListPettyCashAdvances must deny before querying")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.ListPettyCashAdvances(ctxWithTenant(uuid.New()), &expensev1.ListPettyCashAdvancesRequest{})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 // --- Vertical metadata ---

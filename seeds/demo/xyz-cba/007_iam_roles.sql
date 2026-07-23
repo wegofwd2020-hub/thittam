@@ -15,27 +15,27 @@ INSERT INTO roles (id, tenant_id, name, permissions, is_system) VALUES
  'd0000000-0000-0000-0000-000000000001',
  'super_admin',
  ARRAY['production:read','production:write','budget:read','budget:write','budget:approve',
-       'expense:submit','expense:approve','inventory:checkout','report:read','user:manage'],
+       'expense:read','expense:submit','expense:approve','inventory:read','inventory:checkout','report:read','user:manage'],
  true),
 
 ('e0000000-0000-0000-0000-000000000002',
  'd0000000-0000-0000-0000-000000000001',
  'manager',
  ARRAY['production:read','production:write','budget:read','budget:approve',
-       'expense:approve','inventory:checkout','report:read'],
+       'expense:read','expense:approve','inventory:read','inventory:checkout','report:read'],
  true),
 
 ('e0000000-0000-0000-0000-000000000003',
  'd0000000-0000-0000-0000-000000000001',
  'coordinator',
  ARRAY['production:read','production:write','budget:read','budget:write',
-       'expense:approve','inventory:checkout','report:read'],
+       'expense:read','expense:approve','inventory:read','inventory:checkout','report:read'],
  true),
 
 ('e0000000-0000-0000-0000-000000000004',
  'd0000000-0000-0000-0000-000000000001',
  'accountant',
- ARRAY['budget:read','expense:submit','expense:approve','report:read'],
+ ARRAY['budget:read','expense:read','expense:submit','expense:approve','report:read'],
  true),
 
 ('e0000000-0000-0000-0000-000000000006',
@@ -56,8 +56,8 @@ INSERT INTO roles (id, tenant_id, name, permissions, is_system) VALUES
 ('e0000000-0000-0000-0000-000000000008',
  'd0000000-0000-0000-0000-000000000001',
  'project_supervisor',
- ARRAY['production:read','budget:read','expense:submit','expense:approve',
-       'resource:manage','inventory:checkout'],
+ ARRAY['production:read','budget:read','expense:read','expense:submit','expense:approve',
+       'resource:manage','inventory:read','inventory:checkout'],
  true)
 
 ON CONFLICT (tenant_id, name) DO NOTHING;

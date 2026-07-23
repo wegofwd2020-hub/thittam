@@ -858,9 +858,9 @@ func TestSystemRoles_ProjectSupervisorPermissions(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"production:read",
 		"budget:read",
-		"expense:submit", "expense:approve",
+		"expense:read", "expense:submit", "expense:approve",
 		"resource:manage",
-		"inventory:checkout",
+		"inventory:read", "inventory:checkout",
 	}, ps)
 }
 
@@ -2359,5 +2359,43 @@ func TestSystemRoles_LedgerGrants(t *testing.T) {
 		}
 		assert.NotContains(t, r.permissions, "ledger:admin",
 			"only super_admin may hold ledger:admin — closing a period is a separately-privileged act")
+	}
+}
+
+// TestSystemRoles_ReadGrants pins the #139 slice D grant matrix on the
+// systemRoles side (the half that governs every future tenant). member is
+// deliberately excluded from both permissions: ListExpenses has no
+// submitted_by filter, so granting member expense:read would expose every
+// colleague's amounts, vendors and categories to the lowest-privilege role
+// (tracked as #165). Without this test, adding either permission to member
+// in service.go would flip zero other tests.
+func TestSystemRoles_ReadGrants(t *testing.T) {
+	t.Parallel()
+
+	want := map[string][]string{
+		"super_admin":        {"expense:read", "inventory:read"},
+		"manager":            {"expense:read", "inventory:read"},
+		"coordinator":        {"expense:read", "inventory:read"},
+		"accountant":         {"expense:read"},
+		"inventory_manager":  {"inventory:read"},
+		"project_supervisor": {"expense:read", "inventory:read"},
+	}
+	// Roles that must hold NEITHER read permission.
+	none := []string{"member"}
+
+	got := map[string][]string{}
+	for _, r := range systemRoles {
+		for _, p := range r.permissions {
+			if p == "expense:read" || p == "inventory:read" {
+				got[r.name] = append(got[r.name], p)
+			}
+		}
+	}
+
+	for role, perms := range want {
+		assert.ElementsMatch(t, perms, got[role], "role %s", role)
+	}
+	for _, role := range none {
+		assert.Empty(t, got[role], "role %s must hold neither expense:read nor inventory:read", role)
 	}
 }
