@@ -139,15 +139,20 @@ Both services already carry `perm interceptor.PermissionChecker` and the `WithPe
 
 Tests that pass a valid tenant but build the handler without a checker leave `h.perm` nil, and after #138 `RequirePermission` on a nil checker returns `Internal`. Repair by adding `.WithPermissionChecker(allowAllPerm{})` — never by weakening an assertion.
 
-**expense — exactly 10:**
-`GetPurchaseOrder_Success`, `GetPurchaseOrder_InvalidID`, `ListPurchaseOrders_Success`, `ListPurchaseOrders_InvalidProductionID`, `GetExpense_Success`, `GetExpense_InvalidID`, `ListExpenses_Success`, `GetPettyCashAdvance_Success`, `GetPettyCashAdvance_InvalidID`, `ListPettyCashAdvances_Success`
+**The distinction that decides the count:** `newHandler()` in both services already returns `NewHandler(NewService(&mockRepo{})).WithPermissionChecker(allowAllPerm{})`. Tests that call it therefore pass the new gate untouched. Only tests that build the handler inline — `NewHandler(NewService(&mockRepo{...}))` with a custom mock and **no** setter — leave `h.perm` nil and flip.
 
-**inventory — exactly 5:**
-`GetAsset_Success`, `GetAsset_InvalidID`, `ListAssets_Success`, `ListCheckouts_Success`, `ListCheckouts_InvalidAssetID`
+**expense — exactly 6**, all `_Success`:
+`GetPurchaseOrder_Success`, `ListPurchaseOrders_Success`, `GetExpense_Success`, `ListExpenses_Success`, `GetPettyCashAdvance_Success`, `ListPettyCashAdvances_Success`
 
-**These must NOT flip.** All six expense `_NoTenant` tests and all three inventory `_NoTenant` tests pass `ctxWithVertical()` with no tenant, so `tenant.IDFromContext` returns `Unauthenticated` before the gate is reached. `ListCheckouts_PassesCallerTenantToRepo` (added by #157) already supplies `allowAllPerm{}` and is unaffected.
+**inventory — exactly 3**, all `_Success`:
+`GetAsset_Success`, `ListAssets_Success`, `ListCheckouts_Success`
 
-Note the `_InvalidID` / `_InvalidProductionID` tests **do** flip, because the gate precedes the parse. Their assertions must stay `InvalidArgument`, which they reach once a checker is supplied.
+**These must NOT flip, for two distinct reasons:**
+
+- *Already hold a checker via `newHandler()`* — expense `GetPurchaseOrder_InvalidID`, `ListPurchaseOrders_InvalidProductionID`, `GetExpense_InvalidID`, `GetPettyCashAdvance_InvalidID`; inventory `GetAsset_InvalidID`, `ListCheckouts_InvalidAssetID`, and `ListCheckouts_PassesCallerTenantToRepo` (added by #157, supplies `allowAllPerm{}` explicitly). These reach the gate, pass it, and still assert `InvalidArgument` from the parse below.
+- *Short-circuit before the gate* — all six expense `_NoTenant` tests and all three inventory `_NoTenant` tests pass `ctxWithVertical()` with no tenant, so `tenant.IDFromContext` returns `Unauthenticated` first.
+
+An earlier draft of this section predicted 10 and 5 by scanning test bodies for `allowAllPerm` without accounting for `newHandler()` supplying it indirectly. Corrected by measurement.
 
 **If either count differs, stop and report.** Both slice B tasks mispredicted — one by two, one by one — and each miss exposed something real: a broken verification command, and a test that had been passing for the wrong reason.
 
@@ -159,7 +164,7 @@ Use `go test ./services/<svc>/ -count=1 2>&1 | grep -- '--- FAIL' | sort` to cou
 
 ## 7. Out of scope
 
-- **Members cannot read their own expenses.** §3.1. Needs a `submitted_by` filter and a proto decision about how a caller expresses "mine". **File as a new issue.**
+- **Members cannot read their own expenses.** §3.1. Needs a `submitted_by` filter and a proto decision about how a caller expresses "mine". **Filed as #165.**
 - **`ListNotifications` is tenant-scoped but not user-scoped** — the same defect class, already recorded, belongs to slice G.
 - **The public-schema / per-tenant-schema inconsistency** (§2). Recorded, not resolved.
 - **Slices E, F, G** (document, billing, notifications — 35 RPCs, zero gates) and **H** (#159, the tenant-isolation audit). They reuse this slice's migration pattern.
