@@ -129,6 +129,9 @@ func (h *Handler) CreateUser(ctx context.Context, req *iamv1.CreateUserRequest) 
 	if err != nil {
 		return nil, err
 	}
+	if err := h.requireUserManage(ctx); err != nil {
+		return nil, err
+	}
 	user := &User{
 		TenantID:    tenantID,
 		Email:       req.GetEmail(),
@@ -176,6 +179,9 @@ func (h *Handler) ListUsers(ctx context.Context, req *iamv1.ListUsersRequest) (*
 func (h *Handler) UpdateUser(ctx context.Context, req *iamv1.UpdateUserRequest) (*iamv1.User, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := h.requireUserManage(ctx); err != nil {
 		return nil, err
 	}
 	id, err := uuid.Parse(req.GetId())
@@ -230,7 +236,8 @@ func (h *Handler) ChangePassword(ctx context.Context, req *iamv1.ChangePasswordR
 
 // --- Roles & Permissions ---
 
-// requireUserManage authorizes a role-management RPC.
+// requireUserManage authorizes an RPC gated on user:manage — role management
+// plus user CRUD (CreateUser, UpdateUser) and tenant address changes.
 //
 // iam answers this from its own repository rather than dialling itself: the four other
 // gated services hold a gRPC PermissionChecker (wired via interceptor) backed by a call
@@ -397,11 +404,15 @@ func (h *Handler) CreateTenant(ctx context.Context, req *iamv1.CreateTenantReque
 }
 
 // SetTenantAddress updates the company location + currency on an existing
-// tenant. Restricted to callers with the tenant_admin role (or platform
-// admin) — a regular user should not be able to change the currency.
+// tenant. Gated on user:manage via requireUserManage — in the seeded role
+// set (systemRoles, service.go) that permission is held by super_admin
+// alone, so a regular user cannot change the currency.
 func (h *Handler) SetTenantAddress(ctx context.Context, req *iamv1.SetTenantAddressRequest) (*iamv1.Tenant, error) {
 	id, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := h.requireUserManage(ctx); err != nil {
 		return nil, err
 	}
 	t := &Tenant{
@@ -421,11 +432,16 @@ func (h *Handler) SetTenantAddress(ctx context.Context, req *iamv1.SetTenantAddr
 }
 
 func (h *Handler) GetTenant(ctx context.Context, req *iamv1.GetTenantRequest) (*iamv1.Tenant, error) {
-	id, err := uuid.Parse(req.GetId())
+	// The id IS the tenant id: derive it from the caller's verified token rather
+	// than the request body. #144 scoped itself to fields named tenant_id and so
+	// missed this one, leaving any authenticated user able to read any tenant's
+	// record by UUID (#139 slice B). TenantFromRequest returns the caller's tenant
+	// when the field is empty and PermissionDenied when it differs.
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid id")
+		return nil, err
 	}
-	tenant, err := h.svc.GetTenant(ctx, id)
+	tenant, err := h.svc.GetTenant(ctx, tenantID)
 	if err != nil {
 		return nil, grpcError(err)
 	}

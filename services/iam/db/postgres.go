@@ -267,7 +267,11 @@ func (p *Postgres) ListUsers(ctx context.Context, tenantID uuid.UUID, statusFilt
 }
 
 func (p *Postgres) UpdateUser(ctx context.Context, u *iam.User) error {
-	const q = `UPDATE users SET display_name = $2, status = $3 WHERE id = $1 AND tenant_id = $4`
+	// An empty status means "leave it alone", not "clear it". status is
+	// security-critical: pkg/auth/local.go refuses login for 'deactivated' and
+	// 'invited'. Before this guard, a client updating only a display name sent
+	// status: "" and silently reactivated a deactivated account (#139 slice B).
+	const q = `UPDATE users SET display_name = $2, status = COALESCE(NULLIF($3, ''), status) WHERE id = $1 AND tenant_id = $4`
 	tag, err := p.db.Exec(ctx, q, u.ID, u.DisplayName, u.Status, u.TenantID)
 	if err != nil {
 		return fmt.Errorf("iam/db: update user: %w", err)
