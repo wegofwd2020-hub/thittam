@@ -178,7 +178,8 @@ func seedIAMTenant(t *testing.T, pool *pgxpool.Pool) uuid.UUID {
 
 	tenantID := uuid.New()
 	_, err := pool.Exec(ctx,
-		`INSERT INTO tenants (id, name, slug) VALUES ($1, 'Tenant Isolation Test Tenant', $2)`,
+		`INSERT INTO tenants (id, name, slug, country_code, primary_currency_code)
+		 VALUES ($1, 'Tenant Isolation Test Tenant', $2, 'IN', 'INR')`,
 		tenantID, "iso-test-"+tenantID.String())
 	require.NoError(t, err, "insert tenant")
 
