@@ -62,6 +62,116 @@ func TestNotifications_SelfScoped_ListAndGetOnlyReturnCallersOwnRows(t *testing.
 	assert.Equal(t, notifA, got.ID)
 }
 
+// backfillNotificationsRead is the exact statement from
+// migrations/iam/023_seed_notifications_permissions.up.sql. Keep the two in sync.
+const backfillNotificationsRead = `
+UPDATE roles SET permissions = array_append(permissions, 'notifications:read')
+WHERE is_system = true
+  AND name IN ('super_admin', 'manager')
+  AND NOT ('notifications:read' = ANY (permissions))`
+
+// backfillNotificationsManage is the exact statement from
+// migrations/iam/023_seed_notifications_permissions.up.sql. Keep the two in sync.
+const backfillNotificationsManage = `
+UPDATE roles SET permissions = array_append(permissions, 'notifications:manage')
+WHERE is_system = true
+  AND name IN ('super_admin', 'manager')
+  AND NOT ('notifications:manage' = ANY (permissions))`
+
+// backfillNotificationsReadDown is the exact statement from
+// migrations/iam/023_seed_notifications_permissions.down.sql. Keep the two in sync.
+const backfillNotificationsReadDown = `
+UPDATE roles SET permissions = array_remove(permissions, 'notifications:read')   WHERE is_system = true`
+
+// backfillNotificationsManageDown is the exact statement from
+// migrations/iam/023_seed_notifications_permissions.down.sql. Keep the two in sync.
+const backfillNotificationsManageDown = `
+UPDATE roles SET permissions = array_remove(permissions, 'notifications:manage') WHERE is_system = true`
+
+// TestMigration023_GrantsNotificationsPermissionsIdempotently applies
+// migration 023's up statements to a fresh tenant schema, runs them twice,
+// and asserts super_admin and manager each hold both notifications:read and
+// notifications:manage exactly once — the property the migration depends on
+// since it runs against the public schema via `make migrate-all` AND against
+// every new tenant_<uuid> at CreateTenant (a non-idempotent statement would
+// duplicate entries). It then applies the down statements and asserts both
+// strings are gone.
+func TestMigration023_GrantsNotificationsPermissionsIdempotently(t *testing.T) {
+	pool := testdb.Open(t)
+	ctx := context.Background()
+	tx := testdb.NewTx(t, pool)
+
+	tenantID := uuid.New()
+	_, err := tx.Exec(ctx,
+		`INSERT INTO tenants (id, name, slug, country_code, primary_currency_code)
+		 VALUES ($1, $2, $3, 'IN', 'INR')`,
+		tenantID, "Notifications Backfill Test "+tenantID.String(), "notif-backfill-"+tenantID.String())
+	require.NoError(t, err)
+
+	// super_admin and manager as they exist BEFORE the migration: neither
+	// notifications permission present yet.
+	_, err = tx.Exec(ctx,
+		`INSERT INTO roles (id, tenant_id, name, permissions, is_system)
+		 VALUES ($1, $2, 'super_admin', $3, true)`,
+		uuid.New(), tenantID, []string{"production:read", "billing:read", "billing:manage"})
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx,
+		`INSERT INTO roles (id, tenant_id, name, permissions, is_system)
+		 VALUES ($1, $2, 'manager', $3, true)`,
+		uuid.New(), tenantID, []string{"production:read", "billing:read", "billing:manage"})
+	require.NoError(t, err)
+
+	applyNotificationsUp := func() {
+		_, err := tx.Exec(ctx, backfillNotificationsRead)
+		require.NoError(t, err)
+		_, err = tx.Exec(ctx, backfillNotificationsManage)
+		require.NoError(t, err)
+	}
+
+	// First application appends both permissions.
+	applyNotificationsUp()
+	// Second application (migration 023 run again) must be a no-op.
+	applyNotificationsUp()
+
+	for _, role := range []string{"super_admin", "manager"} {
+		var perms []string
+		require.NoError(t, tx.QueryRow(ctx,
+			`SELECT permissions FROM roles WHERE tenant_id = $1 AND name = $2`,
+			tenantID, role).Scan(&perms))
+		require.Contains(t, perms, "notifications:read", "%s must hold notifications:read", role)
+		require.Contains(t, perms, "notifications:manage", "%s must hold notifications:manage", role)
+		require.Equal(t, 1, countOccurrences(perms, "notifications:read"),
+			"re-running the migration must not duplicate notifications:read for %s", role)
+		require.Equal(t, 1, countOccurrences(perms, "notifications:manage"),
+			"re-running the migration must not duplicate notifications:manage for %s", role)
+	}
+
+	// Down removes both strings from both roles.
+	_, err = tx.Exec(ctx, backfillNotificationsReadDown)
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx, backfillNotificationsManageDown)
+	require.NoError(t, err)
+
+	for _, role := range []string{"super_admin", "manager"} {
+		var perms []string
+		require.NoError(t, tx.QueryRow(ctx,
+			`SELECT permissions FROM roles WHERE tenant_id = $1 AND name = $2`,
+			tenantID, role).Scan(&perms))
+		require.NotContains(t, perms, "notifications:read", "down migration must remove notifications:read from %s", role)
+		require.NotContains(t, perms, "notifications:manage", "down migration must remove notifications:manage from %s", role)
+	}
+}
+
+func countOccurrences(xs []string, want string) int {
+	n := 0
+	for _, x := range xs {
+		if x == want {
+			n++
+		}
+	}
+	return n
+}
+
 // insertNotificationLog inserts a notification_log row directly via the pool
 // (the Postgres wrapper under test needs a *pgxpool.Pool, not a tx) and
 // registers a t.Cleanup to delete it so it doesn't leak into other tests.

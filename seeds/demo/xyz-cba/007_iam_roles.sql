@@ -17,7 +17,8 @@ INSERT INTO roles (id, tenant_id, name, permissions, is_system) VALUES
  ARRAY['production:read','production:write','budget:read','budget:write','budget:approve',
        'expense:read','expense:submit','expense:approve','inventory:read','inventory:checkout','report:read','user:manage',
        'billing:read','billing:manage',
-       'document:read','document:write','document:delete'],
+       'document:read','document:write','document:delete',
+       'notifications:read','notifications:manage'],
  true),
 
 ('e0000000-0000-0000-0000-000000000002',
@@ -26,7 +27,8 @@ INSERT INTO roles (id, tenant_id, name, permissions, is_system) VALUES
  ARRAY['production:read','production:write','budget:read','budget:approve',
        'expense:read','expense:approve','inventory:read','inventory:checkout','report:read',
        'billing:read','billing:manage',
-       'document:read','document:write','document:delete'],
+       'document:read','document:write','document:delete',
+       'notifications:read','notifications:manage'],
  true),
 
 ('e0000000-0000-0000-0000-000000000003',
