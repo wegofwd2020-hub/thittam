@@ -26,10 +26,10 @@ type mockRepo struct {
 	updateInvoiceFn             func(ctx context.Context, inv *Invoice) error
 	nextInvoiceSeqFn            func(ctx context.Context, year int) (int, error)
 	createPaymentMethodFn       func(ctx context.Context, pm *PaymentMethod) error
-	getPaymentMethodFn          func(ctx context.Context, id uuid.UUID) (*PaymentMethod, error)
+	getPaymentMethodFn          func(ctx context.Context, tenantID, id uuid.UUID) (*PaymentMethod, error)
 	listPaymentMethodsFn        func(ctx context.Context, tenantID uuid.UUID) ([]PaymentMethod, error)
 	updatePaymentMethodFn       func(ctx context.Context, pm *PaymentMethod) error
-	deletePaymentMethodFn       func(ctx context.Context, id uuid.UUID) error
+	deletePaymentMethodFn       func(ctx context.Context, tenantID, id uuid.UUID) error
 	clearDefaultPaymentMethodsFn func(ctx context.Context, tenantID uuid.UUID) error
 	createUsageRecordFn         func(ctx context.Context, u *UsageRecord) error
 	latestUsageRecordFn         func(ctx context.Context, tenantID uuid.UUID) (*UsageRecord, error)
@@ -104,11 +104,11 @@ func (m *mockRepo) CreatePaymentMethod(ctx context.Context, pm *PaymentMethod) e
 	}
 	return nil
 }
-func (m *mockRepo) GetPaymentMethod(ctx context.Context, id uuid.UUID) (*PaymentMethod, error) {
+func (m *mockRepo) GetPaymentMethod(ctx context.Context, tenantID, id uuid.UUID) (*PaymentMethod, error) {
 	if m.getPaymentMethodFn != nil {
-		return m.getPaymentMethodFn(ctx, id)
+		return m.getPaymentMethodFn(ctx, tenantID, id)
 	}
-	return &PaymentMethod{ID: id, TenantID: uuid.New()}, nil
+	return &PaymentMethod{ID: id, TenantID: tenantID}, nil
 }
 func (m *mockRepo) ListPaymentMethods(ctx context.Context, tenantID uuid.UUID) ([]PaymentMethod, error) {
 	if m.listPaymentMethodsFn != nil {
@@ -122,9 +122,9 @@ func (m *mockRepo) UpdatePaymentMethod(ctx context.Context, pm *PaymentMethod) e
 	}
 	return nil
 }
-func (m *mockRepo) DeletePaymentMethod(ctx context.Context, id uuid.UUID) error {
+func (m *mockRepo) DeletePaymentMethod(ctx context.Context, tenantID, id uuid.UUID) error {
 	if m.deletePaymentMethodFn != nil {
-		return m.deletePaymentMethodFn(ctx, id)
+		return m.deletePaymentMethodFn(ctx, tenantID, id)
 	}
 	return nil
 }
@@ -731,12 +731,12 @@ func TestSetDefaultPaymentMethod_ClearsOldDefault(t *testing.T) {
 func TestRemovePaymentMethod_NotFound(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{
-		getPaymentMethodFn: func(_ context.Context, _ uuid.UUID) (*PaymentMethod, error) {
+		getPaymentMethodFn: func(_ context.Context, _, _ uuid.UUID) (*PaymentMethod, error) {
 			return nil, ErrPaymentMethodNotFound
 		},
 	})
 
-	err := svc.RemovePaymentMethod(context.Background(), fixedPMID)
+	err := svc.RemovePaymentMethod(context.Background(), fixedTenantID, fixedPMID)
 	require.Error(t, err)
 }
 
@@ -978,7 +978,7 @@ func TestSetDefaultPaymentMethod_ClearsOthersAndSetsDefault(t *testing.T) {
 	cleared := false
 	updated := false
 	svc := NewService(&mockRepo{
-		getPaymentMethodFn: func(_ context.Context, id uuid.UUID) (*PaymentMethod, error) {
+		getPaymentMethodFn: func(_ context.Context, _, id uuid.UUID) (*PaymentMethod, error) {
 			return &PaymentMethod{ID: id, TenantID: fixedTenantID}, nil
 		},
 		clearDefaultPaymentMethodsFn: func(_ context.Context, _ uuid.UUID) error {

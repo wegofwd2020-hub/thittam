@@ -295,12 +295,12 @@ func (s *Service) AddPaymentMethod(ctx context.Context, pm *PaymentMethod) error
 }
 
 // RemovePaymentMethod removes a stored payment method.
-func (s *Service) RemovePaymentMethod(ctx context.Context, id uuid.UUID) error {
-	_, err := s.repo.GetPaymentMethod(ctx, id)
+func (s *Service) RemovePaymentMethod(ctx context.Context, tenantID, id uuid.UUID) error {
+	_, err := s.repo.GetPaymentMethod(ctx, tenantID, id)
 	if err != nil {
 		return fmt.Errorf("get payment method: %w", err)
 	}
-	return s.repo.DeletePaymentMethod(ctx, id)
+	return s.repo.DeletePaymentMethod(ctx, tenantID, id)
 }
 
 // ListPaymentMethods returns payment methods for a tenant, capped at 20.
@@ -320,7 +320,7 @@ func (s *Service) ListPaymentMethods(ctx context.Context, tenantID uuid.UUID) ([
 // SetDefaultPaymentMethod designates one payment method as the default for
 // automatic charges. Clears the is_default flag from all others first.
 func (s *Service) SetDefaultPaymentMethod(ctx context.Context, tenantID, id uuid.UUID) error {
-	pm, err := s.repo.GetPaymentMethod(ctx, id)
+	pm, err := s.repo.GetPaymentMethod(ctx, tenantID, id)
 	if err != nil {
 		return fmt.Errorf("get payment method: %w", err)
 	}

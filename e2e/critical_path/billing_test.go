@@ -128,11 +128,11 @@ func (r *billingRepo) CreatePaymentMethod(_ context.Context, pm *billing.Payment
 	return nil
 }
 
-func (r *billingRepo) GetPaymentMethod(_ context.Context, id uuid.UUID) (*billing.PaymentMethod, error) {
+func (r *billingRepo) GetPaymentMethod(_ context.Context, tenantID, id uuid.UUID) (*billing.PaymentMethod, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	pm, ok := r.paymentMethods[id]
-	if !ok {
+	if !ok || pm.TenantID != tenantID {
 		return nil, billing.ErrPaymentMethodNotFound
 	}
 	return pm, nil
@@ -157,9 +157,13 @@ func (r *billingRepo) UpdatePaymentMethod(_ context.Context, pm *billing.Payment
 	return nil
 }
 
-func (r *billingRepo) DeletePaymentMethod(_ context.Context, id uuid.UUID) error {
+func (r *billingRepo) DeletePaymentMethod(_ context.Context, tenantID, id uuid.UUID) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	pm, ok := r.paymentMethods[id]
+	if !ok || pm.TenantID != tenantID {
+		return billing.ErrPaymentMethodNotFound
+	}
 	delete(r.paymentMethods, id)
 	return nil
 }

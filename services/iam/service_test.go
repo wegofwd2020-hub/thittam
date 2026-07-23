@@ -2439,3 +2439,40 @@ func TestSystemRoles_DocumentGrants(t *testing.T) {
 		}
 	}
 }
+
+// TestSystemRoles_BillingGrants pins the #139 slice F grant matrix on the
+// systemRoles side (the half that governs every future tenant). accountant
+// holding billing:read but NOT billing:manage is the load-bearing exclusion:
+// without this test, adding billing:manage to accountant in service.go would
+// flip zero other tests -- the same gap #168's review found for slice D.
+func TestSystemRoles_BillingGrants(t *testing.T) {
+	t.Parallel()
+
+	want := map[string][]string{
+		"super_admin": {"billing:read", "billing:manage"},
+		"manager":     {"billing:read", "billing:manage"},
+		"accountant":  {"billing:read"},
+	}
+
+	byName := map[string][]string{}
+	for _, r := range systemRoles {
+		byName[r.name] = r.permissions
+	}
+
+	for role, expected := range want {
+		perms := byName[role]
+		for _, p := range expected {
+			assert.Contains(t, perms, p, "%s must hold %s", role, p)
+		}
+	}
+	// No role outside `want` holds any billing: permission; and within
+	// `want`, nothing beyond what's expected (in particular, accountant
+	// must never pick up billing:manage).
+	for _, r := range systemRoles {
+		for _, p := range r.permissions {
+			if strings.HasPrefix(p, "billing:") {
+				assert.Contains(t, want[r.name], p, "%s holds unexpected %s", r.name, p)
+			}
+		}
+	}
+}

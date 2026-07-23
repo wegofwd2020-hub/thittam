@@ -16,6 +16,7 @@ INSERT INTO roles (id, tenant_id, name, permissions, is_system) VALUES
  'super_admin',
  ARRAY['production:read','production:write','budget:read','budget:write','budget:approve',
        'expense:read','expense:submit','expense:approve','inventory:read','inventory:checkout','report:read','user:manage',
+       'billing:read','billing:manage',
        'document:read','document:write','document:delete'],
  true),
 
@@ -24,6 +25,7 @@ INSERT INTO roles (id, tenant_id, name, permissions, is_system) VALUES
  'manager',
  ARRAY['production:read','production:write','budget:read','budget:approve',
        'expense:read','expense:approve','inventory:read','inventory:checkout','report:read',
+       'billing:read','billing:manage',
        'document:read','document:write','document:delete'],
  true),
 
@@ -39,6 +41,7 @@ INSERT INTO roles (id, tenant_id, name, permissions, is_system) VALUES
  'd0000000-0000-0000-0000-000000000001',
  'accountant',
  ARRAY['budget:read','expense:read','expense:submit','expense:approve','report:read',
+       'billing:read',
        'document:read','document:write'],
  true),
 

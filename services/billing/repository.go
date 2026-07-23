@@ -26,10 +26,10 @@ type Repository interface {
 
 	// Payment Methods
 	CreatePaymentMethod(ctx context.Context, pm *PaymentMethod) error
-	GetPaymentMethod(ctx context.Context, id uuid.UUID) (*PaymentMethod, error)
+	GetPaymentMethod(ctx context.Context, tenantID, id uuid.UUID) (*PaymentMethod, error)
 	ListPaymentMethods(ctx context.Context, tenantID uuid.UUID) ([]PaymentMethod, error)
 	UpdatePaymentMethod(ctx context.Context, pm *PaymentMethod) error
-	DeletePaymentMethod(ctx context.Context, id uuid.UUID) error
+	DeletePaymentMethod(ctx context.Context, tenantID, id uuid.UUID) error
 	// ClearDefaultPaymentMethods unsets is_default for all payment methods of a
 	// tenant before setting a new default.
 	ClearDefaultPaymentMethods(ctx context.Context, tenantID uuid.UUID) error

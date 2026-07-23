@@ -20,16 +20,20 @@ type Handler struct {
 	billingv1.UnimplementedBillingServiceServer
 	svc       *Service
 	docClient documentv1.DocumentServiceClient // nil → DownloadInvoice returns NotFound
+	perm      interceptor.PermissionChecker
 }
 
-// NewHandler creates a billing handler.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+// NewHandler creates a billing handler. perm is required; cmd/billing refuses
+// to start when the checker is nil. billing dials iam over gRPC, so it uses
+// interceptor.RequirePermission -- not iam's in-process helper.
+func NewHandler(svc *Service, perm interceptor.PermissionChecker) *Handler {
+	return &Handler{svc: svc, perm: perm}
 }
 
 // NewHandlerWithDeps creates a billing handler with optional downstream clients.
-func NewHandlerWithDeps(svc *Service, docClient documentv1.DocumentServiceClient) *Handler {
-	return &Handler{svc: svc, docClient: docClient}
+// perm is required.
+func NewHandlerWithDeps(svc *Service, perm interceptor.PermissionChecker, docClient documentv1.DocumentServiceClient) *Handler {
+	return &Handler{svc: svc, perm: perm, docClient: docClient}
 }
 
 // --- Subscriptions ---
@@ -37,6 +41,9 @@ func NewHandlerWithDeps(svc *Service, docClient documentv1.DocumentServiceClient
 func (h *Handler) GetSubscription(ctx context.Context, req *billingv1.GetSubscriptionRequest) (*billingv1.Subscription, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:read"); err != nil {
 		return nil, err
 	}
 	sub, err := h.svc.GetSubscription(ctx, tenantID)
@@ -51,6 +58,9 @@ func (h *Handler) CreateSubscription(ctx context.Context, req *billingv1.CreateS
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:manage"); err != nil {
+		return nil, err
+	}
 	sub, err := h.svc.CreateSubscription(ctx, tenantID, req.Plan, req.BillingCycle)
 	if err != nil {
 		return nil, grpcErr(err)
@@ -61,6 +71,9 @@ func (h *Handler) CreateSubscription(ctx context.Context, req *billingv1.CreateS
 func (h *Handler) UpgradeSubscription(ctx context.Context, req *billingv1.UpgradeSubscriptionRequest) (*billingv1.Subscription, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:manage"); err != nil {
 		return nil, err
 	}
 	sub, err := h.svc.UpgradeSubscription(ctx, tenantID, req.NewPlan)
@@ -75,6 +88,9 @@ func (h *Handler) CancelSubscription(ctx context.Context, req *billingv1.CancelS
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:manage"); err != nil {
+		return nil, err
+	}
 	sub, err := h.svc.CancelSubscription(ctx, tenantID)
 	if err != nil {
 		return nil, grpcErr(err)
@@ -87,6 +103,9 @@ func (h *Handler) CancelSubscription(ctx context.Context, req *billingv1.CancelS
 func (h *Handler) CheckPlanLimit(ctx context.Context, req *billingv1.CheckPlanLimitRequest) (*billingv1.CheckPlanLimitResponse, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:read"); err != nil {
 		return nil, err
 	}
 	result, err := h.svc.CheckPlanLimit(ctx, CheckLimitRequest{
@@ -111,6 +130,9 @@ func (h *Handler) ListInvoices(ctx context.Context, req *billingv1.ListInvoicesR
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:read"); err != nil {
+		return nil, err
+	}
 	invoices, err := h.svc.ListInvoices(ctx, tenantID, int(req.Limit), int(req.Offset))
 	if err != nil {
 		return nil, grpcErr(err)
@@ -130,6 +152,9 @@ func (h *Handler) GetInvoice(ctx context.Context, req *billingv1.GetInvoiceReque
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:read"); err != nil {
+		return nil, err
+	}
 	invoiceID, err := uuid.Parse(req.InvoiceId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid invoice_id: %v", err)
@@ -147,6 +172,9 @@ func (h *Handler) GetInvoice(ctx context.Context, req *billingv1.GetInvoiceReque
 func (h *Handler) DownloadInvoice(ctx context.Context, req *billingv1.DownloadInvoiceRequest) (*billingv1.InvoiceDownloadURL, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:read"); err != nil {
 		return nil, err
 	}
 	invoiceID, err := uuid.Parse(req.InvoiceId)
@@ -192,6 +220,9 @@ func (h *Handler) AddPaymentMethod(ctx context.Context, req *billingv1.AddPaymen
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:manage"); err != nil {
+		return nil, err
+	}
 
 	pm := &PaymentMethod{
 		TenantID:      tenantID,
@@ -215,11 +246,18 @@ func (h *Handler) AddPaymentMethod(ctx context.Context, req *billingv1.AddPaymen
 }
 
 func (h *Handler) RemovePaymentMethod(ctx context.Context, req *billingv1.RemovePaymentMethodRequest) (*emptypb.Empty, error) {
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
+	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:manage"); err != nil {
+		return nil, err
+	}
 	id, err := uuid.Parse(req.PaymentMethodId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid payment_method_id: %v", err)
 	}
-	if err := h.svc.RemovePaymentMethod(ctx, id); err != nil {
+	if err := h.svc.RemovePaymentMethod(ctx, tenantID, id); err != nil {
 		return nil, grpcErr(err)
 	}
 	return &emptypb.Empty{}, nil
@@ -228,6 +266,9 @@ func (h *Handler) RemovePaymentMethod(ctx context.Context, req *billingv1.Remove
 func (h *Handler) ListPaymentMethods(ctx context.Context, req *billingv1.ListPaymentMethodsRequest) (*billingv1.ListPaymentMethodsResponse, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:read"); err != nil {
 		return nil, err
 	}
 	methods, err := h.svc.ListPaymentMethods(ctx, tenantID)
@@ -244,6 +285,9 @@ func (h *Handler) ListPaymentMethods(ctx context.Context, req *billingv1.ListPay
 func (h *Handler) SetDefaultPaymentMethod(ctx context.Context, req *billingv1.SetDefaultPaymentMethodRequest) (*billingv1.PaymentMethod, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:manage"); err != nil {
 		return nil, err
 	}
 	pmID, err := uuid.Parse(req.PaymentMethodId)
@@ -271,6 +315,9 @@ func (h *Handler) SetDefaultPaymentMethod(ctx context.Context, req *billingv1.Se
 func (h *Handler) GetUsageSummary(ctx context.Context, req *billingv1.GetUsageSummaryRequest) (*billingv1.UsageSummary, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "billing:read"); err != nil {
 		return nil, err
 	}
 	summary, err := h.svc.GetUsageSummary(ctx, tenantID)
