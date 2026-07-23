@@ -32,14 +32,14 @@ var (
 type mockRepo struct {
 	getUserByEmailFn                  func(ctx context.Context, tenantID uuid.UUID, email string) (*auth.UserRecord, error)
 	findTenantByEmailFn               func(ctx context.Context, email string) (uuid.UUID, error)
-	getUserByIDFn                     func(ctx context.Context, userID uuid.UUID) (*auth.UserRecord, error)
+	getUserByIDFn                     func(ctx context.Context, tenantID, userID uuid.UUID) (*auth.UserRecord, error)
 	createOIDCUserFn                  func(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*auth.UserRecord, error)
 	getTenantStatusFn                 func(ctx context.Context, tenantID uuid.UUID) (string, error)
 	createUserFn                      func(ctx context.Context, user *User) error
 	getUserFn                         func(ctx context.Context, tenantID, id uuid.UUID) (*User, error)
 	listUsersFn                       func(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]User, error)
 	updateUserFn                      func(ctx context.Context, user *User) error
-	updatePasswordHashFn              func(ctx context.Context, userID uuid.UUID, hash string) error
+	updatePasswordHashFn              func(ctx context.Context, tenantID, userID uuid.UUID, hash string) error
 	deactivateUserFn                  func(ctx context.Context, tenantID, id uuid.UUID) error
 	createTenantFn                    func(ctx context.Context, tenant *Tenant) error
 	getTenantFn                       func(ctx context.Context, id uuid.UUID) (*Tenant, error)
@@ -87,11 +87,11 @@ func (m *mockRepo) FindTenantByEmail(ctx context.Context, email string) (uuid.UU
 	}
 	return fixedTenantID, nil
 }
-func (m *mockRepo) GetUserByID(ctx context.Context, userID uuid.UUID) (*auth.UserRecord, error) {
+func (m *mockRepo) GetUserByID(ctx context.Context, tenantID, userID uuid.UUID) (*auth.UserRecord, error) {
 	if m.getUserByIDFn != nil {
-		return m.getUserByIDFn(ctx, userID)
+		return m.getUserByIDFn(ctx, tenantID, userID)
 	}
-	return &auth.UserRecord{ID: userID, PasswordHash: "hashed"}, nil
+	return &auth.UserRecord{ID: userID, PasswordHash: "hashed"}, nil // TenantID left uuid.Nil deliberately
 }
 func (m *mockRepo) CreateOIDCUser(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*auth.UserRecord, error) {
 	if m.createOIDCUserFn != nil {
@@ -129,9 +129,9 @@ func (m *mockRepo) UpdateUser(ctx context.Context, user *User) error {
 	}
 	return nil
 }
-func (m *mockRepo) UpdatePasswordHash(ctx context.Context, userID uuid.UUID, hash string) error {
+func (m *mockRepo) UpdatePasswordHash(ctx context.Context, tenantID, userID uuid.UUID, hash string) error {
 	if m.updatePasswordHashFn != nil {
-		return m.updatePasswordHashFn(ctx, userID, hash)
+		return m.updatePasswordHashFn(ctx, tenantID, userID, hash)
 	}
 	return nil
 }
@@ -601,12 +601,12 @@ func TestListUsers_MaxLimitEnforced(t *testing.T) {
 func TestChangePassword_WrongOldPassword(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{
-		getUserByIDFn: func(_ context.Context, _ uuid.UUID) (*auth.UserRecord, error) {
+		getUserByIDFn: func(_ context.Context, _, _ uuid.UUID) (*auth.UserRecord, error) {
 			return &auth.UserRecord{PasswordHash: "hashed:correct"}, nil
 		},
 	})
 
-	err := svc.ChangePassword(context.Background(), fixedUserID, "wrong", "newpass")
+	err := svc.ChangePassword(context.Background(), fixedTenantID, fixedUserID, "wrong", "newpass")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, auth.ErrInvalidCredentials)
 }
@@ -615,16 +615,16 @@ func TestChangePassword_Success(t *testing.T) {
 	t.Parallel()
 	var updatedHash string
 	svc := newTestService(&mockRepo{
-		getUserByIDFn: func(_ context.Context, _ uuid.UUID) (*auth.UserRecord, error) {
+		getUserByIDFn: func(_ context.Context, _, _ uuid.UUID) (*auth.UserRecord, error) {
 			return &auth.UserRecord{PasswordHash: "hashed:oldpass"}, nil
 		},
-		updatePasswordHashFn: func(_ context.Context, _ uuid.UUID, hash string) error {
+		updatePasswordHashFn: func(_ context.Context, _, _ uuid.UUID, hash string) error {
 			updatedHash = hash
 			return nil
 		},
 	})
 
-	err := svc.ChangePassword(context.Background(), fixedUserID, "oldpass", "newpass")
+	err := svc.ChangePassword(context.Background(), fixedTenantID, fixedUserID, "oldpass", "newpass")
 	require.NoError(t, err)
 	assert.Equal(t, "hashed:newpass", updatedHash)
 }
@@ -1869,12 +1869,12 @@ func TestRevokeRole_Error(t *testing.T) {
 func TestChangePassword_GetUserError(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{
-		getUserByIDFn: func(_ context.Context, _ uuid.UUID) (*auth.UserRecord, error) {
+		getUserByIDFn: func(_ context.Context, _, _ uuid.UUID) (*auth.UserRecord, error) {
 			return nil, errors.New("db error")
 		},
 	})
 
-	err := svc.ChangePassword(context.Background(), fixedUserID, "old", "new")
+	err := svc.ChangePassword(context.Background(), fixedTenantID, fixedUserID, "old", "new")
 	require.Error(t, err)
 }
 
@@ -1882,7 +1882,7 @@ func TestChangePassword_HashNewPasswordError(t *testing.T) {
 	t.Parallel()
 	svc := NewService(
 		&mockRepo{
-			getUserByIDFn: func(_ context.Context, _ uuid.UUID) (*auth.UserRecord, error) {
+			getUserByIDFn: func(_ context.Context, _, _ uuid.UUID) (*auth.UserRecord, error) {
 				return &auth.UserRecord{PasswordHash: "hashed:oldpass"}, nil
 			},
 		},
@@ -1896,22 +1896,22 @@ func TestChangePassword_HashNewPasswordError(t *testing.T) {
 		&mockVerifier{},
 	)
 
-	err := svc.ChangePassword(context.Background(), fixedUserID, "oldpass", "newpass")
+	err := svc.ChangePassword(context.Background(), fixedTenantID, fixedUserID, "oldpass", "newpass")
 	require.Error(t, err)
 }
 
 func TestChangePassword_UpdateHashError(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{
-		getUserByIDFn: func(_ context.Context, _ uuid.UUID) (*auth.UserRecord, error) {
+		getUserByIDFn: func(_ context.Context, _, _ uuid.UUID) (*auth.UserRecord, error) {
 			return &auth.UserRecord{PasswordHash: "hashed:oldpass"}, nil
 		},
-		updatePasswordHashFn: func(_ context.Context, _ uuid.UUID, _ string) error {
+		updatePasswordHashFn: func(_ context.Context, _, _ uuid.UUID, _ string) error {
 			return errors.New("db error")
 		},
 	})
 
-	err := svc.ChangePassword(context.Background(), fixedUserID, "oldpass", "newpass")
+	err := svc.ChangePassword(context.Background(), fixedTenantID, fixedUserID, "oldpass", "newpass")
 	require.Error(t, err)
 }
 

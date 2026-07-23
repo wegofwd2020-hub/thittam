@@ -14,7 +14,7 @@ type UserStore interface {
 	GetUserByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*UserRecord, error)
 
 	// GetUserByID returns the user by ID (used for refresh token validation).
-	GetUserByID(ctx context.Context, userID uuid.UUID) (*UserRecord, error)
+	GetUserByID(ctx context.Context, tenantID, userID uuid.UUID) (*UserRecord, error)
 
 	// CreateOIDCUser creates a JIT-provisioned user on first OIDC login.
 	CreateOIDCUser(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*UserRecord, error)

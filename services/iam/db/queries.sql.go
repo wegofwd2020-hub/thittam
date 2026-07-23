@@ -544,11 +544,16 @@ func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, tenant_id, email, display_name, password_hash, status, created_at FROM users WHERE id = $1
+SELECT id, tenant_id, email, display_name, password_hash, status, created_at FROM users WHERE id = $1 AND tenant_id = $2
 `
 
-func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
-	row := q.db.QueryRow(ctx, getUser, id)
+type GetUserParams struct {
+	ID       uuid.UUID `json:"id"`
+	TenantID uuid.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, getUser, arg.ID, arg.TenantID)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -1066,18 +1071,22 @@ func (q *Queries) UpdateTenantStatus(ctx context.Context, arg UpdateTenantStatus
 	return i, err
 }
 
-const updateUserPasswordHash = `-- name: UpdateUserPasswordHash :exec
-UPDATE users SET password_hash = $2 WHERE id = $1
+const updateUserPasswordHash = `-- name: UpdateUserPasswordHash :execrows
+UPDATE users SET password_hash = $2 WHERE id = $1 AND tenant_id = $3
 `
 
 type UpdateUserPasswordHashParams struct {
 	ID           uuid.UUID `json:"id"`
 	PasswordHash string    `json:"password_hash"`
+	TenantID     uuid.UUID `json:"tenant_id"`
 }
 
-func (q *Queries) UpdateUserPasswordHash(ctx context.Context, arg UpdateUserPasswordHashParams) error {
-	_, err := q.db.Exec(ctx, updateUserPasswordHash, arg.ID, arg.PasswordHash)
-	return err
+func (q *Queries) UpdateUserPasswordHash(ctx context.Context, arg UpdateUserPasswordHashParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateUserPasswordHash, arg.ID, arg.PasswordHash, arg.TenantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateUserStatus = `-- name: UpdateUserStatus :one

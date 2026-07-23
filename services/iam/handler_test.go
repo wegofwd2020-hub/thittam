@@ -362,10 +362,10 @@ func TestHandler_ChangePassword_Success(t *testing.T) {
 	tenantID := uuid.New()
 	userID := uuid.New()
 	h := NewHandler(newTestService(&mockRepo{
-		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*auth.UserRecord, error) {
+		getUserByIDFn: func(_ context.Context, _, id uuid.UUID) (*auth.UserRecord, error) {
 			return &auth.UserRecord{ID: id, PasswordHash: "hashed:old"}, nil
 		},
-		updatePasswordHashFn: func(_ context.Context, _ uuid.UUID, _ string) error { return nil },
+		updatePasswordHashFn: func(_ context.Context, _, _ uuid.UUID, _ string) error { return nil },
 	}))
 
 	resp, err := h.ChangePassword(memberCtxAs(tenantID, userID), &iamv1.ChangePasswordRequest{
@@ -398,11 +398,11 @@ func TestHandler_ChangePassword_ForgedSubjectDenied(t *testing.T) {
 	victimID := uuid.New()
 
 	h := NewHandler(newTestService(&mockRepo{
-		getUserByIDFn: func(context.Context, uuid.UUID) (*auth.UserRecord, error) {
+		getUserByIDFn: func(context.Context, uuid.UUID, uuid.UUID) (*auth.UserRecord, error) {
 			t.Fatal("a forged subject must be refused before the user is read")
 			return nil, nil
 		},
-		updatePasswordHashFn: func(context.Context, uuid.UUID, string) error {
+		updatePasswordHashFn: func(context.Context, uuid.UUID, uuid.UUID, string) error {
 			t.Fatal("a forged subject must never reach the password write")
 			return nil
 		},
@@ -425,11 +425,11 @@ func TestHandler_ChangePassword_UsesTheCallerAsSubject(t *testing.T) {
 	var gotReadID, gotWriteID uuid.UUID
 
 	h := NewHandler(newTestService(&mockRepo{
-		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*auth.UserRecord, error) {
+		getUserByIDFn: func(_ context.Context, _, id uuid.UUID) (*auth.UserRecord, error) {
 			gotReadID = id
 			return &auth.UserRecord{ID: id, PasswordHash: "hashed:old"}, nil
 		},
-		updatePasswordHashFn: func(_ context.Context, id uuid.UUID, _ string) error {
+		updatePasswordHashFn: func(_ context.Context, _, id uuid.UUID, _ string) error {
 			gotWriteID = id
 			return nil
 		},
@@ -455,11 +455,11 @@ func TestHandler_ChangePassword_UsesTheCallerAsSubject(t *testing.T) {
 func TestHandler_ChangePassword_NoCallerUnauthenticated(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(newTestService(&mockRepo{
-		getUserByIDFn: func(context.Context, uuid.UUID) (*auth.UserRecord, error) {
+		getUserByIDFn: func(context.Context, uuid.UUID, uuid.UUID) (*auth.UserRecord, error) {
 			t.Fatal("a tokenless call must never reach the repository")
 			return nil, nil
 		},
-		updatePasswordHashFn: func(context.Context, uuid.UUID, string) error {
+		updatePasswordHashFn: func(context.Context, uuid.UUID, uuid.UUID, string) error {
 			t.Fatal("a tokenless call must never reach the password write")
 			return nil
 		},

@@ -229,7 +229,7 @@ func (s *Service) rehashIfNeeded(tenantID uuid.UUID, email, password string) {
 		return
 	}
 	// UpdatePasswordHash is a single-row write — idempotent on retry.
-	_ = s.repo.UpdatePasswordHash(ctx, record.ID, newHash)
+	_ = s.repo.UpdatePasswordHash(ctx, tenantID, record.ID, newHash)
 }
 
 // RefreshToken issues a new token pair from a valid refresh token.
@@ -329,8 +329,8 @@ func (s *Service) DeactivateUser(ctx context.Context, tenantID, id uuid.UUID) er
 }
 
 // ChangePassword verifies the current password then replaces the hash.
-func (s *Service) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
-	record, err := s.repo.GetUserByID(ctx, userID)
+func (s *Service) ChangePassword(ctx context.Context, tenantID, userID uuid.UUID, oldPassword, newPassword string) error {
+	record, err := s.repo.GetUserByID(ctx, tenantID, userID)
 	if err != nil {
 		return fmt.Errorf("iam: get user for password change: %w", err)
 	}
@@ -343,7 +343,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassw
 	if err != nil {
 		return fmt.Errorf("iam: hash new password: %w", err)
 	}
-	if err := s.repo.UpdatePasswordHash(ctx, userID, hash); err != nil {
+	if err := s.repo.UpdatePasswordHash(ctx, tenantID, userID, hash); err != nil {
 		return fmt.Errorf("iam: update password hash: %w", err)
 	}
 	return nil

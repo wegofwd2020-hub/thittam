@@ -21,7 +21,7 @@ type Repository interface {
 	// tenants have a user with the same email — in that case the caller MUST
 	// supply tenant_id explicitly.
 	FindTenantByEmail(ctx context.Context, email string) (uuid.UUID, error)
-	GetUserByID(ctx context.Context, userID uuid.UUID) (*auth.UserRecord, error)
+	GetUserByID(ctx context.Context, tenantID, userID uuid.UUID) (*auth.UserRecord, error)
 	CreateOIDCUser(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*auth.UserRecord, error)
 
 	// auth.TenantStore — used by auth.LocalProvider.
@@ -32,7 +32,7 @@ type Repository interface {
 	GetUser(ctx context.Context, tenantID, id uuid.UUID) (*User, error)
 	ListUsers(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]User, error)
 	UpdateUser(ctx context.Context, user *User) error
-	UpdatePasswordHash(ctx context.Context, userID uuid.UUID, hash string) error
+	UpdatePasswordHash(ctx context.Context, tenantID, userID uuid.UUID, hash string) error
 	DeactivateUser(ctx context.Context, tenantID, id uuid.UUID) error
 
 	// Tenants

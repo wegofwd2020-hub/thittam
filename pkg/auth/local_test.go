@@ -14,7 +14,7 @@ import (
 
 type mockUserStore struct {
 	getByEmailFn  func(ctx context.Context, tenantID uuid.UUID, email string) (*UserRecord, error)
-	getByIDFn     func(ctx context.Context, userID uuid.UUID) (*UserRecord, error)
+	getByIDFn     func(ctx context.Context, tenantID, userID uuid.UUID) (*UserRecord, error)
 	createOIDCFn  func(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*UserRecord, error)
 }
 
@@ -25,9 +25,9 @@ func (m *mockUserStore) GetUserByEmail(ctx context.Context, tenantID uuid.UUID, 
 	return testUser(), nil
 }
 
-func (m *mockUserStore) GetUserByID(ctx context.Context, userID uuid.UUID) (*UserRecord, error) {
+func (m *mockUserStore) GetUserByID(ctx context.Context, tenantID, userID uuid.UUID) (*UserRecord, error) {
 	if m.getByIDFn != nil {
-		return m.getByIDFn(ctx, userID)
+		return m.getByIDFn(ctx, tenantID, userID)
 	}
 	return testUser(), nil
 }

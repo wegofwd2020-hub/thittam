@@ -122,7 +122,7 @@ func (r *iamRepo) GetUserByEmail(_ context.Context, _ uuid.UUID, _ string) (*aut
 func (r *iamRepo) FindTenantByEmail(_ context.Context, _ string) (uuid.UUID, error) {
 	return uuid.Nil, nil
 }
-func (r *iamRepo) GetUserByID(_ context.Context, _ uuid.UUID) (*auth.UserRecord, error) {
+func (r *iamRepo) GetUserByID(_ context.Context, _, _ uuid.UUID) (*auth.UserRecord, error) {
 	return nil, nil
 }
 func (r *iamRepo) CreateOIDCUser(_ context.Context, _ uuid.UUID, _, _ string) (*auth.UserRecord, error) {
@@ -155,7 +155,7 @@ func (r *iamRepo) UpdateUser(_ context.Context, u *iam.User) error {
 	r.users[u.ID] = u
 	return nil
 }
-func (r *iamRepo) UpdatePasswordHash(_ context.Context, _ uuid.UUID, _ string) error { return nil }
+func (r *iamRepo) UpdatePasswordHash(_ context.Context, _, _ uuid.UUID, _ string) error { return nil }
 func (r *iamRepo) DeactivateUser(_ context.Context, _, _ uuid.UUID) error            { return nil }
 
 // Tenants

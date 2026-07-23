@@ -228,7 +228,11 @@ func (h *Handler) ChangePassword(ctx context.Context, req *iamv1.ChangePasswordR
 	if err != nil {
 		return nil, err
 	}
-	if err := h.svc.ChangePassword(ctx, userID, req.GetOldPassword(), req.GetNewPassword()); err != nil {
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok || caller.TenantID == uuid.Nil {
+		return nil, status.Error(codes.Unauthenticated, "caller tenant not present in context")
+	}
+	if err := h.svc.ChangePassword(ctx, caller.TenantID, userID, req.GetOldPassword(), req.GetNewPassword()); err != nil {
 		return nil, grpcError(err)
 	}
 	return &iamv1.ChangePasswordResponse{}, nil
