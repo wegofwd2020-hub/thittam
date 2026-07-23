@@ -138,11 +138,16 @@ func (q *Queries) GetBudget(ctx context.Context, arg GetBudgetParams) (Budget, e
 }
 
 const getLineItem = `-- name: GetLineItem :one
-SELECT id, budget_id, tenant_id, category_id, description, account_code, budgeted_amount, actual_amount, committed_amount, is_locked, created_at, updated_at FROM budget_line_items WHERE id = $1
+SELECT id, budget_id, tenant_id, category_id, description, account_code, budgeted_amount, actual_amount, committed_amount, is_locked, created_at, updated_at FROM budget_line_items WHERE id = $1 AND tenant_id = $2
 `
 
-func (q *Queries) GetLineItem(ctx context.Context, id uuid.UUID) (BudgetLineItem, error) {
-	row := q.db.QueryRow(ctx, getLineItem, id)
+type GetLineItemParams struct {
+	ID       uuid.UUID `json:"id"`
+	TenantID uuid.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) GetLineItem(ctx context.Context, arg GetLineItemParams) (BudgetLineItem, error) {
+	row := q.db.QueryRow(ctx, getLineItem, arg.ID, arg.TenantID)
 	var i BudgetLineItem
 	err := row.Scan(
 		&i.ID,
@@ -216,17 +221,23 @@ func (q *Queries) ListBudgets(ctx context.Context, arg ListBudgetsParams) ([]Bud
 }
 
 const listLineItems = `-- name: ListLineItems :many
-SELECT id, budget_id, tenant_id, category_id, description, account_code, budgeted_amount, actual_amount, committed_amount, is_locked, created_at, updated_at FROM budget_line_items WHERE budget_id = $1 ORDER BY category_id, created_at ASC LIMIT $2 OFFSET $3
+SELECT id, budget_id, tenant_id, category_id, description, account_code, budgeted_amount, actual_amount, committed_amount, is_locked, created_at, updated_at FROM budget_line_items WHERE budget_id = $1 AND tenant_id = $2 ORDER BY category_id, created_at ASC LIMIT $3 OFFSET $4
 `
 
 type ListLineItemsParams struct {
 	BudgetID uuid.UUID `json:"budget_id"`
+	TenantID uuid.UUID `json:"tenant_id"`
 	Limit    int32     `json:"limit"`
 	Offset   int32     `json:"offset"`
 }
 
 func (q *Queries) ListLineItems(ctx context.Context, arg ListLineItemsParams) ([]BudgetLineItem, error) {
-	rows, err := q.db.Query(ctx, listLineItems, arg.BudgetID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listLineItems,
+		arg.BudgetID,
+		arg.TenantID,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -260,11 +271,16 @@ func (q *Queries) ListLineItems(ctx context.Context, arg ListLineItemsParams) ([
 
 const lockLineItem = `-- name: LockLineItem :exec
 UPDATE budget_line_items SET is_locked = true, updated_at = now()
-WHERE id = $1
+WHERE id = $1 AND tenant_id = $2
 `
 
-func (q *Queries) LockLineItem(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, lockLineItem, id)
+type LockLineItemParams struct {
+	ID       uuid.UUID `json:"id"`
+	TenantID uuid.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) LockLineItem(ctx context.Context, arg LockLineItemParams) error {
+	_, err := q.db.Exec(ctx, lockLineItem, arg.ID, arg.TenantID)
 	return err
 }
 
@@ -316,13 +332,18 @@ func (q *Queries) UpdateBudgetStatus(ctx context.Context, arg UpdateBudgetStatus
 
 const updateBudgetTotals = `-- name: UpdateBudgetTotals :exec
 UPDATE budgets
-SET total_amount = (SELECT COALESCE(SUM(budgeted_amount), 0) FROM budget_line_items WHERE budget_id = $1),
+SET total_amount = (SELECT COALESCE(SUM(bli.budgeted_amount), 0) FROM budget_line_items bli WHERE bli.budget_id = $1 AND bli.tenant_id = $2),
     updated_at  = now()
-WHERE id = $1
+WHERE budgets.id = $1 AND budgets.tenant_id = $2
 `
 
-func (q *Queries) UpdateBudgetTotals(ctx context.Context, budgetID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, updateBudgetTotals, budgetID)
+type UpdateBudgetTotalsParams struct {
+	BudgetID uuid.UUID `json:"budget_id"`
+	TenantID uuid.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) UpdateBudgetTotals(ctx context.Context, arg UpdateBudgetTotalsParams) error {
+	_, err := q.db.Exec(ctx, updateBudgetTotals, arg.BudgetID, arg.TenantID)
 	return err
 }
 

@@ -17,8 +17,8 @@ type Repository interface {
 
 	// Line Items
 	CreateLineItem(ctx context.Context, li *BudgetLineItem) error
-	GetLineItem(ctx context.Context, id uuid.UUID) (*BudgetLineItem, error)
-	ListLineItems(ctx context.Context, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error)
-	UpdateLineItemActuals(ctx context.Context, id uuid.UUID, actualAmount, committedAmount decimal.Decimal) error
-	CheckLineAvailability(ctx context.Context, id uuid.UUID) (decimal.Decimal, error)
+	GetLineItem(ctx context.Context, tenantID, id uuid.UUID) (*BudgetLineItem, error)
+	ListLineItems(ctx context.Context, tenantID, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error)
+	UpdateLineItemActuals(ctx context.Context, tenantID, id uuid.UUID, actualAmount, committedAmount decimal.Decimal) error
+	CheckLineAvailability(ctx context.Context, tenantID, id uuid.UUID) (decimal.Decimal, error)
 }

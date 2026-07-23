@@ -28,9 +28,9 @@ RETURNING *;
 
 -- name: UpdateBudgetTotals :exec
 UPDATE budgets
-SET total_amount = (SELECT COALESCE(SUM(budgeted_amount), 0) FROM budget_line_items WHERE budget_id = $1),
+SET total_amount = (SELECT COALESCE(SUM(bli.budgeted_amount), 0) FROM budget_line_items bli WHERE bli.budget_id = $1 AND bli.tenant_id = $2),
     updated_at  = now()
-WHERE id = $1;
+WHERE budgets.id = $1 AND budgets.tenant_id = $2;
 
 -- name: CreateLineItem :one
 INSERT INTO budget_line_items (id, budget_id, tenant_id, category_id, description, account_code, budgeted_amount)
@@ -39,10 +39,10 @@ ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: GetLineItem :one
-SELECT * FROM budget_line_items WHERE id = $1;
+SELECT * FROM budget_line_items WHERE id = $1 AND tenant_id = $2;
 
 -- name: ListLineItems :many
-SELECT * FROM budget_line_items WHERE budget_id = $1 ORDER BY category_id, created_at ASC LIMIT $2 OFFSET $3;
+SELECT * FROM budget_line_items WHERE budget_id = $1 AND tenant_id = $2 ORDER BY category_id, created_at ASC LIMIT $3 OFFSET $4;
 
 -- name: UpdateLineItemAmounts :one
 UPDATE budget_line_items
@@ -55,4 +55,4 @@ RETURNING *;
 
 -- name: LockLineItem :exec
 UPDATE budget_line_items SET is_locked = true, updated_at = now()
-WHERE id = $1;
+WHERE id = $1 AND tenant_id = $2;

@@ -46,10 +46,10 @@ func (m *budgetMock) GetBudget(ctx context.Context, tid, id uuid.UUID) (*budget.
 func (m *budgetMock) ListBudgets(ctx context.Context, tid, pid uuid.UUID, status string, limit, offset int) ([]budget.Budget, error) { return nil, nil }
 func (m *budgetMock) UpdateBudgetStatus(ctx context.Context, id uuid.UUID, status string, approvedBy *uuid.UUID) error { return nil }
 func (m *budgetMock) CreateLineItem(ctx context.Context, li *budget.BudgetLineItem) error { return nil }
-func (m *budgetMock) GetLineItem(ctx context.Context, id uuid.UUID) (*budget.BudgetLineItem, error) { return nil, nil }
-func (m *budgetMock) ListLineItems(ctx context.Context, budgetID uuid.UUID, limit, offset int) ([]budget.BudgetLineItem, error) { return nil, nil }
-func (m *budgetMock) UpdateLineItemActuals(ctx context.Context, id uuid.UUID, actual, committed decimal.Decimal) error { return nil }
-func (m *budgetMock) CheckLineAvailability(ctx context.Context, id uuid.UUID) (decimal.Decimal, error) { return decimal.NewFromInt(1000000), nil }
+func (m *budgetMock) GetLineItem(ctx context.Context, tid, id uuid.UUID) (*budget.BudgetLineItem, error) { return nil, nil }
+func (m *budgetMock) ListLineItems(ctx context.Context, tid, budgetID uuid.UUID, limit, offset int) ([]budget.BudgetLineItem, error) { return nil, nil }
+func (m *budgetMock) UpdateLineItemActuals(ctx context.Context, tid, id uuid.UUID, actual, committed decimal.Decimal) error { return nil }
+func (m *budgetMock) CheckLineAvailability(ctx context.Context, tid, id uuid.UUID) (decimal.Decimal, error) { return decimal.NewFromInt(1000000), nil }
 
 // --- expense mock ---
 

@@ -128,14 +128,14 @@ func (p *Postgres) CreateLineItem(ctx context.Context, li *budget.BudgetLineItem
 	}
 
 	// Keep budget total_amount in sync after every new line item.
-	if err := p.q.UpdateBudgetTotals(ctx, li.BudgetID); err != nil {
+	if err := p.q.UpdateBudgetTotals(ctx, UpdateBudgetTotalsParams{BudgetID: li.BudgetID, TenantID: li.TenantID}); err != nil {
 		return fmt.Errorf("budget: update budget totals: %w", err)
 	}
 	return nil
 }
 
-func (p *Postgres) GetLineItem(ctx context.Context, id uuid.UUID) (*budget.BudgetLineItem, error) {
-	row, err := p.q.GetLineItem(ctx, id)
+func (p *Postgres) GetLineItem(ctx context.Context, tenantID, id uuid.UUID) (*budget.BudgetLineItem, error) {
+	row, err := p.q.GetLineItem(ctx, GetLineItemParams{ID: id, TenantID: tenantID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, budget.ErrLineItemNotFound
@@ -145,9 +145,10 @@ func (p *Postgres) GetLineItem(ctx context.Context, id uuid.UUID) (*budget.Budge
 	return lineItemFromDB(row), nil
 }
 
-func (p *Postgres) ListLineItems(ctx context.Context, budgetID uuid.UUID, limit, offset int) ([]budget.BudgetLineItem, error) {
+func (p *Postgres) ListLineItems(ctx context.Context, tenantID, budgetID uuid.UUID, limit, offset int) ([]budget.BudgetLineItem, error) {
 	rows, err := p.q.ListLineItems(ctx, ListLineItemsParams{
 		BudgetID: budgetID,
+		TenantID: tenantID,
 		Limit:    int32(limit),
 		Offset:   int32(offset),
 	})
@@ -161,17 +162,7 @@ func (p *Postgres) ListLineItems(ctx context.Context, budgetID uuid.UUID, limit,
 	return result, nil
 }
 
-func (p *Postgres) UpdateLineItemActuals(ctx context.Context, id uuid.UUID, actualAmount, committedAmount decimal.Decimal) error {
-	// Resolve tenant_id for the WHERE clause.
-	row := p.db.QueryRow(ctx, "SELECT tenant_id FROM budget_line_items WHERE id = $1", id)
-	var tenantID uuid.UUID
-	if err := row.Scan(&tenantID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return budget.ErrLineItemNotFound
-		}
-		return fmt.Errorf("budget: resolve tenant for line item %s: %w", id, err)
-	}
-
+func (p *Postgres) UpdateLineItemActuals(ctx context.Context, tenantID, id uuid.UUID, actualAmount, committedAmount decimal.Decimal) error {
 	li, err := p.q.UpdateLineItemAmounts(ctx, UpdateLineItemAmountsParams{
 		ID:              id,
 		TenantID:        tenantID,
@@ -187,15 +178,15 @@ func (p *Postgres) UpdateLineItemActuals(ctx context.Context, id uuid.UUID, actu
 	}
 
 	// Keep budget total in sync.
-	if err := p.q.UpdateBudgetTotals(ctx, li.BudgetID); err != nil {
+	if err := p.q.UpdateBudgetTotals(ctx, UpdateBudgetTotalsParams{BudgetID: li.BudgetID, TenantID: tenantID}); err != nil {
 		return fmt.Errorf("budget: update budget totals after actuals: %w", err)
 	}
 	return nil
 }
 
 // CheckLineAvailability returns budgeted - actual - committed for a line item.
-func (p *Postgres) CheckLineAvailability(ctx context.Context, id uuid.UUID) (decimal.Decimal, error) {
-	li, err := p.GetLineItem(ctx, id)
+func (p *Postgres) CheckLineAvailability(ctx context.Context, tenantID, id uuid.UUID) (decimal.Decimal, error) {
+	li, err := p.GetLineItem(ctx, tenantID, id)
 	if err != nil {
 		return decimal.Zero, err
 	}
