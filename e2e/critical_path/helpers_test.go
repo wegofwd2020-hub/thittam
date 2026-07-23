@@ -261,10 +261,10 @@ func (r *iamRepo) CreateTenantPurgeRequest(_ context.Context, _ *iam.TenantPurge
 func (r *iamRepo) GetOpenTenantPurgeRequest(_ context.Context, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
 	return nil, iam.ErrPurgeRequestNotFound
 }
-func (r *iamRepo) ApproveTenantPurgeRequest(_ context.Context, _, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
+func (r *iamRepo) ApproveTenantPurgeRequest(_ context.Context, _, _, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
 	return nil, iam.ErrPurgeRequestNotFound
 }
-func (r *iamRepo) CancelTenantPurgeRequest(_ context.Context, _, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
+func (r *iamRepo) CancelTenantPurgeRequest(_ context.Context, _, _, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
 	return nil, iam.ErrPurgeRequestNotFound
 }
 func (r *iamRepo) ListApprovedTenantPurgeRequests(_ context.Context, _ int) ([]*iam.TenantPurgeRequest, error) {

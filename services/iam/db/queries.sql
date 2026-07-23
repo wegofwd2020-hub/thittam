@@ -205,13 +205,13 @@ LIMIT 1;
 -- name: ApproveTenantPurgeRequest :one
 UPDATE tenant_purge_requests
    SET status = 'approved', approved_by = $2, approved_at = now()
- WHERE id = $1 AND status = 'pending'
+ WHERE id = $1 AND status = 'pending' AND tenant_id = $3
 RETURNING *;
 
 -- name: CancelTenantPurgeRequest :one
 UPDATE tenant_purge_requests
    SET status = 'cancelled', cancelled_by = $2, cancelled_at = now()
- WHERE id = $1 AND status IN ('pending', 'approved')
+ WHERE id = $1 AND status IN ('pending', 'approved') AND tenant_id = $3
 RETURNING *;
 
 -- name: ListApprovedTenantPurgeRequests :many

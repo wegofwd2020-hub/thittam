@@ -1110,10 +1110,11 @@ func (p *Postgres) GetOpenTenantPurgeRequest(ctx context.Context, tenantID uuid.
 // ApproveTenantPurgeRequest transitions a pending request to approved.
 // Returns iam.ErrPurgeRequestNotFound if the request is missing or no
 // longer pending (the WHERE status = 'pending' guard didn't match).
-func (p *Postgres) ApproveTenantPurgeRequest(ctx context.Context, requestID, approverID uuid.UUID) (*iam.TenantPurgeRequest, error) {
+func (p *Postgres) ApproveTenantPurgeRequest(ctx context.Context, tenantID, requestID, approverID uuid.UUID) (*iam.TenantPurgeRequest, error) {
 	row, err := p.q.ApproveTenantPurgeRequest(ctx, ApproveTenantPurgeRequestParams{
 		ID:         requestID,
 		ApprovedBy: pgUUIDFromPtr(&approverID),
+		TenantID:   tenantID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1127,10 +1128,11 @@ func (p *Postgres) ApproveTenantPurgeRequest(ctx context.Context, requestID, app
 // CancelTenantPurgeRequest transitions an open (pending|approved) request
 // to cancelled. Returns iam.ErrPurgeRequestNotFound if the request is
 // missing or already terminal.
-func (p *Postgres) CancelTenantPurgeRequest(ctx context.Context, requestID, cancellerID uuid.UUID) (*iam.TenantPurgeRequest, error) {
+func (p *Postgres) CancelTenantPurgeRequest(ctx context.Context, tenantID, requestID, cancellerID uuid.UUID) (*iam.TenantPurgeRequest, error) {
 	row, err := p.q.CancelTenantPurgeRequest(ctx, CancelTenantPurgeRequestParams{
 		ID:          requestID,
 		CancelledBy: pgUUIDFromPtr(&cancellerID),
+		TenantID:    tenantID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

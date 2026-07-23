@@ -1255,7 +1255,7 @@ func TestHandler_ApproveTenantPurge_Success(t *testing.T) {
 		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
 			return &Tenant{ID: id, Status: TenantStatusPurgeEligible}, nil
 		},
-		approveTenantPurgeRequestFn: func(_ context.Context, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error) {
+		approveTenantPurgeRequestFn: func(_ context.Context, _, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error) {
 			return &TenantPurgeRequest{ID: requestID, TenantID: tid, Status: PurgeRequestApproved, RequestedBy: requester, ApprovedBy: &approverID}, nil
 		},
 	}))
@@ -1289,7 +1289,7 @@ func TestHandler_ApproveTenantPurge_SelfApproval_FailedPrecondition(t *testing.T
 		getOpenTenantPurgeRequestFn: func(_ context.Context, _ uuid.UUID) (*TenantPurgeRequest, error) {
 			return &TenantPurgeRequest{ID: uuid.New(), TenantID: tid, Status: PurgeRequestPending, RequestedBy: uuid.UUID{}}, nil
 		},
-		approveTenantPurgeRequestFn: func(_ context.Context, _, _ uuid.UUID) (*TenantPurgeRequest, error) {
+		approveTenantPurgeRequestFn: func(_ context.Context, _, _, _ uuid.UUID) (*TenantPurgeRequest, error) {
 			t.Fatal("must not approve on self-approval")
 			return nil, nil
 		},
@@ -1306,7 +1306,7 @@ func TestHandler_CancelTenantPurge_Success(t *testing.T) {
 		getOpenTenantPurgeRequestFn: func(_ context.Context, _ uuid.UUID) (*TenantPurgeRequest, error) {
 			return openReq, nil
 		},
-		cancelTenantPurgeRequestFn: func(_ context.Context, requestID, _ uuid.UUID) (*TenantPurgeRequest, error) {
+		cancelTenantPurgeRequestFn: func(_ context.Context, _, requestID, _ uuid.UUID) (*TenantPurgeRequest, error) {
 			return &TenantPurgeRequest{ID: requestID, TenantID: tid, Status: PurgeRequestCancelled, RequestedBy: openReq.RequestedBy}, nil
 		},
 	}))

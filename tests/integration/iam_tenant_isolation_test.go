@@ -90,6 +90,86 @@ func TestIAM_TenantIsolation_ChangePasswordDenied(t *testing.T) {
 	require.NoError(t, auth.NewDualVerifier().Verify("new-password-from-victim", updated.PasswordHash), "same-tenant ChangePassword must actually take effect")
 }
 
+// TestIAM_TenantIsolation_PurgeApprovalDenied is the failing (pre-fix) /
+// passing (post-fix) test for task 3b. Before the fix, ApproveTenantPurgeRequest
+// and CancelTenantPurgeRequest took no tenantID at all — their underlying
+// queries matched by request id (and status) only, so tenant A supplying
+// tenant B's open purge request id would silently approve/cancel B's request.
+// Exercises the real Postgres repository directly (not the Service, whose
+// GetOpenTenantPurgeRequest(ctx, tenantID) call already scopes the request id
+// it hands to Approve/Cancel) so the repo-level predicate itself is under test.
+func TestIAM_TenantIsolation_PurgeApprovalDenied(t *testing.T) {
+	pool := testdb.Open(t)
+	ctx := context.Background()
+	repo := iamdb.NewPostgres(pool)
+
+	tenantA := uuid.New()
+	tenantB := uuid.New()
+
+	requestA := seedIAMPurgeRequest(t, pool, tenantA)
+	requestB := seedIAMPurgeRequest(t, pool, tenantB)
+
+	// --- ApproveTenantPurgeRequest: tenant A approving tenant B's open
+	// request id must fail, and B's request must stay pending. ---
+	_, err := repo.ApproveTenantPurgeRequest(ctx, tenantA, requestB, uuid.New())
+	assert.ErrorIs(t, err, iam.ErrPurgeRequestNotFound, "cross-tenant approve must be refused, not silently resolved by request id alone")
+	assert.Equal(t, "pending", readPurgeRequestStatus(t, pool, requestB), "a refused cross-tenant approve must not mutate the victim tenant's request")
+
+	// --- CancelTenantPurgeRequest: same check, using tenant A's own request
+	// as the victim this time to prove the isolation isn't accidentally
+	// symmetric with the first case. ---
+	_, err = repo.CancelTenantPurgeRequest(ctx, tenantB, requestA, uuid.New())
+	assert.ErrorIs(t, err, iam.ErrPurgeRequestNotFound, "cross-tenant cancel must be refused")
+	assert.Equal(t, "pending", readPurgeRequestStatus(t, pool, requestA), "a refused cross-tenant cancel must not mutate the victim tenant's request")
+
+	// Positive control: same-tenant approve then cancel succeeds end to end,
+	// proving the fix didn't just break the predicate for everyone.
+	approved, err := repo.ApproveTenantPurgeRequest(ctx, tenantB, requestB, uuid.New())
+	require.NoError(t, err)
+	assert.Equal(t, "approved", approved.Status)
+	cancelled, err := repo.CancelTenantPurgeRequest(ctx, tenantB, requestB, uuid.New())
+	require.NoError(t, err)
+	assert.Equal(t, "cancelled", cancelled.Status)
+}
+
+// seedIAMPurgeRequest inserts a pending tenant_purge_requests row for
+// tenantID, registering cleanup. Returns the request id.
+//
+// tenant_purge_requests.tenant_id carries no FK (migrations/iam/019), so this
+// does not require a corresponding tenants row.
+func seedIAMPurgeRequest(t *testing.T, pool *pgxpool.Pool, tenantID uuid.UUID) uuid.UUID {
+	t.Helper()
+	ctx := context.Background()
+
+	requestID := uuid.New()
+	_, err := pool.Exec(ctx,
+		`INSERT INTO tenant_purge_requests (id, tenant_id, status, requested_by, request_reason, tenant_name, tenant_slug)
+		 VALUES ($1, $2, 'pending', $3, 'tenant isolation test', 'Tenant Isolation Test Tenant', $4)`,
+		requestID, tenantID, uuid.New(), "iso-test-"+requestID.String())
+	require.NoError(t, err, "insert tenant_purge_request")
+
+	t.Cleanup(func() {
+		ctx := context.Background()
+		_, err := pool.Exec(ctx, `DELETE FROM tenant_purge_requests WHERE id = $1`, requestID)
+		assert.NoError(t, err, "cleanup: delete tenant_purge_requests")
+	})
+
+	return requestID
+}
+
+// readPurgeRequestStatus reads a purge request's status column directly,
+// bypassing the repository, so the assertion is independent of the code
+// under test.
+func readPurgeRequestStatus(t *testing.T, pool *pgxpool.Pool, requestID uuid.UUID) string {
+	t.Helper()
+	ctx := context.Background()
+
+	var status string
+	err := pool.QueryRow(ctx, `SELECT status FROM tenant_purge_requests WHERE id = $1`, requestID).Scan(&status)
+	require.NoError(t, err, "read tenant_purge_request status")
+	return status
+}
+
 // seedIAMTenant inserts a minimal tenant row, registering cleanup. Returns
 // the tenant id.
 func seedIAMTenant(t *testing.T, pool *pgxpool.Pool) uuid.UUID {

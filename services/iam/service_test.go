@@ -53,8 +53,8 @@ type mockRepo struct {
 	listTenantsDueForLifecycleFn      func(ctx context.Context, now time.Time, limit int) ([]*Tenant, error)
 	createTenantPurgeRequestFn        func(ctx context.Context, req *TenantPurgeRequest) error
 	getOpenTenantPurgeRequestFn       func(ctx context.Context, tenantID uuid.UUID) (*TenantPurgeRequest, error)
-	approveTenantPurgeRequestFn       func(ctx context.Context, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error)
-	cancelTenantPurgeRequestFn        func(ctx context.Context, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error)
+	approveTenantPurgeRequestFn       func(ctx context.Context, tenantID, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error)
+	cancelTenantPurgeRequestFn        func(ctx context.Context, tenantID, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error)
 	listApprovedTenantPurgeRequestsFn func(ctx context.Context, limit int) ([]*TenantPurgeRequest, error)
 	markTenantPurgeRequestFailedFn    func(ctx context.Context, requestID uuid.UUID, reason string) (*TenantPurgeRequest, error)
 	purgeTenantSchemaAndTombstoneFn   func(ctx context.Context, tenantID, requestID uuid.UUID) error
@@ -213,15 +213,15 @@ func (m *mockRepo) GetOpenTenantPurgeRequest(ctx context.Context, tenantID uuid.
 	}
 	return nil, ErrPurgeRequestNotFound
 }
-func (m *mockRepo) ApproveTenantPurgeRequest(ctx context.Context, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error) {
+func (m *mockRepo) ApproveTenantPurgeRequest(ctx context.Context, tenantID, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error) {
 	if m.approveTenantPurgeRequestFn != nil {
-		return m.approveTenantPurgeRequestFn(ctx, requestID, approverID)
+		return m.approveTenantPurgeRequestFn(ctx, tenantID, requestID, approverID)
 	}
 	return nil, ErrPurgeRequestNotFound
 }
-func (m *mockRepo) CancelTenantPurgeRequest(ctx context.Context, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error) {
+func (m *mockRepo) CancelTenantPurgeRequest(ctx context.Context, tenantID, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error) {
 	if m.cancelTenantPurgeRequestFn != nil {
-		return m.cancelTenantPurgeRequestFn(ctx, requestID, cancellerID)
+		return m.cancelTenantPurgeRequestFn(ctx, tenantID, requestID, cancellerID)
 	}
 	return nil, ErrPurgeRequestNotFound
 }

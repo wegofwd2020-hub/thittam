@@ -87,8 +87,8 @@ type Repository interface {
 	// --- Tenant purge (two-person approval, #92 Stage 3) ---
 	CreateTenantPurgeRequest(ctx context.Context, req *TenantPurgeRequest) error
 	GetOpenTenantPurgeRequest(ctx context.Context, tenantID uuid.UUID) (*TenantPurgeRequest, error)
-	ApproveTenantPurgeRequest(ctx context.Context, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error)
-	CancelTenantPurgeRequest(ctx context.Context, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error)
+	ApproveTenantPurgeRequest(ctx context.Context, tenantID, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error)
+	CancelTenantPurgeRequest(ctx context.Context, tenantID, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error)
 	ListApprovedTenantPurgeRequests(ctx context.Context, limit int) ([]*TenantPurgeRequest, error)
 	MarkTenantPurgeRequestFailed(ctx context.Context, requestID uuid.UUID, reason string) (*TenantPurgeRequest, error)
 	// PurgeTenantSchemaAndTombstone hard-deletes a purge_eligible tenant in one
