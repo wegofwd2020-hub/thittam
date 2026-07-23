@@ -223,8 +223,8 @@ func TestHandler_CreatePhase_Success(t *testing.T) {
 	tenantID := uuid.New()
 	prodID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		getPhaseFn: func(_ context.Context, id uuid.UUID) (*Phase, error) {
-			return &Phase{ID: id, PhaseType: "production", Status: "pending"}, nil
+		getPhaseFn: func(_ context.Context, tenantID, id uuid.UUID) (*Phase, error) {
+			return &Phase{ID: id, TenantID: tenantID, PhaseType: "production", Status: "pending"}, nil
 		},
 	})).WithPermissionChecker(allowAllPerm{})
 
@@ -282,7 +282,7 @@ type tripwireListPhasesRepo struct {
 	t *testing.T
 }
 
-func (r *tripwireListPhasesRepo) ListPhases(context.Context, uuid.UUID, int, int) ([]Phase, error) {
+func (r *tripwireListPhasesRepo) ListPhases(context.Context, uuid.UUID, uuid.UUID, int, int) ([]Phase, error) {
 	r.t.Fatal("gate must fire before the repository is read")
 	return nil, nil
 }
@@ -305,17 +305,17 @@ func TestHandler_UpdatePhaseStatus_Success(t *testing.T) {
 	phaseID := uuid.New()
 	callCount := 0
 	h := NewHandler(NewService(&mockRepo{
-		getPhaseFn: func(_ context.Context, id uuid.UUID) (*Phase, error) {
+		getPhaseFn: func(_ context.Context, tenantID, id uuid.UUID) (*Phase, error) {
 			callCount++
 			phaseType := "production"
 			if callCount > 1 {
 				phaseType = "post_production"
 			}
-			return &Phase{ID: id, PhaseType: phaseType, Status: "active"}, nil
+			return &Phase{ID: id, TenantID: tenantID, PhaseType: phaseType, Status: "active"}, nil
 		},
 	})).WithPermissionChecker(allowAllPerm{})
 
-	resp, err := h.UpdatePhaseStatus(callerCtx(), &projectv1.UpdatePhaseStatusRequest{
+	resp, err := h.UpdatePhaseStatus(ctxWithTenant(uuid.New()), &projectv1.UpdatePhaseStatusRequest{
 		PhaseId:      phaseID.String(),
 		NewPhaseType: "post_production",
 	})
@@ -325,7 +325,7 @@ func TestHandler_UpdatePhaseStatus_Success(t *testing.T) {
 
 func TestHandler_UpdatePhaseStatus_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdatePhaseStatus(callerCtx(), &projectv1.UpdatePhaseStatusRequest{PhaseId: "bad"})
+	_, err := newHandler().UpdatePhaseStatus(ctxWithTenant(uuid.New()), &projectv1.UpdatePhaseStatusRequest{PhaseId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -483,4 +483,86 @@ func TestGrpcErr_AllCodes(t *testing.T) {
 	for _, tc := range cases {
 		assert.Equal(t, tc.wantCode, status.Code(grpcErr(tc.err)))
 	}
+}
+
+// --- tenant isolation (#157) ---
+
+// tenantRecordingRepo records the tenant ID each phase query receives, so a
+// test can prove the handler passed the CALLER's tenant and not something
+// derived from the request. mockRepo's defaults return usable rows, so
+// asserting only on the status code would pass against unscoped code.
+type tenantRecordingRepo struct {
+	mockRepo
+	gotListTenant   uuid.UUID
+	gotGetTenant    uuid.UUID
+	gotUpdateTenant uuid.UUID
+}
+
+func (r *tenantRecordingRepo) ListPhases(ctx context.Context, tenantID, prodID uuid.UUID, limit, offset int) ([]Phase, error) {
+	r.gotListTenant = tenantID
+	return nil, nil
+}
+
+func (r *tenantRecordingRepo) GetPhase(ctx context.Context, tenantID, id uuid.UUID) (*Phase, error) {
+	r.gotGetTenant = tenantID
+	return &Phase{ID: id, TenantID: tenantID, PhaseType: "development", Status: "active"}, nil
+}
+
+func (r *tenantRecordingRepo) UpdatePhaseStatus(ctx context.Context, tenantID, id uuid.UUID, status string) error {
+	r.gotUpdateTenant = tenantID
+	return nil
+}
+
+func TestHandler_ListPhases_PassesCallerTenantToRepo(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	repo := &tenantRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	_, err := h.ListPhases(ctxWithTenant(callerTenant), &projectv1.ListPhasesRequest{
+		ProductionId: uuid.New().String(),
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, callerTenant, repo.gotListTenant,
+		"ListPhases must query with the caller's tenant, not an unscoped query")
+}
+
+func TestHandler_UpdatePhaseStatus_PassesCallerTenantToRepo(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	repo := &tenantRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	// tenantRecordingRepo.GetPhase always returns PhaseType "development"; the
+	// movie-production vertical only allows development -> pre_production, so
+	// the target here must be that transition or the validation in
+	// Service.UpdatePhaseStatus rejects it before the write is ever reached.
+	_, err := h.UpdatePhaseStatus(ctxWithTenant(callerTenant), &projectv1.UpdatePhaseStatusRequest{
+		PhaseId:      uuid.New().String(),
+		NewPhaseType: "pre_production",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, callerTenant, repo.gotUpdateTenant,
+		"UpdatePhaseStatus must write with the caller's tenant")
+	require.Equal(t, callerTenant, repo.gotGetTenant,
+		"the read-back after the update must also be tenant-scoped")
+}
+
+func TestHandler_UpdatePhaseStatus_NoTenantUnauthenticated(t *testing.T) {
+	t.Parallel()
+	repo := &tenantRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	// callerCtx() carries a caller but NO tenant.
+	_, err := h.UpdatePhaseStatus(callerCtx(), &projectv1.UpdatePhaseStatusRequest{
+		PhaseId:      uuid.New().String(),
+		NewPhaseType: "production",
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.Unauthenticated, status.Code(err))
+	require.Equal(t, uuid.Nil, repo.gotUpdateTenant,
+		"the repository must not be reached without a tenant")
 }

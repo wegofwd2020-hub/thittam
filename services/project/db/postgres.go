@@ -131,8 +131,8 @@ func (p *Postgres) CreatePhase(ctx context.Context, phase *project.Phase) error 
 	return nil
 }
 
-func (p *Postgres) GetPhase(ctx context.Context, id uuid.UUID) (*project.Phase, error) {
-	row, err := p.q.GetPhase(ctx, id)
+func (p *Postgres) GetPhase(ctx context.Context, tenantID, id uuid.UUID) (*project.Phase, error) {
+	row, err := p.q.GetPhase(ctx, GetPhaseParams{ID: id, TenantID: tenantID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, project.ErrPhaseNotFound
@@ -142,9 +142,10 @@ func (p *Postgres) GetPhase(ctx context.Context, id uuid.UUID) (*project.Phase, 
 	return phaseFromDB(row), nil
 }
 
-func (p *Postgres) ListPhases(ctx context.Context, productionID uuid.UUID, limit, offset int) ([]project.Phase, error) {
+func (p *Postgres) ListPhases(ctx context.Context, tenantID, productionID uuid.UUID, limit, offset int) ([]project.Phase, error) {
 	rows, err := p.q.ListPhases(ctx, ListPhasesParams{
 		ProductionID: productionID,
+		TenantID:     tenantID,
 		Limit:        int32(limit),
 		Offset:       int32(offset),
 	})
@@ -158,8 +159,8 @@ func (p *Postgres) ListPhases(ctx context.Context, productionID uuid.UUID, limit
 	return result, nil
 }
 
-func (p *Postgres) UpdatePhaseStatus(ctx context.Context, id uuid.UUID, status string) error {
-	_, err := p.q.UpdatePhaseStatus(ctx, UpdatePhaseStatusParams{ID: id, Status: status})
+func (p *Postgres) UpdatePhaseStatus(ctx context.Context, tenantID, id uuid.UUID, status string) error {
+	_, err := p.q.UpdatePhaseStatus(ctx, UpdatePhaseStatusParams{ID: id, TenantID: tenantID, Status: status})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return project.ErrPhaseNotFound

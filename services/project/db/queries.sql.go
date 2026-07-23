@@ -196,11 +196,16 @@ func (q *Queries) CreateProduction(ctx context.Context, arg CreateProductionPara
 }
 
 const getPhase = `-- name: GetPhase :one
-SELECT id, production_id, tenant_id, phase_type, status, start_date, end_date, created_at, updated_at FROM phases WHERE id = $1
+SELECT id, production_id, tenant_id, phase_type, status, start_date, end_date, created_at, updated_at FROM phases WHERE id = $1 AND tenant_id = $2
 `
 
-func (q *Queries) GetPhase(ctx context.Context, id uuid.UUID) (Phase, error) {
-	row := q.db.QueryRow(ctx, getPhase, id)
+type GetPhaseParams struct {
+	ID       uuid.UUID `json:"id"`
+	TenantID uuid.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) GetPhase(ctx context.Context, arg GetPhaseParams) (Phase, error) {
+	row := q.db.QueryRow(ctx, getPhase, arg.ID, arg.TenantID)
 	var i Phase
 	err := row.Scan(
 		&i.ID,
@@ -291,17 +296,23 @@ func (q *Queries) ListCrewMembers(ctx context.Context, arg ListCrewMembersParams
 }
 
 const listPhases = `-- name: ListPhases :many
-SELECT id, production_id, tenant_id, phase_type, status, start_date, end_date, created_at, updated_at FROM phases WHERE production_id = $1 ORDER BY created_at ASC LIMIT $2 OFFSET $3
+SELECT id, production_id, tenant_id, phase_type, status, start_date, end_date, created_at, updated_at FROM phases WHERE production_id = $1 AND tenant_id = $2 ORDER BY created_at ASC LIMIT $3 OFFSET $4
 `
 
 type ListPhasesParams struct {
 	ProductionID uuid.UUID `json:"production_id"`
+	TenantID     uuid.UUID `json:"tenant_id"`
 	Limit        int32     `json:"limit"`
 	Offset       int32     `json:"offset"`
 }
 
 func (q *Queries) ListPhases(ctx context.Context, arg ListPhasesParams) ([]Phase, error) {
-	rows, err := q.db.Query(ctx, listPhases, arg.ProductionID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listPhases,
+		arg.ProductionID,
+		arg.TenantID,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -395,17 +406,18 @@ func (q *Queries) RemoveCrewMember(ctx context.Context, id uuid.UUID) error {
 
 const updatePhaseStatus = `-- name: UpdatePhaseStatus :one
 UPDATE phases SET status = $2, updated_at = now()
-WHERE id = $1
+WHERE id = $1 AND tenant_id = $3
 RETURNING id, production_id, tenant_id, phase_type, status, start_date, end_date, created_at, updated_at
 `
 
 type UpdatePhaseStatusParams struct {
-	ID     uuid.UUID `json:"id"`
-	Status string    `json:"status"`
+	ID       uuid.UUID `json:"id"`
+	Status   string    `json:"status"`
+	TenantID uuid.UUID `json:"tenant_id"`
 }
 
 func (q *Queries) UpdatePhaseStatus(ctx context.Context, arg UpdatePhaseStatusParams) (Phase, error) {
-	row := q.db.QueryRow(ctx, updatePhaseStatus, arg.ID, arg.Status)
+	row := q.db.QueryRow(ctx, updatePhaseStatus, arg.ID, arg.Status, arg.TenantID)
 	var i Phase
 	err := row.Scan(
 		&i.ID,

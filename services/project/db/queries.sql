@@ -41,14 +41,14 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: ListPhases :many
-SELECT * FROM phases WHERE production_id = $1 ORDER BY created_at ASC LIMIT $2 OFFSET $3;
+SELECT * FROM phases WHERE production_id = $1 AND tenant_id = $2 ORDER BY created_at ASC LIMIT $3 OFFSET $4;
 
 -- name: GetPhase :one
-SELECT * FROM phases WHERE id = $1;
+SELECT * FROM phases WHERE id = $1 AND tenant_id = $2;
 
 -- name: UpdatePhaseStatus :one
 UPDATE phases SET status = $2, updated_at = now()
-WHERE id = $1
+WHERE id = $1 AND tenant_id = $3
 RETURNING *;
 
 -- name: AddCrewMember :one

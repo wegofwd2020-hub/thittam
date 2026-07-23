@@ -19,8 +19,9 @@ type mockRepo struct {
 	getProductionFn     func(ctx context.Context, tenantID, id uuid.UUID) (*Production, error)
 	listProductionsFn   func(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]Production, error)
 	createPhaseFn       func(ctx context.Context, p *Phase) error
-	getPhaseFn          func(ctx context.Context, id uuid.UUID) (*Phase, error)
-	updatePhaseStatusFn func(ctx context.Context, id uuid.UUID, status string) error
+	listPhasesFn        func(ctx context.Context, tenantID, prodID uuid.UUID, limit, offset int) ([]Phase, error)
+	getPhaseFn          func(ctx context.Context, tenantID, id uuid.UUID) (*Phase, error)
+	updatePhaseStatusFn func(ctx context.Context, tenantID, id uuid.UUID, status string) error
 	addCrewFn           func(ctx context.Context, c *CrewMember) error
 	listCrewFn          func(ctx context.Context, prodID uuid.UUID) ([]CrewMember, error)
 }
@@ -53,18 +54,21 @@ func (m *mockRepo) CreatePhase(ctx context.Context, p *Phase) error {
 	}
 	return nil
 }
-func (m *mockRepo) ListPhases(ctx context.Context, prodID uuid.UUID, limit, offset int) ([]Phase, error) {
+func (m *mockRepo) ListPhases(ctx context.Context, tenantID, prodID uuid.UUID, limit, offset int) ([]Phase, error) {
+	if m.listPhasesFn != nil {
+		return m.listPhasesFn(ctx, tenantID, prodID, limit, offset)
+	}
 	return nil, nil
 }
-func (m *mockRepo) GetPhase(ctx context.Context, id uuid.UUID) (*Phase, error) {
+func (m *mockRepo) GetPhase(ctx context.Context, tenantID, id uuid.UUID) (*Phase, error) {
 	if m.getPhaseFn != nil {
-		return m.getPhaseFn(ctx, id)
+		return m.getPhaseFn(ctx, tenantID, id)
 	}
-	return &Phase{ID: id, PhaseType: "development", Status: "active"}, nil
+	return &Phase{ID: id, TenantID: tenantID, PhaseType: "development", Status: "active"}, nil
 }
-func (m *mockRepo) UpdatePhaseStatus(ctx context.Context, id uuid.UUID, status string) error {
+func (m *mockRepo) UpdatePhaseStatus(ctx context.Context, tenantID, id uuid.UUID, status string) error {
 	if m.updatePhaseStatusFn != nil {
-		return m.updatePhaseStatusFn(ctx, id, status)
+		return m.updatePhaseStatusFn(ctx, tenantID, id, status)
 	}
 	return nil
 }
@@ -166,25 +170,25 @@ func TestCreatePhase_InvalidType(t *testing.T) {
 func TestUpdatePhaseStatus_ValidTransition(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{
-		getPhaseFn: func(ctx context.Context, id uuid.UUID) (*Phase, error) {
-			return &Phase{ID: id, PhaseType: "development", Status: "active"}, nil
+		getPhaseFn: func(ctx context.Context, tenantID, id uuid.UUID) (*Phase, error) {
+			return &Phase{ID: id, TenantID: tenantID, PhaseType: "development", Status: "active"}, nil
 		},
 	})
 
-	err := svc.UpdatePhaseStatus(ctxWithVertical(), uuid.New(), "pre_production")
+	err := svc.UpdatePhaseStatus(ctxWithVertical(), uuid.New(), uuid.New(), "pre_production")
 	require.NoError(t, err)
 }
 
 func TestUpdatePhaseStatus_InvalidTransition(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{
-		getPhaseFn: func(ctx context.Context, id uuid.UUID) (*Phase, error) {
-			return &Phase{ID: id, PhaseType: "development", Status: "active"}, nil
+		getPhaseFn: func(ctx context.Context, tenantID, id uuid.UUID) (*Phase, error) {
+			return &Phase{ID: id, TenantID: tenantID, PhaseType: "development", Status: "active"}, nil
 		},
 	})
 
 	// development → post_production is not allowed (must go through pre_production first)
-	err := svc.UpdatePhaseStatus(ctxWithVertical(), uuid.New(), "post_production")
+	err := svc.UpdatePhaseStatus(ctxWithVertical(), uuid.New(), uuid.New(), "post_production")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrInvalidTransition)
 }
@@ -192,13 +196,13 @@ func TestUpdatePhaseStatus_InvalidTransition(t *testing.T) {
 func TestUpdatePhaseStatus_ReleaseToNothing(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{
-		getPhaseFn: func(ctx context.Context, id uuid.UUID) (*Phase, error) {
-			return &Phase{ID: id, PhaseType: "released", Status: "active"}, nil
+		getPhaseFn: func(ctx context.Context, tenantID, id uuid.UUID) (*Phase, error) {
+			return &Phase{ID: id, TenantID: tenantID, PhaseType: "released", Status: "active"}, nil
 		},
 	})
 
 	// released has no allowed transitions
-	err := svc.UpdatePhaseStatus(ctxWithVertical(), uuid.New(), "development")
+	err := svc.UpdatePhaseStatus(ctxWithVertical(), uuid.New(), uuid.New(), "development")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrInvalidTransition)
 }
@@ -376,12 +380,12 @@ func TestUpdatePhaseStatus_CurrentTypeNotInVertical(t *testing.T) {
 	t.Parallel()
 	// Phase in DB has a type not in the vertical config (orphaned data)
 	svc := NewService(&mockRepo{
-		getPhaseFn: func(_ context.Context, id uuid.UUID) (*Phase, error) {
-			return &Phase{ID: id, PhaseType: "sprint", Status: "active"}, nil
+		getPhaseFn: func(_ context.Context, tenantID, id uuid.UUID) (*Phase, error) {
+			return &Phase{ID: id, TenantID: tenantID, PhaseType: "sprint", Status: "active"}, nil
 		},
 	})
 
-	err := svc.UpdatePhaseStatus(ctxWithVertical(), uuid.New(), "pre_production")
+	err := svc.UpdatePhaseStatus(ctxWithVertical(), uuid.New(), uuid.New(), "pre_production")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrInvalidPhaseType)
 }
@@ -389,14 +393,14 @@ func TestUpdatePhaseStatus_CurrentTypeNotInVertical(t *testing.T) {
 func TestUpdatePhaseStatus_TargetTypeNotInVertical(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{
-		getPhaseFn: func(_ context.Context, id uuid.UUID) (*Phase, error) {
-			return &Phase{ID: id, PhaseType: "development", Status: "active"}, nil
+		getPhaseFn: func(_ context.Context, tenantID, id uuid.UUID) (*Phase, error) {
+			return &Phase{ID: id, TenantID: tenantID, PhaseType: "development", Status: "active"}, nil
 		},
 	})
 
 	// "sprint" exists in transitions config for development? No — so it's rejected
 	// as invalid transition first (development → sprint).
-	err := svc.UpdatePhaseStatus(ctxWithVertical(), uuid.New(), "sprint")
+	err := svc.UpdatePhaseStatus(ctxWithVertical(), uuid.New(), uuid.New(), "sprint")
 	require.Error(t, err)
 	// Could be ErrInvalidTransition or ErrInvalidPhaseType — both mean rejected.
 	require.True(t, err != nil)
