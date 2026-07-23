@@ -216,15 +216,15 @@ Legend — **AUTH** = any authenticated tenant member; **PUBLIC** = no caller by
 
 **Safe to gate:** `cmd/notifications/dispatcher.go` calls `d.svc.Send(...)` — the **service** layer — so the NATS dispatcher does not traverse the handler and is unaffected.
 
-### 4.10 reporting-analytics — 5 RPCs (0 enforced)
+### 4.10 reporting-analytics — 5 RPCs (3 gated by slice C, 2 AUTH)
 
 | RPC | Policy | Rule | |
 |---|---|---|---|
-| `GetReportDefinition` | `report:read` ☠ | R1 | 🔴 |
-| `ListReportDefinitions` | `report:read` ☠ | R1 | 🔴 |
-| `GetExpenseFacts` | `report:read` ☠ | R1 | 🔴 |
-| `GetBudgetFacts` | `report:read` ☠ | R1 | 🔴 |
-| `GetDashboardSummary` | `report:read` ☠ | R1 | 🔴 |
+| `GetReportDefinition` | AUTH | R3 | ✅ **config, not tenant data** — reads `vertical.MustFromContext(ctx).FindReportDefinition(...)` (`services/reporting/service.go:22`), touches no repository and no tenant; the report catalogue for the vertical, same class as `GetBudgetTemplates`. Corrected from `report:read` while implementing slice C |
+| `ListReportDefinitions` | AUTH | R3 | ✅ same as above — reads the vertical's report catalogue only |
+| `GetExpenseFacts` | `report:read` | R1 | ✅ **gated by slice C** (PR pending) — tenant financial data |
+| `GetBudgetFacts` | `report:read` | R1 | ✅ **gated by slice C** — tenant financial data |
+| `GetDashboardSummary` | `report:read` | R1 | ✅ **gated by slice C** — tenant financial data |
 
 `report:read` is granted to `super_admin`, `manager`, `coordinator` and `accountant` and checked nowhere. `services/reporting/consumer.go` is NATS-driven against the service layer, so gating the handlers is safe.
 
