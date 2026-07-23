@@ -173,10 +173,17 @@ Expected: all three new tests PASS.
 - [ ] **Step 6: Check for flipped pre-existing tests**
 
 ```bash
-go test ./services/iam/ -count=1 2>&1 | grep -E '^\s+--- FAIL' | sort
+go test ./services/iam/ -count=1 2>&1 | grep -- '--- FAIL' | sort
 ```
 
-**Prediction: zero flips.** No existing test in `handler_test.go` calls `GetTenant` (verify with `grep -c 'h\.GetTenant(\|\.GetTenant(ctx' services/iam/handler_test.go`). **If any test fails, STOP and report** rather than repairing it — a surprise means this reading was wrong.
+**Prediction: exactly 2 flips** — `TestHandler_GetTenant_Success` and `TestHandler_GetTenant_InvalidID`. Both call the handler with `context.Background()`, i.e. **no caller identity at all**, which the vulnerable handler never needed and `TenantFromRequest` now requires.
+
+Repair by giving each the caller it always should have had. **Neither assertion changes.**
+
+- `TestHandler_GetTenant_Success`: replace `context.Background()` with `memberCtx(tenantID)` — the request already sends `Id: tenantID.String()`, so caller and request agree and it still succeeds.
+- `TestHandler_GetTenant_InvalidID`: replace `context.Background()` with `memberCtx(uuid.New())`. `TenantFromRequest` parses `"bad"` and returns `InvalidArgument`, so the existing assertion holds.
+
+**If the count is not exactly 2, STOP and report.**
 
 - [ ] **Step 7: Run the full check**
 
@@ -366,7 +373,7 @@ func (h *Handler) SetTenantAddress(ctx context.Context, req *iamv1.SetTenantAddr
 `mockRepo.GetUserPermissions` returns `nil, nil` unstubbed, so `requireUserManage` denies. Run:
 
 ```bash
-go test ./services/iam/ -count=1 2>&1 | grep -E '^\s+--- FAIL' | sort
+go test ./services/iam/ -count=1 2>&1 | grep -- '--- FAIL' | sort
 ```
 
 **Prediction — exactly these five, and no others:**
