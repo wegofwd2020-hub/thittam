@@ -19,6 +19,7 @@ import (
 
 	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
 	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/iamclient"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/server"
 	"github.com/wegofwd2020/thittam/services/document"
@@ -77,7 +78,26 @@ func main() {
 	// --- Repository, service, and handler ---
 	repo := documentdb.NewPostgres(pool)
 	svc := document.NewService(repo, store, publisher)
-	handler := document.NewHandler(svc)
+
+	// --- IAM permission checker ---
+	// document cannot authorize without IAM. #138/#149's convention for the JWT
+	// public key applies here too: a service that cannot enforce its guarantees
+	// does not start. Starting would serve codes.Internal on every RPC, which
+	// reads as a bug rather than as a misconfiguration.
+	//
+	// iamPerm is the concrete *iamclient.PermissionChecker here, so this is a
+	// plain pointer comparison. Assigning it to an interface field first would
+	// produce a non-nil interface wrapping a nil pointer, and the check would
+	// never fire.
+	iamPerm, closeIAM, err := iamclient.DialFromEnv("document")
+	if err != nil {
+		log.Fatalf("document: startup: dial IAM: %v", err)
+	}
+	defer func() { _ = closeIAM() }()
+	if iamPerm == nil {
+		log.Fatalf("document: startup: %s is not set; document cannot authorize without a permission checker", iamclient.EnvAddr)
+	}
+	handler := document.NewHandler(svc, iamPerm)
 
 	// --- gRPC server ---
 	// Document is a universal service — no vertical interceptor needed.

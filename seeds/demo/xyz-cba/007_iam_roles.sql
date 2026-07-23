@@ -15,39 +15,43 @@ INSERT INTO roles (id, tenant_id, name, permissions, is_system) VALUES
  'd0000000-0000-0000-0000-000000000001',
  'super_admin',
  ARRAY['production:read','production:write','budget:read','budget:write','budget:approve',
-       'expense:read','expense:submit','expense:approve','inventory:read','inventory:checkout','report:read','user:manage'],
+       'expense:read','expense:submit','expense:approve','inventory:read','inventory:checkout','report:read','user:manage',
+       'document:read','document:write','document:delete'],
  true),
 
 ('e0000000-0000-0000-0000-000000000002',
  'd0000000-0000-0000-0000-000000000001',
  'manager',
  ARRAY['production:read','production:write','budget:read','budget:approve',
-       'expense:read','expense:approve','inventory:read','inventory:checkout','report:read'],
+       'expense:read','expense:approve','inventory:read','inventory:checkout','report:read',
+       'document:read','document:write','document:delete'],
  true),
 
 ('e0000000-0000-0000-0000-000000000003',
  'd0000000-0000-0000-0000-000000000001',
  'coordinator',
  ARRAY['production:read','production:write','budget:read','budget:write',
-       'expense:read','expense:approve','inventory:read','inventory:checkout','report:read'],
+       'expense:read','expense:approve','inventory:read','inventory:checkout','report:read',
+       'document:read','document:write'],
  true),
 
 ('e0000000-0000-0000-0000-000000000004',
  'd0000000-0000-0000-0000-000000000001',
  'accountant',
- ARRAY['budget:read','expense:read','expense:submit','expense:approve','report:read'],
+ ARRAY['budget:read','expense:read','expense:submit','expense:approve','report:read',
+       'document:read','document:write'],
  true),
 
 ('e0000000-0000-0000-0000-000000000006',
  'd0000000-0000-0000-0000-000000000001',
  'member',
- ARRAY['production:read','expense:submit'],
+ ARRAY['production:read','expense:submit','document:read'],
  true),
 
 ('e0000000-0000-0000-0000-000000000007',
  'd0000000-0000-0000-0000-000000000001',
  'inventory_manager',
- ARRAY['inventory:read','inventory:write','inventory:checkout','inventory:retire'],
+ ARRAY['inventory:read','inventory:write','inventory:checkout','inventory:retire','document:read'],
  true),
 
 -- project_supervisor permissions are tenant-wide in Phase 1.
@@ -57,7 +61,8 @@ INSERT INTO roles (id, tenant_id, name, permissions, is_system) VALUES
  'd0000000-0000-0000-0000-000000000001',
  'project_supervisor',
  ARRAY['production:read','budget:read','expense:read','expense:submit','expense:approve',
-       'resource:manage','inventory:read','inventory:checkout'],
+       'resource:manage','inventory:read','inventory:checkout',
+       'document:read','document:write'],
  true)
 
 ON CONFLICT (tenant_id, name) DO NOTHING;

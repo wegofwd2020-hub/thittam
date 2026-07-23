@@ -844,6 +844,7 @@ func TestSystemRoles_InventoryManagerPermissions(t *testing.T) {
 	}
 	assert.ElementsMatch(t, []string{
 		"inventory:read", "inventory:write", "inventory:checkout", "inventory:retire",
+		"document:read",
 	}, inv.perms)
 }
 
@@ -861,6 +862,7 @@ func TestSystemRoles_ProjectSupervisorPermissions(t *testing.T) {
 		"expense:read", "expense:submit", "expense:approve",
 		"resource:manage",
 		"inventory:read", "inventory:checkout",
+		"document:read", "document:write",
 	}, ps)
 }
 
@@ -2397,5 +2399,43 @@ func TestSystemRoles_ReadGrants(t *testing.T) {
 	}
 	for _, role := range none {
 		assert.Empty(t, got[role], "role %s must hold neither expense:read nor inventory:read", role)
+	}
+}
+
+// TestSystemRoles_DocumentGrants pins the #139 slice E grant matrix on the
+// systemRoles side (the half that governs every future tenant). Absence is
+// as load-bearing as presence: member and inventory_manager must hold
+// document:read only, never document:write or document:delete. Without this
+// test, adding document:write to member in service.go would flip zero other
+// tests -- the gap #168's review found for slice D.
+func TestSystemRoles_DocumentGrants(t *testing.T) {
+	t.Parallel()
+
+	want := map[string][]string{
+		"super_admin":        {"document:read", "document:write", "document:delete"},
+		"manager":            {"document:read", "document:write", "document:delete"},
+		"coordinator":        {"document:read", "document:write"},
+		"accountant":         {"document:read", "document:write"},
+		"project_supervisor": {"document:read", "document:write"},
+		"member":             {"document:read"},
+		"inventory_manager":  {"document:read"},
+	}
+
+	byName := map[string][]string{}
+	for _, r := range systemRoles {
+		byName[r.name] = r.permissions
+	}
+
+	for role, expected := range want {
+		perms := byName[role]
+		for _, p := range expected {
+			assert.Contains(t, perms, p, "%s must hold %s", role, p)
+		}
+		// Nothing outside `expected` from the document: namespace.
+		for _, p := range perms {
+			if strings.HasPrefix(p, "document:") {
+				assert.Contains(t, expected, p, "%s holds unexpected %s", role, p)
+			}
+		}
 	}
 }
