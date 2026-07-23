@@ -129,6 +129,9 @@ func (h *Handler) CreateUser(ctx context.Context, req *iamv1.CreateUserRequest) 
 	if err != nil {
 		return nil, err
 	}
+	if err := h.requireUserManage(ctx); err != nil {
+		return nil, err
+	}
 	user := &User{
 		TenantID:    tenantID,
 		Email:       req.GetEmail(),
@@ -176,6 +179,9 @@ func (h *Handler) ListUsers(ctx context.Context, req *iamv1.ListUsersRequest) (*
 func (h *Handler) UpdateUser(ctx context.Context, req *iamv1.UpdateUserRequest) (*iamv1.User, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := h.requireUserManage(ctx); err != nil {
 		return nil, err
 	}
 	id, err := uuid.Parse(req.GetId())
@@ -402,6 +408,9 @@ func (h *Handler) CreateTenant(ctx context.Context, req *iamv1.CreateTenantReque
 func (h *Handler) SetTenantAddress(ctx context.Context, req *iamv1.SetTenantAddressRequest) (*iamv1.Tenant, error) {
 	id, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := h.requireUserManage(ctx); err != nil {
 		return nil, err
 	}
 	t := &Tenant{

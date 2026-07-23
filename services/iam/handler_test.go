@@ -126,7 +126,8 @@ func TestHandler_ValidateToken_Success(t *testing.T) {
 func TestHandler_CreateUser_Success(t *testing.T) {
 	t.Parallel()
 	tid := uuid.New()
-	resp, err := newHandler().CreateUser(memberCtx(tid), &iamv1.CreateUserRequest{
+	h := newHandlerWithRepo(&mockRepo{getUserPermissionsFn: grantUserManage()})
+	resp, err := h.CreateUser(memberCtx(tid), &iamv1.CreateUserRequest{
 		TenantId:    tid.String(),
 		Email:       "new@example.com",
 		DisplayName: "New User",
@@ -144,6 +145,32 @@ func TestHandler_CreateUser_InvalidTenantID(t *testing.T) {
 		Password: "pass",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// #139 slice B (Task 2): CreateUser was tenant-bounded but enforced no
+// permission, so any authenticated member could create users in their own
+// tenant. createUserFn carries the t.Fatal, not just the status code, so a
+// denial test that forgets to gate would pass vacuously against mockRepo's
+// benign unstubbed write fns.
+func TestHandler_CreateUser_RequiresUserManage(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := newHandlerWithRepo(&mockRepo{
+		createUserFn: func(_ context.Context, _ *User) error {
+			t.Fatal("repository reached: CreateUser must deny before writing")
+			return nil
+		},
+	})
+
+	_, err := h.CreateUser(memberCtx(tid), &iamv1.CreateUserRequest{
+		TenantId:    tid.String(),
+		Email:       "new@example.com",
+		DisplayName: "New User",
+		Password:    "correct-horse-battery-staple",
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 // --- GetUser ---
@@ -211,6 +238,7 @@ func TestHandler_UpdateUser_Success(t *testing.T) {
 		getUserFn: func(_ context.Context, _, id uuid.UUID) (*User, error) {
 			return &User{ID: id, TenantID: tenantID, Email: "u@x.com", DisplayName: "Updated", Status: "active"}, nil
 		},
+		getUserPermissionsFn: grantUserManage(),
 	}))
 
 	resp, err := h.UpdateUser(memberCtx(tenantID), &iamv1.UpdateUserRequest{
@@ -232,8 +260,32 @@ func TestHandler_UpdateUser_InvalidTenantID(t *testing.T) {
 func TestHandler_UpdateUser_InvalidID(t *testing.T) {
 	t.Parallel()
 	tid := uuid.New()
-	_, err := newHandler().UpdateUser(memberCtx(tid), &iamv1.UpdateUserRequest{TenantId: tid.String(), Id: "bad"})
+	h := newHandlerWithRepo(&mockRepo{getUserPermissionsFn: grantUserManage()})
+	_, err := h.UpdateUser(memberCtx(tid), &iamv1.UpdateUserRequest{TenantId: tid.String(), Id: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// #139 slice B (Task 2): UpdateUser was tenant-bounded but enforced no
+// permission, so any authenticated member could rename or re-status a
+// colleague. updateUserFn carries the t.Fatal, not just the status code.
+func TestHandler_UpdateUser_RequiresUserManage(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := newHandlerWithRepo(&mockRepo{
+		updateUserFn: func(_ context.Context, _ *User) error {
+			t.Fatal("repository reached: UpdateUser must deny before writing")
+			return nil
+		},
+	})
+
+	_, err := h.UpdateUser(memberCtx(tid), &iamv1.UpdateUserRequest{
+		TenantId:    tid.String(),
+		Id:          uuid.New().String(),
+		DisplayName: "Renamed",
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 // --- DeactivateUser ---
@@ -727,6 +779,7 @@ func TestHandler_SetTenantAddress_Success(t *testing.T) {
 		updateTenantAddressFn: func(_ context.Context, tn *Tenant) (*Tenant, error) {
 			return tn, nil
 		},
+		getUserPermissionsFn: grantUserManage(),
 	}))
 
 	resp, err := h.SetTenantAddress(memberCtx(tenantID), &iamv1.SetTenantAddressRequest{
@@ -748,14 +801,44 @@ func TestHandler_SetTenantAddress_InvalidTenantID(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+// Not in the Step 6 flip list: require.Error accepts any error, so this test
+// vacuously kept passing after gating (PermissionDenied is still an error) —
+// but it would then be silently testing the wrong thing, not the missing-
+// country validation its name promises. Granting user:manage here restores
+// that original intent without weakening the assertion.
 func TestHandler_SetTenantAddress_MissingCountry(t *testing.T) {
 	t.Parallel()
-	h := newHandler()
+	h := newHandlerWithRepo(&mockRepo{getUserPermissionsFn: grantUserManage()})
 	tid := uuid.New()
 	_, err := h.SetTenantAddress(memberCtx(tid), &iamv1.SetTenantAddressRequest{
 		TenantId: tid.String(),
 	})
 	require.Error(t, err)
+}
+
+// #139 slice B (Task 2): SetTenantAddress was tenant-bounded but enforced no
+// permission, so any authenticated member could rewrite the tenant's billing
+// address and currency. updateTenantAddressFn carries the t.Fatal, not just
+// the status code.
+func TestHandler_SetTenantAddress_RequiresUserManage(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := newHandlerWithRepo(&mockRepo{
+		updateTenantAddressFn: func(_ context.Context, _ *Tenant) (*Tenant, error) {
+			t.Fatal("repository reached: SetTenantAddress must deny before writing")
+			return nil, nil
+		},
+	})
+
+	_, err := h.SetTenantAddress(memberCtx(tid), &iamv1.SetTenantAddressRequest{
+		TenantId:     tid.String(),
+		AddressLine1: "1 Main St",
+		City:         "Chennai",
+		CountryCode:  "IN",
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 // --- GetTenant ---
