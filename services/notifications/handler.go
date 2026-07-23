@@ -169,12 +169,16 @@ func (h *Handler) GetNotification(ctx context.Context, req *notificationsv1.GetN
 	if err != nil {
 		return nil, err
 	}
+	recipientID, err := interceptor.ActorFromRequest(ctx, "")
+	if err != nil {
+		return nil, err
+	}
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid notification id")
 	}
 
-	notif, err := h.svc.GetNotification(ctx, tenantID, id)
+	notif, err := h.svc.GetNotification(ctx, tenantID, recipientID, id)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -186,8 +190,12 @@ func (h *Handler) ListNotifications(ctx context.Context, req *notificationsv1.Li
 	if err != nil {
 		return nil, err
 	}
+	recipientID, err := interceptor.ActorFromRequest(ctx, "")
+	if err != nil {
+		return nil, err
+	}
 
-	notifs, err := h.svc.ListNotifications(ctx, tenantID, req.GetChannel(), req.GetStatus(), int(req.GetLimit()), int(req.GetOffset()))
+	notifs, err := h.svc.ListNotifications(ctx, tenantID, recipientID, req.GetChannel(), req.GetStatus(), int(req.GetLimit()), int(req.GetOffset()))
 	if err != nil {
 		return nil, grpcErr(err)
 	}

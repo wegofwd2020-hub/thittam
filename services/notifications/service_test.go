@@ -30,8 +30,8 @@ type mockRepo struct {
 	listTemplatesFn           func(ctx context.Context, tenantID uuid.UUID) ([]Template, error)
 	createNotificationFn      func(ctx context.Context, n *Notification) error
 	updateNotificationStatusFn func(ctx context.Context, id uuid.UUID, status, providerMsgID, errMsg string, sentAt *time.Time) error
-	getNotificationFn         func(ctx context.Context, tenantID, id uuid.UUID) (*Notification, error)
-	listNotificationsFn       func(ctx context.Context, tenantID uuid.UUID, channel, status string, limit, offset int) ([]Notification, error)
+	getNotificationFn         func(ctx context.Context, tenantID, recipientID, id uuid.UUID) (*Notification, error)
+	listNotificationsFn       func(ctx context.Context, tenantID, recipientID uuid.UUID, channel, status string, limit, offset int) ([]Notification, error)
 	incrementRetryCountFn     func(ctx context.Context, id uuid.UUID) error
 }
 
@@ -85,15 +85,15 @@ func (m *mockRepo) UpdateNotificationStatus(ctx context.Context, id uuid.UUID, s
 	}
 	return nil
 }
-func (m *mockRepo) GetNotification(ctx context.Context, tenantID, id uuid.UUID) (*Notification, error) {
+func (m *mockRepo) GetNotification(ctx context.Context, tenantID, recipientID, id uuid.UUID) (*Notification, error) {
 	if m.getNotificationFn != nil {
-		return m.getNotificationFn(ctx, tenantID, id)
+		return m.getNotificationFn(ctx, tenantID, recipientID, id)
 	}
 	return &Notification{ID: id, TenantID: tenantID, Status: "sent"}, nil
 }
-func (m *mockRepo) ListNotifications(ctx context.Context, tenantID uuid.UUID, channel, status string, limit, offset int) ([]Notification, error) {
+func (m *mockRepo) ListNotifications(ctx context.Context, tenantID, recipientID uuid.UUID, channel, status string, limit, offset int) ([]Notification, error) {
 	if m.listNotificationsFn != nil {
-		return m.listNotificationsFn(ctx, tenantID, channel, status, limit, offset)
+		return m.listNotificationsFn(ctx, tenantID, recipientID, channel, status, limit, offset)
 	}
 	return nil, nil
 }
@@ -354,13 +354,13 @@ func TestListNotifications_DefaultLimit(t *testing.T) {
 	t.Parallel()
 	var capturedLimit int
 	svc := newTestService(&mockRepo{
-		listNotificationsFn: func(_ context.Context, _ uuid.UUID, _, _ string, limit, _ int) ([]Notification, error) {
+		listNotificationsFn: func(_ context.Context, _, _ uuid.UUID, _, _ string, limit, _ int) ([]Notification, error) {
 			capturedLimit = limit
 			return nil, nil
 		},
 	}, nil)
 
-	_, err := svc.ListNotifications(context.Background(), fixedTenantID, "", "", 0, 0)
+	_, err := svc.ListNotifications(context.Background(), fixedTenantID, fixedRecipientID, "", "", 0, 0)
 	require.NoError(t, err)
 	assert.Equal(t, 20, capturedLimit)
 }
@@ -369,13 +369,13 @@ func TestListNotifications_MaxLimitEnforced(t *testing.T) {
 	t.Parallel()
 	var capturedLimit int
 	svc := newTestService(&mockRepo{
-		listNotificationsFn: func(_ context.Context, _ uuid.UUID, _, _ string, limit, _ int) ([]Notification, error) {
+		listNotificationsFn: func(_ context.Context, _, _ uuid.UUID, _, _ string, limit, _ int) ([]Notification, error) {
 			capturedLimit = limit
 			return nil, nil
 		},
 	}, nil)
 
-	_, err := svc.ListNotifications(context.Background(), fixedTenantID, "", "", 9999, 0)
+	_, err := svc.ListNotifications(context.Background(), fixedTenantID, fixedRecipientID, "", "", 9999, 0)
 	require.NoError(t, err)
 	assert.Equal(t, 20, capturedLimit)
 }
@@ -510,12 +510,12 @@ func TestListTemplates_RepoError(t *testing.T) {
 func TestGetNotification_Success(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{
-		getNotificationFn: func(_ context.Context, tenantID, id uuid.UUID) (*Notification, error) {
+		getNotificationFn: func(_ context.Context, tenantID, _, id uuid.UUID) (*Notification, error) {
 			return &Notification{ID: id, TenantID: tenantID, Status: "sent", Channel: "email"}, nil
 		},
 	}, nil)
 
-	n, err := svc.GetNotification(context.Background(), fixedTenantID, fixedNotifID)
+	n, err := svc.GetNotification(context.Background(), fixedTenantID, fixedRecipientID, fixedNotifID)
 	require.NoError(t, err)
 	assert.Equal(t, fixedNotifID, n.ID)
 	assert.Equal(t, "sent", n.Status)
@@ -524,12 +524,12 @@ func TestGetNotification_Success(t *testing.T) {
 func TestGetNotification_NotFound(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{
-		getNotificationFn: func(_ context.Context, _, _ uuid.UUID) (*Notification, error) {
+		getNotificationFn: func(_ context.Context, _, _, _ uuid.UUID) (*Notification, error) {
 			return nil, errors.New("not found")
 		},
 	}, nil)
 
-	_, err := svc.GetNotification(context.Background(), fixedTenantID, fixedNotifID)
+	_, err := svc.GetNotification(context.Background(), fixedTenantID, fixedRecipientID, fixedNotifID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), fixedNotifID.String())
 }

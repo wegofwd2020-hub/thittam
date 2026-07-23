@@ -181,21 +181,24 @@ func (s *Service) ListTemplates(ctx context.Context, tenantID uuid.UUID) ([]Temp
 
 // --- Delivery history ---
 
-// GetNotification retrieves a notification log entry by ID.
-func (s *Service) GetNotification(ctx context.Context, tenantID, id uuid.UUID) (*Notification, error) {
-	n, err := s.repo.GetNotification(ctx, tenantID, id)
+// GetNotification retrieves a notification log entry by ID, scoped to the
+// caller's own recipient id — a member cannot read another member's inbox.
+func (s *Service) GetNotification(ctx context.Context, tenantID, recipientID, id uuid.UUID) (*Notification, error) {
+	n, err := s.repo.GetNotification(ctx, tenantID, recipientID, id)
 	if err != nil {
 		return nil, fmt.Errorf("notifications: get notification %s: %w", id, err)
 	}
 	return n, nil
 }
 
-// ListNotifications returns the delivery log for a tenant with optional filters.
-func (s *Service) ListNotifications(ctx context.Context, tenantID uuid.UUID, channel, status string, limit, offset int) ([]Notification, error) {
+// ListNotifications returns the delivery log for a tenant with optional
+// filters, scoped to the caller's own recipient id — a member cannot list
+// another member's inbox.
+func (s *Service) ListNotifications(ctx context.Context, tenantID, recipientID uuid.UUID, channel, status string, limit, offset int) ([]Notification, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	notifications, err := s.repo.ListNotifications(ctx, tenantID, channel, status, limit, offset)
+	notifications, err := s.repo.ListNotifications(ctx, tenantID, recipientID, channel, status, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("notifications: list notifications: %w", err)
 	}

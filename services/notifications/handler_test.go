@@ -33,6 +33,17 @@ func callerCtx(tid uuid.UUID) context.Context {
 	})
 }
 
+// callerCtxWithUser is callerCtx with a caller-controlled UserID, so a test can
+// assert the recipient predicate the handler derives from the token.
+func callerCtxWithUser(tid, uid uuid.UUID) context.Context {
+	return interceptor.WithCaller(context.Background(), interceptor.CallerInfo{
+		UserID:   uid,
+		TenantID: tid,
+		Email:    "user@example.com",
+		Roles:    []string{"member"},
+	})
+}
+
 // --- Send ---
 
 func TestHandler_Send_Success(t *testing.T) {
@@ -264,7 +275,7 @@ func TestHandler_GetNotification_Success(t *testing.T) {
 	tenantID := uuid.New()
 	notifID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		getNotificationFn: func(_ context.Context, tid, id uuid.UUID) (*Notification, error) {
+		getNotificationFn: func(_ context.Context, tid, _, id uuid.UUID) (*Notification, error) {
 			return &Notification{ID: id, TenantID: tid, Channel: "email", Status: "sent"}, nil
 		},
 	}, map[string]ChannelSender{}))
@@ -275,6 +286,24 @@ func TestHandler_GetNotification_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, notifID.String(), resp.GetId())
+}
+
+func TestHandler_GetNotification_SelfScoped(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	uid := uuid.New()
+	var gotRecipient uuid.UUID
+	h := newHandlerWithRepo(&mockRepo{
+		getNotificationFn: func(_ context.Context, _, recipientID, id uuid.UUID) (*Notification, error) {
+			gotRecipient = recipientID
+			return &Notification{ID: id, TenantID: tid}, nil
+		},
+	})
+	_, err := h.GetNotification(callerCtxWithUser(tid, uid), &notificationsv1.GetNotificationRequest{
+		TenantId: tid.String(), Id: uuid.New().String(),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uid, gotRecipient)
 }
 
 func TestHandler_GetNotification_InvalidTenantID(t *testing.T) {
@@ -300,7 +329,7 @@ func TestHandler_ListNotifications_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listNotificationsFn: func(_ context.Context, _ uuid.UUID, _, _ string, _, _ int) ([]Notification, error) {
+		listNotificationsFn: func(_ context.Context, _, _ uuid.UUID, _, _ string, _, _ int) ([]Notification, error) {
 			return []Notification{{ID: uuid.New(), TenantID: tenantID, Channel: "email", Status: "sent"}}, nil
 		},
 	}, map[string]ChannelSender{}))
@@ -308,6 +337,22 @@ func TestHandler_ListNotifications_Success(t *testing.T) {
 	resp, err := h.ListNotifications(callerCtx(tenantID), &notificationsv1.ListNotificationsRequest{TenantId: tenantID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetNotifications(), 1)
+}
+
+func TestHandler_ListNotifications_SelfScoped(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	uid := uuid.New()
+	var gotRecipient uuid.UUID
+	h := newHandlerWithRepo(&mockRepo{
+		listNotificationsFn: func(_ context.Context, _, recipientID uuid.UUID, _, _ string, _, _ int) ([]Notification, error) {
+			gotRecipient = recipientID
+			return nil, nil
+		},
+	})
+	_, err := h.ListNotifications(callerCtxWithUser(tid, uid), &notificationsv1.ListNotificationsRequest{TenantId: tid.String()})
+	require.NoError(t, err)
+	assert.Equal(t, uid, gotRecipient)
 }
 
 func TestHandler_ListNotifications_InvalidTenantID(t *testing.T) {
@@ -323,7 +368,7 @@ func TestHandler_CrossTenantRead_Denied(t *testing.T) {
 	require.NotEqual(t, callerTenant, victimTenant)
 
 	h := newHandlerWithRepo(&mockRepo{
-		listNotificationsFn: func(context.Context, uuid.UUID, string, string, int, int) ([]Notification, error) {
+		listNotificationsFn: func(context.Context, uuid.UUID, uuid.UUID, string, string, int, int) ([]Notification, error) {
 			t.Fatal("repository must not be reached on a cross-tenant request")
 			return nil, nil
 		},
@@ -342,7 +387,7 @@ func TestHandler_ListNotifications_UsesTokenTenant(t *testing.T) {
 	tid := uuid.New()
 	var gotTenant uuid.UUID
 	h := newHandlerWithRepo(&mockRepo{
-		listNotificationsFn: func(_ context.Context, tenantID uuid.UUID, _, _ string, _, _ int) ([]Notification, error) {
+		listNotificationsFn: func(_ context.Context, tenantID, _ uuid.UUID, _, _ string, _, _ int) ([]Notification, error) {
 			gotTenant = tenantID
 			return nil, nil
 		},

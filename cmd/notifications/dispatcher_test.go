@@ -52,10 +52,10 @@ func (r *mockTemplateRepo) CreateNotification(_ context.Context, _ *notification
 func (r *mockTemplateRepo) UpdateNotificationStatus(_ context.Context, _ uuid.UUID, _, _, _ string, _ *time.Time) error {
 	return nil
 }
-func (r *mockTemplateRepo) GetNotification(_ context.Context, _, _ uuid.UUID) (*notifications.Notification, error) {
+func (r *mockTemplateRepo) GetNotification(_ context.Context, _, _, _ uuid.UUID) (*notifications.Notification, error) {
 	return nil, nil
 }
-func (r *mockTemplateRepo) ListNotifications(_ context.Context, _ uuid.UUID, _, _ string, _, _ int) ([]notifications.Notification, error) {
+func (r *mockTemplateRepo) ListNotifications(_ context.Context, _, _ uuid.UUID, _, _ string, _, _ int) ([]notifications.Notification, error) {
 	return nil, nil
 }
 func (r *mockTemplateRepo) IncrementRetryCount(_ context.Context, _ uuid.UUID) error {

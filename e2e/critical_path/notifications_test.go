@@ -111,23 +111,26 @@ func (r *notifRepo) UpdateNotificationStatus(_ context.Context, id uuid.UUID, st
 	return nil
 }
 
-func (r *notifRepo) GetNotification(_ context.Context, tenantID, id uuid.UUID) (*notifications.Notification, error) {
+func (r *notifRepo) GetNotification(_ context.Context, tenantID, recipientID, id uuid.UUID) (*notifications.Notification, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, n := range r.notifs {
-		if n.TenantID == tenantID && n.ID == id {
+		if n.TenantID == tenantID && n.RecipientID == recipientID && n.ID == id {
 			return n, nil
 		}
 	}
 	return nil, notifications.ErrNotificationNotFound
 }
 
-func (r *notifRepo) ListNotifications(_ context.Context, tenantID uuid.UUID, channel, status string, limit, offset int) ([]notifications.Notification, error) {
+func (r *notifRepo) ListNotifications(_ context.Context, tenantID, recipientID uuid.UUID, channel, status string, limit, offset int) ([]notifications.Notification, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []notifications.Notification
 	for _, n := range r.notifs {
 		if n.TenantID != tenantID {
+			continue
+		}
+		if n.RecipientID != recipientID {
 			continue
 		}
 		if channel != "" && n.Channel != channel {

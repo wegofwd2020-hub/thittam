@@ -19,7 +19,7 @@ type Repository interface {
 	// Delivery log
 	CreateNotification(ctx context.Context, n *Notification) error
 	UpdateNotificationStatus(ctx context.Context, id uuid.UUID, status, providerMsgID, errMsg string, sentAt *time.Time) error
-	GetNotification(ctx context.Context, tenantID, id uuid.UUID) (*Notification, error)
-	ListNotifications(ctx context.Context, tenantID uuid.UUID, channel, status string, limit, offset int) ([]Notification, error)
+	GetNotification(ctx context.Context, tenantID, recipientID, id uuid.UUID) (*Notification, error)
+	ListNotifications(ctx context.Context, tenantID, recipientID uuid.UUID, channel, status string, limit, offset int) ([]Notification, error)
 	IncrementRetryCount(ctx context.Context, id uuid.UUID) error
 }
