@@ -432,11 +432,11 @@ func (p *Postgres) CreatePaymentMethod(ctx context.Context, pm *billing.PaymentM
 	return nil
 }
 
-func (p *Postgres) GetPaymentMethod(ctx context.Context, id uuid.UUID) (*billing.PaymentMethod, error) {
+func (p *Postgres) GetPaymentMethod(ctx context.Context, tenantID, id uuid.UUID) (*billing.PaymentMethod, error) {
 	row := p.db.QueryRow(ctx, `
 		SELECT id, tenant_id, type, display_name, is_default,
 		       razorpay_token, stripe_pm_id, expires_at, created_at
-		FROM payment_methods WHERE id = $1`, id)
+		FROM payment_methods WHERE id = $1 AND tenant_id = $2`, id, tenantID)
 	return scanPaymentMethod(row)
 }
 
@@ -463,20 +463,26 @@ func (p *Postgres) ListPaymentMethods(ctx context.Context, tenantID uuid.UUID) (
 }
 
 func (p *Postgres) UpdatePaymentMethod(ctx context.Context, pm *billing.PaymentMethod) error {
-	_, err := p.db.Exec(ctx, `
+	tag, err := p.db.Exec(ctx, `
 		UPDATE payment_methods
 		SET is_default = $2, expires_at = $3
-		WHERE id = $1`, pm.ID, pm.IsDefault, pm.ExpiresAt)
+		WHERE id = $1 AND tenant_id = $4`, pm.ID, pm.IsDefault, pm.ExpiresAt, pm.TenantID)
 	if err != nil {
 		return fmt.Errorf("billing: update payment method: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return billing.ErrPaymentMethodNotFound
 	}
 	return nil
 }
 
-func (p *Postgres) DeletePaymentMethod(ctx context.Context, id uuid.UUID) error {
-	_, err := p.db.Exec(ctx, `DELETE FROM payment_methods WHERE id = $1`, id)
+func (p *Postgres) DeletePaymentMethod(ctx context.Context, tenantID, id uuid.UUID) error {
+	tag, err := p.db.Exec(ctx, `DELETE FROM payment_methods WHERE id = $1 AND tenant_id = $2`, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("billing: delete payment method: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return billing.ErrPaymentMethodNotFound
 	}
 	return nil
 }

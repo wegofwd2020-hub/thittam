@@ -215,11 +215,15 @@ func (h *Handler) AddPaymentMethod(ctx context.Context, req *billingv1.AddPaymen
 }
 
 func (h *Handler) RemovePaymentMethod(ctx context.Context, req *billingv1.RemovePaymentMethodRequest) (*emptypb.Empty, error) {
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.TenantId)
+	if err != nil {
+		return nil, err
+	}
 	id, err := uuid.Parse(req.PaymentMethodId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid payment_method_id: %v", err)
 	}
-	if err := h.svc.RemovePaymentMethod(ctx, id); err != nil {
+	if err := h.svc.RemovePaymentMethod(ctx, tenantID, id); err != nil {
 		return nil, grpcErr(err)
 	}
 	return &emptypb.Empty{}, nil

@@ -438,7 +438,7 @@ func TestHandler_RemovePaymentMethod(t *testing.T) {
 		t.Parallel()
 		pm := fixedPM()
 		h := newHandlerWithRepo(&mockRepo{
-			getPaymentMethodFn: func(_ context.Context, _ uuid.UUID) (*PaymentMethod, error) {
+			getPaymentMethodFn: func(_ context.Context, _, _ uuid.UUID) (*PaymentMethod, error) {
 				return pm, nil
 			},
 		})
@@ -452,7 +452,7 @@ func TestHandler_RemovePaymentMethod(t *testing.T) {
 	t.Run("not_found", func(t *testing.T) {
 		t.Parallel()
 		h := newHandlerWithRepo(&mockRepo{
-			getPaymentMethodFn: func(_ context.Context, _ uuid.UUID) (*PaymentMethod, error) {
+			getPaymentMethodFn: func(_ context.Context, _, _ uuid.UUID) (*PaymentMethod, error) {
 				return nil, ErrPaymentMethodNotFound
 			},
 		})
@@ -463,6 +463,57 @@ func TestHandler_RemovePaymentMethod(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
+}
+
+func TestHandler_RemovePaymentMethod_PassesCallerTenantToRepo(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	var gotGetTenant, gotDelTenant uuid.UUID
+	delCalled := false
+	repo := &mockRepo{
+		getPaymentMethodFn: func(_ context.Context, tenantID, id uuid.UUID) (*PaymentMethod, error) {
+			gotGetTenant = tenantID
+			return &PaymentMethod{ID: id, TenantID: tenantID}, nil
+		},
+		deletePaymentMethodFn: func(_ context.Context, tenantID, id uuid.UUID) error {
+			gotDelTenant = tenantID
+			delCalled = true
+			return nil
+		},
+	}
+	h := newHandlerWithRepo(repo)
+
+	_, err := h.RemovePaymentMethod(callerCtx(callerTenant), &billingv1.RemovePaymentMethodRequest{
+		PaymentMethodId: uuid.New().String(),
+	})
+
+	require.NoError(t, err)
+	require.True(t, delCalled)
+	require.Equal(t, callerTenant, gotGetTenant, "GetPaymentMethod must receive the caller's tenant")
+	require.Equal(t, callerTenant, gotDelTenant, "the DELETE must be scoped to the caller's tenant")
+}
+
+func TestHandler_SetDefaultPaymentMethod_PassesCallerTenantToGet(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	var gotGetTenant uuid.UUID
+	repo := &mockRepo{
+		getPaymentMethodFn: func(_ context.Context, tenantID, id uuid.UUID) (*PaymentMethod, error) {
+			gotGetTenant = tenantID
+			return &PaymentMethod{ID: id, TenantID: tenantID}, nil
+		},
+		clearDefaultPaymentMethodsFn: func(_ context.Context, _ uuid.UUID) error { return nil },
+		updatePaymentMethodFn:        func(_ context.Context, _ *PaymentMethod) error { return nil },
+		listPaymentMethodsFn:         func(_ context.Context, _ uuid.UUID) ([]PaymentMethod, error) { return nil, nil },
+	}
+	h := newHandlerWithRepo(repo)
+
+	_, _ = h.SetDefaultPaymentMethod(callerCtx(callerTenant), &billingv1.SetDefaultPaymentMethodRequest{
+		PaymentMethodId: uuid.New().String(),
+	})
+
+	require.Equal(t, callerTenant, gotGetTenant,
+		"SetDefaultPaymentMethod must fetch the payment method scoped to the caller's tenant, not a bare id")
 }
 
 // --- ListPaymentMethods ---
