@@ -28,7 +28,7 @@ type Repository interface {
 	CreateJournalEntry(ctx context.Context, je *JournalEntry) error
 	GetJournalEntry(ctx context.Context, tenantID, id uuid.UUID) (*JournalEntry, error)
 	ListJournalEntries(ctx context.Context, tenantID uuid.UUID, periodID *uuid.UUID, status string, limit, offset int) ([]JournalEntry, error)
-	UpdateJournalStatus(ctx context.Context, id uuid.UUID, status string, actorID uuid.UUID, at time.Time) error
+	UpdateJournalStatus(ctx context.Context, tenantID, id uuid.UUID, status string, actorID uuid.UUID, at time.Time) error
 
 	// Trial Balance
 	GetTrialBalance(ctx context.Context, tenantID uuid.UUID, asOf time.Time) ([]TrialBalanceEntry, error)

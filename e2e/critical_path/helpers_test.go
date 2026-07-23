@@ -514,7 +514,7 @@ func (r *ledgerRepo) GetJournalEntry(_ context.Context, _, id uuid.UUID) (*ledge
 func (r *ledgerRepo) ListJournalEntries(_ context.Context, _ uuid.UUID, _ *uuid.UUID, _ string, _, _ int) ([]ledger.JournalEntry, error) {
 	return nil, nil
 }
-func (r *ledgerRepo) UpdateJournalStatus(_ context.Context, id uuid.UUID, status string, _ uuid.UUID, _ time.Time) error {
+func (r *ledgerRepo) UpdateJournalStatus(_ context.Context, _, id uuid.UUID, status string, _ uuid.UUID, _ time.Time) error {
 	if je, ok := r.entries[id]; ok {
 		je.Status = status
 		return nil

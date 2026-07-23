@@ -217,7 +217,7 @@ func (s *Service) PostJournalEntry(ctx context.Context, tenantID, id, postedBy u
 	}
 
 	now := time.Now().UTC()
-	if err := s.repo.UpdateJournalStatus(ctx, id, "posted", postedBy, now); err != nil {
+	if err := s.repo.UpdateJournalStatus(ctx, tenantID, id, "posted", postedBy, now); err != nil {
 		return nil, fmt.Errorf("ledger: post journal entry %s: %w", id, err)
 	}
 	je.Status = "posted"
@@ -297,7 +297,7 @@ func (s *Service) VoidJournalEntry(ctx context.Context, tenantID, id, voidedBy u
 
 	// Mark the original as void.
 	now := time.Now().UTC()
-	if err := s.repo.UpdateJournalStatus(ctx, id, "void", voidedBy, now); err != nil {
+	if err := s.repo.UpdateJournalStatus(ctx, tenantID, id, "void", voidedBy, now); err != nil {
 		return nil, fmt.Errorf("ledger: mark entry void: %w", err)
 	}
 

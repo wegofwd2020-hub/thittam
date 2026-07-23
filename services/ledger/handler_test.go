@@ -334,7 +334,7 @@ func TestHandler_PostJournalEntry_Success(t *testing.T) {
 				},
 			}, nil
 		},
-		updateJournalStatusFn: func(_ context.Context, _ uuid.UUID, _ string, _ uuid.UUID, _ time.Time) error { return nil },
+		updateJournalStatusFn: func(_ context.Context, _, _ uuid.UUID, _ string, _ uuid.UUID, _ time.Time) error { return nil },
 	}), allowAllPerm{})
 
 	resp, err := h.PostJournalEntry(callerCtxAs(tenantID, postedBy), &ledgerv1.PostJournalEntryRequest{
@@ -437,7 +437,7 @@ func TestHandler_VoidJournalEntry_Success(t *testing.T) {
 			return "JE-2026-002", nil
 		},
 		createJournalEntryFn:  func(_ context.Context, _ *JournalEntry) error { return nil },
-		updateJournalStatusFn: func(_ context.Context, _ uuid.UUID, _ string, _ uuid.UUID, _ time.Time) error { return nil },
+		updateJournalStatusFn: func(_ context.Context, _, _ uuid.UUID, _ string, _ uuid.UUID, _ time.Time) error { return nil },
 	}), allowAllPerm{})
 
 	resp, err := h.VoidJournalEntry(callerCtxAs(tenantID, voidedBy), &ledgerv1.VoidJournalEntryRequest{
@@ -555,7 +555,7 @@ func TestHandler_PostJournalEntry_MemberDenied(t *testing.T) {
 			t.Fatal("gate must fire before the repository is read")
 			return nil, nil
 		},
-		updateJournalStatusFn: func(context.Context, uuid.UUID, string, uuid.UUID, time.Time) error {
+		updateJournalStatusFn: func(context.Context, uuid.UUID, uuid.UUID, string, uuid.UUID, time.Time) error {
 			t.Fatal("gate must fire before the journal is written")
 			return nil
 		},
@@ -575,7 +575,7 @@ func TestHandler_VoidJournalEntry_MemberDenied(t *testing.T) {
 			t.Fatal("gate must fire before the repository is read")
 			return nil, nil
 		},
-		updateJournalStatusFn: func(context.Context, uuid.UUID, string, uuid.UUID, time.Time) error {
+		updateJournalStatusFn: func(context.Context, uuid.UUID, uuid.UUID, string, uuid.UUID, time.Time) error {
 			t.Fatal("gate must fire before the journal is written")
 			return nil
 		},
@@ -716,7 +716,7 @@ func TestHandler_NilPermissionChecker_Denies(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		updateJournalStatusFn: func(context.Context, uuid.UUID, string, uuid.UUID, time.Time) error {
+		updateJournalStatusFn: func(context.Context, uuid.UUID, uuid.UUID, string, uuid.UUID, time.Time) error {
 			t.Fatal("a nil checker must never reach the journal")
 			return nil
 		},
@@ -740,7 +740,7 @@ func TestHandler_PostJournalEntry_ForgedActorDenied(t *testing.T) {
 			t.Fatal("a forged actor must be refused before the repository is read")
 			return nil, nil
 		},
-		updateJournalStatusFn: func(context.Context, uuid.UUID, string, uuid.UUID, time.Time) error {
+		updateJournalStatusFn: func(context.Context, uuid.UUID, uuid.UUID, string, uuid.UUID, time.Time) error {
 			t.Fatal("a forged actor must never be written")
 			return nil
 		},
@@ -804,7 +804,7 @@ func TestHandler_PostJournalEntry_RecordsTheCallerAsActor(t *testing.T) {
 				},
 			}, nil
 		},
-		updateJournalStatusFn: func(_ context.Context, id uuid.UUID, _ string, actorID uuid.UUID, _ time.Time) error {
+		updateJournalStatusFn: func(_ context.Context, _, id uuid.UUID, _ string, actorID uuid.UUID, _ time.Time) error {
 			gotEntryID, gotActorID = id, actorID
 			return nil
 		},
