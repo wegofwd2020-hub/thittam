@@ -77,6 +77,7 @@ var systemRoles = []struct {
 		permUserManage,
 		"billing:read", "billing:manage",
 		"document:read", "document:write", "document:delete",
+		"notifications:read", "notifications:manage",
 	}},
 	{"manager", []string{
 		"production:read", "production:write",
@@ -87,6 +88,7 @@ var systemRoles = []struct {
 		permLedgerRead,
 		"billing:read", "billing:manage",
 		"document:read", "document:write", "document:delete",
+		"notifications:read", "notifications:manage",
 	}},
 	{"coordinator", []string{
 		"production:read", "production:write",

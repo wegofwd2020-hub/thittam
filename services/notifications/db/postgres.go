@@ -158,13 +158,13 @@ func (p *Postgres) UpdateNotificationStatus(ctx context.Context, id uuid.UUID, s
 	}
 }
 
-func (p *Postgres) GetNotification(ctx context.Context, tenantID, id uuid.UUID) (*notifications.Notification, error) {
+func (p *Postgres) GetNotification(ctx context.Context, tenantID, recipientID, id uuid.UUID) (*notifications.Notification, error) {
 	const sql = `SELECT id, tenant_id, recipient_id, channel, event_type, subject,
 		provider_msg_id, status, retry_count, error_message, sent_at, delivered_at, created_at
-		FROM notification_log WHERE id = $1 AND tenant_id = $2`
+		FROM notification_log WHERE id = $1 AND tenant_id = $2 AND recipient_id = $3`
 
 	var row NotificationLog
-	err := p.db.QueryRow(ctx, sql, id, tenantID).Scan(
+	err := p.db.QueryRow(ctx, sql, id, tenantID, recipientID).Scan(
 		&row.ID,
 		&row.TenantID,
 		&row.RecipientID,
@@ -188,17 +188,18 @@ func (p *Postgres) GetNotification(ctx context.Context, tenantID, id uuid.UUID) 
 	return notificationFromDB(row), nil
 }
 
-func (p *Postgres) ListNotifications(ctx context.Context, tenantID uuid.UUID, channel, status string, limit, offset int) ([]notifications.Notification, error) {
+func (p *Postgres) ListNotifications(ctx context.Context, tenantID, recipientID uuid.UUID, channel, status string, limit, offset int) ([]notifications.Notification, error) {
 	const sql = `SELECT id, tenant_id, recipient_id, channel, event_type, subject,
 		provider_msg_id, status, retry_count, error_message, sent_at, delivered_at, created_at
 		FROM notification_log
 		WHERE tenant_id = $1
-		  AND ($2 = '' OR channel = $2)
-		  AND ($3 = '' OR status = $3)
+		  AND recipient_id = $2
+		  AND ($3 = '' OR channel = $3)
+		  AND ($4 = '' OR status = $4)
 		ORDER BY created_at DESC
-		LIMIT $4 OFFSET $5`
+		LIMIT $5 OFFSET $6`
 
-	rows, err := p.db.Query(ctx, sql, tenantID, channel, status, int32(limit), int32(offset))
+	rows, err := p.db.Query(ctx, sql, tenantID, recipientID, channel, status, int32(limit), int32(offset))
 	if err != nil {
 		return nil, fmt.Errorf("notifications: list notifications: %w", err)
 	}

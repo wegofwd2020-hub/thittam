@@ -21,12 +21,14 @@ import (
 // handler methods.
 type Handler struct {
 	notificationsv1.UnimplementedNotificationsServiceServer
-	svc *Service
+	svc  *Service
+	perm interceptor.PermissionChecker
 }
 
-// NewHandler creates a Handler wrapping the given Service.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+// NewHandler creates a Handler. perm is required; cmd/notifications refuses to
+// start without a permission checker, so it is never nil in production.
+func NewHandler(svc *Service, perm interceptor.PermissionChecker) *Handler {
+	return &Handler{svc: svc, perm: perm}
 }
 
 // Compile-time interface check.
@@ -37,6 +39,9 @@ var _ notificationsv1.NotificationsServiceServer = (*Handler)(nil)
 func (h *Handler) Send(ctx context.Context, req *notificationsv1.SendRequest) (*notificationsv1.Notification, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "notifications:manage"); err != nil {
 		return nil, err
 	}
 	recipientID, err := uuid.Parse(req.GetRecipientId())
@@ -63,6 +68,9 @@ func (h *Handler) Dispatch(ctx context.Context, req *notificationsv1.DispatchReq
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "notifications:manage"); err != nil {
+		return nil, err
+	}
 	recipientID, err := uuid.Parse(req.GetRecipientId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid recipient_id")
@@ -86,6 +94,9 @@ func (h *Handler) CreateTemplate(ctx context.Context, req *notificationsv1.Creat
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "notifications:manage"); err != nil {
+		return nil, err
+	}
 
 	tmpl, err := h.svc.CreateTemplate(ctx, &Template{
 		TenantID:     tenantID,
@@ -103,6 +114,9 @@ func (h *Handler) CreateTemplate(ctx context.Context, req *notificationsv1.Creat
 func (h *Handler) UpdateTemplate(ctx context.Context, req *notificationsv1.UpdateTemplateRequest) (*notificationsv1.Template, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "notifications:manage"); err != nil {
 		return nil, err
 	}
 	id, err := uuid.Parse(req.GetId())
@@ -132,6 +146,9 @@ func (h *Handler) GetTemplate(ctx context.Context, req *notificationsv1.GetTempl
 	if err != nil {
 		return nil, err
 	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "notifications:read"); err != nil {
+		return nil, err
+	}
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid template id")
@@ -147,6 +164,9 @@ func (h *Handler) GetTemplate(ctx context.Context, req *notificationsv1.GetTempl
 func (h *Handler) ListTemplates(ctx context.Context, req *notificationsv1.ListTemplatesRequest) (*notificationsv1.ListTemplatesResponse, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, "notifications:read"); err != nil {
 		return nil, err
 	}
 
@@ -169,12 +189,16 @@ func (h *Handler) GetNotification(ctx context.Context, req *notificationsv1.GetN
 	if err != nil {
 		return nil, err
 	}
+	recipientID, err := interceptor.ActorFromRequest(ctx, "")
+	if err != nil {
+		return nil, err
+	}
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid notification id")
 	}
 
-	notif, err := h.svc.GetNotification(ctx, tenantID, id)
+	notif, err := h.svc.GetNotification(ctx, tenantID, recipientID, id)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -186,8 +210,12 @@ func (h *Handler) ListNotifications(ctx context.Context, req *notificationsv1.Li
 	if err != nil {
 		return nil, err
 	}
+	recipientID, err := interceptor.ActorFromRequest(ctx, "")
+	if err != nil {
+		return nil, err
+	}
 
-	notifs, err := h.svc.ListNotifications(ctx, tenantID, req.GetChannel(), req.GetStatus(), int(req.GetLimit()), int(req.GetOffset()))
+	notifs, err := h.svc.ListNotifications(ctx, tenantID, recipientID, req.GetChannel(), req.GetStatus(), int(req.GetLimit()), int(req.GetOffset()))
 	if err != nil {
 		return nil, grpcErr(err)
 	}
