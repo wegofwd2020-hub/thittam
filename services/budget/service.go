@@ -64,7 +64,7 @@ func (s *Service) SubmitBudget(ctx context.Context, tenantID, id uuid.UUID, subm
 	if b.Status != "draft" {
 		return fmt.Errorf("%w: current status is %q, must be draft", ErrBudgetLocked, b.Status)
 	}
-	return s.repo.UpdateBudgetStatus(ctx, id, "submitted", nil)
+	return s.repo.UpdateBudgetStatus(ctx, tenantID, id, "submitted", nil)
 }
 
 // ApproveBudget approves a budget. The budget must be in submitted status.
@@ -79,7 +79,7 @@ func (s *Service) ApproveBudget(ctx context.Context, tenantID, id uuid.UUID, app
 	if b.Status != "submitted" {
 		return fmt.Errorf("%w: current status is %q, must be submitted", ErrBudgetNotApproved, b.Status)
 	}
-	if err := s.repo.UpdateBudgetStatus(ctx, id, "approved", &approvedBy); err != nil {
+	if err := s.repo.UpdateBudgetStatus(ctx, tenantID, id, "approved", &approvedBy); err != nil {
 		return err
 	}
 	b.Status = "approved"

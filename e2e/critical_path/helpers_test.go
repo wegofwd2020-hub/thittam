@@ -358,7 +358,7 @@ func (r *budgetRepo) GetBudget(_ context.Context, _, id uuid.UUID) (*budget.Budg
 func (r *budgetRepo) ListBudgets(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]budget.Budget, error) {
 	return nil, nil
 }
-func (r *budgetRepo) UpdateBudgetStatus(_ context.Context, id uuid.UUID, status string, approvedBy *uuid.UUID) error {
+func (r *budgetRepo) UpdateBudgetStatus(_ context.Context, _, id uuid.UUID, status string, approvedBy *uuid.UUID) error {
 	if b, ok := r.budgets[id]; ok {
 		b.Status = status
 		b.ApprovedBy = approvedBy

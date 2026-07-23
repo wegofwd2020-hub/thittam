@@ -44,7 +44,7 @@ type budgetMock struct{}
 func (m *budgetMock) CreateBudget(ctx context.Context, b *budget.Budget) error { return nil }
 func (m *budgetMock) GetBudget(ctx context.Context, tid, id uuid.UUID) (*budget.Budget, error) { return nil, nil }
 func (m *budgetMock) ListBudgets(ctx context.Context, tid, pid uuid.UUID, status string, limit, offset int) ([]budget.Budget, error) { return nil, nil }
-func (m *budgetMock) UpdateBudgetStatus(ctx context.Context, id uuid.UUID, status string, approvedBy *uuid.UUID) error { return nil }
+func (m *budgetMock) UpdateBudgetStatus(ctx context.Context, tenantID, id uuid.UUID, status string, approvedBy *uuid.UUID) error { return nil }
 func (m *budgetMock) CreateLineItem(ctx context.Context, li *budget.BudgetLineItem) error { return nil }
 func (m *budgetMock) GetLineItem(ctx context.Context, tid, id uuid.UUID) (*budget.BudgetLineItem, error) { return nil, nil }
 func (m *budgetMock) ListLineItems(ctx context.Context, tid, budgetID uuid.UUID, limit, offset int) ([]budget.BudgetLineItem, error) { return nil, nil }
