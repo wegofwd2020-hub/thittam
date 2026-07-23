@@ -306,7 +306,23 @@ git diff --stat migrations/   # EXPECTED to be non-empty this task
 
 Expected: vet clean, tests pass, coverage ≥ the Step 1 baseline.
 
-**Flip prediction for this task: zero.** No gate is added here, so no existing test changes behaviour. Any `services/iam` test failure means the `systemRoles` edit broke an assertion about role contents — **stop and report** rather than adjusting the test.
+**Flip prediction for this task: exactly 1.** No gate is added here, but `services/iam/service_test.go:850` `TestSystemRoles_ProjectSupervisorPermissions` pins that role's permission list with `assert.ElementsMatch` against a literal slice. Granting `project_supervisor` two new strings breaks it — which is the test doing its job.
+
+**Repair by adding the two strings to the expected list**, keeping `ElementsMatch` (equally strict, order-independent):
+
+```go
+	assert.ElementsMatch(t, []string{
+		"production:read",
+		"budget:read",
+		"expense:read", "expense:submit", "expense:approve",
+		"resource:manage",
+		"inventory:read", "inventory:checkout",
+	}, ps)
+```
+
+`TestSystemRoles_InventoryManagerPermissions` (`:837`) must NOT flip — `inventory_manager` already holds `inventory:read` and does not receive `expense:read`. No other role has a list-pinning test.
+
+**If the count is not exactly 1, stop and report.**
 
 - [ ] **Step 9: Commit**
 
