@@ -144,12 +144,17 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Asset
 
 const getActiveCheckout = `-- name: GetActiveCheckout :one
 SELECT id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in FROM asset_checkouts
-WHERE asset_id = $1 AND checked_in_at IS NULL
+WHERE asset_id = $1 AND tenant_id = $2 AND checked_in_at IS NULL
 LIMIT 1
 `
 
-func (q *Queries) GetActiveCheckout(ctx context.Context, assetID uuid.UUID) (AssetCheckout, error) {
-	row := q.db.QueryRow(ctx, getActiveCheckout, assetID)
+type GetActiveCheckoutParams struct {
+	AssetID  uuid.UUID `json:"asset_id"`
+	TenantID uuid.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) GetActiveCheckout(ctx context.Context, arg GetActiveCheckoutParams) (AssetCheckout, error) {
+	row := q.db.QueryRow(ctx, getActiveCheckout, arg.AssetID, arg.TenantID)
 	var i AssetCheckout
 	err := row.Scan(
 		&i.ID,
@@ -226,6 +231,33 @@ func (q *Queries) GetAssetByCode(ctx context.Context, arg GetAssetByCodeParams) 
 	return i, err
 }
 
+const getCheckout = `-- name: GetCheckout :one
+SELECT id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in FROM asset_checkouts WHERE id = $1 AND tenant_id = $2
+`
+
+type GetCheckoutParams struct {
+	ID       uuid.UUID `json:"id"`
+	TenantID uuid.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) GetCheckout(ctx context.Context, arg GetCheckoutParams) (AssetCheckout, error) {
+	row := q.db.QueryRow(ctx, getCheckout, arg.ID, arg.TenantID)
+	var i AssetCheckout
+	err := row.Scan(
+		&i.ID,
+		&i.AssetID,
+		&i.ProductionID,
+		&i.TenantID,
+		&i.CheckedOutTo,
+		&i.CheckedOutAt,
+		&i.ExpectedReturn,
+		&i.CheckedInAt,
+		&i.ConditionOut,
+		&i.ConditionIn,
+	)
+	return i, err
+}
+
 const listAssets = `-- name: ListAssets :many
 SELECT id, tenant_id, asset_code, name, category_id, description, ownership_type, status, purchase_date, purchase_cost, serial_number, created_at, updated_at FROM assets
 WHERE tenant_id = $1
@@ -285,28 +317,28 @@ func (q *Queries) ListAssets(ctx context.Context, arg ListAssetsParams) ([]Asset
 
 const listCheckouts = `-- name: ListCheckouts :many
 SELECT id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in FROM asset_checkouts
-WHERE tenant_id = $1
-  AND ($2::uuid IS NULL OR asset_id = $2)
-  AND ($3::uuid IS NULL OR production_id = $3)
+WHERE tenant_id = $1::uuid
+  AND ($2::uuid IS NULL OR asset_id = $2::uuid)
+  AND ($3::uuid IS NULL OR production_id = $3::uuid)
 ORDER BY checked_out_at DESC
-LIMIT $4 OFFSET $5
+LIMIT $5::int OFFSET $4::int
 `
 
 type ListCheckoutsParams struct {
-	TenantID uuid.UUID `json:"tenant_id"`
-	Column2  uuid.UUID `json:"column_2"`
-	Column3  uuid.UUID `json:"column_3"`
-	Limit    int32     `json:"limit"`
-	Offset   int32     `json:"offset"`
+	TenantID     uuid.UUID   `json:"tenant_id"`
+	AssetID      pgtype.UUID `json:"asset_id"`
+	ProductionID pgtype.UUID `json:"production_id"`
+	Offset       int32       `json:"offset"`
+	Limit        int32       `json:"limit"`
 }
 
 func (q *Queries) ListCheckouts(ctx context.Context, arg ListCheckoutsParams) ([]AssetCheckout, error) {
 	rows, err := q.db.Query(ctx, listCheckouts,
 		arg.TenantID,
-		arg.Column2,
-		arg.Column3,
-		arg.Limit,
+		arg.AssetID,
+		arg.ProductionID,
 		arg.Offset,
+		arg.Limit,
 	)
 	if err != nil {
 		return nil, err

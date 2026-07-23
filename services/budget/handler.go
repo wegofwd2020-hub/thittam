@@ -259,7 +259,7 @@ func (h *Handler) CreateLineItem(ctx context.Context, req *budgetv1.CreateLineIt
 		return nil, grpcErr(err)
 	}
 
-	created, err := h.svc.GetLineItem(ctx, li.ID)
+	created, err := h.svc.GetLineItem(ctx, tenantID, li.ID)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -267,6 +267,11 @@ func (h *Handler) CreateLineItem(ctx context.Context, req *budgetv1.CreateLineIt
 }
 
 func (h *Handler) GetLineItem(ctx context.Context, req *budgetv1.GetLineItemRequest) (*budgetv1.BudgetLineItem, error) {
+	tenantID, ok := tenant.IDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
 	if err := interceptor.RequirePermission(ctx, h.perm, "budget:read"); err != nil {
 		return nil, err
 	}
@@ -276,7 +281,7 @@ func (h *Handler) GetLineItem(ctx context.Context, req *budgetv1.GetLineItemRequ
 		return nil, status.Error(codes.InvalidArgument, "invalid line item ID")
 	}
 
-	li, err := h.svc.GetLineItem(ctx, id)
+	li, err := h.svc.GetLineItem(ctx, tenantID, id)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -284,6 +289,11 @@ func (h *Handler) GetLineItem(ctx context.Context, req *budgetv1.GetLineItemRequ
 }
 
 func (h *Handler) ListLineItems(ctx context.Context, req *budgetv1.ListLineItemsRequest) (*budgetv1.ListLineItemsResponse, error) {
+	tenantID, ok := tenant.IDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
 	if err := interceptor.RequirePermission(ctx, h.perm, "budget:read"); err != nil {
 		return nil, err
 	}
@@ -297,7 +307,7 @@ func (h *Handler) ListLineItems(ctx context.Context, req *budgetv1.ListLineItems
 	// unbounded queries. Callers wanting a different page size should use the
 	// batch-export endpoint or wait for the proto to be updated.
 	const defaultLimit = 100
-	items, err := h.svc.ListLineItems(ctx, budgetID, defaultLimit, 0)
+	items, err := h.svc.ListLineItems(ctx, tenantID, budgetID, defaultLimit, 0)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -310,6 +320,11 @@ func (h *Handler) ListLineItems(ctx context.Context, req *budgetv1.ListLineItems
 }
 
 func (h *Handler) UpdateLineItemActuals(ctx context.Context, req *budgetv1.UpdateLineItemActualsRequest) (*budgetv1.BudgetLineItem, error) {
+	tenantID, ok := tenant.IDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
 	if err := interceptor.RequirePermission(ctx, h.perm, "budget:write"); err != nil {
 		return nil, err
 	}
@@ -329,11 +344,11 @@ func (h *Handler) UpdateLineItemActuals(ctx context.Context, req *budgetv1.Updat
 		return nil, status.Error(codes.InvalidArgument, "invalid committed_amount")
 	}
 
-	if err := h.svc.UpdateLineItemActuals(ctx, id, actual, committed); err != nil {
+	if err := h.svc.UpdateLineItemActuals(ctx, tenantID, id, actual, committed); err != nil {
 		return nil, grpcErr(err)
 	}
 
-	li, err := h.svc.GetLineItem(ctx, id)
+	li, err := h.svc.GetLineItem(ctx, tenantID, id)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -341,6 +356,11 @@ func (h *Handler) UpdateLineItemActuals(ctx context.Context, req *budgetv1.Updat
 }
 
 func (h *Handler) CheckLineAvailability(ctx context.Context, req *budgetv1.CheckLineAvailabilityRequest) (*budgetv1.CheckLineAvailabilityResponse, error) {
+	tenantID, ok := tenant.IDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
 	if err := interceptor.RequirePermission(ctx, h.perm, "budget:read"); err != nil {
 		return nil, err
 	}
@@ -350,7 +370,7 @@ func (h *Handler) CheckLineAvailability(ctx context.Context, req *budgetv1.Check
 		return nil, status.Error(codes.InvalidArgument, "invalid line_item_id")
 	}
 
-	available, err := h.svc.CheckLineAvailability(ctx, id)
+	available, err := h.svc.CheckLineAvailability(ctx, tenantID, id)
 	if err != nil {
 		return nil, grpcErr(err)
 	}

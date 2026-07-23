@@ -107,13 +107,13 @@ func TestPhaseTransition_AllVerticals(t *testing.T) {
 		t.Run(tc.name+"/valid", func(t *testing.T) {
 			t.Parallel()
 			svc := project.NewService(&phaseReturnMock{phaseType: tc.validPhaseTransition[0]})
-			err := svc.UpdatePhaseStatus(ctxWith(tc.config), uuid.New(), tc.validPhaseTransition[1])
+			err := svc.UpdatePhaseStatus(ctxWith(tc.config), uuid.New(), uuid.New(), tc.validPhaseTransition[1])
 			require.NoError(t, err)
 		})
 		t.Run(tc.name+"/invalid", func(t *testing.T) {
 			t.Parallel()
 			svc := project.NewService(&phaseReturnMock{phaseType: tc.invalidPhaseTransition[0]})
-			err := svc.UpdatePhaseStatus(ctxWith(tc.config), uuid.New(), tc.invalidPhaseTransition[1])
+			err := svc.UpdatePhaseStatus(ctxWith(tc.config), uuid.New(), uuid.New(), tc.invalidPhaseTransition[1])
 			require.Error(t, err)
 			assert.ErrorIs(t, err, project.ErrInvalidTransition)
 		})

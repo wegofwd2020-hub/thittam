@@ -361,43 +361,49 @@ func TestHandler_GetLineItem_Success(t *testing.T) {
 	t.Parallel()
 	itemID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		getLineItemFn: func(_ context.Context, id uuid.UUID) (*BudgetLineItem, error) {
-			return &BudgetLineItem{ID: id, CategoryID: "above_the_line"}, nil
+		getLineItemFn: func(_ context.Context, tenantID, id uuid.UUID) (*BudgetLineItem, error) {
+			return &BudgetLineItem{ID: id, TenantID: tenantID, CategoryID: "above_the_line"}, nil
 		},
 	})).WithPermissionChecker(allowAllPerm{})
 
-	resp, err := h.GetLineItem(callerCtx(), &budgetv1.GetLineItemRequest{Id: itemID.String()})
+	resp, err := h.GetLineItem(ctxWithTenant(uuid.New()), &budgetv1.GetLineItemRequest{Id: itemID.String()})
 	require.NoError(t, err)
 	assert.Equal(t, itemID.String(), resp.GetId())
 }
 
+func TestHandler_GetLineItem_NoTenant(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().GetLineItem(callerCtx(), &budgetv1.GetLineItemRequest{Id: uuid.New().String()})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
 func TestHandler_GetLineItem_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetLineItem(callerCtx(), &budgetv1.GetLineItemRequest{Id: "bad"})
+	_, err := newHandler().GetLineItem(ctxWithTenant(uuid.New()), &budgetv1.GetLineItemRequest{Id: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_GetLineItem_NotFound(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		getLineItemFn: func(_ context.Context, _ uuid.UUID) (*BudgetLineItem, error) {
+		getLineItemFn: func(_ context.Context, _, _ uuid.UUID) (*BudgetLineItem, error) {
 			return nil, ErrLineItemNotFound
 		},
 	})).WithPermissionChecker(allowAllPerm{})
-	_, err := h.GetLineItem(callerCtx(), &budgetv1.GetLineItemRequest{Id: uuid.New().String()})
+	_, err := h.GetLineItem(ctxWithTenant(uuid.New()), &budgetv1.GetLineItemRequest{Id: uuid.New().String()})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
 func TestHandler_GetLineItem_Denied(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		getLineItemFn: func(context.Context, uuid.UUID) (*BudgetLineItem, error) {
+		getLineItemFn: func(context.Context, uuid.UUID, uuid.UUID) (*BudgetLineItem, error) {
 			t.Fatal("gate must fire before the repository is read")
 			return nil, nil
 		},
 	})).WithPermissionChecker(denyPerm{})
 
-	_, err := h.GetLineItem(callerCtx(), &budgetv1.GetLineItemRequest{Id: uuid.New().String()})
+	_, err := h.GetLineItem(ctxWithTenant(uuid.New()), &budgetv1.GetLineItemRequest{Id: uuid.New().String()})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
@@ -407,32 +413,38 @@ func TestHandler_ListLineItems_Success(t *testing.T) {
 	t.Parallel()
 	budgetID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listLineItemsFn: func(_ context.Context, _ uuid.UUID, _, _ int) ([]BudgetLineItem, error) {
+		listLineItemsFn: func(_ context.Context, _, _ uuid.UUID, _, _ int) ([]BudgetLineItem, error) {
 			return []BudgetLineItem{{ID: uuid.New(), CategoryID: "above_the_line"}}, nil
 		},
 	})).WithPermissionChecker(allowAllPerm{})
 
-	resp, err := h.ListLineItems(callerCtx(), &budgetv1.ListLineItemsRequest{BudgetId: budgetID.String()})
+	resp, err := h.ListLineItems(ctxWithTenant(uuid.New()), &budgetv1.ListLineItemsRequest{BudgetId: budgetID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetLineItems(), 1)
 }
 
+func TestHandler_ListLineItems_NoTenant(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ListLineItems(callerCtx(), &budgetv1.ListLineItemsRequest{BudgetId: uuid.New().String()})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
 func TestHandler_ListLineItems_InvalidBudgetID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListLineItems(callerCtx(), &budgetv1.ListLineItemsRequest{BudgetId: "bad"})
+	_, err := newHandler().ListLineItems(ctxWithTenant(uuid.New()), &budgetv1.ListLineItemsRequest{BudgetId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_ListLineItems_Denied(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		listLineItemsFn: func(context.Context, uuid.UUID, int, int) ([]BudgetLineItem, error) {
+		listLineItemsFn: func(context.Context, uuid.UUID, uuid.UUID, int, int) ([]BudgetLineItem, error) {
 			t.Fatal("gate must fire before the repository is read")
 			return nil, nil
 		},
 	})).WithPermissionChecker(denyPerm{})
 
-	_, err := h.ListLineItems(callerCtx(), &budgetv1.ListLineItemsRequest{BudgetId: uuid.New().String()})
+	_, err := h.ListLineItems(ctxWithTenant(uuid.New()), &budgetv1.ListLineItemsRequest{BudgetId: uuid.New().String()})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
@@ -443,7 +455,7 @@ func TestHandler_UpdateLineItemActuals_Success(t *testing.T) {
 	itemID := uuid.New()
 	h := newHandler()
 
-	resp, err := h.UpdateLineItemActuals(callerCtx(), &budgetv1.UpdateLineItemActualsRequest{
+	resp, err := h.UpdateLineItemActuals(ctxWithTenant(uuid.New()), &budgetv1.UpdateLineItemActualsRequest{
 		Id:              itemID.String(),
 		ActualAmount:    "100000.00",
 		CommittedAmount: "50000.00",
@@ -454,7 +466,7 @@ func TestHandler_UpdateLineItemActuals_Success(t *testing.T) {
 
 func TestHandler_UpdateLineItemActuals_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdateLineItemActuals(callerCtx(), &budgetv1.UpdateLineItemActualsRequest{
+	_, err := newHandler().UpdateLineItemActuals(ctxWithTenant(uuid.New()), &budgetv1.UpdateLineItemActualsRequest{
 		Id: "bad", ActualAmount: "100.00", CommittedAmount: "50.00",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -462,7 +474,7 @@ func TestHandler_UpdateLineItemActuals_InvalidID(t *testing.T) {
 
 func TestHandler_UpdateLineItemActuals_InvalidActual(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdateLineItemActuals(callerCtx(), &budgetv1.UpdateLineItemActualsRequest{
+	_, err := newHandler().UpdateLineItemActuals(ctxWithTenant(uuid.New()), &budgetv1.UpdateLineItemActualsRequest{
 		Id: uuid.New().String(), ActualAmount: "bad", CommittedAmount: "50.00",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -470,7 +482,7 @@ func TestHandler_UpdateLineItemActuals_InvalidActual(t *testing.T) {
 
 func TestHandler_UpdateLineItemActuals_InvalidCommitted(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdateLineItemActuals(callerCtx(), &budgetv1.UpdateLineItemActualsRequest{
+	_, err := newHandler().UpdateLineItemActuals(ctxWithTenant(uuid.New()), &budgetv1.UpdateLineItemActualsRequest{
 		Id: uuid.New().String(), ActualAmount: "100.00", CommittedAmount: "bad",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -481,37 +493,137 @@ func TestHandler_UpdateLineItemActuals_InvalidCommitted(t *testing.T) {
 func TestHandler_CheckLineAvailability_Success(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		checkLineAvailabilityFn: func(_ context.Context, _ uuid.UUID) (decimal.Decimal, error) {
+		checkLineAvailabilityFn: func(_ context.Context, _, _ uuid.UUID) (decimal.Decimal, error) {
 			return decimal.NewFromInt(1000000), nil
 		},
 	})).WithPermissionChecker(allowAllPerm{})
 
-	resp, err := h.CheckLineAvailability(callerCtx(), &budgetv1.CheckLineAvailabilityRequest{
+	resp, err := h.CheckLineAvailability(ctxWithTenant(uuid.New()), &budgetv1.CheckLineAvailabilityRequest{
 		LineItemId: uuid.New().String(),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "1000000.00", resp.GetAvailableAmount())
 }
 
+func TestHandler_CheckLineAvailability_NoTenant(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().CheckLineAvailability(callerCtx(), &budgetv1.CheckLineAvailabilityRequest{LineItemId: uuid.New().String()})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
 func TestHandler_CheckLineAvailability_InvalidID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CheckLineAvailability(callerCtx(), &budgetv1.CheckLineAvailabilityRequest{LineItemId: "bad"})
+	_, err := newHandler().CheckLineAvailability(ctxWithTenant(uuid.New()), &budgetv1.CheckLineAvailabilityRequest{LineItemId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_CheckLineAvailability_Denied(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		checkLineAvailabilityFn: func(context.Context, uuid.UUID) (decimal.Decimal, error) {
+		checkLineAvailabilityFn: func(context.Context, uuid.UUID, uuid.UUID) (decimal.Decimal, error) {
 			t.Fatal("gate must fire before the repository is read")
 			return decimal.Decimal{}, nil
 		},
 	})).WithPermissionChecker(denyPerm{})
 
-	_, err := h.CheckLineAvailability(callerCtx(), &budgetv1.CheckLineAvailabilityRequest{
+	_, err := h.CheckLineAvailability(ctxWithTenant(uuid.New()), &budgetv1.CheckLineAvailabilityRequest{
 		LineItemId: uuid.New().String(),
 	})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+// --- Cross-tenant line-item tenant scoping (#157) ---
+
+// lineItemRecordingRepo records the tenant ID each line-item query receives.
+// budget's mockRepo returns a usable BudgetLineItem by default, so asserting
+// only on the status code would pass against unscoped code.
+type lineItemRecordingRepo struct {
+	mockRepo
+	gotGetTenant    uuid.UUID
+	gotListTenant   uuid.UUID
+	gotUpdateTenant uuid.UUID
+	updateCalled    bool
+}
+
+func (r *lineItemRecordingRepo) GetLineItem(ctx context.Context, tenantID, id uuid.UUID) (*BudgetLineItem, error) {
+	r.gotGetTenant = tenantID
+	return &BudgetLineItem{ID: id, TenantID: tenantID, CategoryID: "above_the_line"}, nil
+}
+
+func (r *lineItemRecordingRepo) ListLineItems(ctx context.Context, tenantID, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error) {
+	r.gotListTenant = tenantID
+	return nil, nil
+}
+
+func (r *lineItemRecordingRepo) UpdateLineItemActuals(ctx context.Context, tenantID, id uuid.UUID, actual, committed decimal.Decimal) error {
+	r.gotUpdateTenant = tenantID
+	r.updateCalled = true
+	return nil
+}
+
+func TestHandler_GetLineItem_PassesCallerTenantToRepo(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	repo := &lineItemRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	_, err := h.GetLineItem(ctxWithTenant(callerTenant), &budgetv1.GetLineItemRequest{
+		Id: uuid.New().String(),
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, callerTenant, repo.gotGetTenant,
+		"GetLineItem must query with the caller's tenant")
+}
+
+func TestHandler_ListLineItems_PassesCallerTenantToRepo(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	repo := &lineItemRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	_, err := h.ListLineItems(ctxWithTenant(callerTenant), &budgetv1.ListLineItemsRequest{
+		BudgetId: uuid.New().String(),
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, callerTenant, repo.gotListTenant,
+		"ListLineItems must query with the caller's tenant")
+}
+
+func TestHandler_UpdateLineItemActuals_PassesCallerTenantToRepo(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	repo := &lineItemRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	_, err := h.UpdateLineItemActuals(ctxWithTenant(callerTenant), &budgetv1.UpdateLineItemActualsRequest{
+		Id:              uuid.New().String(),
+		ActualAmount:    "100.00",
+		CommittedAmount: "50.00",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, callerTenant, repo.gotUpdateTenant,
+		"UpdateLineItemActuals writes money: it must be scoped to the caller's tenant")
+}
+
+func TestHandler_UpdateLineItemActuals_NoTenantDoesNotWrite(t *testing.T) {
+	t.Parallel()
+	repo := &lineItemRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	// callerCtx() carries a caller but NO tenant.
+	_, err := h.UpdateLineItemActuals(callerCtx(), &budgetv1.UpdateLineItemActualsRequest{
+		Id:              uuid.New().String(),
+		ActualAmount:    "100.00",
+		CommittedAmount: "50.00",
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.Unauthenticated, status.Code(err))
+	require.False(t, repo.updateCalled,
+		"the monetary write must not be reached without a tenant")
 }
 
 // --- Vertical metadata ---

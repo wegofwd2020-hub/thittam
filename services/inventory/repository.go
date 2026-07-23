@@ -16,7 +16,7 @@ type Repository interface {
 
 	// Checkouts
 	CheckOutAsset(ctx context.Context, c *AssetCheckout) error
-	CheckInAsset(ctx context.Context, checkoutID uuid.UUID, conditionIn string) error
-	GetCheckout(ctx context.Context, id uuid.UUID) (*AssetCheckout, error)
-	ListCheckouts(ctx context.Context, assetID uuid.UUID) ([]AssetCheckout, error)
+	CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, conditionIn string) error
+	GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*AssetCheckout, error)
+	ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error)
 }

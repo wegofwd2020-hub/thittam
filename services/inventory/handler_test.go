@@ -216,20 +216,87 @@ func TestHandler_ListCheckouts_Success(t *testing.T) {
 	t.Parallel()
 	assetID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listCheckoutsFn: func(_ context.Context, _ uuid.UUID) ([]AssetCheckout, error) {
+		listCheckoutsFn: func(_ context.Context, _, _ uuid.UUID) ([]AssetCheckout, error) {
 			return []AssetCheckout{{ID: uuid.New(), AssetID: assetID}}, nil
 		},
 	}))
 
-	resp, err := h.ListCheckouts(context.Background(), &inventoryv1.ListCheckoutsRequest{AssetId: assetID.String()})
+	resp, err := h.ListCheckouts(ctxWithTenant(uuid.New()), &inventoryv1.ListCheckoutsRequest{AssetId: assetID.String()})
 	require.NoError(t, err)
 	assert.Len(t, resp.GetCheckouts(), 1)
 }
 
+func TestHandler_ListCheckouts_NoTenant(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ListCheckouts(context.Background(), &inventoryv1.ListCheckoutsRequest{AssetId: uuid.New().String()})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
 func TestHandler_ListCheckouts_InvalidAssetID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListCheckouts(context.Background(), &inventoryv1.ListCheckoutsRequest{AssetId: "bad"})
+	_, err := newHandler().ListCheckouts(ctxWithTenant(uuid.New()), &inventoryv1.ListCheckoutsRequest{AssetId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// --- cross-tenant regression (#157) ---
+
+// checkoutRecordingRepo records the tenant ID each checkout query receives.
+// inventory's mockRepo returns a usable AssetCheckout by default, so a
+// status-code assertion alone would pass against unscoped code.
+type checkoutRecordingRepo struct {
+	mockRepo
+	gotListTenant    uuid.UUID
+	gotGetTenant     uuid.UUID
+	gotCheckInTenant uuid.UUID
+}
+
+func (r *checkoutRecordingRepo) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error) {
+	r.gotListTenant = tenantID
+	return nil, nil
+}
+
+func (r *checkoutRecordingRepo) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*AssetCheckout, error) {
+	r.gotGetTenant = tenantID
+	return &AssetCheckout{ID: id, TenantID: tenantID}, nil
+}
+
+func (r *checkoutRecordingRepo) CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, conditionIn string) error {
+	r.gotCheckInTenant = tenantID
+	return nil
+}
+
+func TestHandler_ListCheckouts_PassesCallerTenantToRepo(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	repo := &checkoutRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	_, err := h.ListCheckouts(ctxWithTenant(callerTenant), &inventoryv1.ListCheckoutsRequest{
+		AssetId: uuid.New().String(),
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, callerTenant, repo.gotListTenant,
+		"ListCheckouts must query with the caller's tenant")
+}
+
+func TestHandler_CheckInAsset_PassesCallerTenantToRepo(t *testing.T) {
+	t.Parallel()
+	callerTenant := uuid.New()
+	repo := &checkoutRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	_, err := h.CheckInAsset(ctxWithTenant(callerTenant), &inventoryv1.CheckInAssetRequest{
+		CheckoutId:  uuid.New().String(),
+		AssetId:     uuid.New().String(),
+		ConditionIn: "good",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, callerTenant, repo.gotCheckInTenant,
+		"CheckInAsset must write with the caller's tenant, which Service already held")
+	require.Equal(t, callerTenant, repo.gotGetTenant,
+		"the read-back after check-in must also be tenant-scoped")
 }
 
 // --- GetInventoryCategories ---

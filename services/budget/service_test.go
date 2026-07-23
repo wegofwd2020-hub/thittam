@@ -20,10 +20,10 @@ type mockRepo struct {
 	listBudgetsFn           func(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int) ([]Budget, error)
 	updateBudgetStatusFn    func(ctx context.Context, id uuid.UUID, status string, approvedBy *uuid.UUID) error
 	createLineItemFn        func(ctx context.Context, li *BudgetLineItem) error
-	getLineItemFn           func(ctx context.Context, id uuid.UUID) (*BudgetLineItem, error)
-	listLineItemsFn         func(ctx context.Context, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error)
-	updateLineItemActualsFn func(ctx context.Context, id uuid.UUID, actual, committed decimal.Decimal) error
-	checkLineAvailabilityFn func(ctx context.Context, id uuid.UUID) (decimal.Decimal, error)
+	getLineItemFn           func(ctx context.Context, tenantID, id uuid.UUID) (*BudgetLineItem, error)
+	listLineItemsFn         func(ctx context.Context, tenantID, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error)
+	updateLineItemActualsFn func(ctx context.Context, tenantID, id uuid.UUID, actual, committed decimal.Decimal) error
+	checkLineAvailabilityFn func(ctx context.Context, tenantID, id uuid.UUID) (decimal.Decimal, error)
 }
 
 func (m *mockRepo) CreateBudget(ctx context.Context, b *Budget) error {
@@ -56,27 +56,27 @@ func (m *mockRepo) CreateLineItem(ctx context.Context, li *BudgetLineItem) error
 	}
 	return nil
 }
-func (m *mockRepo) GetLineItem(ctx context.Context, id uuid.UUID) (*BudgetLineItem, error) {
+func (m *mockRepo) GetLineItem(ctx context.Context, tenantID, id uuid.UUID) (*BudgetLineItem, error) {
 	if m.getLineItemFn != nil {
-		return m.getLineItemFn(ctx, id)
+		return m.getLineItemFn(ctx, tenantID, id)
 	}
-	return &BudgetLineItem{ID: id, CategoryID: "above_the_line"}, nil
+	return &BudgetLineItem{ID: id, TenantID: tenantID, CategoryID: "above_the_line"}, nil
 }
-func (m *mockRepo) ListLineItems(ctx context.Context, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error) {
+func (m *mockRepo) ListLineItems(ctx context.Context, tenantID, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error) {
 	if m.listLineItemsFn != nil {
-		return m.listLineItemsFn(ctx, budgetID, limit, offset)
+		return m.listLineItemsFn(ctx, tenantID, budgetID, limit, offset)
 	}
 	return nil, nil
 }
-func (m *mockRepo) UpdateLineItemActuals(ctx context.Context, id uuid.UUID, actual, committed decimal.Decimal) error {
+func (m *mockRepo) UpdateLineItemActuals(ctx context.Context, tenantID, id uuid.UUID, actual, committed decimal.Decimal) error {
 	if m.updateLineItemActualsFn != nil {
-		return m.updateLineItemActualsFn(ctx, id, actual, committed)
+		return m.updateLineItemActualsFn(ctx, tenantID, id, actual, committed)
 	}
 	return nil
 }
-func (m *mockRepo) CheckLineAvailability(ctx context.Context, id uuid.UUID) (decimal.Decimal, error) {
+func (m *mockRepo) CheckLineAvailability(ctx context.Context, tenantID, id uuid.UUID) (decimal.Decimal, error) {
 	if m.checkLineAvailabilityFn != nil {
-		return m.checkLineAvailabilityFn(ctx, id)
+		return m.checkLineAvailabilityFn(ctx, tenantID, id)
 	}
 	return decimal.NewFromInt(0), nil
 }
@@ -281,13 +281,13 @@ func TestApproveBudget_AlreadyApproved(t *testing.T) {
 func TestCheckLineAvailability(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{
-		checkLineAvailabilityFn: func(ctx context.Context, id uuid.UUID) (decimal.Decimal, error) {
+		checkLineAvailabilityFn: func(ctx context.Context, tenantID, id uuid.UUID) (decimal.Decimal, error) {
 			// Simulates: budgeted 500000 - actual 100000 - committed 50000 = 350000
 			return decimal.NewFromInt(350000), nil
 		},
 	})
 
-	available, err := svc.CheckLineAvailability(context.Background(), uuid.New())
+	available, err := svc.CheckLineAvailability(context.Background(), uuid.New(), uuid.New())
 	require.NoError(t, err)
 	assert.True(t, decimal.NewFromInt(350000).Equal(available))
 }
@@ -396,12 +396,12 @@ func TestGetLineItem_Success(t *testing.T) {
 	t.Parallel()
 	lineID := uuid.New()
 	svc := NewService(&mockRepo{
-		getLineItemFn: func(_ context.Context, id uuid.UUID) (*BudgetLineItem, error) {
-			return &BudgetLineItem{ID: id, CategoryID: "above_the_line"}, nil
+		getLineItemFn: func(_ context.Context, tenantID, id uuid.UUID) (*BudgetLineItem, error) {
+			return &BudgetLineItem{ID: id, TenantID: tenantID, CategoryID: "above_the_line"}, nil
 		},
 	})
 
-	li, err := svc.GetLineItem(context.Background(), lineID)
+	li, err := svc.GetLineItem(context.Background(), uuid.New(), lineID)
 	require.NoError(t, err)
 	assert.Equal(t, lineID, li.ID)
 }
@@ -410,7 +410,7 @@ func TestListLineItems_Success(t *testing.T) {
 	t.Parallel()
 	budgetID := uuid.New()
 	svc := NewService(&mockRepo{
-		listLineItemsFn: func(_ context.Context, bid uuid.UUID, _, _ int) ([]BudgetLineItem, error) {
+		listLineItemsFn: func(_ context.Context, tenantID, bid uuid.UUID, _, _ int) ([]BudgetLineItem, error) {
 			return []BudgetLineItem{
 				{ID: uuid.New(), BudgetID: bid, CategoryID: "above_the_line"},
 				{ID: uuid.New(), BudgetID: bid, CategoryID: "below_the_line"},
@@ -418,7 +418,7 @@ func TestListLineItems_Success(t *testing.T) {
 		},
 	})
 
-	items, err := svc.ListLineItems(context.Background(), budgetID, 100, 0)
+	items, err := svc.ListLineItems(context.Background(), uuid.New(), budgetID, 100, 0)
 	require.NoError(t, err)
 	assert.Len(t, items, 2)
 }
@@ -428,14 +428,14 @@ func TestUpdateLineItemActuals_Success(t *testing.T) {
 	var capturedActual, capturedCommitted decimal.Decimal
 	lineID := uuid.New()
 	svc := NewService(&mockRepo{
-		updateLineItemActualsFn: func(_ context.Context, id uuid.UUID, actual, committed decimal.Decimal) error {
+		updateLineItemActualsFn: func(_ context.Context, tenantID, id uuid.UUID, actual, committed decimal.Decimal) error {
 			capturedActual = actual
 			capturedCommitted = committed
 			return nil
 		},
 	})
 
-	err := svc.UpdateLineItemActuals(context.Background(), lineID, decimal.NewFromInt(100000), decimal.NewFromInt(50000))
+	err := svc.UpdateLineItemActuals(context.Background(), uuid.New(), lineID, decimal.NewFromInt(100000), decimal.NewFromInt(50000))
 	require.NoError(t, err)
 	assert.True(t, decimal.NewFromInt(100000).Equal(capturedActual))
 	assert.True(t, decimal.NewFromInt(50000).Equal(capturedCommitted))

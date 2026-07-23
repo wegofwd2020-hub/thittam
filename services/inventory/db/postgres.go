@@ -112,14 +112,8 @@ func (p *Postgres) CheckOutAsset(ctx context.Context, c *inventory.AssetCheckout
 	return nil
 }
 
-func (p *Postgres) CheckInAsset(ctx context.Context, checkoutID uuid.UUID, conditionIn string) error {
-	// Resolve tenant_id — the sqlc query requires it for the WHERE clause.
-	tenantID, err := p.resolveTenantForCheckout(ctx, checkoutID)
-	if err != nil {
-		return err
-	}
-
-	_, err = p.q.CheckinAsset(ctx, CheckinAssetParams{
+func (p *Postgres) CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, conditionIn string) error {
+	_, err := p.q.CheckinAsset(ctx, CheckinAssetParams{
 		ID:          checkoutID,
 		TenantID:    tenantID,
 		ConditionIn: pgTextFromString(conditionIn),
@@ -133,24 +127,8 @@ func (p *Postgres) CheckInAsset(ctx context.Context, checkoutID uuid.UUID, condi
 	return nil
 }
 
-func (p *Postgres) GetCheckout(ctx context.Context, id uuid.UUID) (*inventory.AssetCheckout, error) {
-	const sql = `SELECT id, asset_id, production_id, tenant_id, checked_out_to,
-		checked_out_at, expected_return, checked_in_at, condition_out, condition_in
-		FROM asset_checkouts WHERE id = $1`
-
-	var row AssetCheckout
-	err := p.db.QueryRow(ctx, sql, id).Scan(
-		&row.ID,
-		&row.AssetID,
-		&row.ProductionID,
-		&row.TenantID,
-		&row.CheckedOutTo,
-		&row.CheckedOutAt,
-		&row.ExpectedReturn,
-		&row.CheckedInAt,
-		&row.ConditionOut,
-		&row.ConditionIn,
-	)
+func (p *Postgres) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*inventory.AssetCheckout, error) {
+	row, err := p.q.GetCheckout(ctx, GetCheckoutParams{ID: id, TenantID: tenantID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, inventory.ErrAssetNotFound
@@ -160,53 +138,27 @@ func (p *Postgres) GetCheckout(ctx context.Context, id uuid.UUID) (*inventory.As
 	return checkoutFromDB(row), nil
 }
 
-// ListCheckouts lists all checkout records for an asset.
-// A raw query is used because the sqlc-generated ListCheckouts has a
-// production_id filter that cannot be disabled via a zero UUID.
-func (p *Postgres) ListCheckouts(ctx context.Context, assetID uuid.UUID) ([]inventory.AssetCheckout, error) {
-	const sql = `SELECT id, asset_id, production_id, tenant_id, checked_out_to,
-		checked_out_at, expected_return, checked_in_at, condition_out, condition_in
-		FROM asset_checkouts WHERE asset_id = $1 ORDER BY checked_out_at DESC`
+// ListCheckouts lists checkout records for an asset, scoped to the caller's
+// tenant. maxCheckouts bounds the query itself (rather than relying solely
+// on the service-layer post-fetch clamp) now that the query accepts a limit.
+const maxCheckoutsQueryLimit = 200
 
-	rows, err := p.db.Query(ctx, sql, assetID)
+func (p *Postgres) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID) ([]inventory.AssetCheckout, error) {
+	rows, err := p.q.ListCheckouts(ctx, ListCheckoutsParams{
+		TenantID:     tenantID,
+		AssetID:      pgtype.UUID{Bytes: assetID, Valid: true},
+		ProductionID: pgtype.UUID{}, // no production filter for this interface
+		Limit:        maxCheckoutsQueryLimit,
+		Offset:       0,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("inventory: list checkouts: %w", err)
 	}
-	defer rows.Close()
-
-	var result []inventory.AssetCheckout
-	for rows.Next() {
-		var row AssetCheckout
-		if err := rows.Scan(
-			&row.ID,
-			&row.AssetID,
-			&row.ProductionID,
-			&row.TenantID,
-			&row.CheckedOutTo,
-			&row.CheckedOutAt,
-			&row.ExpectedReturn,
-			&row.CheckedInAt,
-			&row.ConditionOut,
-			&row.ConditionIn,
-		); err != nil {
-			return nil, fmt.Errorf("inventory: scan checkout: %w", err)
-		}
-		result = append(result, *checkoutFromDB(row))
+	result := make([]inventory.AssetCheckout, len(rows))
+	for i, row := range rows {
+		result[i] = *checkoutFromDB(row)
 	}
-	return result, rows.Err()
-}
-
-// resolveTenantForCheckout looks up the tenant_id for a checkout record.
-func (p *Postgres) resolveTenantForCheckout(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	var tenantID uuid.UUID
-	err := p.db.QueryRow(ctx, "SELECT tenant_id FROM asset_checkouts WHERE id = $1", id).Scan(&tenantID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return uuid.Nil, inventory.ErrAssetNotFound
-		}
-		return uuid.Nil, fmt.Errorf("inventory: resolve tenant for checkout %s: %w", id, err)
-	}
-	return tenantID, nil
+	return result, nil
 }
 
 // --- model conversion helpers ---

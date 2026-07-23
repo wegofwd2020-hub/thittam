@@ -370,19 +370,19 @@ func (r *budgetRepo) CreateLineItem(_ context.Context, li *budget.BudgetLineItem
 	r.lineItems[li.ID] = li
 	return nil
 }
-func (r *budgetRepo) GetLineItem(_ context.Context, id uuid.UUID) (*budget.BudgetLineItem, error) {
+func (r *budgetRepo) GetLineItem(_ context.Context, _, id uuid.UUID) (*budget.BudgetLineItem, error) {
 	if li, ok := r.lineItems[id]; ok {
 		return li, nil
 	}
 	return nil, budget.ErrLineItemNotFound
 }
-func (r *budgetRepo) ListLineItems(_ context.Context, _ uuid.UUID, _, _ int) ([]budget.BudgetLineItem, error) {
+func (r *budgetRepo) ListLineItems(_ context.Context, _, _ uuid.UUID, _, _ int) ([]budget.BudgetLineItem, error) {
 	return nil, nil
 }
-func (r *budgetRepo) UpdateLineItemActuals(_ context.Context, _ uuid.UUID, _, _ decimal.Decimal) error {
+func (r *budgetRepo) UpdateLineItemActuals(_ context.Context, _, _ uuid.UUID, _, _ decimal.Decimal) error {
 	return nil
 }
-func (r *budgetRepo) CheckLineAvailability(_ context.Context, _ uuid.UUID) (decimal.Decimal, error) {
+func (r *budgetRepo) CheckLineAvailability(_ context.Context, _, _ uuid.UUID) (decimal.Decimal, error) {
 	return decimal.NewFromInt(500000), nil
 }
 

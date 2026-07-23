@@ -48,13 +48,16 @@ RETURNING *;
 
 -- name: ListCheckouts :many
 SELECT * FROM asset_checkouts
-WHERE tenant_id = $1
-  AND ($2::uuid IS NULL OR asset_id = $2)
-  AND ($3::uuid IS NULL OR production_id = $3)
+WHERE tenant_id = sqlc.arg('tenant_id')::uuid
+  AND (sqlc.narg('asset_id')::uuid IS NULL OR asset_id = sqlc.narg('asset_id')::uuid)
+  AND (sqlc.narg('production_id')::uuid IS NULL OR production_id = sqlc.narg('production_id')::uuid)
 ORDER BY checked_out_at DESC
-LIMIT $4 OFFSET $5;
+LIMIT sqlc.arg('limit')::int OFFSET sqlc.arg('offset')::int;
 
 -- name: GetActiveCheckout :one
 SELECT * FROM asset_checkouts
-WHERE asset_id = $1 AND checked_in_at IS NULL
+WHERE asset_id = $1 AND tenant_id = $2 AND checked_in_at IS NULL
 LIMIT 1;
+
+-- name: GetCheckout :one
+SELECT * FROM asset_checkouts WHERE id = $1 AND tenant_id = $2;

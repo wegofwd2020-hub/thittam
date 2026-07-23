@@ -168,7 +168,7 @@ func (h *Handler) CheckOutAsset(ctx context.Context, req *inventoryv1.CheckOutAs
 		return nil, grpcErr(err)
 	}
 
-	out, err := h.svc.GetCheckout(ctx, c.ID)
+	out, err := h.svc.GetCheckout(ctx, tenantID, c.ID)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -199,7 +199,7 @@ func (h *Handler) CheckInAsset(ctx context.Context, req *inventoryv1.CheckInAsse
 		return nil, grpcErr(err)
 	}
 
-	out, err := h.svc.GetCheckout(ctx, checkoutID)
+	out, err := h.svc.GetCheckout(ctx, tenantID, checkoutID)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -207,12 +207,17 @@ func (h *Handler) CheckInAsset(ctx context.Context, req *inventoryv1.CheckInAsse
 }
 
 func (h *Handler) ListCheckouts(ctx context.Context, req *inventoryv1.ListCheckoutsRequest) (*inventoryv1.ListCheckoutsResponse, error) {
+	tenantID, ok := tenant.IDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
 	assetID, err := uuid.Parse(req.GetAssetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid asset_id")
 	}
 
-	checkouts, err := h.svc.ListCheckouts(ctx, assetID)
+	checkouts, err := h.svc.ListCheckouts(ctx, tenantID, assetID)
 	if err != nil {
 		return nil, grpcErr(err)
 	}

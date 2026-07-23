@@ -110,28 +110,28 @@ func (s *Service) CreateLineItem(ctx context.Context, li *BudgetLineItem) error 
 	return s.repo.CreateLineItem(ctx, li)
 }
 
-// GetLineItem retrieves a line item by ID.
-func (s *Service) GetLineItem(ctx context.Context, id uuid.UUID) (*BudgetLineItem, error) {
-	return s.repo.GetLineItem(ctx, id)
+// GetLineItem retrieves a line item, scoped to the caller's tenant.
+func (s *Service) GetLineItem(ctx context.Context, tenantID, id uuid.UUID) (*BudgetLineItem, error) {
+	return s.repo.GetLineItem(ctx, tenantID, id)
 }
 
 // ListLineItems lists line items for a budget, capped at 200 per page.
-func (s *Service) ListLineItems(ctx context.Context, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error) {
+func (s *Service) ListLineItems(ctx context.Context, tenantID, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
-	return s.repo.ListLineItems(ctx, budgetID, limit, offset)
+	return s.repo.ListLineItems(ctx, tenantID, budgetID, limit, offset)
 }
 
 // UpdateLineItemActuals updates actual and committed amounts on a line item.
-func (s *Service) UpdateLineItemActuals(ctx context.Context, id uuid.UUID, actualAmount, committedAmount decimal.Decimal) error {
-	return s.repo.UpdateLineItemActuals(ctx, id, actualAmount, committedAmount)
+func (s *Service) UpdateLineItemActuals(ctx context.Context, tenantID, id uuid.UUID, actualAmount, committedAmount decimal.Decimal) error {
+	return s.repo.UpdateLineItemActuals(ctx, tenantID, id, actualAmount, committedAmount)
 }
 
 // CheckLineAvailability returns the available amount on a line item
 // (budgeted - actual - committed).
-func (s *Service) CheckLineAvailability(ctx context.Context, id uuid.UUID) (decimal.Decimal, error) {
-	return s.repo.CheckLineAvailability(ctx, id)
+func (s *Service) CheckLineAvailability(ctx context.Context, tenantID, id uuid.UUID) (decimal.Decimal, error) {
+	return s.repo.CheckLineAvailability(ctx, tenantID, id)
 }
 
 // CreateBudgetFromTemplate creates a budget pre-populated with line items from a

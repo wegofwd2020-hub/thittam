@@ -20,9 +20,9 @@ type mockRepo struct {
 	listAssetsFn        func(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]Asset, error)
 	updateAssetStatusFn func(ctx context.Context, tenantID, id uuid.UUID, status string) error
 	checkOutAssetFn     func(ctx context.Context, c *AssetCheckout) error
-	checkInAssetFn      func(ctx context.Context, checkoutID uuid.UUID, conditionIn string) error
-	getCheckoutFn       func(ctx context.Context, id uuid.UUID) (*AssetCheckout, error)
-	listCheckoutsFn     func(ctx context.Context, assetID uuid.UUID) ([]AssetCheckout, error)
+	checkInAssetFn      func(ctx context.Context, tenantID, checkoutID uuid.UUID, conditionIn string) error
+	getCheckoutFn       func(ctx context.Context, tenantID, id uuid.UUID) (*AssetCheckout, error)
+	listCheckoutsFn     func(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error)
 }
 
 func (m *mockRepo) CreateAsset(ctx context.Context, a *Asset) error {
@@ -55,21 +55,21 @@ func (m *mockRepo) CheckOutAsset(ctx context.Context, c *AssetCheckout) error {
 	}
 	return nil
 }
-func (m *mockRepo) CheckInAsset(ctx context.Context, checkoutID uuid.UUID, conditionIn string) error {
+func (m *mockRepo) CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, conditionIn string) error {
 	if m.checkInAssetFn != nil {
-		return m.checkInAssetFn(ctx, checkoutID, conditionIn)
+		return m.checkInAssetFn(ctx, tenantID, checkoutID, conditionIn)
 	}
 	return nil
 }
-func (m *mockRepo) GetCheckout(ctx context.Context, id uuid.UUID) (*AssetCheckout, error) {
+func (m *mockRepo) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*AssetCheckout, error) {
 	if m.getCheckoutFn != nil {
-		return m.getCheckoutFn(ctx, id)
+		return m.getCheckoutFn(ctx, tenantID, id)
 	}
-	return &AssetCheckout{ID: id}, nil
+	return &AssetCheckout{ID: id, TenantID: tenantID}, nil
 }
-func (m *mockRepo) ListCheckouts(ctx context.Context, assetID uuid.UUID) ([]AssetCheckout, error) {
+func (m *mockRepo) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error) {
 	if m.listCheckoutsFn != nil {
-		return m.listCheckoutsFn(ctx, assetID)
+		return m.listCheckoutsFn(ctx, tenantID, assetID)
 	}
 	return nil, nil
 }
@@ -279,12 +279,12 @@ func TestListCheckouts_Success(t *testing.T) {
 	t.Parallel()
 	assetID := uuid.New()
 	svc := NewService(&mockRepo{
-		listCheckoutsFn: func(_ context.Context, id uuid.UUID) ([]AssetCheckout, error) {
+		listCheckoutsFn: func(_ context.Context, _, id uuid.UUID) ([]AssetCheckout, error) {
 			return []AssetCheckout{{ID: uuid.New(), AssetID: id}}, nil
 		},
 	})
 
-	checkouts, err := svc.ListCheckouts(context.Background(), assetID)
+	checkouts, err := svc.ListCheckouts(context.Background(), uuid.New(), assetID)
 	require.NoError(t, err)
 	assert.Len(t, checkouts, 1)
 }
@@ -292,7 +292,7 @@ func TestListCheckouts_Success(t *testing.T) {
 func TestCheckInAsset_Error(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{
-		checkInAssetFn: func(_ context.Context, _ uuid.UUID, _ string) error {
+		checkInAssetFn: func(_ context.Context, _, _ uuid.UUID, _ string) error {
 			return fmt.Errorf("db error")
 		},
 	})

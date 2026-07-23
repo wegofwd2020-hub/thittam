@@ -72,12 +72,22 @@ func (s *Service) CreatePhase(ctx context.Context, p *Phase) error {
 	return s.repo.CreatePhase(ctx, p)
 }
 
+// GetPhase returns a single phase, scoped to the caller's tenant.
+func (s *Service) GetPhase(ctx context.Context, tenantID, id uuid.UUID) (*Phase, error) {
+	return s.repo.GetPhase(ctx, tenantID, id)
+}
+
+// ListPhases returns a production's phases, scoped to the caller's tenant.
+func (s *Service) ListPhases(ctx context.Context, tenantID, productionID uuid.UUID, limit, offset int) ([]Phase, error) {
+	return s.repo.ListPhases(ctx, tenantID, productionID, limit, offset)
+}
+
 // UpdatePhaseStatus transitions a phase to a new status, enforcing the vertical's
 // allowed transitions.
-func (s *Service) UpdatePhaseStatus(ctx context.Context, phaseID uuid.UUID, newPhaseType string) error {
+func (s *Service) UpdatePhaseStatus(ctx context.Context, tenantID, phaseID uuid.UUID, newPhaseType string) error {
 	vcfg := vertical.MustFromContext(ctx)
 
-	phase, err := s.repo.GetPhase(ctx, phaseID)
+	phase, err := s.repo.GetPhase(ctx, tenantID, phaseID)
 	if err != nil {
 		return fmt.Errorf("get phase: %w", err)
 	}
@@ -99,7 +109,7 @@ func (s *Service) UpdatePhaseStatus(ctx context.Context, phaseID uuid.UUID, newP
 		return fmt.Errorf("%w: target %q is not valid", ErrInvalidPhaseType, newPhaseType)
 	}
 
-	return s.repo.UpdatePhaseStatus(ctx, phaseID, newPhaseType)
+	return s.repo.UpdatePhaseStatus(ctx, tenantID, phaseID, newPhaseType)
 }
 
 // GetEntityLabels returns the vertical's entity labels for the frontend.
@@ -136,17 +146,18 @@ func (s *Service) AddCrewMember(ctx context.Context, c *CrewMember) error {
 	return nil
 }
 
-// ListCrewMembers lists crew for a production, capped at 200 per page.
-func (s *Service) ListCrewMembers(ctx context.Context, productionID uuid.UUID, limit, offset int) ([]CrewMember, error) {
+// ListCrewMembers lists crew for a production, scoped to the caller's tenant
+// and capped at 200 per page.
+func (s *Service) ListCrewMembers(ctx context.Context, tenantID, productionID uuid.UUID, limit, offset int) ([]CrewMember, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	return s.repo.ListCrewMembers(ctx, productionID, limit, offset)
+	return s.repo.ListCrewMembers(ctx, tenantID, productionID, limit, offset)
 }
 
-// RemoveCrewMember removes a crew member.
-func (s *Service) RemoveCrewMember(ctx context.Context, id uuid.UUID) error {
-	return s.repo.RemoveCrewMember(ctx, id)
+// RemoveCrewMember removes a crew member, scoped to the caller's tenant.
+func (s *Service) RemoveCrewMember(ctx context.Context, tenantID, id uuid.UUID) error {
+	return s.repo.RemoveCrewMember(ctx, tenantID, id)
 }
 
 // publish calls fn only when a publisher is configured; errors are best-effort.
