@@ -71,7 +71,7 @@ func (s *Service) CheckOutAsset(ctx context.Context, c *AssetCheckout) error {
 
 // CheckInAsset checks in an asset and sets status back to available.
 func (s *Service) CheckInAsset(ctx context.Context, tenantID, checkoutID, assetID uuid.UUID, conditionIn string) error {
-	if err := s.repo.CheckInAsset(ctx, checkoutID, conditionIn); err != nil {
+	if err := s.repo.CheckInAsset(ctx, tenantID, checkoutID, conditionIn); err != nil {
 		return err
 	}
 	return s.repo.UpdateAssetStatus(ctx, tenantID, assetID, "available")
@@ -83,15 +83,17 @@ func (s *Service) GetInventoryCategories(ctx context.Context) []vertical.Invento
 	return vcfg.InventoryCategories
 }
 
-// GetCheckout retrieves a single checkout record by ID.
-func (s *Service) GetCheckout(ctx context.Context, id uuid.UUID) (*AssetCheckout, error) {
-	return s.repo.GetCheckout(ctx, id)
+// GetCheckout retrieves a single checkout record by ID, scoped to the
+// caller's tenant.
+func (s *Service) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*AssetCheckout, error) {
+	return s.repo.GetCheckout(ctx, tenantID, id)
 }
 
-// ListCheckouts lists checkouts for an asset. Capped at 200 — a single prop
-// realistically has tens of checkout records; 200 bounds a runaway scan.
-func (s *Service) ListCheckouts(ctx context.Context, assetID uuid.UUID) ([]AssetCheckout, error) {
-	checkouts, err := s.repo.ListCheckouts(ctx, assetID)
+// ListCheckouts lists checkouts for an asset, scoped to the caller's tenant.
+// Capped at 200 — a single prop realistically has tens of checkout records;
+// 200 bounds a runaway scan.
+func (s *Service) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error) {
+	checkouts, err := s.repo.ListCheckouts(ctx, tenantID, assetID)
 	if err != nil {
 		return nil, err
 	}
