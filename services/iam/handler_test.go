@@ -288,6 +288,39 @@ func TestHandler_UpdateUser_RequiresUserManage(t *testing.T) {
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
+// #139 slice B (Task 3): a client updating only a display name omits status,
+// so the request carries status: "". This test proves the handler passes
+// that empty value straight through rather than trying to "fix" it here —
+// the fix belongs in the SQL (Postgres.UpdateUser), since that is the only
+// layer that knows whether an empty status means "leave it alone" (a
+// profile edit) or is simply what the caller sent. See
+// user_status_preserve_integration_test.go for the SQL-level proof.
+func TestHandler_UpdateUser_EmptyStatusIsNotAWipe(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	var got *User
+
+	h := newHandlerWithRepo(&mockRepo{
+		getUserPermissionsFn: grantUserManage(),
+		updateUserFn: func(_ context.Context, u *User) error {
+			got = u
+			return nil
+		},
+	})
+
+	_, err := h.UpdateUser(memberCtx(tid), &iamv1.UpdateUserRequest{
+		TenantId:    tid.String(),
+		Id:          uuid.New().String(),
+		DisplayName: "Renamed",
+		// Status deliberately omitted -- a profile edit must not touch it.
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Empty(t, got.Status,
+		"handler must pass through an empty status; the SQL decides to preserve it")
+}
+
 // --- DeactivateUser ---
 
 func TestHandler_DeactivateUser_Success(t *testing.T) {
