@@ -483,6 +483,22 @@ func TestHandler_Inbox_NotGated(t *testing.T) {
 	require.NoError(t, err) // denyPerm must not block a self-scoped read
 }
 
+func TestHandler_GetNotification_NotGated(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	uid := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getNotificationFn: func(_ context.Context, tenantID, _, id uuid.UUID) (*Notification, error) {
+			return &Notification{ID: id, TenantID: tenantID, Channel: "email", Status: "sent"}, nil
+		},
+	}, map[string]ChannelSender{}), denyPerm{})
+	_, err := h.GetNotification(callerCtxWithUser(tid, uid), &notificationsv1.GetNotificationRequest{
+		TenantId: tid.String(),
+		Id:       uuid.New().String(),
+	})
+	require.NoError(t, err) // denyPerm must not block a self-scoped read
+}
+
 // --- grpcErr ---
 
 func TestGrpcErr_AllCodes(t *testing.T) {
