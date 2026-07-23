@@ -6,7 +6,7 @@
 
 ## 1. The problem
 
-Seven queries across `project` and `budget` select or mutate rows by a caller-supplied UUID with **no `tenant_id` predicate**. Their parent tables scope correctly; the child tables do not:
+Eleven queries across `project`, `budget` and `inventory` select or mutate rows by a caller-supplied UUID without an effective tenant predicate. Seven have no `tenant_id` predicate at all; two have one satisfied tautologically (§2.5); two are raw inline SQL that bypasses the generated, correctly-scoped query (§2.6). Their parent tables scope correctly; the child tables do not:
 
 ```sql
 -- productions: correct
@@ -35,9 +35,28 @@ Exploitation requires the target row's UUID, and v4 UUIDs are not enumerable. Th
 
 It is still a live cross-tenant defect, for two reasons. Resource UUIDs are not secrets — they appear in URLs, CSV exports, logs, support tickets, and are visible to anyone who was ever legitimately a member of the target tenant, including former employees and contractors who worked across productions. And the write paths (`UpdatePhaseStatus`, `RemoveCrewMember`) mean the damage is not bounded by what the attacker can already read: an id learned once, from any source, remains a durable write capability.
 
-## 2. Triage — 14 unscoped queries, 10 defects
+## 2. Triage — 14 defects in three services, across three classes
 
-A tree-wide scan of every `services/*/db/queries.sql` for queries with no `tenant_id` predicate found 14. They fall into four classes. Only the first three are defects; the fourth is correct and must be left alone.
+**This branch covers `project`, `budget` and `inventory` only.** A whole-tree audit is deliberately *not* attempted here; see §2.7 and §7.
+
+Three scans were needed, because each defect class is invisible to the scan that found the previous one.
+
+| scan | method | blind spot it revealed |
+|---|---|---|
+| 1 | every `services/*/db/queries.sql` for queries with no `tenant_id` predicate | misses SQL that is not in `queries.sql` |
+| 2 | grep `SELECT tenant_id FROM` in Go — predicates satisfied from the target row | misses queries that never do a lookup |
+| 3 | inline SQL literals in Go, reading the **`WHERE` clause specifically** | an earlier version matched `tenant_id` anywhere in the statement and passed queries that merely *select* the column |
+
+**There is no single grep that decides tenant isolation.** Each candidate's callers must be traced: §2.4 shows unscoped SQL that is perfectly safe, and §2.5 shows scoped-looking SQL that is not. This is the substance of #139 §3's "needs proving, not assuming".
+
+Confirmed in the three services in scope: **14 defects, 11 of them live.**
+
+| class | § | count | live |
+|---|---|---|---|
+| No `tenant_id` predicate | 2.1–2.3 | 9 | 6 |
+| Tautological predicate | 2.5 | 2 | 2 |
+| Raw inline SQL bypassing `queries.sql` | 2.6 | 3 | 3 |
+| **total** | | **14** | **11** |
 
 ### 2.1 Live — caller-reachable with an arbitrary UUID (7)
 
@@ -47,7 +66,7 @@ A tree-wide scan of every `services/*/db/queries.sql` for queries with no `tenan
 | project | `GetPhase` | `CreatePhase`, `UpdatePhaseStatus` RPCs | cross-tenant read |
 | project | `UpdatePhaseStatus` | `UpdatePhaseStatus` RPC | **cross-tenant write** |
 | project | `ListCrewMembers` | `ListCrewMembers` RPC | cross-tenant read |
-| project | `RemoveCrewMember` | `RemoveCrewMember` RPC | **cross-tenant delete** |
+| project | `RemoveCrewMember` | `RemoveCrewMember` RPC | **cross-tenant delete** — but see §2.6: the live path is raw SQL, not this query |
 | budget | `GetLineItem` | `GetLineItem`, `UpdateLineItemActuals`, `CheckLineAvailability` RPCs | cross-tenant read |
 | budget | `ListLineItems` | `ListLineItems` RPC | cross-tenant read |
 
@@ -76,6 +95,83 @@ It is not an independent primitive: reaching it requires already being able to w
 The ledger case is the instructive one. Its SQL is *indistinguishable* from project's `GetPhase` — both are `WHERE <fk> = $1` with no tenant. One is safe and one is not, and the difference lives entirely in the call graph: ledger's parent id comes from a scoped read, project's comes straight off the request. **A grep cannot make this determination; each unscoped query needs its callers traced.** That is why this triage is part of the spec rather than a mechanical sweep.
 
 Note that ledger's safety is held by call-site discipline, the same property already flagged as fragile for `UpdateJournalStatus`. It is correct today and out of scope here; converting it to a structural guarantee is a separate change.
+
+### 2.5 The tautological tenant predicate (2 live, 3 correct)
+
+Four repository methods satisfy a genuine `AND tenant_id = $N` predicate with a tenant they resolve **from the target row itself**, immediately before the write:
+
+```go
+// budget/db/postgres.go:166 — UpdateLineItemActuals
+// "Resolve tenant_id for the WHERE clause."
+row := p.db.QueryRow(ctx, "SELECT tenant_id FROM budget_line_items WHERE id = $1", id)
+...
+p.q.UpdateLineItemAmounts(ctx, UpdateLineItemAmountsParams{ID: id, TenantID: tenantID, ...})
+```
+
+The predicate cannot fail: `$2` came from `SELECT tenant_id … WHERE id = $1`. It is a tautology, and the SQL is scoped in appearance only.
+
+| site | reachable path | verdict |
+|---|---|---|
+| budget `UpdateLineItemActuals` (`postgres.go:166`) | `UpdateLineItemActuals` RPC → `Service` pass-through | **LIVE — cross-tenant monetary write** |
+| inventory `CheckInAsset` (`postgres.go:200`, via `resolveTenantForCheckout`) | `CheckInAsset` RPC → `Service` | **LIVE — cross-tenant write** |
+| budget `UpdateBudgetStatus` (`postgres.go:87`) | `SubmitBudget`/`ApproveBudget` call scoped `GetBudget(ctx, tenantID, id)` first and return on error | safe by caller discipline |
+| ledger `UpdateJournalStatus` (`postgres.go:302`) | `Service.PostJournalEntry` does a scoped read first | safe by caller discipline |
+| iam `FindTenantByEmail` (`postgres.go:54`) | login directory lookup | **correct by design** — not a tenant check; it resolves which tenant an email belongs to and returns `ErrAmbiguousEmail` when more than one matches |
+
+`inventory.CheckInAsset` is the sharpest of these because the tenant is *already in hand and discarded*:
+
+```go
+func (s *Service) CheckInAsset(ctx context.Context, tenantID, checkoutID, assetID uuid.UUID, conditionIn string) error {
+	if err := s.repo.CheckInAsset(ctx, checkoutID, conditionIn); err != nil {  // tenantID not passed
+		return err
+	}
+	return s.repo.UpdateAssetStatus(ctx, tenantID, assetID, "available")        // tenantID used here
+}
+```
+
+This is the #146 defect repeated — `Service.AssignRole` likewise discarded its `tenantID` while the SQL beneath looked scoped. It is also the strongest argument for the §3.1 fix shape: had `repo.CheckInAsset` required a `tenantID` parameter, this could not have compiled.
+
+**The two live cases are in scope.** The two safe-by-discipline cases are not fixed here (§7), but note that "safe" depends on a caller invariant no type enforces — the same fragility already recorded against `UpdateJournalStatus`.
+
+### 2.6 Raw inline SQL that bypasses `queries.sql` (3 live)
+
+Three `Repository` methods are implemented with hand-written SQL in Go rather than sqlc, and none filters by tenant. **All three shadow a generated query that is scoped correctly and simply unused.**
+
+`project.RemoveCrewMember` (`postgres.go:218`) is the sharpest, because it is a `DELETE`:
+
+```go
+tag, err := p.db.Exec(ctx, "DELETE FROM crew_members WHERE id = $1", id)
+```
+
+Scoping the `RemoveCrewMember` entry in `queries.sql` would change nothing — that query is never called. This is worth stating because the naive fix is to edit the `.sql` file and assume the job is done.
+
+It was also missed by the first pass of scan 3, whose regex matched only backtick-quoted strings; this statement uses double quotes. Any future audit must cover both quote styles.
+
+The other two are in `inventory`:
+
+```go
+// inventory/db/postgres.go:137 — GetCheckout
+const sql = `SELECT id, asset_id, production_id, tenant_id, ...
+	FROM asset_checkouts WHERE id = $1`
+
+// inventory/db/postgres.go:167 — ListCheckouts
+const sql = `SELECT id, asset_id, production_id, tenant_id, ...
+	FROM asset_checkouts WHERE asset_id = $1 ORDER BY checked_out_at DESC`
+```
+
+Both select the `tenant_id` column and neither filters on it — the distinction a `grep tenant_id` cannot make, and the reason scan 3 had to read the `WHERE` clause.
+
+`ListCheckouts` is a gated RPC (slice C did not touch inventory, but the handler holds `inventory:read`), so this is a **live cross-tenant read**. `GetCheckout` is on the `Repository` interface and reachable from the service layer.
+
+**There is already a correct `ListCheckouts` in `services/inventory/db/queries.sql`** — `WHERE tenant_id = $1 AND ($2::uuid IS NULL OR asset_id = $2) …` — and it is **unused**. The generated, tenant-filtering version was written and then bypassed by a raw query that drops the filter. Task 4 wires the correct one up rather than patching the raw string.
+
+### 2.7 Not audited here — the rest of the tree
+
+Scan 3 flags roughly 30 further candidates in `billing`, `document`, `notifications` and `iam`. **None is claimed as a defect by this spec**, because none has had its callers traced, and §2.4 demonstrates that untraced unscoped SQL is as likely to be safe as broken.
+
+They are excluded on sequencing grounds, not risk grounds: `billing`, `document` and `notifications` currently enforce **no authorization at all** (0 gates across 35 RPCs, #139 slices E/F/G). Tightening their tenant predicates while any authenticated user may still call every one of their RPCs would be fixing the second lock on an open door. `iam`'s cases need separate reasoning again — several are single-tenant-directory lookups that are correct unscoped, in the same way `FindTenantByEmail` is.
+
+Tracked as **#159**, for #139 slice H.
 
 ## 3. Design
 
@@ -212,7 +308,7 @@ Because this task changes repository signatures, the parent commit will not comp
 ## 7. Out of scope
 
 - **The remaining #139 gating slices** — B (iam completion), D (expense reads + the D10 backfill), E/F/G (document, billing, notifications). This slice adds no permission gate and revives no vocabulary.
-- **Converting ledger's call-site-discipline safety into a structural guarantee** (§2.4). Correct today; a separate change.
-- **`UpdateJournalStatus`'s unscoped compensating SELECT**, whose error is discarded. Known, not exploitable, deserves its own issue.
+- **The rest of the tree** — roughly 30 untraced candidates in `billing`, `document`, `notifications`, `iam`. **Tracked as #159** (§2.7).
+- **Converting call-site-discipline safety into a structural guarantee** (§2.4, §2.5). Three sites are correct only because their callers happen to do a tenant-scoped read first: ledger `ListJournalLines`, ledger `UpdateJournalStatus`, budget `UpdateBudgetStatus`. None is exploitable today, and hardening them means threading `tenantID` through three more signatures with no live defect to justify the churn on a security branch. `UpdateJournalStatus` additionally discards the error from its compensating `SELECT`. **Carried in #159**, so the latent trap is tracked rather than forgotten.
 - **Row-level security.** Considered and rejected for this slice: it is the strongest option, but needs a migration, per-checkout session-variable wiring in the pool, and RLS-aware tests, and it is untestable locally under the no-database constraint. Worth revisiting as a platform-wide control once the per-query fixes have established which tables are tenant-scoped.
 - **Whether `X-Tenant-ID` is itself trustworthy.** These handlers scope from `tenant.IDFromContext` — the header path — not from the verified token claim. This slice makes the queries honour whatever tenant the context carries; it does not certify how that tenant got there. That is #139 §3 / slice H.
