@@ -14,6 +14,7 @@ import (
 	billingv1 "github.com/wegofwd2020/thittam/gen/billing/v1"
 	documentv1 "github.com/wegofwd2020/thittam/gen/document/v1"
 	"github.com/wegofwd2020/thittam/pkg/auth"
+	"github.com/wegofwd2020/thittam/pkg/iamclient"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
 	"github.com/wegofwd2020/thittam/pkg/server"
@@ -102,7 +103,25 @@ func main() {
 		log.Printf("billing: DOCUMENT_SERVICE_ADDR not set — DownloadInvoice will return Unavailable")
 	}
 
-	handler := billing.NewHandlerWithDeps(svc, docClient)
+	// --- IAM permission checker ---
+	// billing cannot authorize without IAM. #138/#149's convention for the JWT
+	// public key applies here too: a service that cannot enforce its
+	// guarantees does not start.
+	//
+	// iamPerm is the concrete *iamclient.PermissionChecker here, so this is a
+	// plain pointer comparison. Assigning it to an interface field first would
+	// produce a non-nil interface wrapping a nil pointer, and the check would
+	// never fire.
+	iamPerm, closeIAM, err := iamclient.DialFromEnv("billing")
+	if err != nil {
+		log.Fatalf("billing: startup: dial IAM: %v", err)
+	}
+	defer func() { _ = closeIAM() }()
+	if iamPerm == nil {
+		log.Fatalf("billing: startup: %s is not set; billing cannot authorize without a permission checker", iamclient.EnvAddr)
+	}
+
+	handler := billing.NewHandlerWithDeps(svc, iamPerm, docClient)
 
 	// --- gRPC server ---
 	verifier, err := auth.VerifierFromEnv(ctx)

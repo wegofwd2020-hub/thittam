@@ -84,9 +84,29 @@ func fixedPM() *PaymentMethod {
 	}
 }
 
+// allowAllPerm is a PermissionChecker double that grants every check.
+type allowAllPerm struct{}
+
+func (allowAllPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	return true, nil
+}
+
+// denyPerm is a PermissionChecker double that denies every check.
+type denyPerm struct{}
+
+func (denyPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uuid.UUID) (bool, error) {
+	return false, nil
+}
+
 // newHandlerWithRepo builds a Handler backed by the given mock repo.
 func newHandlerWithRepo(r Repository) *Handler {
-	return NewHandler(NewService(r))
+	return NewHandler(NewService(r), allowAllPerm{})
+}
+
+// newHandlerWithRepoDeny builds a Handler backed by the given mock repo whose
+// permission checker denies every check, for the denial tests.
+func newHandlerWithRepoDeny(r Repository) *Handler {
+	return NewHandler(NewService(r), denyPerm{})
 }
 
 // --- mock document client ---
@@ -624,7 +644,7 @@ func TestGrpcErr(t *testing.T) {
 // --- DownloadInvoice ---
 
 func newHandlerWithDocClient(r Repository, doc documentv1.DocumentServiceClient) *Handler {
-	return NewHandlerWithDeps(NewService(r), doc)
+	return NewHandlerWithDeps(NewService(r), allowAllPerm{}, doc)
 }
 
 var fixedPDFDocID = uuid.MustParse("a1000000-0000-0000-0000-000000000099")
@@ -773,4 +793,221 @@ func TestHandler_ListInvoices_UsesTokenTenant(t *testing.T) {
 	_, err := h.ListInvoices(callerCtx(tid), &billingv1.ListInvoicesRequest{})
 	require.NoError(t, err)
 	assert.Equal(t, tid, gotTenant, "the repository must receive the token's tenant")
+}
+
+// --- Authorization denial (#139) ---
+//
+// One test per gated RPC. Each installs t.Fatal on the first repo/service fn
+// its happy path reaches, so a passing gate is provable: if the gate did not
+// fire, the mock would panic the test via t.Fatal rather than merely return
+// PermissionDenied by chance.
+
+func TestHandler_GetSubscription_Denied(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{
+		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
+			t.Fatal("repository reached: GetSubscription must deny before querying")
+			return nil, nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.GetSubscription(callerCtx(uuid.New()), &billingv1.GetSubscriptionRequest{})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListInvoices_Denied(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{
+		listInvoicesFn: func(_ context.Context, _ uuid.UUID, _, _ int) ([]Invoice, error) {
+			t.Fatal("repository reached: ListInvoices must deny before querying")
+			return nil, nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.ListInvoices(callerCtx(uuid.New()), &billingv1.ListInvoicesRequest{})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_GetInvoice_Denied(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{
+		getInvoiceFn: func(_ context.Context, _, _ uuid.UUID) (*Invoice, error) {
+			t.Fatal("repository reached: GetInvoice must deny before querying")
+			return nil, nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.GetInvoice(callerCtx(uuid.New()), &billingv1.GetInvoiceRequest{InvoiceId: fixedInvID.String()})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_DownloadInvoice_Denied(t *testing.T) {
+	t.Parallel()
+	// The gate fires before the invoice fetch, so before the doc client is
+	// ever touched — the tripwire is the invoice fetch fn, not a doc-client call.
+	repo := &mockRepo{
+		getInvoiceFn: func(_ context.Context, _, _ uuid.UUID) (*Invoice, error) {
+			t.Fatal("repository reached: DownloadInvoice must deny before fetching the invoice")
+			return nil, nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.DownloadInvoice(callerCtx(uuid.New()), &billingv1.DownloadInvoiceRequest{InvoiceId: fixedInvID.String()})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListPaymentMethods_Denied(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{
+		listPaymentMethodsFn: func(_ context.Context, _ uuid.UUID) ([]PaymentMethod, error) {
+			t.Fatal("repository reached: ListPaymentMethods must deny before querying")
+			return nil, nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.ListPaymentMethods(callerCtx(uuid.New()), &billingv1.ListPaymentMethodsRequest{})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_GetUsageSummary_Denied(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{
+		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
+			t.Fatal("repository reached: GetUsageSummary must deny before querying")
+			return nil, nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.GetUsageSummary(callerCtx(uuid.New()), &billingv1.GetUsageSummaryRequest{})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_CheckPlanLimit_Denied(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{
+		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
+			t.Fatal("repository reached: CheckPlanLimit must deny before querying")
+			return nil, nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.CheckPlanLimit(callerCtx(uuid.New()), &billingv1.CheckPlanLimitRequest{Resource: "production"})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_CreateSubscription_Denied(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{
+		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
+			t.Fatal("repository reached: CreateSubscription must deny before querying")
+			return nil, nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.CreateSubscription(callerCtx(uuid.New()), &billingv1.CreateSubscriptionRequest{Plan: "starter"})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_UpgradeSubscription_Denied(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{
+		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
+			t.Fatal("repository reached: UpgradeSubscription must deny before querying")
+			return nil, nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.UpgradeSubscription(callerCtx(uuid.New()), &billingv1.UpgradeSubscriptionRequest{NewPlan: "professional"})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_CancelSubscription_Denied(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{
+		getSubscriptionByTenantFn: func(_ context.Context, _ uuid.UUID) (*Subscription, error) {
+			t.Fatal("repository reached: CancelSubscription must deny before querying")
+			return nil, nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.CancelSubscription(callerCtx(uuid.New()), &billingv1.CancelSubscriptionRequest{})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_AddPaymentMethod_Denied(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{
+		createPaymentMethodFn: func(_ context.Context, _ *PaymentMethod) error {
+			t.Fatal("repository reached: AddPaymentMethod must deny before writing")
+			return nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.AddPaymentMethod(callerCtx(uuid.New()), &billingv1.AddPaymentMethodRequest{Type: "card"})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_RemovePaymentMethod_Denied(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{
+		getPaymentMethodFn: func(_ context.Context, _, _ uuid.UUID) (*PaymentMethod, error) {
+			t.Fatal("repository reached: RemovePaymentMethod must deny before querying")
+			return nil, nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.RemovePaymentMethod(callerCtx(uuid.New()), &billingv1.RemovePaymentMethodRequest{PaymentMethodId: fixedPMID.String()})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_SetDefaultPaymentMethod_Denied(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{
+		getPaymentMethodFn: func(_ context.Context, _, _ uuid.UUID) (*PaymentMethod, error) {
+			t.Fatal("repository reached: SetDefaultPaymentMethod must deny before querying")
+			return nil, nil
+		},
+	}
+	h := newHandlerWithRepoDeny(repo)
+
+	_, err := h.SetDefaultPaymentMethod(callerCtx(uuid.New()), &billingv1.SetDefaultPaymentMethodRequest{PaymentMethodId: fixedPMID.String()})
+
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
