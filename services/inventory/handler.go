@@ -93,6 +93,10 @@ func (h *Handler) GetAsset(ctx context.Context, req *inventoryv1.GetAssetRequest
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, "inventory:read"); err != nil {
+		return nil, err
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid asset ID")
@@ -109,6 +113,10 @@ func (h *Handler) ListAssets(ctx context.Context, req *inventoryv1.ListAssetsReq
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, "inventory:read"); err != nil {
+		return nil, err
 	}
 
 	assets, err := h.svc.ListAssets(ctx, tenantID, req.GetStatus(), int(req.GetLimit()), 0)
@@ -210,6 +218,10 @@ func (h *Handler) ListCheckouts(ctx context.Context, req *inventoryv1.ListChecko
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, "inventory:read"); err != nil {
+		return nil, err
 	}
 
 	assetID, err := uuid.Parse(req.GetAssetId())
