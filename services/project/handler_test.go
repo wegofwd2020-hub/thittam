@@ -38,8 +38,9 @@ func ctxWithTenant(tenantID uuid.UUID) context.Context {
 	return interceptor.WithCaller(ctx, interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID})
 }
 
-// callerCtx is for handlers that do not check tenant.IDFromContext themselves
-// (e.g. UpdatePhaseStatus, RemoveCrewMember) but still hit RequirePermission.
+// callerCtx builds a context with a caller present but NO tenant, so
+// no-tenant denial tests can prove a handler's tenant guard fires before
+// the repository is ever reached.
 func callerCtx() context.Context {
 	return interceptor.WithCaller(ctxWithVertical(), interceptor.CallerInfo{UserID: uuid.New(), TenantID: uuid.New()})
 }
@@ -528,6 +529,22 @@ func TestHandler_ListPhases_PassesCallerTenantToRepo(t *testing.T) {
 		"ListPhases must query with the caller's tenant, not an unscoped query")
 }
 
+func TestHandler_ListPhases_NoTenantUnauthenticated(t *testing.T) {
+	t.Parallel()
+	repo := &tenantRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	// callerCtx() carries a caller but NO tenant.
+	_, err := h.ListPhases(callerCtx(), &projectv1.ListPhasesRequest{
+		ProductionId: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.Unauthenticated, status.Code(err))
+	require.Equal(t, uuid.Nil, repo.gotListTenant,
+		"the repository must not be reached without a tenant")
+}
+
 func TestHandler_UpdatePhaseStatus_PassesCallerTenantToRepo(t *testing.T) {
 	t.Parallel()
 	callerTenant := uuid.New()
@@ -599,6 +616,22 @@ func TestHandler_ListCrewMembers_PassesCallerTenantToRepo(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, callerTenant, repo.gotListTenant,
 		"ListCrewMembers must query with the caller's tenant")
+}
+
+func TestHandler_ListCrewMembers_NoTenantUnauthenticated(t *testing.T) {
+	t.Parallel()
+	repo := &crewRecordingRepo{}
+	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+
+	// callerCtx() carries a caller but NO tenant.
+	_, err := h.ListCrewMembers(callerCtx(), &projectv1.ListCrewMembersRequest{
+		ProductionId: uuid.New().String(),
+	})
+
+	require.Error(t, err)
+	require.Equal(t, codes.Unauthenticated, status.Code(err))
+	require.Equal(t, uuid.Nil, repo.gotListTenant,
+		"the repository must not be reached without a tenant")
 }
 
 func TestHandler_RemoveCrewMember_PassesCallerTenantToRepo(t *testing.T) {
