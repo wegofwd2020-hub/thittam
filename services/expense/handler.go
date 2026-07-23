@@ -101,6 +101,10 @@ func (h *Handler) GetPurchaseOrder(ctx context.Context, req *expensev1.GetPurcha
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+		return nil, err
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid purchase order ID")
@@ -117,6 +121,10 @@ func (h *Handler) ListPurchaseOrders(ctx context.Context, req *expensev1.ListPur
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+		return nil, err
 	}
 
 	var productionID uuid.UUID
@@ -214,6 +222,10 @@ func (h *Handler) GetExpense(ctx context.Context, req *expensev1.GetExpenseReque
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+		return nil, err
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid expense ID")
@@ -230,6 +242,10 @@ func (h *Handler) ListExpenses(ctx context.Context, req *expensev1.ListExpensesR
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+		return nil, err
 	}
 
 	var productionID uuid.UUID
@@ -332,6 +348,10 @@ func (h *Handler) GetPettyCashAdvance(ctx context.Context, req *expensev1.GetPet
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+		return nil, err
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid petty cash advance ID")
@@ -348,6 +368,10 @@ func (h *Handler) ListPettyCashAdvances(ctx context.Context, req *expensev1.List
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+		return nil, err
 	}
 
 	var productionID uuid.UUID
