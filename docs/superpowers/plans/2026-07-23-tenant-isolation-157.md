@@ -49,15 +49,22 @@ So a denial test asserting only a status code can pass against vulnerable code. 
 
 ### Verifying a test has teeth
 
-Because signatures change, the parent commit will not compile against new tests, so the usual `git worktree` teeth check does not apply directly. Use the predicate-revert check instead, which is stronger for this shape of change:
+Because signatures change, the parent commit will not compile against new tests, so the usual `git worktree` teeth check does not apply directly. Use the predicate-revert check instead.
 
-1. Implement the task fully; tests pass.
+**⚠️ RUN THIS ONLY AFTER THE TASK'S COMMIT EXISTS.** The restore step is `git checkout <file>`, which restores from HEAD — so if the fix is still uncommitted when you run it, **it reverts the real fix, not just the experiment.** That happened on Task 1: the implementer caught it and re-applied by hand, but do not repeat it. Commit first, experiment second.
+
+1. Implement the task fully; tests pass; **commit** (the task's commit step).
 2. In the working tree, delete ONLY the `AND tenant_id = $N` from one query in `queries.sql`, leaving all Go signatures intact.
 3. `make generate-sqlc`
-4. Re-run that query's cross-tenant test. **It MUST fail.** If it passes, the test is not testing the predicate — fix the test.
-5. `git checkout services/<svc>/db/queries.sql && make generate-sqlc` to restore. Confirm `git diff` is clean apart from the intended task changes.
+4. Re-run that query's cross-tenant test and record the result.
+5. `git checkout services/<svc>/db/queries.sql && make generate-sqlc` to restore — now safe, because HEAD holds the committed fix.
+6. Confirm `git status --short` is clean and `git log --oneline -1` still shows your task commit.
 
-Report the result of this check in the task report. If it is impractical for a given test, say so explicitly — do not skip it silently.
+**Expected result, and why it is not a failure:** the test will most likely still PASS. These are handler tests driven by mocks, so the mock answers the call and Postgres is never involved — removing a SQL predicate cannot affect them. Record that outcome plainly. It means the handler tests prove the *tenant is threaded through the Go call chain*, and CI's real-Postgres integration job is what proves the *SQL predicate*. Do not "fix" a test to make this check fail; do not claim teeth the test does not have.
+
+Report the result in the task report. If it is impractical for a given test, say so explicitly — do not skip it silently.
+
+**`make generate-sqlc` is repo-wide.** It regenerates every service and will dirty `services/billing/`, which carries pre-existing drift unrelated to this branch (tracked as #160). Revert those files (`git checkout services/billing/`) before committing so the security diff stays scoped. Never `git add -A`.
 
 ---
 
