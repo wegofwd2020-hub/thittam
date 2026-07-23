@@ -75,6 +75,7 @@ var systemRoles = []struct {
 		"report:read",
 		permLedgerRead, permLedgerWrite, permLedgerPost, permLedgerAdmin,
 		permUserManage,
+		"billing:read", "billing:manage",
 		"document:read", "document:write", "document:delete",
 	}},
 	{"manager", []string{
@@ -84,6 +85,7 @@ var systemRoles = []struct {
 		"inventory:read", "inventory:checkout",
 		"report:read",
 		permLedgerRead,
+		"billing:read", "billing:manage",
 		"document:read", "document:write", "document:delete",
 	}},
 	{"coordinator", []string{
@@ -100,6 +102,7 @@ var systemRoles = []struct {
 		"expense:read", "expense:submit", "expense:approve",
 		"report:read",
 		permLedgerRead, permLedgerWrite, permLedgerPost,
+		"billing:read",
 		"document:read", "document:write",
 	}},
 	{"member", []string{
