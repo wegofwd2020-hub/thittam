@@ -72,6 +72,12 @@ func TestJWTIssuer_RevokeAllForUser_CounterResetStillRejects(t *testing.T) {
 	iss, mr := testIssuer(t)
 	ctx := context.Background()
 
+	// Baseline bump FIRST, so the issued token carries a NONZERO generation.
+	// Without this the payload would carry 0, a missing key also reads 0, and
+	// both `0 != 0` and `0 < 0` are false — the test would fail even against a
+	// correct implementation and would not discriminate between the operators.
+	require.NoError(t, iss.RevokeAllForUser(ctx, fixtureUserID))
+
 	pair, err := iss.Issue(ctx, &AuthResult{UserID: fixtureUserID, TenantID: fixtureTenantID, Email: "u@example.com"})
 	require.NoError(t, err)
 	require.NoError(t, iss.RevokeAllForUser(ctx, fixtureUserID))
