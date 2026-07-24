@@ -114,11 +114,10 @@ func TestHandler_Logout_Success(t *testing.T) {
 
 // --- ValidateToken ---
 
-func TestHandler_ValidateToken_Success(t *testing.T) {
+func TestHandler_ValidateToken_Retired(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().ValidateToken(context.Background(), &iamv1.ValidateTokenRequest{AccessToken: "anytoken"})
-	require.NoError(t, err)
-	assert.NotEmpty(t, resp.GetSubject())
+	_, err := newHandler().ValidateToken(context.Background(), &iamv1.ValidateTokenRequest{AccessToken: "anytoken"})
+	assert.Equal(t, codes.Unimplemented, status.Code(err))
 }
 
 // --- CreateUser ---

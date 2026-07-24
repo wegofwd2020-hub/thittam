@@ -66,12 +66,15 @@ func (h *Handler) Logout(ctx context.Context, req *iamv1.LogoutRequest) (*iamv1.
 	return &iamv1.LogoutResponse{}, nil
 }
 
-func (h *Handler) ValidateToken(ctx context.Context, req *iamv1.ValidateTokenRequest) (*iamv1.Claims, error) {
-	claims, err := h.svc.tokens.Validate(ctx, req.GetAccessToken())
-	if err != nil {
-		return nil, grpcError(err)
-	}
-	return claimsToProto(claims), nil
+// ValidateToken is retired.
+//
+// Deprecated: every service verifies JWTs in-process against the shared public
+// key (#138), so this RPC has had no callers. Left declared because
+// proto/buf.yaml uses the FILE breaking category — removing an RPC fails CI —
+// and removed from PublicMethods because an unauthenticated verification
+// oracle on iam's port is exactly what #139 §4 asked to close.
+func (h *Handler) ValidateToken(context.Context, *iamv1.ValidateTokenRequest) (*iamv1.Claims, error) {
+	return nil, status.Error(codes.Unimplemented, "ValidateToken is retired; verify tokens in-process against the JWT public key")
 }
 
 // GetCurrentUser extracts the bearer token from the Authorization metadata,
@@ -820,19 +823,6 @@ func tokenPairToProto(p *auth.TokenPair) *iamv1.TokenPair {
 		TokenType:    p.TokenType,
 		ExpiresIn:    int32(p.ExpiresIn),
 		ExpiresAt:    timestamppb.New(p.ExpiresAt),
-	}
-}
-
-func claimsToProto(c *auth.Claims) *iamv1.Claims {
-	return &iamv1.Claims{
-		Subject:     c.Subject.String(),
-		TenantId:    c.TenantID.String(),
-		Email:       c.Email,
-		Roles:       c.Roles,
-		Permissions: c.Permissions,
-		AuthMethod:  string(c.AuthMethod),
-		IssuedAt:    timestamppb.New(c.IssuedAt),
-		ExpiresAt:   timestamppb.New(c.ExpiresAt),
 	}
 }
 

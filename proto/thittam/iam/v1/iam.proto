@@ -25,6 +25,9 @@ service IAMService {
   rpc Logout(LogoutRequest) returns (LogoutResponse) {
     option (google.api.http) = { post: "/api/v1/auth/logout" body: "*" };
   }
+  // Deprecated: retired. Services verify JWTs in-process against the shared
+  // public key (#138). Returns Unimplemented. Not deleted: buf's FILE breaking
+  // category makes RPC removal a breaking change (#139 slice I).
   rpc ValidateToken(ValidateTokenRequest) returns (Claims);
 
   // GetCurrentUser returns the user + tenant identified by the bearer token
