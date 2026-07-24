@@ -25,6 +25,11 @@ const (
 
 	// refreshKeyPrefix is the Redis key namespace for refresh tokens.
 	refreshKeyPrefix = "iam:refresh:"
+
+	// usergenKeyPrefix namespaces the per-user token generation counter.
+	// Bumping a user's generation invalidates every refresh token issued
+	// before the bump (#154).
+	usergenKeyPrefix = "iam:usergen:"
 )
 
 // jwtClaims is the JWT payload — maps 1-to-1 with auth.Claims but uses the
@@ -48,6 +53,10 @@ type refreshPayload struct {
 	Roles       []string     `json:"roles"`
 	Permissions []string     `json:"permissions"`
 	AuthMethod  ProviderType `json:"auth_method"`
+
+	// Generation is the user's token generation at issue time. Refresh compares
+	// it against the live counter and rejects on ANY difference (#154).
+	Generation int64 `json:"generation"`
 }
 
 // JWTIssuer implements TokenIssuer using:
@@ -124,6 +133,19 @@ func NewJWTIssuer(privateKeyPEM []byte, rdb redis.Cmdable, cfg JWTConfig) (*JWTI
 // The access token is an RS256 JWT. The refresh token is a 32-byte random hex
 // string stored in Redis.
 func (j *JWTIssuer) Issue(ctx context.Context, result *AuthResult) (*TokenPair, error) {
+	gen, err := j.currentGeneration(ctx, result.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return j.issueWithGeneration(ctx, result, gen)
+}
+
+// issueWithGeneration is Issue's body with the generation supplied by the
+// caller instead of read fresh. Refresh uses this to embed the generation it
+// already validated against, so a revocation landing mid-refresh cannot be
+// baked into the new token (#154 TOCTOU: a bare Issue call re-reads the
+// counter, reopening the window between Refresh's compare-read and re-issue).
+func (j *JWTIssuer) issueWithGeneration(ctx context.Context, result *AuthResult, gen int64) (*TokenPair, error) {
 	now := time.Now().UTC()
 	accessExp := now.Add(j.accessTTL)
 
@@ -153,6 +175,7 @@ func (j *JWTIssuer) Issue(ctx context.Context, result *AuthResult) (*TokenPair, 
 		Roles:       result.Roles,
 		Permissions: result.Permissions,
 		AuthMethod:  result.AuthMethod,
+		Generation:  gen,
 	})
 	if err != nil {
 		return nil, err
@@ -175,7 +198,26 @@ func (j *JWTIssuer) Refresh(ctx context.Context, refreshToken string) (*TokenPai
 		return nil, err
 	}
 
-	return j.Issue(ctx, &AuthResult{
+	gen, err := j.currentGeneration(ctx, payload.UserID)
+	if err != nil {
+		return nil, err
+	}
+	// Deliberately `!=`, not `<`. The counter key can vanish (TTL, flush,
+	// failover) and a missing key reads as 0; under `<` a stale token with a
+	// higher generation would be ACCEPTED, un-revoking sessions exactly when
+	// the store is least healthy. Any divergence fails closed.
+	if payload.Generation != gen {
+		return nil, ErrSessionRevoked
+	}
+
+	// Must call issueWithGeneration with the `gen` already validated above, NOT
+	// Issue. Issue re-reads the live counter; if a RevokeAllForUser INCR lands
+	// between the compare-read above and that re-read, the re-read would win
+	// the race and the new token would carry the POST-revoke generation
+	// forever — silently defeating revocation for whoever holds this refresh
+	// token (#154 TOCTOU, reproduced). Carrying `gen` forward closes the window.
+	// Do not "simplify" this back to j.Issue(ctx, ...).
+	return j.issueWithGeneration(ctx, &AuthResult{
 		UserID:          payload.UserID,
 		TenantID:        payload.TenantID,
 		Email:           payload.Email,
@@ -183,7 +225,7 @@ func (j *JWTIssuer) Refresh(ctx context.Context, refreshToken string) (*TokenPai
 		Permissions:     payload.Permissions,
 		AuthMethod:      payload.AuthMethod,
 		AuthenticatedAt: time.Now().UTC(),
-	})
+	}, gen)
 }
 
 // Revoke deletes the refresh token from Redis, invalidating the session.
@@ -195,6 +237,31 @@ func (j *JWTIssuer) Revoke(ctx context.Context, refreshToken string) error {
 	}
 	if deleted == 0 {
 		return ErrRefreshTokenNotFound
+	}
+	return nil
+}
+
+// RevokeAllForUser invalidates every outstanding refresh token for a user by
+// bumping their generation counter. O(1) regardless of session count.
+//
+// Access tokens already issued remain valid until they expire (accessTTL) —
+// this bounds a compromised session at the refresh boundary, not instantly.
+func (j *JWTIssuer) RevokeAllForUser(ctx context.Context, userID uuid.UUID) error {
+	key := usergenKeyPrefix + userID.String()
+	// EXPIRE alongside INCR is pure housekeeping — it bounds how long a stale
+	// counter lingers in Redis, not a correctness mechanism (see the `!=`
+	// comparison in Refresh, which fails closed regardless of whether the key
+	// is present). It is set here only, never refreshed by Issue/Refresh, so a
+	// user revoked long ago who logs in again near the TTL boundary could see
+	// one spurious forced re-login later when the counter expires and a new
+	// baseline generation is established. Rare, fails closed, not worth an
+	// extra write on every issue to close.
+	if _, err := j.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.Incr(ctx, key)
+		pipe.Expire(ctx, key, j.refreshTTL*2)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("auth: jwt: revoke all sessions: %w", err)
 	}
 	return nil
 }
@@ -301,6 +368,18 @@ func (j *JWTIssuer) consumeRefreshToken(ctx context.Context, token string) (*ref
 	}
 
 	return &payload, nil
+}
+
+// currentGeneration returns the user's token generation, 0 if never bumped.
+func (j *JWTIssuer) currentGeneration(ctx context.Context, userID uuid.UUID) (int64, error) {
+	gen, err := j.rdb.Get(ctx, usergenKeyPrefix+userID.String()).Int64()
+	if errors.Is(err, redis.Nil) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("auth: jwt: read token generation: %w", err)
+	}
+	return gen, nil
 }
 
 // generateToken produces a 32-byte cryptographically random hex token.

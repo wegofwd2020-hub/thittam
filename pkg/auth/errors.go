@@ -24,6 +24,10 @@ var (
 	// ErrRefreshTokenNotFound is returned when the refresh token doesn't exist in the store.
 	ErrRefreshTokenNotFound = errors.New("auth: refresh token not found")
 
+	// ErrSessionRevoked is returned when a refresh token was issued before a
+	// revoke-all (password change, deactivation, role revocation).
+	ErrSessionRevoked = errors.New("auth: session revoked")
+
 	// ErrOIDCConfigMissing is returned when a tenant has no OIDC configuration.
 	ErrOIDCConfigMissing = errors.New("auth: OIDC configuration not found for tenant")
 

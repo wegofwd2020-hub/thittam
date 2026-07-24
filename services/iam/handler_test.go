@@ -1501,6 +1501,7 @@ func TestGrpcErr_AllCodes(t *testing.T) {
 		{auth.ErrTokenExpired, codes.Unauthenticated},
 		{auth.ErrTokenInvalid, codes.Unauthenticated},
 		{auth.ErrRefreshTokenNotFound, codes.Unauthenticated},
+		{auth.ErrSessionRevoked, codes.Unauthenticated},
 		{auth.ErrTenantSuspended, codes.PermissionDenied},
 		{auth.ErrAccountDeactivated, codes.PermissionDenied},
 		{auth.ErrAccountInvited, codes.FailedPrecondition},

@@ -75,7 +75,7 @@ func TestIAM_TenantIsolation_ChangePasswordDenied(t *testing.T) {
 	// password, even with the correct old plaintext password, must be
 	// refused at the tenant boundary — not at the password-verification
 	// step. ---
-	svc := iam.NewService(repo, nil, nil, hasher, auth.NewDualVerifier())
+	svc := iam.NewService(repo, nil, noopTokenIssuer{}, hasher, auth.NewDualVerifier())
 	err = svc.ChangePassword(ctx, tenantA, victim, victimOldPassword, "new-password-from-attacker")
 	assert.ErrorIs(t, err, iam.ErrUserNotFound, "cross-tenant ChangePassword must be refused regardless of whether the old password is known")
 
@@ -225,3 +225,20 @@ func readPasswordHash(t *testing.T, pool *pgxpool.Pool, userID uuid.UUID) string
 	require.NoError(t, err, "read password_hash")
 	return hash
 }
+
+// noopTokenIssuer is a stub auth.TokenIssuer for the tenant-isolation tests.
+// ChangePassword (and DeactivateUser/RevokeRole) call RevokeAllForUser after a
+// successful repo write; these tests exercise the tenant predicate, not
+// revocation (that is covered by pkg/auth and services/iam unit tests), so the
+// stub records nothing and never errors.
+type noopTokenIssuer struct{}
+
+var _ auth.TokenIssuer = (*noopTokenIssuer)(nil)
+
+func (noopTokenIssuer) Issue(context.Context, *auth.AuthResult) (*auth.TokenPair, error) {
+	return nil, nil
+}
+func (noopTokenIssuer) Refresh(context.Context, string) (*auth.TokenPair, error) { return nil, nil }
+func (noopTokenIssuer) Revoke(context.Context, string) error                     { return nil }
+func (noopTokenIssuer) RevokeAllForUser(context.Context, uuid.UUID) error        { return nil }
+func (noopTokenIssuer) Validate(context.Context, string) (*auth.Claims, error)   { return nil, nil }

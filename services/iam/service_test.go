@@ -333,10 +333,11 @@ func (m *mockAuthenticator) Authenticate(ctx context.Context, req auth.AuthReque
 // --- Mock TokenIssuer ---
 
 type mockTokenIssuer struct {
-	issueFn    func(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error)
-	refreshFn  func(ctx context.Context, refreshToken string) (*auth.TokenPair, error)
-	revokeFn   func(ctx context.Context, refreshToken string) error
-	validateFn func(ctx context.Context, accessToken string) (*auth.Claims, error)
+	issueFn            func(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error)
+	refreshFn          func(ctx context.Context, refreshToken string) (*auth.TokenPair, error)
+	revokeFn           func(ctx context.Context, refreshToken string) error
+	validateFn         func(ctx context.Context, accessToken string) (*auth.Claims, error)
+	revokeAllForUserFn func(ctx context.Context, userID uuid.UUID) error
 }
 
 func (m *mockTokenIssuer) Issue(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error) {
@@ -362,6 +363,12 @@ func (m *mockTokenIssuer) Validate(ctx context.Context, accessToken string) (*au
 		return m.validateFn(ctx, accessToken)
 	}
 	return &auth.Claims{Subject: fixedUserID}, nil
+}
+func (m *mockTokenIssuer) RevokeAllForUser(ctx context.Context, userID uuid.UUID) error {
+	if m.revokeAllForUserFn != nil {
+		return m.revokeAllForUserFn(ctx, userID)
+	}
+	return nil
 }
 
 // --- Mock PasswordHasher & Verifier ---
@@ -600,6 +607,48 @@ func TestChangePassword_Success(t *testing.T) {
 	err := svc.ChangePassword(context.Background(), fixedTenantID, fixedUserID, "oldpass", "newpass")
 	require.NoError(t, err)
 	assert.Equal(t, "hashed:newpass", updatedHash)
+}
+
+func TestChangePassword_RevokesAllSessions(t *testing.T) {
+	t.Parallel()
+	var revokedFor uuid.UUID
+	tokens := &mockTokenIssuer{
+		revokeAllForUserFn: func(_ context.Context, userID uuid.UUID) error {
+			revokedFor = userID
+			return nil
+		},
+	}
+	repo := &mockRepo{
+		getUserByIDFn: func(_ context.Context, _, _ uuid.UUID) (*auth.UserRecord, error) {
+			return &auth.UserRecord{PasswordHash: "hashed:oldpass"}, nil
+		},
+		updatePasswordHashFn: func(_ context.Context, _, _ uuid.UUID, _ string) error {
+			return nil
+		},
+	}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+
+	require.NoError(t, svc.ChangePassword(context.Background(), fixedTenantID, fixedUserID, "oldpass", "newpass"))
+	assert.Equal(t, fixedUserID, revokedFor, "changing a password must revoke every session")
+}
+
+func TestChangePassword_RevokeFailure_IsReported(t *testing.T) {
+	t.Parallel()
+	tokens := &mockTokenIssuer{
+		revokeAllForUserFn: func(context.Context, uuid.UUID) error { return errors.New("redis down") },
+	}
+	repo := &mockRepo{
+		getUserByIDFn: func(_ context.Context, _, _ uuid.UUID) (*auth.UserRecord, error) {
+			return &auth.UserRecord{PasswordHash: "hashed:oldpass"}, nil
+		},
+		updatePasswordHashFn: func(_ context.Context, _, _ uuid.UUID, _ string) error {
+			return nil
+		},
+	}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+
+	err := svc.ChangePassword(context.Background(), fixedTenantID, fixedUserID, "oldpass", "newpass")
+	require.Error(t, err, "a failed revocation must not be silently swallowed")
 }
 
 func TestCheckPermission_Found(t *testing.T) {
@@ -1483,6 +1532,26 @@ func TestDeactivateUser_Success(t *testing.T) {
 	assert.Equal(t, fixedUserID, deactivatedID)
 }
 
+func TestDeactivateUser_RevokesAllSessions(t *testing.T) {
+	t.Parallel()
+	var revokedFor uuid.UUID
+	tokens := &mockTokenIssuer{
+		revokeAllForUserFn: func(_ context.Context, userID uuid.UUID) error {
+			revokedFor = userID
+			return nil
+		},
+	}
+	repo := &mockRepo{
+		deactivateUserFn: func(_ context.Context, _, _ uuid.UUID) error {
+			return nil
+		},
+	}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+
+	require.NoError(t, svc.DeactivateUser(context.Background(), fixedTenantID, fixedUserID))
+	assert.Equal(t, fixedUserID, revokedFor, "deactivating a user must revoke every session")
+}
+
 func TestDeactivateUser_Error(t *testing.T) {
 	t.Parallel()
 	svc := newTestService(&mockRepo{
@@ -1588,6 +1657,26 @@ func TestRevokeRole_Success(t *testing.T) {
 	err := svc.RevokeRole(context.Background(), fixedTenantID, fixedUserID, fixedRoleID)
 	require.NoError(t, err)
 	assert.Equal(t, fixedRoleID, capturedRoleID)
+}
+
+func TestRevokeRole_RevokesAllSessions(t *testing.T) {
+	t.Parallel()
+	var revokedFor uuid.UUID
+	tokens := &mockTokenIssuer{
+		revokeAllForUserFn: func(_ context.Context, userID uuid.UUID) error {
+			revokedFor = userID
+			return nil
+		},
+	}
+	repo := &mockRepo{
+		revokeRoleFn: func(_ context.Context, _, _ uuid.UUID) error {
+			return nil
+		},
+	}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+
+	require.NoError(t, svc.RevokeRole(context.Background(), fixedTenantID, fixedUserID, fixedRoleID))
+	assert.Equal(t, fixedUserID, revokedFor, "revoking a role must revoke every session")
 }
 
 func TestRevokeRole_ForeignRole_Denied(t *testing.T) {

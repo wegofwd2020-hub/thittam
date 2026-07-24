@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -50,6 +51,119 @@ func testIssuer(t *testing.T) (*JWTIssuer, *miniredis.Miniredis) {
 	})
 	require.NoError(t, err)
 	return issuer, mr
+}
+
+// testIssuerWithClient is testIssuer but also returns the *redis.Client
+// backing the issuer, so a test can install a redis.Hook on it (needed for
+// the #154 TOCTOU regression test below). Does not replace testIssuer —
+// other tests depend on that helper's signature.
+func testIssuerWithClient(t *testing.T) (*JWTIssuer, *miniredis.Miniredis, *redis.Client) {
+	t.Helper()
+
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	keyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privKey),
+	})
+
+	issuer, err := NewJWTIssuer(keyPEM, rdb, JWTConfig{
+		AccessTTL:  5 * time.Second,
+		RefreshTTL: 10 * time.Second,
+	})
+	require.NoError(t, err)
+	return issuer, mr, rdb
+}
+
+// midRefreshRevokeHook is a redis.Hook that, the first time it observes a GET
+// against a specific "iam:usergen:<uid>" key, bumps that same key (INCR)
+// immediately after the real GET completes and before control returns to the
+// caller. This reproduces the #154 TOCTOU window: a RevokeAllForUser landing
+// exactly between Refresh's compare-read and the generation re-read that used
+// to happen inside Issue. It fires at most once (guarded by `fired`) so it
+// models a single revocation event, not a storm of them.
+type midRefreshRevokeHook struct {
+	rdb   *redis.Client
+	key   string
+	fired atomic.Bool
+}
+
+func (h *midRefreshRevokeHook) DialHook(next redis.DialHook) redis.DialHook {
+	return next
+}
+
+func (h *midRefreshRevokeHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		err := next(ctx, cmd)
+		if cmd.Name() == "get" {
+			if args := cmd.Args(); len(args) >= 2 {
+				if key, ok := args[1].(string); ok && key == h.key {
+					if h.fired.CompareAndSwap(false, true) {
+						h.rdb.Incr(ctx, h.key)
+					}
+				}
+			}
+		}
+		return err
+	}
+}
+
+func (h *midRefreshRevokeHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+// TestJWTIssuer_Refresh_TOCTOU_RevokeMidRefresh reproduces #154's TOCTOU: a
+// RevokeAllForUser INCR landing between Refresh's compare-read of the
+// generation counter and the re-issue. Before the fix, Refresh delegated to
+// the public Issue, which re-read the counter and embedded the POST-revoke
+// generation into the freshly issued refresh token — permanently un-revoking
+// the session the revoke was meant to kill. After the fix, Refresh carries
+// forward the generation it already validated, so the new token still embeds
+// the STALE (pre-revoke) generation and the very next refresh must be
+// rejected with ErrSessionRevoked.
+//
+// Verified this test fails against the pre-fix code (Refresh calling the
+// public Issue, which re-reads the counter): the second Refresh below
+// succeeded instead of returning ErrSessionRevoked. See fix-report.md.
+func TestJWTIssuer_Refresh_TOCTOU_RevokeMidRefresh(t *testing.T) {
+	issuer, _, rdb := testIssuerWithClient(t)
+	ctx := context.Background()
+
+	// Issue the original token BEFORE installing the hook — Issue also reads
+	// the generation counter, and we only want the hook to fire on the read
+	// that happens inside the upcoming Refresh call, not this one.
+	original, err := issuer.Issue(ctx, fixtureAuthResult())
+	require.NoError(t, err)
+
+	hook := &midRefreshRevokeHook{
+		rdb: rdb,
+		key: usergenKeyPrefix + fixtureUserID.String(),
+	}
+	rdb.AddHook(hook)
+
+	// This Refresh's internal compare-read observes generation 0 (matching the
+	// token) and is allowed to proceed; the hook then bumps the live counter
+	// to 1 immediately afterward, simulating a RevokeAllForUser that lands in
+	// the TOCTOU window. Refresh itself must still succeed — the token being
+	// refreshed right now was valid at the moment it was validated.
+	refreshed, err := issuer.Refresh(ctx, original.RefreshToken)
+	require.NoError(t, err, "the in-flight refresh must complete using the generation it already validated")
+	require.True(t, hook.fired.Load(), "test setup bug: the race hook never observed the expected GET")
+
+	// The critical assertion: the token minted by that refresh must NOT
+	// survive against the now-bumped counter. If it embedded the post-revoke
+	// generation (the pre-fix bug), this next refresh would succeed instead.
+	_, err = issuer.Refresh(ctx, refreshed.RefreshToken)
+	assert.ErrorIs(t, err, ErrSessionRevoked,
+		"a refresh token minted during the TOCTOU window must not survive the revocation that raced it")
 }
 
 func fixtureAuthResult() *AuthResult {
@@ -379,4 +493,72 @@ func TestNewJWTIssuer_PKCS8Key(t *testing.T) {
 	issuer, err := NewJWTIssuer(keyPEM, rdb, JWTConfig{})
 	require.NoError(t, err)
 	assert.NotNil(t, issuer)
+}
+
+func TestJWTIssuer_RevokeAllForUser_RejectsPriorRefreshToken(t *testing.T) {
+	iss, _ := testIssuer(t)
+	ctx := context.Background()
+
+	pair, err := iss.Issue(ctx, &AuthResult{UserID: fixtureUserID, TenantID: fixtureTenantID, Email: "u@example.com"})
+	require.NoError(t, err)
+
+	require.NoError(t, iss.RevokeAllForUser(ctx, fixtureUserID))
+
+	_, err = iss.Refresh(ctx, pair.RefreshToken)
+	require.Error(t, err, "a refresh token issued before revoke-all must be rejected")
+}
+
+// A token issued AFTER the revocation must work — revoke-all must not wedge
+// the user out permanently.
+func TestJWTIssuer_RevokeAllForUser_NewTokenStillWorks(t *testing.T) {
+	iss, _ := testIssuer(t)
+	ctx := context.Background()
+
+	require.NoError(t, iss.RevokeAllForUser(ctx, fixtureUserID))
+
+	pair, err := iss.Issue(ctx, &AuthResult{UserID: fixtureUserID, TenantID: fixtureTenantID, Email: "u@example.com"})
+	require.NoError(t, err)
+	_, err = iss.Refresh(ctx, pair.RefreshToken)
+	require.NoError(t, err)
+}
+
+// THE test that pins `!=` over `<`. With the counter key deleted (TTL expiry,
+// flush, cold-replica failover) a stale token must still be rejected. Written
+// against `<` this fails, because 1 < 0 is false and the token is accepted.
+func TestJWTIssuer_RevokeAllForUser_CounterResetStillRejects(t *testing.T) {
+	iss, mr := testIssuer(t)
+	ctx := context.Background()
+
+	// Establish a nonzero baseline generation first. Without this, the token
+	// issued below would carry generation 0 — identical to what a missing key
+	// reads as after the Del below — and the assertion would pass (or fail)
+	// identically under `!=` and `<`, defeating the point of this test. A
+	// nonzero embedded generation is required to actually distinguish the two
+	// operators (see the `1 < 0` arithmetic below).
+	require.NoError(t, iss.RevokeAllForUser(ctx, fixtureUserID))
+
+	pair, err := iss.Issue(ctx, &AuthResult{UserID: fixtureUserID, TenantID: fixtureTenantID, Email: "u@example.com"})
+	require.NoError(t, err)
+	require.NoError(t, iss.RevokeAllForUser(ctx, fixtureUserID))
+
+	// Simulate the counter disappearing while the refresh token is still alive.
+	mr.Del(usergenKeyPrefix + fixtureUserID.String())
+
+	_, err = iss.Refresh(ctx, pair.RefreshToken)
+	require.Error(t, err, "a reset counter must not resurrect a revoked session")
+}
+
+// Revoking one user must not touch another's sessions.
+func TestJWTIssuer_RevokeAllForUser_ScopedToUser(t *testing.T) {
+	iss, _ := testIssuer(t)
+	ctx := context.Background()
+	other := uuid.MustParse("a1000000-0000-0000-0000-0000000000ff")
+
+	pair, err := iss.Issue(ctx, &AuthResult{UserID: other, TenantID: fixtureTenantID, Email: "o@example.com"})
+	require.NoError(t, err)
+
+	require.NoError(t, iss.RevokeAllForUser(ctx, fixtureUserID))
+
+	_, err = iss.Refresh(ctx, pair.RefreshToken)
+	require.NoError(t, err, "revoking one user must not revoke another's sessions")
 }
