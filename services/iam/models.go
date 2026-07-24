@@ -90,41 +90,14 @@ type OIDCConfigParams struct {
 	DefaultRole      string // defaults to "member"
 }
 
-// ImpersonationSession records a platform admin actively impersonating a tenant user.
-// Sessions are bounded by ExpiresAt; EndedAt is set when the session is explicitly
-// terminated (via EndImpersonation) or cleaned up by the background expiry ticker.
-type ImpersonationSession struct {
-	ID               uuid.UUID  `json:"id"`
-	PlatformUserID   uuid.UUID  `json:"platform_user_id"`
-	TenantID         uuid.UUID  `json:"tenant_id"`
-	ImpersonatedUser uuid.UUID  `json:"impersonated_user"`
-	Reason           string     `json:"reason"`
-	StartedAt        time.Time  `json:"started_at"`
-	ExpiresAt        time.Time  `json:"expires_at"`
-	EndedAt          *time.Time `json:"ended_at,omitempty"`
-	IPAddress        string     `json:"ip_address,omitempty"`
-}
-
-// StartImpersonationParams carries the fields required to open an impersonation session.
-// The Duration is capped at 4 hours by the service layer regardless of what the caller
-// requests.
-type StartImpersonationParams struct {
-	PlatformUserID   uuid.UUID
-	TenantID         uuid.UUID
-	ImpersonatedUser uuid.UUID
-	Reason           string
-	Duration         time.Duration // desired TTL; service caps at maxImpersonationDuration
-	IPAddress        string
-}
-
 // AuditEntry is an append-only record of a security-relevant action.
 // Fields follow Rule #7: actor_id, action, target_type, target_id,
 // timestamp, old_state, new_state. Rows must never be updated or deleted.
 type AuditEntry struct {
 	ID         uuid.UUID `json:"id"`
 	ActorID    uuid.UUID `json:"actor_id"`    // user who performed the action
-	Action     string    `json:"action"`      // e.g. "impersonation.start", "impersonation.end"
-	TargetType string    `json:"target_type"` // e.g. "impersonation_session", "user"
+	Action     string    `json:"action"`      // e.g. "role_assigned", "purge_requested" (see pkg/audit.Action)
+	TargetType string    `json:"target_type"` // e.g. "user", "tenant" (see pkg/audit.ResourceType)
 	TargetID   uuid.UUID `json:"target_id"`
 	OldState   string    `json:"old_state,omitempty"`
 	NewState   string    `json:"new_state,omitempty"`

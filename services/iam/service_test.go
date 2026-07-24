@@ -69,9 +69,6 @@ type mockRepo struct {
 	getInvitationByTokenFn            func(ctx context.Context, token string) (*Invitation, error)
 	markInvitationFn                  func(ctx context.Context, id uuid.UUID) error
 	upsertOIDCConfigFn                func(ctx context.Context, params OIDCConfigParams) error
-	startImpersonationFn              func(ctx context.Context, params StartImpersonationParams) (*ImpersonationSession, error)
-	endImpersonationSessionFn         func(ctx context.Context, sessionID uuid.UUID) error
-	expireImpersonationSessionsFn     func(ctx context.Context) (int64, error)
 	createAuditEntryFn                func(ctx context.Context, entry *AuditEntry) error
 }
 
@@ -308,30 +305,6 @@ func (m *mockRepo) UpsertOIDCConfig(ctx context.Context, params OIDCConfigParams
 		return m.upsertOIDCConfigFn(ctx, params)
 	}
 	return nil
-}
-func (m *mockRepo) StartImpersonation(ctx context.Context, params StartImpersonationParams) (*ImpersonationSession, error) {
-	if m.startImpersonationFn != nil {
-		return m.startImpersonationFn(ctx, params)
-	}
-	return &ImpersonationSession{
-		ID:               uuid.MustParse("e5000000-0000-0000-0000-000000000005"),
-		PlatformUserID:   params.PlatformUserID,
-		TenantID:         params.TenantID,
-		ImpersonatedUser: params.ImpersonatedUser,
-		Reason:           params.Reason,
-	}, nil
-}
-func (m *mockRepo) EndImpersonationSession(ctx context.Context, sessionID uuid.UUID) error {
-	if m.endImpersonationSessionFn != nil {
-		return m.endImpersonationSessionFn(ctx, sessionID)
-	}
-	return nil
-}
-func (m *mockRepo) ExpireImpersonationSessions(ctx context.Context) (int64, error) {
-	if m.expireImpersonationSessionsFn != nil {
-		return m.expireImpersonationSessionsFn(ctx)
-	}
-	return 0, nil
 }
 func (m *mockRepo) CreateAuditEntry(ctx context.Context, entry *AuditEntry) error {
 	if m.createAuditEntryFn != nil {
@@ -2022,122 +1995,6 @@ func TestSetOIDCConfig_Success_SecretIsEncrypted(t *testing.T) {
 	// Other fields must pass through unchanged.
 	assert.Equal(t, "https://accounts.google.com", capturedParams.IssuerURL)
 	assert.Equal(t, "client-id-123", capturedParams.ClientID)
-}
-
-// --- Impersonation service tests ---
-
-var fixedSessionID = uuid.MustParse("e5000000-0000-0000-0000-000000000005")
-
-func TestStartImpersonation_Success(t *testing.T) {
-	t.Parallel()
-	svc := newTestService(&mockRepo{})
-	params := StartImpersonationParams{
-		PlatformUserID:   fixedUserID,
-		TenantID:         fixedTenantID,
-		ImpersonatedUser: uuid.MustParse("f6000000-0000-0000-0000-000000000006"),
-		Reason:           "Customer support ticket #12345",
-		Duration:         30 * time.Minute,
-		IPAddress:        "10.0.0.1",
-	}
-	session, err := svc.StartImpersonation(context.Background(), params)
-	require.NoError(t, err)
-	assert.Equal(t, params.Reason, session.Reason)
-	assert.Equal(t, params.TenantID, session.TenantID)
-}
-
-func TestStartImpersonation_DurationCappedAt4Hours(t *testing.T) {
-	t.Parallel()
-	var capturedParams StartImpersonationParams
-	svc := newTestService(&mockRepo{
-		startImpersonationFn: func(_ context.Context, p StartImpersonationParams) (*ImpersonationSession, error) {
-			capturedParams = p
-			return &ImpersonationSession{ID: fixedSessionID, Reason: p.Reason}, nil
-		},
-	})
-
-	_, err := svc.StartImpersonation(context.Background(), StartImpersonationParams{
-		PlatformUserID:   fixedUserID,
-		TenantID:         fixedTenantID,
-		ImpersonatedUser: fixedUserID,
-		Reason:           "test",
-		Duration:         24 * time.Hour, // exceeds maxImpersonationDuration
-	})
-	require.NoError(t, err)
-	assert.Equal(t, maxImpersonationDuration, capturedParams.Duration)
-}
-
-func TestStartImpersonation_ZeroDuration_UsesMax(t *testing.T) {
-	t.Parallel()
-	var capturedParams StartImpersonationParams
-	svc := newTestService(&mockRepo{
-		startImpersonationFn: func(_ context.Context, p StartImpersonationParams) (*ImpersonationSession, error) {
-			capturedParams = p
-			return &ImpersonationSession{ID: fixedSessionID}, nil
-		},
-	})
-
-	_, err := svc.StartImpersonation(context.Background(), StartImpersonationParams{
-		PlatformUserID: fixedUserID, TenantID: fixedTenantID,
-		ImpersonatedUser: fixedUserID, Reason: "test", Duration: 0,
-	})
-	require.NoError(t, err)
-	assert.Equal(t, maxImpersonationDuration, capturedParams.Duration)
-}
-
-func TestStartImpersonation_RepoError(t *testing.T) {
-	t.Parallel()
-	svc := newTestService(&mockRepo{
-		startImpersonationFn: func(_ context.Context, _ StartImpersonationParams) (*ImpersonationSession, error) {
-			return nil, errors.New("db error")
-		},
-	})
-
-	_, err := svc.StartImpersonation(context.Background(), StartImpersonationParams{
-		PlatformUserID: fixedUserID, TenantID: fixedTenantID,
-		ImpersonatedUser: fixedUserID, Reason: "test", Duration: time.Hour,
-	})
-	require.Error(t, err)
-}
-
-func TestEndImpersonation_Success(t *testing.T) {
-	t.Parallel()
-	var endedID uuid.UUID
-	svc := newTestService(&mockRepo{
-		endImpersonationSessionFn: func(_ context.Context, id uuid.UUID) error {
-			endedID = id
-			return nil
-		},
-	})
-
-	err := svc.EndImpersonation(context.Background(), fixedSessionID, fixedUserID)
-	require.NoError(t, err)
-	assert.Equal(t, fixedSessionID, endedID)
-}
-
-func TestEndImpersonation_NotFound(t *testing.T) {
-	t.Parallel()
-	svc := newTestService(&mockRepo{
-		endImpersonationSessionFn: func(_ context.Context, _ uuid.UUID) error {
-			return ErrImpersonationNotFound
-		},
-	})
-
-	err := svc.EndImpersonation(context.Background(), fixedSessionID, fixedUserID)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, ErrImpersonationNotFound)
-}
-
-func TestEndImpersonation_AlreadyEnded(t *testing.T) {
-	t.Parallel()
-	svc := newTestService(&mockRepo{
-		endImpersonationSessionFn: func(_ context.Context, _ uuid.UUID) error {
-			return ErrImpersonationAlreadyEnded
-		},
-	})
-
-	err := svc.EndImpersonation(context.Background(), fixedSessionID, fixedUserID)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, ErrImpersonationAlreadyEnded)
 }
 
 func TestRehashIfNeeded_NeedsRehash_HashFails(t *testing.T) {

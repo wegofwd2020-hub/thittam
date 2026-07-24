@@ -318,18 +318,7 @@ func (r *iamRepo) MarkInvitationAccepted(_ context.Context, _ uuid.UUID) error {
 func (r *iamRepo) UpsertOIDCConfig(_ context.Context, _ iam.OIDCConfigParams) error {
 	return nil
 }
-func (r *iamRepo) StartImpersonation(_ context.Context, p iam.StartImpersonationParams) (*iam.ImpersonationSession, error) {
-	return &iam.ImpersonationSession{
-		ID:               uuid.New(),
-		PlatformUserID:   p.PlatformUserID,
-		TenantID:         p.TenantID,
-		ImpersonatedUser: p.ImpersonatedUser,
-		Reason:           p.Reason,
-	}, nil
-}
-func (r *iamRepo) EndImpersonationSession(_ context.Context, _ uuid.UUID) error { return nil }
-func (r *iamRepo) ExpireImpersonationSessions(_ context.Context) (int64, error) { return 0, nil }
-func (r *iamRepo) CreateAuditEntry(_ context.Context, _ *iam.AuditEntry) error  { return nil }
+func (r *iamRepo) CreateAuditEntry(_ context.Context, _ *iam.AuditEntry) error { return nil }
 
 // ── Budget mock repository ─────────────────────────────────────────────────
 

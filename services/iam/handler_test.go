@@ -1445,86 +1445,24 @@ func TestHandler_AcceptInvitation_Success(t *testing.T) {
 	assert.Equal(t, "access", resp.GetAccessToken())
 }
 
-// --- StartImpersonation ---
+// --- Impersonation (retired, #139 §5 / D8) ---
 
-func TestHandler_StartImpersonation_Success(t *testing.T) {
-	t.Parallel()
-	resp, err := newHandler().StartImpersonation(platformAdminCtx(), &iamv1.StartImpersonationRequest{
-		PlatformUserId:   uuid.New().String(),
-		TenantId:         uuid.New().String(),
-		ImpersonatedUser: uuid.New().String(),
-		Reason:           "support ticket #99",
-		DurationSeconds:  1800,
-	})
-	require.NoError(t, err)
-	assert.NotEmpty(t, resp.GetId())
-}
-
-func TestHandler_StartImpersonation_PermissionDenied(t *testing.T) {
-	t.Parallel()
-	_, err := newHandler().StartImpersonation(context.Background(), &iamv1.StartImpersonationRequest{
-		PlatformUserId:   uuid.New().String(),
-		TenantId:         uuid.New().String(),
-		ImpersonatedUser: uuid.New().String(),
-		Reason:           "test",
-	})
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
-}
-
-func TestHandler_StartImpersonation_MissingReason(t *testing.T) {
+func TestHandler_StartImpersonation_Retired(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().StartImpersonation(platformAdminCtx(), &iamv1.StartImpersonationRequest{
-		PlatformUserId:   uuid.New().String(),
-		TenantId:         uuid.New().String(),
-		ImpersonatedUser: uuid.New().String(),
-		Reason:           "", // empty
+		PlatformUserId: uuid.New().String(),
+		TenantId:       uuid.New().String(),
+		Reason:         "support",
 	})
-	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Equal(t, codes.Unimplemented, status.Code(err))
 }
 
-// --- EndImpersonation ---
-
-func TestHandler_EndImpersonation_Success(t *testing.T) {
+func TestHandler_EndImpersonation_Retired(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().EndImpersonation(platformAdminCtx(), &iamv1.EndImpersonationRequest{
+	_, err := newHandler().EndImpersonation(platformAdminCtx(), &iamv1.EndImpersonationRequest{
 		SessionId: uuid.New().String(),
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, resp)
-}
-
-func TestHandler_EndImpersonation_PermissionDenied(t *testing.T) {
-	t.Parallel()
-	_, err := newHandler().EndImpersonation(context.Background(), &iamv1.EndImpersonationRequest{
-		SessionId: uuid.New().String(),
-	})
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
-}
-
-func TestHandler_EndImpersonation_NotFound(t *testing.T) {
-	t.Parallel()
-	h := NewHandler(newTestService(&mockRepo{
-		endImpersonationSessionFn: func(_ context.Context, _ uuid.UUID) error {
-			return ErrImpersonationNotFound
-		},
-	}))
-	_, err := h.EndImpersonation(platformAdminCtx(), &iamv1.EndImpersonationRequest{
-		SessionId: uuid.New().String(),
-	})
-	assert.Equal(t, codes.NotFound, status.Code(err))
-}
-
-func TestHandler_EndImpersonation_AlreadyEnded(t *testing.T) {
-	t.Parallel()
-	h := NewHandler(newTestService(&mockRepo{
-		endImpersonationSessionFn: func(_ context.Context, _ uuid.UUID) error {
-			return ErrImpersonationAlreadyEnded
-		},
-	}))
-	_, err := h.EndImpersonation(platformAdminCtx(), &iamv1.EndImpersonationRequest{
-		SessionId: uuid.New().String(),
-	})
-	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	assert.Equal(t, codes.Unimplemented, status.Code(err))
 }
 
 // --- SetOIDCConfig ---
