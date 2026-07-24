@@ -25,6 +25,11 @@ const (
 
 	// refreshKeyPrefix is the Redis key namespace for refresh tokens.
 	refreshKeyPrefix = "iam:refresh:"
+
+	// usergenKeyPrefix namespaces the per-user token generation counter.
+	// Bumping a user's generation invalidates every refresh token issued
+	// before the bump (#154).
+	usergenKeyPrefix = "iam:usergen:"
 )
 
 // jwtClaims is the JWT payload — maps 1-to-1 with auth.Claims but uses the
@@ -48,6 +53,10 @@ type refreshPayload struct {
 	Roles       []string     `json:"roles"`
 	Permissions []string     `json:"permissions"`
 	AuthMethod  ProviderType `json:"auth_method"`
+
+	// Generation is the user's token generation at issue time. Refresh compares
+	// it against the live counter and rejects on ANY difference (#154).
+	Generation int64 `json:"generation"`
 }
 
 // JWTIssuer implements TokenIssuer using:
@@ -146,6 +155,11 @@ func (j *JWTIssuer) Issue(ctx context.Context, result *AuthResult) (*TokenPair, 
 		return nil, fmt.Errorf("auth: jwt: sign access token: %w", err)
 	}
 
+	gen, err := j.currentGeneration(ctx, result.UserID)
+	if err != nil {
+		return nil, err
+	}
+
 	refreshToken, err := j.issueRefreshToken(ctx, &refreshPayload{
 		UserID:      result.UserID,
 		TenantID:    result.TenantID,
@@ -153,6 +167,7 @@ func (j *JWTIssuer) Issue(ctx context.Context, result *AuthResult) (*TokenPair, 
 		Roles:       result.Roles,
 		Permissions: result.Permissions,
 		AuthMethod:  result.AuthMethod,
+		Generation:  gen,
 	})
 	if err != nil {
 		return nil, err
@@ -175,6 +190,18 @@ func (j *JWTIssuer) Refresh(ctx context.Context, refreshToken string) (*TokenPai
 		return nil, err
 	}
 
+	gen, err := j.currentGeneration(ctx, payload.UserID)
+	if err != nil {
+		return nil, err
+	}
+	// Deliberately `!=`, not `<`. The counter key can vanish (TTL, flush,
+	// failover) and a missing key reads as 0; under `<` a stale token with a
+	// higher generation would be ACCEPTED, un-revoking sessions exactly when
+	// the store is least healthy. Any divergence fails closed.
+	if payload.Generation != gen {
+		return nil, ErrSessionRevoked
+	}
+
 	return j.Issue(ctx, &AuthResult{
 		UserID:          payload.UserID,
 		TenantID:        payload.TenantID,
@@ -195,6 +222,26 @@ func (j *JWTIssuer) Revoke(ctx context.Context, refreshToken string) error {
 	}
 	if deleted == 0 {
 		return ErrRefreshTokenNotFound
+	}
+	return nil
+}
+
+// RevokeAllForUser invalidates every outstanding refresh token for a user by
+// bumping their generation counter. O(1) regardless of session count.
+//
+// Access tokens already issued remain valid until they expire (accessTTL) —
+// this bounds a compromised session at the refresh boundary, not instantly.
+func (j *JWTIssuer) RevokeAllForUser(ctx context.Context, userID uuid.UUID) error {
+	key := usergenKeyPrefix + userID.String()
+	// EXPIRE alongside INCR so counters do not accumulate forever. The window
+	// is longer than refreshTTL so a counter outlives every token it governs;
+	// correctness does not depend on it (see the `!=` comparison in Refresh).
+	if _, err := j.rdb.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.Incr(ctx, key)
+		pipe.Expire(ctx, key, j.refreshTTL*2)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("auth: jwt: revoke all sessions: %w", err)
 	}
 	return nil
 }
@@ -301,6 +348,18 @@ func (j *JWTIssuer) consumeRefreshToken(ctx context.Context, token string) (*ref
 	}
 
 	return &payload, nil
+}
+
+// currentGeneration returns the user's token generation, 0 if never bumped.
+func (j *JWTIssuer) currentGeneration(ctx context.Context, userID uuid.UUID) (int64, error) {
+	gen, err := j.rdb.Get(ctx, usergenKeyPrefix+userID.String()).Int64()
+	if errors.Is(err, redis.Nil) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("auth: jwt: read token generation: %w", err)
+	}
+	return gen, nil
 }
 
 // generateToken produces a 32-byte cryptographically random hex token.

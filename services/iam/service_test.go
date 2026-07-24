@@ -333,10 +333,11 @@ func (m *mockAuthenticator) Authenticate(ctx context.Context, req auth.AuthReque
 // --- Mock TokenIssuer ---
 
 type mockTokenIssuer struct {
-	issueFn    func(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error)
-	refreshFn  func(ctx context.Context, refreshToken string) (*auth.TokenPair, error)
-	revokeFn   func(ctx context.Context, refreshToken string) error
-	validateFn func(ctx context.Context, accessToken string) (*auth.Claims, error)
+	issueFn            func(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error)
+	refreshFn          func(ctx context.Context, refreshToken string) (*auth.TokenPair, error)
+	revokeFn           func(ctx context.Context, refreshToken string) error
+	validateFn         func(ctx context.Context, accessToken string) (*auth.Claims, error)
+	revokeAllForUserFn func(ctx context.Context, userID uuid.UUID) error
 }
 
 func (m *mockTokenIssuer) Issue(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error) {
@@ -362,6 +363,12 @@ func (m *mockTokenIssuer) Validate(ctx context.Context, accessToken string) (*au
 		return m.validateFn(ctx, accessToken)
 	}
 	return &auth.Claims{Subject: fixedUserID}, nil
+}
+func (m *mockTokenIssuer) RevokeAllForUser(ctx context.Context, userID uuid.UUID) error {
+	if m.revokeAllForUserFn != nil {
+		return m.revokeAllForUserFn(ctx, userID)
+	}
+	return nil
 }
 
 // --- Mock PasswordHasher & Verifier ---

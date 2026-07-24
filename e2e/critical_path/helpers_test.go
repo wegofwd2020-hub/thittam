@@ -95,6 +95,7 @@ func (stubTokenIssuer) Revoke(_ context.Context, _ string) error { return nil }
 func (stubTokenIssuer) Validate(_ context.Context, _ string) (*auth.Claims, error) {
 	return &auth.Claims{}, nil
 }
+func (stubTokenIssuer) RevokeAllForUser(_ context.Context, _ uuid.UUID) error { return nil }
 
 type stubVerifier struct{}
 

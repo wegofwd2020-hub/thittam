@@ -380,3 +380,71 @@ func TestNewJWTIssuer_PKCS8Key(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, issuer)
 }
+
+func TestJWTIssuer_RevokeAllForUser_RejectsPriorRefreshToken(t *testing.T) {
+	iss, _ := testIssuer(t)
+	ctx := context.Background()
+
+	pair, err := iss.Issue(ctx, &AuthResult{UserID: fixtureUserID, TenantID: fixtureTenantID, Email: "u@example.com"})
+	require.NoError(t, err)
+
+	require.NoError(t, iss.RevokeAllForUser(ctx, fixtureUserID))
+
+	_, err = iss.Refresh(ctx, pair.RefreshToken)
+	require.Error(t, err, "a refresh token issued before revoke-all must be rejected")
+}
+
+// A token issued AFTER the revocation must work — revoke-all must not wedge
+// the user out permanently.
+func TestJWTIssuer_RevokeAllForUser_NewTokenStillWorks(t *testing.T) {
+	iss, _ := testIssuer(t)
+	ctx := context.Background()
+
+	require.NoError(t, iss.RevokeAllForUser(ctx, fixtureUserID))
+
+	pair, err := iss.Issue(ctx, &AuthResult{UserID: fixtureUserID, TenantID: fixtureTenantID, Email: "u@example.com"})
+	require.NoError(t, err)
+	_, err = iss.Refresh(ctx, pair.RefreshToken)
+	require.NoError(t, err)
+}
+
+// THE test that pins `!=` over `<`. With the counter key deleted (TTL expiry,
+// flush, cold-replica failover) a stale token must still be rejected. Written
+// against `<` this fails, because 1 < 0 is false and the token is accepted.
+func TestJWTIssuer_RevokeAllForUser_CounterResetStillRejects(t *testing.T) {
+	iss, mr := testIssuer(t)
+	ctx := context.Background()
+
+	// Establish a nonzero baseline generation first. Without this, the token
+	// issued below would carry generation 0 — identical to what a missing key
+	// reads as after the Del below — and the assertion would pass (or fail)
+	// identically under `!=` and `<`, defeating the point of this test. A
+	// nonzero embedded generation is required to actually distinguish the two
+	// operators (see the `1 < 0` arithmetic below).
+	require.NoError(t, iss.RevokeAllForUser(ctx, fixtureUserID))
+
+	pair, err := iss.Issue(ctx, &AuthResult{UserID: fixtureUserID, TenantID: fixtureTenantID, Email: "u@example.com"})
+	require.NoError(t, err)
+	require.NoError(t, iss.RevokeAllForUser(ctx, fixtureUserID))
+
+	// Simulate the counter disappearing while the refresh token is still alive.
+	mr.Del(usergenKeyPrefix + fixtureUserID.String())
+
+	_, err = iss.Refresh(ctx, pair.RefreshToken)
+	require.Error(t, err, "a reset counter must not resurrect a revoked session")
+}
+
+// Revoking one user must not touch another's sessions.
+func TestJWTIssuer_RevokeAllForUser_ScopedToUser(t *testing.T) {
+	iss, _ := testIssuer(t)
+	ctx := context.Background()
+	other := uuid.MustParse("a1000000-0000-0000-0000-0000000000ff")
+
+	pair, err := iss.Issue(ctx, &AuthResult{UserID: other, TenantID: fixtureTenantID, Email: "o@example.com"})
+	require.NoError(t, err)
+
+	require.NoError(t, iss.RevokeAllForUser(ctx, fixtureUserID))
+
+	_, err = iss.Refresh(ctx, pair.RefreshToken)
+	require.NoError(t, err, "revoking one user must not revoke another's sessions")
+}

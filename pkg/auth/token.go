@@ -39,6 +39,10 @@ type TokenIssuer interface {
 	// Revoke invalidates a refresh token (logout).
 	Revoke(ctx context.Context, refreshToken string) error
 
+	// RevokeAllForUser invalidates every outstanding refresh token for a user
+	// (password change, deactivation, role revocation — #154).
+	RevokeAllForUser(ctx context.Context, userID uuid.UUID) error
+
 	// Validate parses and validates an access token, returning its claims.
 	Validate(ctx context.Context, accessToken string) (*Claims, error)
 }
