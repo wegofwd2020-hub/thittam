@@ -139,8 +139,7 @@ func TestChain_ValidTokenReachesHandlerWithVerifiedIdentity(t *testing.T) {
 }
 
 func TestChain_CheckPermissionRejectsTokenlessCall(t *testing.T) {
-	key, v := keyAndVerifier(t)
-	_ = key
+	_, v := keyAndVerifier(t)
 	client := startServer(t, v)
 	_, err := client.CheckPermission(context.Background(), &iamv1.CheckPermissionRequest{
 		UserId: uuid.New().String(), Permission: "budget:read",
