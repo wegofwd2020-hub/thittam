@@ -257,7 +257,7 @@ func TestPublicMethods_ReflectionNamesWellFormed(t *testing.T) {
 		assert.True(t, ok)
 		assert.Regexp(t, `^/[a-z0-9.]+\.ServerReflection/ServerReflectionInfo$`, m)
 	}
-	assert.Len(t, PublicMethods, 7, "adding a public method is a security decision — update this count deliberately")
+	assert.Len(t, PublicMethods, 6, "adding a public method is a security decision — update this count deliberately")
 	assert.Contains(t, PublicMethods, iamv1.IAMService_Login_FullMethodName)
 	assert.NotContains(t, PublicMethods, iamv1.IAMService_Logout_FullMethodName, "Logout requires an access token")
 	assert.NotContains(t, PublicMethods, iamv1.IAMService_GetCurrentUser_FullMethodName, "GetCurrentUser requires an access token")

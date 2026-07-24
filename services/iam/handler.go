@@ -345,6 +345,20 @@ func (h *Handler) CheckPermission(ctx context.Context, req *iamv1.CheckPermissio
 		}
 		projectID = &parsed
 	}
+
+	// A caller may only ask about itself. Every in-tree caller does exactly
+	// that (interceptor.RequirePermission passes caller.UserID), and allowing
+	// an arbitrary user_id made this an enumeration oracle for anyone who
+	// could reach iam's port (#139 §4).
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok || caller.UserID == uuid.Nil {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not present in context")
+	}
+	if userID != caller.UserID {
+		// Deliberately echoes neither id: confirming the other exists is an oracle.
+		return nil, status.Error(codes.PermissionDenied, "user_id does not match the authenticated caller")
+	}
+
 	allowed, err := h.svc.CheckPermission(ctx, userID, req.GetPermission(), projectID)
 	if err != nil {
 		return nil, grpcError(err)
