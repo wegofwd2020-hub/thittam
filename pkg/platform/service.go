@@ -20,7 +20,6 @@ type Service struct {
 	tenants   TenantManager
 	verticals VerticalManager
 	logger    Logger
-	auditLog  AuditSink
 }
 
 // NewService creates a platform administration service.
@@ -36,13 +35,6 @@ func NewService(
 		verticals: verticals,
 		logger:    logger,
 	}
-}
-
-// WithAuditSink attaches an audit logger to the service.
-// Must be called before the service handles any requests.
-func (s *Service) WithAuditSink(a AuditSink) *Service {
-	s.auditLog = a
-	return s
 }
 
 // CheckAccess verifies that a platform user has the required role.

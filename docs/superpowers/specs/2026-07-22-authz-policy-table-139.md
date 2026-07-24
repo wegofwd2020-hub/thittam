@@ -92,8 +92,8 @@ Legend — **AUTH** = any authenticated tenant member; **PUBLIC** = no caller by
 | `ApproveTenantPurge` | `RolePlatformAdmin` | unchanged | R5 | ✅ |
 | `CancelTenantPurge` | `RolePlatformAdmin` | unchanged | R5 | ✅ |
 | `SetOIDCConfig` | `RolePlatformAdmin` | unchanged | R5 | ✅ |
-| `StartImpersonation` | `RolePlatformAdmin` | unchanged | R5 | ✅ D8 executed 2026-07-22: the forged-actor defect (`handler.go:608`, third instance of #149's defect class, see **#156**) is moot — the RPC now returns `codes.Unimplemented` and is marked `// Deprecated:` |
-| `EndImpersonation` | `RolePlatformAdmin` | unchanged | R5 | ✅ D8 executed 2026-07-22: returns `codes.Unimplemented` and is marked `// Deprecated:` |
+| `StartImpersonation` | `RolePlatformAdmin` | unchanged | R5 | ✅ D8 executed 2026-07-24: the forged-actor defect (`handler.go:608`, third instance of #149's defect class, see **#156**) is moot — the RPC now returns `codes.Unimplemented` and is marked `// Deprecated:` |
+| `EndImpersonation` | `RolePlatformAdmin` | unchanged | R5 | ✅ D8 executed 2026-07-24: returns `codes.Unimplemented` and is marked `// Deprecated:` |
 
 ### 4.2 project — 13 RPCs (7 enforced)
 

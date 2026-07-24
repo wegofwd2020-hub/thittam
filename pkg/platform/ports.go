@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/wegofwd2020/thittam/pkg/audit"
 )
 
 // UserStore manages platform user persistence.
@@ -43,20 +42,10 @@ type TenantManager interface {
 	UpgradePlan(ctx context.Context, tenantID uuid.UUID, newPlan string) error
 }
 
-// AuditSink records security events. Satisfied in production by *audit.Logger.
-// Defined here as a narrow interface so pkg/platform does not take a hard
-// dependency on the concrete audit.Logger type.
-type AuditSink interface {
-	LogAction(
-		tenantID, actorID uuid.UUID,
-		actorEmail string,
-		action audit.Action,
-		resourceType audit.ResourceType,
-		resourceID uuid.UUID,
-		oldState, newState interface{},
-		metadata map[string]interface{},
-	)
-}
+// AuditSink was removed with the impersonation surface (#139 §5): its only
+// emitters were Impersonate and revokeSession, so the field it fed became
+// write-only — a future caller could attach a sink and silently receive no
+// events. Reintroduce it alongside a real emitter, not before.
 
 // VerticalManager provides vertical definition management for platform admins.
 type VerticalManager interface {

@@ -96,8 +96,8 @@ type OIDCConfigParams struct {
 type AuditEntry struct {
 	ID         uuid.UUID `json:"id"`
 	ActorID    uuid.UUID `json:"actor_id"`    // user who performed the action
-	Action     string    `json:"action"`      // e.g. "impersonation.start", "impersonation.end"
-	TargetType string    `json:"target_type"` // e.g. "impersonation_session", "user"
+	Action     string    `json:"action"`      // e.g. "role_assigned", "purge_requested" (see pkg/audit.Action)
+	TargetType string    `json:"target_type"` // e.g. "user", "tenant" (see pkg/audit.ResourceType)
 	TargetID   uuid.UUID `json:"target_id"`
 	OldState   string    `json:"old_state,omitempty"`
 	NewState   string    `json:"new_state,omitempty"`

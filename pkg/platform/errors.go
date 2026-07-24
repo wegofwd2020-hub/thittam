@@ -8,10 +8,4 @@ var (
 
 	// ErrInsufficientRole is returned when the platform user lacks the required role.
 	ErrInsufficientRole = errors.New("platform: insufficient role for this action")
-
-	// ErrMFARequired is returned when MFA is not enabled/verified for a platform action.
-	ErrMFARequired = errors.New("platform: MFA verification required")
-
-	// ErrPlatformUserNotFound is returned when the platform user doesn't exist.
-	ErrPlatformUserNotFound = errors.New("platform: user not found")
 )
