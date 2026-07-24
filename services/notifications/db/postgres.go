@@ -230,10 +230,17 @@ func (p *Postgres) ListNotifications(ctx context.Context, tenantID, recipientID 
 	return result, rows.Err()
 }
 
-func (p *Postgres) IncrementRetryCount(ctx context.Context, id uuid.UUID) error {
-	_, err := p.db.Exec(ctx, "UPDATE notification_log SET retry_count = retry_count + 1 WHERE id = $1", id)
+func (p *Postgres) IncrementRetryCount(ctx context.Context, tenantID, id uuid.UUID) error {
+	tag, err := p.db.Exec(ctx,
+		"UPDATE notification_log SET retry_count = retry_count + 1 WHERE id = $1 AND tenant_id = $2",
+		id, tenantID)
 	if err != nil {
 		return fmt.Errorf("notifications: increment retry count: %w", err)
+	}
+	// Without this the tenant predicate would be a silent no-op: a cross-tenant
+	// id matches zero rows and Exec still returns nil.
+	if tag.RowsAffected() == 0 {
+		return notifications.ErrNotificationNotFound
 	}
 	return nil
 }

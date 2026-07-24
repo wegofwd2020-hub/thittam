@@ -197,14 +197,14 @@ func (r *billingRepo) LatestUsageRecord(_ context.Context, tenantID uuid.UUID) (
 	return nil, fmt.Errorf("billing: no usage record for tenant")
 }
 
-func (r *billingRepo) CreateDunningAttempt(_ context.Context, d *billing.DunningAttempt) error {
+func (r *billingRepo) CreateDunningAttempt(_ context.Context, _ uuid.UUID, d *billing.DunningAttempt) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.dunning = append(r.dunning, d)
 	return nil
 }
 
-func (r *billingRepo) ListDunningAttempts(_ context.Context, invoiceID uuid.UUID) ([]billing.DunningAttempt, error) {
+func (r *billingRepo) ListDunningAttempts(_ context.Context, _, invoiceID uuid.UUID) ([]billing.DunningAttempt, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []billing.DunningAttempt

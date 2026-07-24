@@ -144,7 +144,7 @@ func (r *notifRepo) ListNotifications(_ context.Context, tenantID, recipientID u
 	return out, nil
 }
 
-func (r *notifRepo) IncrementRetryCount(_ context.Context, id uuid.UUID) error { return nil }
+func (r *notifRepo) IncrementRetryCount(_ context.Context, _, id uuid.UUID) error { return nil }
 
 // stubSender captures send calls and returns a canned provider message ID.
 type stubSender struct {

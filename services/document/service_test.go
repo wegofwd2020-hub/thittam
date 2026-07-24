@@ -176,6 +176,37 @@ func TestInitiateUpload_CreatesRecordAndReturnsURL(t *testing.T) {
 	assert.Equal(t, 1, savedDoc.CurrentVersion)
 }
 
+// TestInitiateUpload_ForeignFolderRejected pins the #174 guard at the unit
+// level. mockRepo.GetFolder's default returns a synthetic folder for ANY id,
+// so every other InitiateUpload test passes with the guard deleted — this one
+// stubs a not-found folder and asserts the document is never created, so the
+// check survives a refactor by someone running only `go test -short`.
+func TestInitiateUpload_ForeignFolderRejected(t *testing.T) {
+	t.Parallel()
+	foreignFolder := uuid.New()
+	created := false
+	svc := NewService(&mockRepo{
+		getFolderFn: func(_ context.Context, _, _ uuid.UUID) (*Folder, error) {
+			return nil, ErrFolderNotFound
+		},
+		createDocumentFn: func(_ context.Context, _ *Document) error {
+			created = true
+			return nil
+		},
+	}, &mockStore{}, &mockPublisher{})
+
+	_, err := svc.InitiateUpload(context.Background(), &InitiateUploadRequest{
+		TenantID:   fixedTenantID,
+		FolderID:   &foreignFolder,
+		Name:       "script.pdf",
+		MimeType:   "application/pdf",
+		UploadedBy: fixedUserID,
+	})
+
+	require.ErrorIs(t, err, ErrFolderNotFound)
+	assert.False(t, created, "no document may be created for a folder the tenant does not own")
+}
+
 func TestInitiateUpload_StorageKeyContainsTenantAndDocID(t *testing.T) {
 	t.Parallel()
 	var capturedKey string

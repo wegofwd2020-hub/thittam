@@ -58,7 +58,7 @@ func (r *mockTemplateRepo) GetNotification(_ context.Context, _, _, _ uuid.UUID)
 func (r *mockTemplateRepo) ListNotifications(_ context.Context, _, _ uuid.UUID, _, _ string, _, _ int) ([]notifications.Notification, error) {
 	return nil, nil
 }
-func (r *mockTemplateRepo) IncrementRetryCount(_ context.Context, _ uuid.UUID) error {
+func (r *mockTemplateRepo) IncrementRetryCount(_ context.Context, _, _ uuid.UUID) error {
 	return nil
 }
 
