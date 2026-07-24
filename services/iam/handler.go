@@ -636,57 +636,23 @@ func (h *Handler) AcceptInvitation(ctx context.Context, req *iamv1.AcceptInvitat
 	return tokenPairToProto(pair), nil
 }
 
-// --- Impersonation ---
-
-func (h *Handler) StartImpersonation(ctx context.Context, req *iamv1.StartImpersonationRequest) (*iamv1.ImpersonationSession, error) {
-	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
-		return nil, err
-	}
-	platformUserID, err := uuid.Parse(req.GetPlatformUserId())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid platform_user_id")
-	}
-	tenantID, err := uuid.Parse(req.GetTenantId())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
-	}
-	impersonatedUser, err := uuid.Parse(req.GetImpersonatedUser())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid impersonated_user")
-	}
-	if req.GetReason() == "" {
-		return nil, status.Error(codes.InvalidArgument, "reason is required")
-	}
-
-	dur := time.Duration(req.GetDurationSeconds()) * time.Second
-
-	session, err := h.svc.StartImpersonation(ctx, StartImpersonationParams{
-		PlatformUserID:   platformUserID,
-		TenantID:         tenantID,
-		ImpersonatedUser: impersonatedUser,
-		Reason:           req.GetReason(),
-		Duration:         dur,
-		IPAddress:        req.GetIpAddress(),
-	})
-	if err != nil {
-		return nil, grpcError(err)
-	}
-	return impersonationSessionToProto(session), nil
+// StartImpersonation is retired.
+//
+// Deprecated: the feature never impersonated anything — it minted no token and
+// set no act/impersonator claim, so subsequent requests carried the platform
+// admin's own identity while the audit log recorded a session the request path
+// knew nothing about (#139 §5, decision D8). It also took its actor from the
+// request body rather than the verified caller (#156). Left declared because
+// proto/buf.yaml uses the FILE breaking category — removing an RPC fails CI.
+func (h *Handler) StartImpersonation(context.Context, *iamv1.StartImpersonationRequest) (*iamv1.ImpersonationSession, error) {
+	return nil, status.Error(codes.Unimplemented, "impersonation is retired (#139)")
 }
 
-func (h *Handler) EndImpersonation(ctx context.Context, req *iamv1.EndImpersonationRequest) (*iamv1.EndImpersonationResponse, error) {
-	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
-		return nil, err
-	}
-	sessionID, err := uuid.Parse(req.GetSessionId())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid session_id")
-	}
-	caller, _ := interceptor.CallerFromContext(ctx)
-	if err := h.svc.EndImpersonation(ctx, sessionID, caller.UserID); err != nil {
-		return nil, grpcError(err)
-	}
-	return &iamv1.EndImpersonationResponse{}, nil
+// EndImpersonation is retired. See StartImpersonation.
+//
+// Deprecated: retired with the rest of the impersonation feature (#139 §5, D8).
+func (h *Handler) EndImpersonation(context.Context, *iamv1.EndImpersonationRequest) (*iamv1.EndImpersonationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "impersonation is retired (#139)")
 }
 
 // --- OIDC configuration ---
@@ -799,23 +765,6 @@ func invitationToProto(inv *Invitation) *iamv1.Invitation {
 	return pb
 }
 
-func impersonationSessionToProto(s *ImpersonationSession) *iamv1.ImpersonationSession {
-	pb := &iamv1.ImpersonationSession{
-		Id:               s.ID.String(),
-		PlatformUserId:   s.PlatformUserID.String(),
-		TenantId:         s.TenantID.String(),
-		ImpersonatedUser: s.ImpersonatedUser.String(),
-		Reason:           s.Reason,
-		StartedAt:        timestamppb.New(s.StartedAt),
-		ExpiresAt:        timestamppb.New(s.ExpiresAt),
-		IpAddress:        s.IPAddress,
-	}
-	if s.EndedAt != nil {
-		pb.EndedAt = timestamppb.New(*s.EndedAt)
-	}
-	return pb
-}
-
 func tokenPairToProto(p *auth.TokenPair) *iamv1.TokenPair {
 	return &iamv1.TokenPair{
 		AccessToken:  p.AccessToken,
@@ -834,12 +783,8 @@ func grpcError(err error) error {
 	case errors.Is(err, ErrUserNotFound),
 		errors.Is(err, ErrTenantNotFound),
 		errors.Is(err, ErrRoleNotFound),
-		errors.Is(err, ErrInvitationNotFound),
-		errors.Is(err, ErrImpersonationNotFound):
+		errors.Is(err, ErrInvitationNotFound):
 		return status.Error(codes.NotFound, err.Error())
-
-	case errors.Is(err, ErrImpersonationAlreadyEnded):
-		return status.Error(codes.FailedPrecondition, err.Error())
 
 	case errors.Is(err, ErrUserAlreadyExists),
 		errors.Is(err, ErrTenantSlugTaken),

@@ -12,16 +12,14 @@ var (
 	// caller that does not hold the platform_admin role.
 	ErrNotPlatformAdmin = errors.New("iam: caller does not have platform_admin role")
 
-	ErrTenantNotFound            = errors.New("iam: tenant not found")
-	ErrImpersonationNotFound     = errors.New("iam: impersonation session not found")
-	ErrImpersonationAlreadyEnded = errors.New("iam: impersonation session already ended")
-	ErrUserNotFound              = errors.New("iam: user not found")
-	ErrUserAlreadyExists         = errors.New("iam: user already exists for tenant")
-	ErrRoleNotFound              = errors.New("iam: role not found")
-	ErrInvitationNotFound        = errors.New("iam: invitation not found")
-	ErrInvitationExpired         = errors.New("iam: invitation has expired")
-	ErrInvitationAccepted        = errors.New("iam: invitation already accepted")
-	ErrTenantSlugTaken           = errors.New("iam: tenant slug already taken")
+	ErrTenantNotFound     = errors.New("iam: tenant not found")
+	ErrUserNotFound       = errors.New("iam: user not found")
+	ErrUserAlreadyExists  = errors.New("iam: user already exists for tenant")
+	ErrRoleNotFound       = errors.New("iam: role not found")
+	ErrInvitationNotFound = errors.New("iam: invitation not found")
+	ErrInvitationExpired  = errors.New("iam: invitation has expired")
+	ErrInvitationAccepted = errors.New("iam: invitation already accepted")
+	ErrTenantSlugTaken    = errors.New("iam: tenant slug already taken")
 	// ErrTenantNameTaken is returned by CreateTenant when another tenant
 	// already exists with the same name (case-insensitive, whitespace-collapsed).
 	// Enforced by the tenants_name_ci_unique index added in migration 015.

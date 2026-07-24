@@ -88,7 +88,10 @@ service IAMService {
   // --- OIDC configuration ---
   rpc SetOIDCConfig(SetOIDCConfigRequest) returns (SetOIDCConfigResponse);
 
-  // --- Impersonation (platform_admin only) ---
+  // --- Impersonation (RETIRED, #139 §5) ---
+  // Deprecated: both RPCs return Unimplemented. The feature minted no token and
+  // set no act/impersonator claim, so it never actually impersonated anyone.
+  // Not deleted: buf's FILE breaking category makes RPC removal a breaking change.
   rpc StartImpersonation(StartImpersonationRequest) returns (ImpersonationSession);
   rpc EndImpersonation(EndImpersonationRequest) returns (EndImpersonationResponse);
 }

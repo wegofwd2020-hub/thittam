@@ -181,25 +181,6 @@ func main() {
 		WithSchemaMigrator(schemaMigrator)
 	handler := iam.NewHandler(svc)
 
-	// --- Background: impersonation session expiry ticker ---
-	// Runs every minute. Sessions whose expires_at has passed but ended_at is
-	// still NULL are closed. This bounds how long a stale impersonation can
-	// remain open if the caller never called EndImpersonation explicitly.
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			n, err := repo.ExpireImpersonationSessions(ctx)
-			if err != nil {
-				log.Printf("iam: expire impersonation sessions: %v", err)
-				continue
-			}
-			if n > 0 {
-				log.Printf("iam: expired %d impersonation session(s)", n)
-			}
-		}
-	}()
-
 	// --- NATS JetStream: billing consumer (#118) ---
 	// iam's first JetStream consumer. Subscribes to the FINANCIAL stream
 	// filtered to thittam.billing.subscription.suspended and mirrors the
