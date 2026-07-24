@@ -39,8 +39,8 @@ type Repository interface {
 	LatestUsageRecord(ctx context.Context, tenantID uuid.UUID) (*UsageRecord, error)
 
 	// Dunning
-	CreateDunningAttempt(ctx context.Context, d *DunningAttempt) error
-	ListDunningAttempts(ctx context.Context, invoiceID uuid.UUID) ([]DunningAttempt, error)
+	CreateDunningAttempt(ctx context.Context, tenantID uuid.UUID, d *DunningAttempt) error
+	ListDunningAttempts(ctx context.Context, tenantID, invoiceID uuid.UUID) ([]DunningAttempt, error)
 
 	// Outbox (#126)
 	SuspendSubscriptionWithOutbox(ctx context.Context, sub *Subscription, subject string, payload []byte) error

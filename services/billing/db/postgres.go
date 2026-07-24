@@ -542,7 +542,12 @@ func (p *Postgres) LatestUsageRecord(ctx context.Context, tenantID uuid.UUID) (*
 
 // --- Dunning ---
 
-func (p *Postgres) CreateDunningAttempt(ctx context.Context, d *billing.DunningAttempt) error {
+func (p *Postgres) CreateDunningAttempt(ctx context.Context, tenantID uuid.UUID, d *billing.DunningAttempt) error {
+	// dunning_attempts carries no tenant_id; the invoice is the tenant boundary.
+	// A cross-tenant invoice_id must not be insertable.
+	if _, err := p.GetInvoice(ctx, tenantID, d.InvoiceID); err != nil {
+		return err // billing.ErrInvoiceNotFound for a foreign or missing invoice
+	}
 	_, err := p.db.Exec(ctx, `
 		INSERT INTO dunning_attempts
 		  (id, invoice_id, attempt_number, outcome, attempted_at, next_retry_at)
@@ -557,11 +562,13 @@ func (p *Postgres) CreateDunningAttempt(ctx context.Context, d *billing.DunningA
 	return nil
 }
 
-func (p *Postgres) ListDunningAttempts(ctx context.Context, invoiceID uuid.UUID) ([]billing.DunningAttempt, error) {
+func (p *Postgres) ListDunningAttempts(ctx context.Context, tenantID, invoiceID uuid.UUID) ([]billing.DunningAttempt, error) {
 	rows, err := p.db.Query(ctx, `
-		SELECT id, invoice_id, attempt_number, outcome, attempted_at, next_retry_at
-		FROM dunning_attempts WHERE invoice_id = $1
-		ORDER BY attempt_number ASC`, invoiceID)
+		SELECT da.id, da.invoice_id, da.attempt_number, da.outcome, da.attempted_at, da.next_retry_at
+		FROM dunning_attempts da
+		JOIN invoices i ON i.id = da.invoice_id
+		WHERE da.invoice_id = $1 AND i.tenant_id = $2
+		ORDER BY da.attempt_number ASC`, invoiceID, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("billing: list dunning attempts: %w", err)
 	}

@@ -373,15 +373,15 @@ func (s *Service) GetUsageSummary(ctx context.Context, tenantID uuid.UUID) (*Usa
 // --- Dunning ---
 
 // RecordDunningAttempt appends a retry record for an overdue invoice.
-func (s *Service) RecordDunningAttempt(ctx context.Context, d *DunningAttempt) error {
+func (s *Service) RecordDunningAttempt(ctx context.Context, tenantID uuid.UUID, d *DunningAttempt) error {
 	if d.ID == uuid.Nil {
 		d.ID = uuid.New()
 	}
 	d.AttemptedAt = time.Now().UTC()
-	return s.repo.CreateDunningAttempt(ctx, d)
+	return s.repo.CreateDunningAttempt(ctx, tenantID, d)
 }
 
 // ListDunningAttempts returns all retry records for an invoice.
-func (s *Service) ListDunningAttempts(ctx context.Context, invoiceID uuid.UUID) ([]DunningAttempt, error) {
-	return s.repo.ListDunningAttempts(ctx, invoiceID)
+func (s *Service) ListDunningAttempts(ctx context.Context, tenantID, invoiceID uuid.UUID) ([]DunningAttempt, error) {
+	return s.repo.ListDunningAttempts(ctx, tenantID, invoiceID)
 }

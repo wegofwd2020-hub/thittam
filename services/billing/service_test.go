@@ -33,8 +33,8 @@ type mockRepo struct {
 	clearDefaultPaymentMethodsFn func(ctx context.Context, tenantID uuid.UUID) error
 	createUsageRecordFn         func(ctx context.Context, u *UsageRecord) error
 	latestUsageRecordFn         func(ctx context.Context, tenantID uuid.UUID) (*UsageRecord, error)
-	createDunningAttemptFn      func(ctx context.Context, d *DunningAttempt) error
-	listDunningAttemptsFn       func(ctx context.Context, invoiceID uuid.UUID) ([]DunningAttempt, error)
+	createDunningAttemptFn      func(ctx context.Context, tenantID uuid.UUID, d *DunningAttempt) error
+	listDunningAttemptsFn       func(ctx context.Context, tenantID, invoiceID uuid.UUID) ([]DunningAttempt, error)
 
 	// Outbox (#126)
 	suspendSubscriptionWithOutboxFn func(ctx context.Context, sub *Subscription, subject string, payload []byte) error
@@ -146,15 +146,15 @@ func (m *mockRepo) LatestUsageRecord(ctx context.Context, tenantID uuid.UUID) (*
 	}
 	return nil, ErrSubscriptionNotFound
 }
-func (m *mockRepo) CreateDunningAttempt(ctx context.Context, d *DunningAttempt) error {
+func (m *mockRepo) CreateDunningAttempt(ctx context.Context, tenantID uuid.UUID, d *DunningAttempt) error {
 	if m.createDunningAttemptFn != nil {
-		return m.createDunningAttemptFn(ctx, d)
+		return m.createDunningAttemptFn(ctx, tenantID, d)
 	}
 	return nil
 }
-func (m *mockRepo) ListDunningAttempts(ctx context.Context, invoiceID uuid.UUID) ([]DunningAttempt, error) {
+func (m *mockRepo) ListDunningAttempts(ctx context.Context, tenantID, invoiceID uuid.UUID) ([]DunningAttempt, error) {
 	if m.listDunningAttemptsFn != nil {
-		return m.listDunningAttemptsFn(ctx, invoiceID)
+		return m.listDunningAttemptsFn(ctx, tenantID, invoiceID)
 	}
 	return nil, nil
 }
@@ -807,7 +807,7 @@ func TestRecordDunningAttempt_GeneratesID(t *testing.T) {
 		AttemptNumber: 1,
 		Result:        "card_declined",
 	}
-	err := svc.RecordDunningAttempt(context.Background(), d)
+	err := svc.RecordDunningAttempt(context.Background(), fixedTenantID, d)
 	require.NoError(t, err)
 	assert.NotEqual(t, uuid.Nil, d.ID)
 	assert.False(t, d.AttemptedAt.IsZero())
@@ -933,12 +933,12 @@ func TestListDunningAttempts_ReturnsAttempts(t *testing.T) {
 		{ID: uuid.MustParse("a1000000-0000-0000-0000-000000000011"), InvoiceID: fixedInvID, AttemptNumber: 2, Result: "card_declined"},
 	}
 	svc := NewService(&mockRepo{
-		listDunningAttemptsFn: func(_ context.Context, _ uuid.UUID) ([]DunningAttempt, error) {
+		listDunningAttemptsFn: func(_ context.Context, _, _ uuid.UUID) ([]DunningAttempt, error) {
 			return want, nil
 		},
 	})
 
-	got, err := svc.ListDunningAttempts(context.Background(), fixedInvID)
+	got, err := svc.ListDunningAttempts(context.Background(), fixedTenantID, fixedInvID)
 	require.NoError(t, err)
 	assert.Equal(t, want, got)
 }
@@ -947,7 +947,7 @@ func TestListDunningAttempts_Empty(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{})
 
-	got, err := svc.ListDunningAttempts(context.Background(), fixedInvID)
+	got, err := svc.ListDunningAttempts(context.Background(), fixedTenantID, fixedInvID)
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }
