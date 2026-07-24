@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-07-23T05:30:34+00:00",
+  "generated": "2026-07-24T05:25:32+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -836,7 +836,7 @@
       "id": "#139",
       "name": "security(platform): ~100 RPCs enforce no authorization; iam AssignRole is a self-promotion primitive",
       "status": "in-progress",
-      "commits": 10
+      "commits": 46
     },
     {
       "id": "#140",
@@ -943,12 +943,114 @@
     {
       "id": "#157",
       "name": "security(project): phase and crew RPCs have no tenant filter \u2014 cross-tenant read and write by id",
-      "status": "pending",
-      "commits": 0
+      "status": "in-progress",
+      "commits": 7
     },
     {
       "id": "#158",
       "name": "security(project/budget/reporting): gate read RPCs on <resource>:read; reporting fails closed (#139)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#159",
+      "name": "security(platform): audit tenant isolation across billing/document/notifications/iam \u2014 grep cannot decide it",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#160",
+      "name": "chore(billing): sqlc generated code is stale; make generate-sqlc dirties any branch",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#161",
+      "name": "security(project/budget/inventory): scope child-row queries to the caller's tenant (#157)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#162",
+      "name": "security(iam): DeactivateUser's platform_admin gate is bypassable via UpdateUser",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#163",
+      "name": "fix(iam): validation sentinels surface as codes.Internal, not InvalidArgument",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#164",
+      "name": "security(iam): close a cross-tenant read and gate the three write RPCs (#139 slice B)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#165",
+      "name": "fix(expense): members cannot read back their own submitted expenses",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#166",
+      "name": "infra: nothing enforces migration-before-deploy ordering for permission migrations",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#167",
+      "name": "chore: project/budget/expense/inventory start without a permission checker; dial.go log line is false",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#168",
+      "name": "security(expense/inventory): gate nine read RPCs and backfill the new permissions (#139 slice D)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#169",
+      "name": "security(document): wire fail-closed authz and gate all 13 RPCs (#139 slice E)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#170",
+      "name": "security(billing): gate 13 RPCs, close a payment-method cross-tenant cluster (#139 slice F)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#171",
+      "name": "feat(notifications): authorization gates + self-scoped inbox (#139 slice G)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#172",
+      "name": "cleanup(db): dead unscoped sqlc-generated queries across billing/document/notifications",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#173",
+      "name": "security(billing): ListDunningAttempts/RecordDunningAttempt have no tenant scoping",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#174",
+      "name": "security(document): InitiateUpload sets folder_id from request without verifying folder ownership",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#175",
+      "name": "fix(security): tenant-isolation guard-by-type for 7 caller-discipline sites (#139 slice H / #159)",
       "status": "pending",
       "commits": 0
     }
