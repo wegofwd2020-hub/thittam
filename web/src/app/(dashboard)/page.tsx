@@ -9,8 +9,6 @@ import { ApprovalAgeBars } from "@/components/dashboard/approval-age-bars";
 import { UtilizationGauge } from "@/components/dashboard/utilization-gauge";
 import { ComplianceTable, type ComplianceItem } from "@/components/dashboard/compliance-table";
 import { ActivityTimeline, type ActivityItem } from "@/components/dashboard/activity-timeline";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { AmountDisplay } from "@/components/ui/amount-display";
 import Link from "next/link";
 import {
   FolderKanban,

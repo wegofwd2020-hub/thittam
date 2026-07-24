@@ -341,7 +341,6 @@ export default function AssetDetailPage() {
   const isAvailable = asset.status === "available";
   const isCheckedOut = asset.status === "checked_out";
   const isUnderRepair = asset.status === "under_repair";
-  const isRetired = asset.status === "retired";
 
   return (
     <div className="mx-auto max-w-5xl">

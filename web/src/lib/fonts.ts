@@ -10,7 +10,6 @@
 //   All text:        OpenDyslexic / OpenDyslexic Mono
 
 import { Inter, Merriweather, JetBrains_Mono } from "next/font/google";
-import localFont from "next/font/local";
 
 // --- Default fonts ---
 

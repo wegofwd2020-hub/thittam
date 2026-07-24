@@ -42,7 +42,10 @@ export default function BudgetsPage() {
   const [productionFilter, setProductionFilter] = useState("all");
 
   const productionsQuery = useProductions();
-  const productions = productionsQuery.data?.productions ?? [];
+  const productions = useMemo(
+    () => productionsQuery.data?.productions ?? [],
+    [productionsQuery.data],
+  );
 
   // Fan out: one useBudgets query per production. There is no tenant-wide
   // list endpoint (#60 follow-up); the per-production endpoint is what the

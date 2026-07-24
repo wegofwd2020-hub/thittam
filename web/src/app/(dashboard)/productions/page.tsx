@@ -78,7 +78,10 @@ export default function ProductionsPage() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
   const query = useProductions();
-  const productions = query.data?.productions ?? [];
+  const productions = useMemo(
+    () => query.data?.productions ?? [],
+    [query.data],
+  );
 
   const filtered = useMemo(() => {
     return productions.filter((p) => {

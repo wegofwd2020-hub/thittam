@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useSyncExternalStore,
+} from "react";
 
 interface AccessibilityState {
   dyslexiaMode: boolean;
@@ -14,25 +20,50 @@ const AccessibilityContext = createContext<AccessibilityState>({
 
 const STORAGE_KEY = "thittam-dyslexia-mode";
 
-export function AccessibilityProvider({ children }: { children: React.ReactNode }) {
-  const [dyslexiaMode, setDyslexiaMode] = useState(false);
+// The dyslexia preference lives in localStorage, not React state.
+// useSyncExternalStore reads it without a mount-effect setState — that pattern
+// triggers a second render before paint (a visible flash of un-styled content)
+// and trips react-hooks/set-state-in-effect. getServerSnapshot returns the
+// default so SSR and the first client render agree (no hydration mismatch).
 
-  // Load preference from localStorage on mount
+const listeners = new Set<() => void>();
+
+function emitChange() {
+  for (const listener of listeners) listener();
+}
+
+function subscribe(callback: () => void) {
+  listeners.add(callback);
+  // Reflect changes made in other tabs, too.
+  window.addEventListener("storage", callback);
+  return () => {
+    listeners.delete(callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+
+function getSnapshot() {
+  return localStorage.getItem(STORAGE_KEY) === "true";
+}
+
+function getServerSnapshot() {
+  return false;
+}
+
+export function AccessibilityProvider({ children }: { children: React.ReactNode }) {
+  const dyslexiaMode = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+  // Apply/remove the document-level styles whenever the resolved preference
+  // changes. This effect only mutates the DOM; it never calls setState, so
+  // react-hooks/set-state-in-effect does not fire.
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "true") {
-      setDyslexiaMode(true);
-      applyDyslexiaStyles(true);
-    }
-  }, []);
+    applyDyslexiaStyles(dyslexiaMode);
+  }, [dyslexiaMode]);
 
   const toggleDyslexia = useCallback(() => {
-    setDyslexiaMode((prev) => {
-      const next = !prev;
-      localStorage.setItem(STORAGE_KEY, String(next));
-      applyDyslexiaStyles(next);
-      return next;
-    });
+    const next = localStorage.getItem(STORAGE_KEY) !== "true";
+    localStorage.setItem(STORAGE_KEY, String(next));
+    emitChange();
   }, []);
 
   return (

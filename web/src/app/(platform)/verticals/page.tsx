@@ -149,7 +149,6 @@ export default function VerticalsPage() {
 
   function handleDeprecateConfirm() {
     // In production this would call the platform API
-    // eslint-disable-next-line no-console
     console.log("Deprecated vertical:", deprecateTarget?.id);
     setDeprecateTarget(null);
   }

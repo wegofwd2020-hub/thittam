@@ -76,7 +76,10 @@ export default function BudgetDetailPage() {
   const [newAmount, setNewAmount] = useState("");
 
   const budget = budgetQuery.data;
-  const lineItems: BudgetLineItem[] = lineItemsQuery.data ?? [];
+  const lineItems: BudgetLineItem[] = useMemo(
+    () => lineItemsQuery.data ?? [],
+    [lineItemsQuery.data],
+  );
 
   const categoryTotals = useMemo(() => {
     const totals: Record<string, number> = {};
