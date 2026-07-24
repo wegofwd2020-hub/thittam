@@ -26,7 +26,7 @@ const ALL_PERMISSIONS = [
 ] as const;
 
 function formatPermission(perm: string): string {
-  const [resource, action] = perm.split(":");
+  const [, action] = perm.split(":");
   return `${action.charAt(0).toUpperCase()}${action.slice(1)}`;
 }
 

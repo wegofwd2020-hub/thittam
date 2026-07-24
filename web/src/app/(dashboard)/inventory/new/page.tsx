@@ -58,7 +58,7 @@ const INITIAL_FORM: FormState = {
 // ---------------------------------------------------------------------------
 
 export default function NewAssetPage() {
-  const { entityLabels } = useTheme();
+  useTheme();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});

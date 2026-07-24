@@ -172,7 +172,7 @@ function formatIndian(num: number): string {
 
 export default function TeamPage() {
   const { entityLabels } = useTheme();
-  const router = useRouter();
+  useRouter();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [departmentFilter, setDepartmentFilter] = useState("All Departments");
 
@@ -279,7 +279,7 @@ export default function TeamPage() {
     {
       key: "actions",
       header: "",
-      render: (row) => (
+      render: () => (
         <span
           className="cursor-pointer text-xs font-heading font-medium transition-colors hover:opacity-80"
           style={{ color: "var(--thittam-primary, #3b82f6)" }}

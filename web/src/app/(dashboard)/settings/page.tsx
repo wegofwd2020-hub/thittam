@@ -374,7 +374,7 @@ function formatDateTime(iso: string | null): string {
 // ---------------------------------------------------------------------------
 
 export default function SettingsPage() {
-  const { entityLabels } = useTheme();
+  useTheme();
   const [activeTab, setActiveTab] = useState<TabKey>("users");
   const [showInvite, setShowInvite] = useState(false);
   const [oidcEnabled, setOidcEnabled] = useState(
@@ -678,7 +678,7 @@ export default function SettingsPage() {
                   default_role: mockAuthConfig.default_role,
                 }}
                 roles={mockRoles}
-                onSave={(values) => {
+                onSave={() => {
                   toast.success("OIDC configuration saved");
                 }}
               />

@@ -107,17 +107,6 @@ export function ThemeCustomizer() {
     [defaultColors.status],
   );
 
-  const resetColor = useCallback(
-    (key: keyof ThemeColors) => {
-      setColorOverrides((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    },
-    [],
-  );
-
   // ── Actions ───────────────────────────────────────────────────────────
 
   const handlePreview = useCallback(() => {
