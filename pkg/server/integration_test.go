@@ -45,6 +45,13 @@ func (s *stubIAM) ListRoles(ctx context.Context, _ *iamv1.ListRolesRequest) (*ia
 	return &iamv1.ListRolesResponse{Roles: []*iamv1.Role{{Name: caller.Email}}}, nil
 }
 
+func (s *stubIAM) CheckPermission(ctx context.Context, _ *iamv1.CheckPermissionRequest) (*iamv1.CheckPermissionResponse, error) {
+	if _, ok := interceptor.CallerFromContext(ctx); !ok {
+		return nil, status.Error(codes.Internal, "handler reached without a verified caller")
+	}
+	return &iamv1.CheckPermissionResponse{Allowed: true}, nil
+}
+
 func startServer(t *testing.T, v *auth.Verifier) iamv1.IAMServiceClient {
 	t.Helper()
 	lis := bufconn.Listen(1024 * 1024)
@@ -129,4 +136,24 @@ func TestChain_ValidTokenReachesHandlerWithVerifiedIdentity(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, resp.GetRoles(), 1)
 	assert.Equal(t, "real@example.com", resp.GetRoles()[0].GetName(), "identity came from the token")
+}
+
+func TestChain_CheckPermissionRejectsTokenlessCall(t *testing.T) {
+	_, v := keyAndVerifier(t)
+	client := startServer(t, v)
+	_, err := client.CheckPermission(context.Background(), &iamv1.CheckPermissionRequest{
+		UserId: uuid.New().String(), Permission: "budget:read",
+	})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err),
+		"CheckPermission must not be reachable without a token now that it is off PublicMethods")
+}
+
+func TestChain_CheckPermissionAcceptsForwardedToken(t *testing.T) {
+	key, v := keyAndVerifier(t)
+	client := startServer(t, v)
+	resp, err := client.CheckPermission(bearer(t, key), &iamv1.CheckPermissionRequest{
+		UserId: uuid.New().String(), Permission: "budget:read",
+	})
+	require.NoError(t, err)
+	assert.True(t, resp.GetAllowed())
 }

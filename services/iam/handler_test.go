@@ -114,11 +114,10 @@ func TestHandler_Logout_Success(t *testing.T) {
 
 // --- ValidateToken ---
 
-func TestHandler_ValidateToken_Success(t *testing.T) {
+func TestHandler_ValidateToken_Retired(t *testing.T) {
 	t.Parallel()
-	resp, err := newHandler().ValidateToken(context.Background(), &iamv1.ValidateTokenRequest{AccessToken: "anytoken"})
-	require.NoError(t, err)
-	assert.NotEmpty(t, resp.GetSubject())
+	_, err := newHandler().ValidateToken(context.Background(), &iamv1.ValidateTokenRequest{AccessToken: "anytoken"})
+	assert.Equal(t, codes.Unimplemented, status.Code(err))
 }
 
 // --- CreateUser ---
@@ -631,14 +630,15 @@ func TestHandler_ListRoles_InvalidTenantID(t *testing.T) {
 
 func TestHandler_CheckPermission_Success(t *testing.T) {
 	t.Parallel()
+	tid, uid := uuid.New(), uuid.New()
 	h := NewHandler(newTestService(&mockRepo{
 		getUserPermissionsFn: func(_ context.Context, _ uuid.UUID, _ *uuid.UUID) ([]string, error) {
 			return []string{"budget:read"}, nil
 		},
 	}))
 
-	resp, err := h.CheckPermission(context.Background(), &iamv1.CheckPermissionRequest{
-		UserId:     uuid.New().String(),
+	resp, err := h.CheckPermission(memberCtxAs(tid, uid), &iamv1.CheckPermissionRequest{
+		UserId:     uid.String(),
 		Permission: "budget:read",
 	})
 	require.NoError(t, err)
@@ -653,6 +653,7 @@ func TestHandler_CheckPermission_InvalidUserID(t *testing.T) {
 
 func TestHandler_CheckPermission_WithProjectID(t *testing.T) {
 	t.Parallel()
+	tid, uid := uuid.New(), uuid.New()
 	wantProject := uuid.New()
 	var seenProject *uuid.UUID
 	h := NewHandler(newTestService(&mockRepo{
@@ -662,8 +663,8 @@ func TestHandler_CheckPermission_WithProjectID(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.CheckPermission(context.Background(), &iamv1.CheckPermissionRequest{
-		UserId:     uuid.New().String(),
+	resp, err := h.CheckPermission(memberCtxAs(tid, uid), &iamv1.CheckPermissionRequest{
+		UserId:     uid.String(),
 		Permission: "expense:approve",
 		ProjectId:  wantProject.String(),
 	})
@@ -681,6 +682,33 @@ func TestHandler_CheckPermission_InvalidProjectID(t *testing.T) {
 		ProjectId:  "not-a-uuid",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_CheckPermission_RejectsOtherUser(t *testing.T) {
+	t.Parallel()
+	tid, caller := uuid.New(), uuid.New()
+	victim := uuid.New()
+	require.NotEqual(t, caller, victim)
+
+	h := newHandlerWithRepo(&mockRepo{
+		getUserPermissionsFn: func(context.Context, uuid.UUID, *uuid.UUID) ([]string, error) {
+			t.Fatal("service must not be reached for a cross-user permission check")
+			return nil, nil
+		},
+	})
+
+	_, err := h.CheckPermission(memberCtxAs(tid, caller), &iamv1.CheckPermissionRequest{
+		UserId: victim.String(), Permission: "budget:read",
+	})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_CheckPermission_RejectsTokenlessCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().CheckPermission(context.Background(), &iamv1.CheckPermissionRequest{
+		UserId: uuid.New().String(), Permission: "budget:read",
+	})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
 // --- AssignProjectRole ---

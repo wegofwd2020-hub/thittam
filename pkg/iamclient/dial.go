@@ -34,9 +34,12 @@ func DialFromEnv(serviceName string) (*PermissionChecker, func() error, error) {
 	}
 
 	// ForwardAuthUnaryClientInterceptor forwards the caller's bearer token so
-	// iam verifies the same token. CheckPermission is currently allowlisted
-	// (interceptor.PublicMethods) so this is strictly safer today, and it lets
-	// #139 remove that allowlist entry without another change here.
+	// iam verifies the same token.
+	//
+	// REQUIRED, not defence in depth. CheckPermission is no longer in
+	// interceptor.PublicMethods (#139 slice I), so iam rejects an anonymous
+	// call. Without this interceptor every permission-gated RPC in this
+	// service fails closed — do not remove it.
 	conn, err := grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(interceptor.ForwardAuthUnaryClientInterceptor()),

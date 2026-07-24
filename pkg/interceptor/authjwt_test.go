@@ -257,8 +257,13 @@ func TestPublicMethods_ReflectionNamesWellFormed(t *testing.T) {
 		assert.True(t, ok)
 		assert.Regexp(t, `^/[a-z0-9.]+\.ServerReflection/ServerReflectionInfo$`, m)
 	}
-	assert.Len(t, PublicMethods, 7, "adding a public method is a security decision — update this count deliberately")
+	assert.Len(t, PublicMethods, 5, "adding a public method is a security decision — update this count deliberately")
 	assert.Contains(t, PublicMethods, iamv1.IAMService_Login_FullMethodName)
 	assert.NotContains(t, PublicMethods, iamv1.IAMService_Logout_FullMethodName, "Logout requires an access token")
 	assert.NotContains(t, PublicMethods, iamv1.IAMService_GetCurrentUser_FullMethodName, "GetCurrentUser requires an access token")
+	// The size assertion alone would still pass if someone swapped one entry for
+	// another. These two came off the list in #139 slice I and must stay off:
+	// pkg/iamclient forwards the caller's token, so neither needs to be public.
+	assert.NotContains(t, PublicMethods, iamv1.IAMService_CheckPermission_FullMethodName, "CheckPermission verifies the forwarded caller token (#139 slice I)")
+	assert.NotContains(t, PublicMethods, iamv1.IAMService_ValidateToken_FullMethodName, "ValidateToken is retired to Unimplemented (#139 slice I)")
 }
