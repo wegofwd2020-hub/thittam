@@ -31,6 +31,12 @@ SET status          = 'sent',
     sent_at         = now()
 WHERE id = $1;
 
+-- Correct unscoped (#159/#172): `id` is never caller-supplied. The only path
+-- here is Service.Send → UpdateNotificationStatus, passing the id of a
+-- notification the service itself just created. Contrast IncrementRetryCount,
+-- which was reachable by arbitrary id and so carries a tenant predicate plus a
+-- RowsAffected check. If this ever gains a caller that accepts an id from a
+-- request, it needs the same treatment.
 -- name: UpdateNotificationLogFailed :exec
 UPDATE notification_log
 SET status        = 'failed',

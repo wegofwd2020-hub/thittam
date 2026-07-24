@@ -34,10 +34,20 @@ func TestDunningAttempts_TenantIsolation(t *testing.T) {
 		tenantB, "Dunning IT B "+tenantB.String()[:8], "dun-b-"+tenantB.String()[:8])
 	require.NoError(t, err, "seed tenants")
 	t.Cleanup(func() {
-		// ON DELETE CASCADE removes the subscription/invoice too; dunning_attempts
-		// has no tenant_id and no ON DELETE CASCADE from invoices, so remove it first.
-		_, _ = pool.Exec(context.Background(), `DELETE FROM dunning_attempts WHERE invoice_id IN (SELECT id FROM invoices WHERE tenant_id IN ($1, $2))`, tenantA, tenantB)
-		_, _ = pool.Exec(context.Background(), `DELETE FROM tenants WHERE id IN ($1, $2)`, tenantA, tenantB)
+		// Delete child-first. invoices.tenant_id and invoices.subscription_id are
+		// plain REFERENCES with NO ON DELETE action (migrations/billing/001:29-30),
+		// so deleting tenants while invoices exist raises an FK violation — which
+		// an ignored Exec error would hide, leaking every row.
+		ctx := context.Background()
+		for _, q := range []string{
+			`DELETE FROM dunning_attempts WHERE invoice_id IN (SELECT id FROM invoices WHERE tenant_id IN ($1, $2))`,
+			`DELETE FROM invoices WHERE tenant_id IN ($1, $2)`,
+			`DELETE FROM subscriptions WHERE tenant_id IN ($1, $2)`,
+			`DELETE FROM tenants WHERE id IN ($1, $2)`,
+		} {
+			_, err := pool.Exec(ctx, q, tenantA, tenantB)
+			assert.NoError(t, err, "cleanup: %s", q)
+		}
 	})
 
 	now := time.Now().UTC()

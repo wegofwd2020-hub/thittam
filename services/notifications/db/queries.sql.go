@@ -136,6 +136,12 @@ type UpdateNotificationLogFailedParams struct {
 	ErrorMessage pgtype.Text `json:"error_message"`
 }
 
+// Correct unscoped (#159/#172): `id` is never caller-supplied. The only path
+// here is Service.Send → UpdateNotificationStatus, passing the id of a
+// notification the service itself just created. Contrast IncrementRetryCount,
+// which was reachable by arbitrary id and so carries a tenant predicate plus a
+// RowsAffected check. If this ever gains a caller that accepts an id from a
+// request, it needs the same treatment.
 func (q *Queries) UpdateNotificationLogFailed(ctx context.Context, arg UpdateNotificationLogFailedParams) error {
 	_, err := q.db.Exec(ctx, updateNotificationLogFailed, arg.ID, arg.ErrorMessage)
 	return err
