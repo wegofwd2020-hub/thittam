@@ -12,22 +12,6 @@ var (
 	// ErrMFARequired is returned when MFA is not enabled/verified for a platform action.
 	ErrMFARequired = errors.New("platform: MFA verification required")
 
-	// ErrImpersonationDenied is returned when the user cannot impersonate (wrong role or tenant).
-	ErrImpersonationDenied = errors.New("platform: impersonation denied")
-
-	// ErrReasonRequired is returned when an impersonation request lacks a reason.
-	ErrReasonRequired = errors.New("platform: impersonation reason is required")
-
 	// ErrPlatformUserNotFound is returned when the platform user doesn't exist.
 	ErrPlatformUserNotFound = errors.New("platform: user not found")
-
-	// ErrSessionNotFound is returned when no active impersonation session matches the ID.
-	ErrSessionNotFound = errors.New("platform: impersonation session not found")
-
-	// ErrSessionExpired is returned when the session has exceeded MaxImpersonationDuration.
-	ErrSessionExpired = errors.New("platform: impersonation session expired")
-
-	// ErrActionBlockedDuringImpersonation is returned when a caller attempts a
-	// blocked action while operating under an impersonation token.
-	ErrActionBlockedDuringImpersonation = errors.New("platform: action is not permitted during an impersonation session")
 )
