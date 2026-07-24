@@ -32,7 +32,7 @@ type mockRepo struct {
 	updateNotificationStatusFn func(ctx context.Context, id uuid.UUID, status, providerMsgID, errMsg string, sentAt *time.Time) error
 	getNotificationFn         func(ctx context.Context, tenantID, recipientID, id uuid.UUID) (*Notification, error)
 	listNotificationsFn       func(ctx context.Context, tenantID, recipientID uuid.UUID, channel, status string, limit, offset int) ([]Notification, error)
-	incrementRetryCountFn     func(ctx context.Context, id uuid.UUID) error
+	incrementRetryCountFn     func(ctx context.Context, tenantID, id uuid.UUID) error
 }
 
 func (m *mockRepo) CreateTemplate(ctx context.Context, tmpl *Template) error {
@@ -97,9 +97,9 @@ func (m *mockRepo) ListNotifications(ctx context.Context, tenantID, recipientID 
 	}
 	return nil, nil
 }
-func (m *mockRepo) IncrementRetryCount(ctx context.Context, id uuid.UUID) error {
+func (m *mockRepo) IncrementRetryCount(ctx context.Context, tenantID, id uuid.UUID) error {
 	if m.incrementRetryCountFn != nil {
-		return m.incrementRetryCountFn(ctx, id)
+		return m.incrementRetryCountFn(ctx, tenantID, id)
 	}
 	return nil
 }

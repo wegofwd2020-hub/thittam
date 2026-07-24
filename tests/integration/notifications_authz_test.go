@@ -168,6 +168,41 @@ func TestMigration023_GrantsNotificationsPermissionsIdempotently(t *testing.T) {
 	}
 }
 
+// TestNotifications_IncrementRetryCount_TenantScoped exercises #172: the
+// pre-fix Exec took only an id, so a cross-tenant call still matched zero
+// rows and returned nil — a silent no-op that looked like a working guard.
+// This proves the fixed repo method (a) refuses a cross-tenant id with
+// ErrNotificationNotFound rather than nil and (b) leaves the owning
+// tenant's row untouched.
+func TestNotifications_IncrementRetryCount_TenantScoped(t *testing.T) {
+	pool := testdb.Open(t)
+	ctx := context.Background()
+	repo := notificationsdb.NewPostgres(pool)
+
+	tenantA := uuid.New()
+	tenantB := uuid.New()
+	recipientA := uuid.New()
+
+	notifA := insertNotificationLog(t, pool, tenantA, recipientA, "email", "pending")
+
+	// Calling as tenant B against tenant A's row must be indistinguishable
+	// from a missing row, not a silent success.
+	err := repo.IncrementRetryCount(ctx, tenantB, notifA)
+	assert.ErrorIs(t, err, notifications.ErrNotificationNotFound)
+
+	var retryCount int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT retry_count FROM notification_log WHERE id = $1`, notifA).Scan(&retryCount))
+	assert.Equal(t, 0, retryCount, "tenant B's call must not increment tenant A's row")
+
+	// Sanity: the same call as the owning tenant does increment.
+	err = repo.IncrementRetryCount(ctx, tenantA, notifA)
+	require.NoError(t, err)
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT retry_count FROM notification_log WHERE id = $1`, notifA).Scan(&retryCount))
+	assert.Equal(t, 1, retryCount, "tenant A's own call must increment its own row")
+}
+
 func countOccurrences(xs []string, want string) int {
 	n := 0
 	for _, x := range xs {
