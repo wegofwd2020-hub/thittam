@@ -208,22 +208,9 @@ sql:
           - db_type: "timestamptz"
             go_type: "time.Time"
 
-  - engine: "postgresql"
-    queries: "services/billing/db/queries.sql"
-    schema:
-      - "migrations/iam/"
-      - "migrations/billing/"
-    gen:
-      go:
-        package: "db"
-        out: "services/billing/db"
-        sql_package: "pgx/v5"
-        emit_json_tags: true
-        emit_empty_slices: true
-        overrides:
-          - db_type: "uuid"
-            go_type: "github.com/google/uuid.UUID"
-          - db_type: "numeric"
-            go_type: "github.com/shopspring/decimal.Decimal"
-          - db_type: "timestamptz"
-            go_type: "time.Time"
+# services/billing is deliberately absent: its data access is hand-written in
+# services/billing/db/postgres.go, because the transactional outbox needs
+# in-transaction writes that sqlc does not express well. A generated layer was
+# configured here and never called (#160) — it drifted several migrations
+# behind the schema and dirtied unrelated branches on every `make generate-sqlc`.
+# If billing ever wants sqlc, re-add a block here and generate deliberately.
