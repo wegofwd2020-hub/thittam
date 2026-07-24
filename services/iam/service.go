@@ -325,6 +325,11 @@ func (s *Service) DeactivateUser(ctx context.Context, tenantID, id uuid.UUID) er
 	if err := s.repo.DeactivateUser(ctx, tenantID, id); err != nil {
 		return fmt.Errorf("iam: deactivate user %s: %w", id, err)
 	}
+	// A deactivated account holding live sessions for up to the refresh window
+	// defeats deactivation (#154).
+	if err := s.tokens.RevokeAllForUser(ctx, id); err != nil {
+		return fmt.Errorf("iam: deactivate user %s: revoke sessions: %w", id, err)
+	}
 	return nil
 }
 
@@ -345,6 +350,15 @@ func (s *Service) ChangePassword(ctx context.Context, tenantID, userID uuid.UUID
 	}
 	if err := s.repo.UpdatePasswordHash(ctx, tenantID, userID, hash); err != nil {
 		return fmt.Errorf("iam: update password hash: %w", err)
+	}
+	// Changing a password is the action a user takes to end someone else's
+	// access, so it must end every session — including this caller's. The
+	// user re-authenticates on the device they just used.
+	if err := s.tokens.RevokeAllForUser(ctx, userID); err != nil {
+		// Reported, not swallowed. Note this failure is self-limiting: Refresh
+		// also needs Redis, so if the counter bump failed because Redis is
+		// unreachable, no refresh can succeed either.
+		return fmt.Errorf("iam: change password: revoke sessions: %w", err)
 	}
 	return nil
 }
@@ -384,6 +398,12 @@ func (s *Service) RevokeRole(ctx context.Context, tenantID, userID, roleID uuid.
 	}
 	if err := s.repo.RevokeRole(ctx, userID, roleID); err != nil {
 		return fmt.Errorf("iam: revoke role %s from user %s: %w", roleID, userID, err)
+	}
+	// Refresh re-issues roles from the stored payload, so without this the
+	// revoked role survives to the refresh window rather than the 15-minute
+	// access TTL (#154).
+	if err := s.tokens.RevokeAllForUser(ctx, userID); err != nil {
+		return fmt.Errorf("iam: revoke role %s from user %s: revoke sessions: %w", roleID, userID, err)
 	}
 	return nil
 }
