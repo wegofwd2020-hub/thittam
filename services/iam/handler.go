@@ -818,6 +818,10 @@ func grpcError(err error) error {
 	case errors.Is(err, auth.ErrInvalidCredentials),
 		errors.Is(err, auth.ErrTokenExpired),
 		errors.Is(err, auth.ErrTokenInvalid),
+		// Without this the sentinel falls through to Internal, and a correctly
+		// revoked session returns 500 — which clients and gateways retry rather
+		// than redirecting to login (#154).
+		errors.Is(err, auth.ErrSessionRevoked),
 		errors.Is(err, auth.ErrRefreshTokenNotFound):
 		return status.Error(codes.Unauthenticated, err.Error())
 
