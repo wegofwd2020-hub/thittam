@@ -69,13 +69,17 @@ two reflection entries stay.
 before doing any work:
 
 ```go
-caller, ok := interceptor.CallerFromContext(ctx)
-if !ok || caller.UserID == uuid.Nil {
-    return nil, status.Error(codes.Unauthenticated, "caller identity not present in context")
-}
+// All UUID parses first — including the optional project_id — so a malformed
+// id is never masked as PermissionDenied (house rule).
 userID, err := uuid.Parse(req.GetUserId())
 if err != nil {
     return nil, status.Error(codes.InvalidArgument, "invalid user_id")
+}
+// ... existing optional project_id parse ...
+
+caller, ok := interceptor.CallerFromContext(ctx)
+if !ok || caller.UserID == uuid.Nil {
+    return nil, status.Error(codes.Unauthenticated, "caller identity not present in context")
 }
 if userID != caller.UserID {
     // Deliberately does not echo either id: confirming the other exists is an oracle.
@@ -83,7 +87,7 @@ if userID != caller.UserID {
 }
 ```
 
-then the existing `project_id` parse and `h.svc.CheckPermission(...)` call, unchanged.
+then the existing `h.svc.CheckPermission(...)` call, unchanged.
 
 **Compatible with every existing caller:** `interceptor.RequirePermission:84` always
 passes `caller.UserID`, and that caller identity comes from the same token iam is now
