@@ -213,30 +213,6 @@ func (q *Queries) GetFolder(ctx context.Context, arg GetFolderParams) (Folder, e
 	return i, err
 }
 
-const incrementDocumentVersion = `-- name: IncrementDocumentVersion :one
-UPDATE documents SET current_version = current_version + 1 WHERE id = $1 RETURNING id, tenant_id, production_id, folder_id, name, mime_type, size_bytes, storage_key, current_version, uploaded_by, created_at, deleted_at
-`
-
-func (q *Queries) IncrementDocumentVersion(ctx context.Context, id uuid.UUID) (Document, error) {
-	row := q.db.QueryRow(ctx, incrementDocumentVersion, id)
-	var i Document
-	err := row.Scan(
-		&i.ID,
-		&i.TenantID,
-		&i.ProductionID,
-		&i.FolderID,
-		&i.Name,
-		&i.MimeType,
-		&i.SizeBytes,
-		&i.StorageKey,
-		&i.CurrentVersion,
-		&i.UploadedBy,
-		&i.CreatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
 const listDocumentVersions = `-- name: ListDocumentVersions :many
 SELECT id, document_id, version, storage_key, size_bytes, uploaded_by, created_at FROM document_versions
 WHERE document_id = $1
@@ -278,114 +254,6 @@ func (q *Queries) ListDocumentVersions(ctx context.Context, arg ListDocumentVers
 	return items, nil
 }
 
-const listDocuments = `-- name: ListDocuments :many
-SELECT id, tenant_id, production_id, folder_id, name, mime_type, size_bytes, storage_key, current_version, uploaded_by, created_at, deleted_at FROM documents
-WHERE tenant_id = $1
-  AND ($2::uuid IS NULL OR production_id = $2)
-  AND ($3::uuid IS NULL OR folder_id = $3)
-  AND deleted_at IS NULL
-ORDER BY created_at DESC
-LIMIT $4 OFFSET $5
-`
-
-type ListDocumentsParams struct {
-	TenantID uuid.UUID `json:"tenant_id"`
-	Column2  uuid.UUID `json:"column_2"`
-	Column3  uuid.UUID `json:"column_3"`
-	Limit    int32     `json:"limit"`
-	Offset   int32     `json:"offset"`
-}
-
-func (q *Queries) ListDocuments(ctx context.Context, arg ListDocumentsParams) ([]Document, error) {
-	rows, err := q.db.Query(ctx, listDocuments,
-		arg.TenantID,
-		arg.Column2,
-		arg.Column3,
-		arg.Limit,
-		arg.Offset,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Document{}
-	for rows.Next() {
-		var i Document
-		if err := rows.Scan(
-			&i.ID,
-			&i.TenantID,
-			&i.ProductionID,
-			&i.FolderID,
-			&i.Name,
-			&i.MimeType,
-			&i.SizeBytes,
-			&i.StorageKey,
-			&i.CurrentVersion,
-			&i.UploadedBy,
-			&i.CreatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listFolders = `-- name: ListFolders :many
-SELECT id, tenant_id, production_id, name, parent_id, created_by, created_at FROM folders
-WHERE tenant_id = $1
-  AND ($2::uuid IS NULL OR production_id = $2)
-  AND ($3::uuid IS NULL OR parent_id = $3)
-ORDER BY name ASC
-LIMIT $4 OFFSET $5
-`
-
-type ListFoldersParams struct {
-	TenantID uuid.UUID `json:"tenant_id"`
-	Column2  uuid.UUID `json:"column_2"`
-	Column3  uuid.UUID `json:"column_3"`
-	Limit    int32     `json:"limit"`
-	Offset   int32     `json:"offset"`
-}
-
-func (q *Queries) ListFolders(ctx context.Context, arg ListFoldersParams) ([]Folder, error) {
-	rows, err := q.db.Query(ctx, listFolders,
-		arg.TenantID,
-		arg.Column2,
-		arg.Column3,
-		arg.Limit,
-		arg.Offset,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Folder{}
-	for rows.Next() {
-		var i Folder
-		if err := rows.Scan(
-			&i.ID,
-			&i.TenantID,
-			&i.ProductionID,
-			&i.Name,
-			&i.ParentID,
-			&i.CreatedBy,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const softDeleteDocument = `-- name: SoftDeleteDocument :exec
 UPDATE documents SET deleted_at = now() WHERE id = $1 AND tenant_id = $2
 `
@@ -397,19 +265,5 @@ type SoftDeleteDocumentParams struct {
 
 func (q *Queries) SoftDeleteDocument(ctx context.Context, arg SoftDeleteDocumentParams) error {
 	_, err := q.db.Exec(ctx, softDeleteDocument, arg.ID, arg.TenantID)
-	return err
-}
-
-const updateDocumentSize = `-- name: UpdateDocumentSize :exec
-UPDATE documents SET size_bytes = $2 WHERE id = $1
-`
-
-type UpdateDocumentSizeParams struct {
-	ID        uuid.UUID `json:"id"`
-	SizeBytes int64     `json:"size_bytes"`
-}
-
-func (q *Queries) UpdateDocumentSize(ctx context.Context, arg UpdateDocumentSizeParams) error {
-	_, err := q.db.Exec(ctx, updateDocumentSize, arg.ID, arg.SizeBytes)
 	return err
 }

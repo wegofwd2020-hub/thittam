@@ -110,6 +110,14 @@ func (s *Service) InitiateUpload(ctx context.Context, req *InitiateUploadRequest
 	docID := uuid.New()
 	key := storageKey(req.TenantID, docID, req.ProductionID, 1, req.Name)
 
+	// A folder from another tenant must not become this document's parent.
+	// MoveDocument already enforces this; InitiateUpload did not (#174).
+	if req.FolderID != nil {
+		if _, err := s.repo.GetFolder(ctx, req.TenantID, *req.FolderID); err != nil {
+			return nil, fmt.Errorf("document: initiate upload — %w", ErrFolderNotFound)
+		}
+	}
+
 	ttl := presignedURLWindow(req.SizeHintBytes)
 	if ttl > largeURLWindowThreshold {
 		s.logger.Warn("large presigned upload URL window issued",
