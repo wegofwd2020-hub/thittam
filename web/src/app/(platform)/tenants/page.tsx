@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Search, UserCog, ArrowUpCircle, Pause, Play } from "lucide-react";
+import { Search, ArrowUpCircle, Pause, Play } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { PlanBadge } from "@/components/platform/plan-badge";
-import { ImpersonationDialog } from "@/components/platform/impersonation-dialog";
 
 // ---------------------------------------------------------------------------
 // Mock data
@@ -91,14 +90,6 @@ const mockTenants: Tenant[] = [
   },
 ];
 
-// Mock users for impersonation dialog
-const mockUsers = [
-  { id: "u-001", name: "Alex Rivera", email: "alex@example.com", role: "owner" },
-  { id: "u-002", name: "Jordan Kim", email: "jordan@example.com", role: "admin" },
-  { id: "u-003", name: "Sam Patel", email: "sam@example.com", role: "member" },
-  { id: "u-004", name: "Taylor Chen", email: "taylor@example.com", role: "viewer" },
-];
-
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -106,7 +97,6 @@ const mockUsers = [
 export default function TenantsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "suspended">("all");
-  const [impersonateTenant, setImpersonateTenant] = useState<Tenant | null>(null);
 
   const filtered = mockTenants.filter((t) => {
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
@@ -121,17 +111,6 @@ export default function TenantsPage() {
     return true;
   });
 
-  function handleImpersonateConfirm(userId: string, reason: string) {
-    // In production this would call the platform API
-    // eslint-disable-next-line no-console
-    console.log("Impersonation started:", {
-      tenantId: impersonateTenant?.id,
-      userId,
-      reason,
-    });
-    setImpersonateTenant(null);
-  }
-
   return (
     <div className="mx-auto max-w-7xl">
       {/* Header */}
@@ -140,7 +119,7 @@ export default function TenantsPage() {
           Tenant Management
         </h1>
         <p className="mt-1 font-body text-sm text-slate-500">
-          View, manage, and impersonate tenant accounts across the platform.
+          View and manage tenant accounts across the platform.
         </p>
       </div>
 
@@ -290,16 +269,6 @@ export default function TenantsPage() {
                     >
                       <ArrowUpCircle className="h-4 w-4" />
                     </button>
-
-                    {/* Impersonate */}
-                    <button
-                      onClick={() => setImpersonateTenant(tenant)}
-                      className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-orange-50 hover:text-orange-600"
-                      title="Impersonate user"
-                      disabled={tenant.status === "suspended"}
-                    >
-                      <UserCog className="h-4 w-4" />
-                    </button>
                   </div>
                 </td>
               </tr>
@@ -325,20 +294,6 @@ export default function TenantsPage() {
           Showing {filtered.length} of {mockTenants.length} tenants
         </p>
       </div>
-
-      {/* Impersonation dialog */}
-      {impersonateTenant && (
-        <ImpersonationDialog
-          tenant={{
-            id: impersonateTenant.id,
-            name: impersonateTenant.name,
-          }}
-          users={mockUsers}
-          isOpen={true}
-          onClose={() => setImpersonateTenant(null)}
-          onConfirm={handleImpersonateConfirm}
-        />
-      )}
     </div>
   );
 }

@@ -92,8 +92,8 @@ Legend — **AUTH** = any authenticated tenant member; **PUBLIC** = no caller by
 | `ApproveTenantPurge` | `RolePlatformAdmin` | unchanged | R5 | ✅ |
 | `CancelTenantPurge` | `RolePlatformAdmin` | unchanged | R5 | ✅ |
 | `SetOIDCConfig` | `RolePlatformAdmin` | unchanged | R5 | ✅ |
-| `StartImpersonation` | `RolePlatformAdmin` | unchanged **gate**, but 🔴 **actor** | R5/R4 | 🔴 the gate is right and the **actor is forged**: `platform_user_id` comes from the request body (`handler.go:608`) and becomes `AuditEntry.ActorID`; `ip_address` is self-reported too. Third instance of #149's defect class — see **#156**. `EndImpersonation` does it correctly. Closes with D8 if that is executed |
-| `EndImpersonation` | `RolePlatformAdmin` | unchanged | R5 | ✅ |
+| `StartImpersonation` | `RolePlatformAdmin` | unchanged | R5 | ✅ D8 executed 2026-07-22: the forged-actor defect (`handler.go:608`, third instance of #149's defect class, see **#156**) is moot — the RPC now returns `codes.Unimplemented` and is marked `// Deprecated:` |
+| `EndImpersonation` | `RolePlatformAdmin` | unchanged | R5 | ✅ D8 executed 2026-07-22: returns `codes.Unimplemented` and is marked `// Deprecated:` |
 
 ### 4.2 project — 13 RPCs (7 enforced)
 
