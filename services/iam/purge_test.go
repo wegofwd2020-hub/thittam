@@ -108,7 +108,7 @@ func TestApproveTenantPurge_RejectsSelfApproval(t *testing.T) {
 		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
 			return &Tenant{ID: id, Status: TenantStatusPurgeEligible}, nil
 		},
-		approveTenantPurgeRequestFn: func(_ context.Context, _, _ uuid.UUID) (*TenantPurgeRequest, error) {
+		approveTenantPurgeRequestFn: func(_ context.Context, _, _, _ uuid.UUID) (*TenantPurgeRequest, error) {
 			t.Fatal("must not approve when approver == requester")
 			return nil, nil
 		},
@@ -130,7 +130,7 @@ func TestApproveTenantPurge_RejectsWhenTenantLeftPurgeEligible(t *testing.T) {
 			// Tenant status changed (e.g. reactivated) between request and approval.
 			return &Tenant{ID: id, Status: TenantStatusDeactivated}, nil
 		},
-		approveTenantPurgeRequestFn: func(_ context.Context, _, _ uuid.UUID) (*TenantPurgeRequest, error) {
+		approveTenantPurgeRequestFn: func(_ context.Context, _, _, _ uuid.UUID) (*TenantPurgeRequest, error) {
 			t.Fatal("must not approve when tenant is no longer purge_eligible")
 			return nil, nil
 		},
@@ -148,7 +148,7 @@ func TestApproveTenantPurge_RejectsAlreadyProcessedRequest(t *testing.T) {
 		getOpenTenantPurgeRequestFn: func(_ context.Context, tid uuid.UUID) (*TenantPurgeRequest, error) {
 			return &TenantPurgeRequest{ID: uuid.New(), TenantID: tid, Status: PurgeRequestApproved, RequestedBy: requester}, nil
 		},
-		approveTenantPurgeRequestFn: func(_ context.Context, _, _ uuid.UUID) (*TenantPurgeRequest, error) {
+		approveTenantPurgeRequestFn: func(_ context.Context, _, _, _ uuid.UUID) (*TenantPurgeRequest, error) {
 			t.Fatal("must not re-approve a request that is not pending")
 			return nil, nil
 		},
@@ -181,7 +181,7 @@ func TestApproveTenantPurge_Happy(t *testing.T) {
 		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
 			return &Tenant{ID: id, Status: TenantStatusPurgeEligible}, nil
 		},
-		approveTenantPurgeRequestFn: func(_ context.Context, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error) {
+		approveTenantPurgeRequestFn: func(_ context.Context, _, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error) {
 			gotRequestID, gotApproverID = requestID, approverID
 			return approved, nil
 		},
@@ -222,7 +222,7 @@ func TestCancelTenantPurge_Happy(t *testing.T) {
 		getOpenTenantPurgeRequestFn: func(_ context.Context, tid uuid.UUID) (*TenantPurgeRequest, error) {
 			return openReq, nil
 		},
-		cancelTenantPurgeRequestFn: func(_ context.Context, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error) {
+		cancelTenantPurgeRequestFn: func(_ context.Context, _, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error) {
 			gotRequestID, gotCancellerID = requestID, cancellerID
 			return cancelled, nil
 		},

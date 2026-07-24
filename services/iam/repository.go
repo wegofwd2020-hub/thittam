@@ -21,7 +21,7 @@ type Repository interface {
 	// tenants have a user with the same email — in that case the caller MUST
 	// supply tenant_id explicitly.
 	FindTenantByEmail(ctx context.Context, email string) (uuid.UUID, error)
-	GetUserByID(ctx context.Context, userID uuid.UUID) (*auth.UserRecord, error)
+	GetUserByID(ctx context.Context, tenantID, userID uuid.UUID) (*auth.UserRecord, error)
 	CreateOIDCUser(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*auth.UserRecord, error)
 
 	// auth.TenantStore — used by auth.LocalProvider.
@@ -32,7 +32,7 @@ type Repository interface {
 	GetUser(ctx context.Context, tenantID, id uuid.UUID) (*User, error)
 	ListUsers(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]User, error)
 	UpdateUser(ctx context.Context, user *User) error
-	UpdatePasswordHash(ctx context.Context, userID uuid.UUID, hash string) error
+	UpdatePasswordHash(ctx context.Context, tenantID, userID uuid.UUID, hash string) error
 	DeactivateUser(ctx context.Context, tenantID, id uuid.UUID) error
 
 	// Tenants
@@ -87,8 +87,8 @@ type Repository interface {
 	// --- Tenant purge (two-person approval, #92 Stage 3) ---
 	CreateTenantPurgeRequest(ctx context.Context, req *TenantPurgeRequest) error
 	GetOpenTenantPurgeRequest(ctx context.Context, tenantID uuid.UUID) (*TenantPurgeRequest, error)
-	ApproveTenantPurgeRequest(ctx context.Context, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error)
-	CancelTenantPurgeRequest(ctx context.Context, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error)
+	ApproveTenantPurgeRequest(ctx context.Context, tenantID, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error)
+	CancelTenantPurgeRequest(ctx context.Context, tenantID, requestID, cancellerID uuid.UUID) (*TenantPurgeRequest, error)
 	ListApprovedTenantPurgeRequests(ctx context.Context, limit int) ([]*TenantPurgeRequest, error)
 	MarkTenantPurgeRequestFailed(ctx context.Context, requestID uuid.UUID, reason string) (*TenantPurgeRequest, error)
 	// PurgeTenantSchemaAndTombstone hard-deletes a purge_eligible tenant in one

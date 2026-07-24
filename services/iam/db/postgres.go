@@ -101,8 +101,8 @@ func (p *Postgres) GetUserByEmail(ctx context.Context, tenantID uuid.UUID, email
 }
 
 // GetUserByID returns the user record for refresh-token validation.
-func (p *Postgres) GetUserByID(ctx context.Context, userID uuid.UUID) (*auth.UserRecord, error) {
-	u, err := p.q.GetUser(ctx, userID)
+func (p *Postgres) GetUserByID(ctx context.Context, tenantID, userID uuid.UUID) (*auth.UserRecord, error) {
+	u, err := p.q.GetUser(ctx, GetUserParams{ID: userID, TenantID: tenantID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, iam.ErrUserNotFound
@@ -235,14 +235,15 @@ func (p *Postgres) CreateUser(ctx context.Context, u *iam.User) error {
 }
 
 func (p *Postgres) GetUser(ctx context.Context, tenantID, id uuid.UUID) (*iam.User, error) {
-	row, err := p.q.GetUser(ctx, id)
+	row, err := p.q.GetUser(ctx, GetUserParams{ID: id, TenantID: tenantID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, iam.ErrUserNotFound
 		}
 		return nil, fmt.Errorf("iam/db: get user: %w", err)
 	}
-	// Enforce tenant isolation — the query fetches by PK only for efficiency.
+	// Defense in depth: the query above now also filters by tenant_id, but this
+	// keeps the explicit guard in case that predicate is ever weakened again.
 	if row.TenantID != tenantID {
 		return nil, iam.ErrUserNotFound
 	}
@@ -282,12 +283,17 @@ func (p *Postgres) UpdateUser(ctx context.Context, u *iam.User) error {
 	return nil
 }
 
-func (p *Postgres) UpdatePasswordHash(ctx context.Context, userID uuid.UUID, hash string) error {
-	if err := p.q.UpdateUserPasswordHash(ctx, UpdateUserPasswordHashParams{
+func (p *Postgres) UpdatePasswordHash(ctx context.Context, tenantID, userID uuid.UUID, hash string) error {
+	n, err := p.q.UpdateUserPasswordHash(ctx, UpdateUserPasswordHashParams{
 		ID:           userID,
 		PasswordHash: hash,
-	}); err != nil {
+		TenantID:     tenantID,
+	})
+	if err != nil {
 		return fmt.Errorf("iam/db: update password hash: %w", err)
+	}
+	if n == 0 {
+		return iam.ErrUserNotFound
 	}
 	return nil
 }
@@ -1104,10 +1110,11 @@ func (p *Postgres) GetOpenTenantPurgeRequest(ctx context.Context, tenantID uuid.
 // ApproveTenantPurgeRequest transitions a pending request to approved.
 // Returns iam.ErrPurgeRequestNotFound if the request is missing or no
 // longer pending (the WHERE status = 'pending' guard didn't match).
-func (p *Postgres) ApproveTenantPurgeRequest(ctx context.Context, requestID, approverID uuid.UUID) (*iam.TenantPurgeRequest, error) {
+func (p *Postgres) ApproveTenantPurgeRequest(ctx context.Context, tenantID, requestID, approverID uuid.UUID) (*iam.TenantPurgeRequest, error) {
 	row, err := p.q.ApproveTenantPurgeRequest(ctx, ApproveTenantPurgeRequestParams{
 		ID:         requestID,
 		ApprovedBy: pgUUIDFromPtr(&approverID),
+		TenantID:   tenantID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1121,10 +1128,11 @@ func (p *Postgres) ApproveTenantPurgeRequest(ctx context.Context, requestID, app
 // CancelTenantPurgeRequest transitions an open (pending|approved) request
 // to cancelled. Returns iam.ErrPurgeRequestNotFound if the request is
 // missing or already terminal.
-func (p *Postgres) CancelTenantPurgeRequest(ctx context.Context, requestID, cancellerID uuid.UUID) (*iam.TenantPurgeRequest, error) {
+func (p *Postgres) CancelTenantPurgeRequest(ctx context.Context, tenantID, requestID, cancellerID uuid.UUID) (*iam.TenantPurgeRequest, error) {
 	row, err := p.q.CancelTenantPurgeRequest(ctx, CancelTenantPurgeRequestParams{
 		ID:          requestID,
 		CancelledBy: pgUUIDFromPtr(&cancellerID),
+		TenantID:    tenantID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

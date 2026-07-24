@@ -225,7 +225,7 @@ func (p *Postgres) GetJournalEntry(ctx context.Context, tenantID, id uuid.UUID) 
 
 	je := journalEntryFromDB(row)
 
-	lineRows, err := p.q.ListJournalLines(ctx, je.ID)
+	lineRows, err := p.q.ListJournalLines(ctx, ListJournalLinesParams{JournalID: je.ID, TenantID: tenantID})
 	if err != nil {
 		return nil, fmt.Errorf("ledger: list journal lines for %s: %w", je.ID, err)
 	}
@@ -264,12 +264,12 @@ func (p *Postgres) ListJournalEntries(ctx context.Context, tenantID uuid.UUID, p
 
 // UpdateJournalStatus dispatches to the appropriate sqlc query based on status.
 // "posted" → PostJournalEntry; "void" → VoidJournalEntry.
-func (p *Postgres) UpdateJournalStatus(ctx context.Context, id uuid.UUID, status string, actorID uuid.UUID, _ time.Time) error {
+func (p *Postgres) UpdateJournalStatus(ctx context.Context, tenantID, id uuid.UUID, status string, actorID uuid.UUID, _ time.Time) error {
 	switch status {
 	case "posted":
 		_, err := p.q.PostJournalEntry(ctx, PostJournalEntryParams{
 			ID:       id,
-			TenantID: p.resolveTenantForJournal(ctx, id),
+			TenantID: tenantID,
 			PostedBy: pgtype.UUID{Bytes: actorID, Valid: true},
 		})
 		if err != nil {
@@ -281,7 +281,7 @@ func (p *Postgres) UpdateJournalStatus(ctx context.Context, id uuid.UUID, status
 	case "void":
 		_, err := p.q.VoidJournalEntry(ctx, VoidJournalEntryParams{
 			ID:       id,
-			TenantID: p.resolveTenantForJournal(ctx, id),
+			TenantID: tenantID,
 		})
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -293,14 +293,6 @@ func (p *Postgres) UpdateJournalStatus(ctx context.Context, id uuid.UUID, status
 		return fmt.Errorf("ledger: unsupported journal status %q", status)
 	}
 	return nil
-}
-
-// resolveTenantForJournal looks up the tenant_id for a journal entry ID.
-// Used when the callers (service) only pass the entry ID with no tenant context.
-func (p *Postgres) resolveTenantForJournal(ctx context.Context, id uuid.UUID) uuid.UUID {
-	var tenantID uuid.UUID
-	_ = p.db.QueryRow(ctx, "SELECT tenant_id FROM journal_entries WHERE id = $1", id).Scan(&tenantID)
-	return tenantID
 }
 
 // GetTrialBalance returns all active accounts with their posted debit/credit totals

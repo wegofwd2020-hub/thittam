@@ -39,7 +39,7 @@ type mockRepo struct {
 	createJournalEntryFn   func(ctx context.Context, je *JournalEntry) error
 	getJournalEntryFn      func(ctx context.Context, tenantID, id uuid.UUID) (*JournalEntry, error)
 	listJournalEntriesFn   func(ctx context.Context, tenantID uuid.UUID, periodID *uuid.UUID, status string, limit, offset int) ([]JournalEntry, error)
-	updateJournalStatusFn  func(ctx context.Context, id uuid.UUID, status string, actorID uuid.UUID, at time.Time) error
+	updateJournalStatusFn  func(ctx context.Context, tenantID, id uuid.UUID, status string, actorID uuid.UUID, at time.Time) error
 	getTrialBalanceFn      func(ctx context.Context, tenantID uuid.UUID, asOf time.Time) ([]TrialBalanceEntry, error)
 }
 
@@ -124,9 +124,9 @@ func (m *mockRepo) ListJournalEntries(ctx context.Context, tenantID uuid.UUID, p
 	}
 	return nil, nil
 }
-func (m *mockRepo) UpdateJournalStatus(ctx context.Context, id uuid.UUID, status string, actorID uuid.UUID, at time.Time) error {
+func (m *mockRepo) UpdateJournalStatus(ctx context.Context, tenantID, id uuid.UUID, status string, actorID uuid.UUID, at time.Time) error {
 	if m.updateJournalStatusFn != nil {
-		return m.updateJournalStatusFn(ctx, id, status, actorID, at)
+		return m.updateJournalStatusFn(ctx, tenantID, id, status, actorID, at)
 	}
 	return nil
 }
@@ -347,7 +347,7 @@ func TestPostJournalEntry_Success(t *testing.T) {
 	t.Parallel()
 	var postedStatus string
 	svc := NewService(&mockRepo{
-		updateJournalStatusFn: func(_ context.Context, _ uuid.UUID, status string, _ uuid.UUID, _ time.Time) error {
+		updateJournalStatusFn: func(_ context.Context, _, _ uuid.UUID, status string, _ uuid.UUID, _ time.Time) error {
 			postedStatus = status
 			return nil
 		},

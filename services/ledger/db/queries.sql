@@ -79,7 +79,11 @@ ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: ListJournalLines :many
-SELECT * FROM journal_lines WHERE journal_id = $1 ORDER BY id ASC;
+SELECT jl.id, jl.journal_id, jl.account_id, jl.debit_amount, jl.credit_amount, jl.currency, jl.description
+FROM journal_lines jl
+JOIN journal_entries je ON je.id = jl.journal_id
+WHERE jl.journal_id = $1 AND je.tenant_id = $2
+ORDER BY jl.id ASC;
 
 -- name: GetAccountBalance :one
 SELECT

@@ -136,7 +136,7 @@ ON CONFLICT (tenant_id, email) DO NOTHING
 RETURNING *;
 
 -- name: GetUser :one
-SELECT * FROM users WHERE id = $1;
+SELECT * FROM users WHERE id = $1 AND tenant_id = $2;
 
 -- name: GetUserByEmail :one
 SELECT * FROM users WHERE tenant_id = $1 AND email = $2;
@@ -150,8 +150,8 @@ LIMIT $3 OFFSET $4;
 -- name: UpdateUserStatus :one
 UPDATE users SET status = $2 WHERE id = $1 AND tenant_id = $3 RETURNING *;
 
--- name: UpdateUserPasswordHash :exec
-UPDATE users SET password_hash = $2 WHERE id = $1;
+-- name: UpdateUserPasswordHash :execrows
+UPDATE users SET password_hash = $2 WHERE id = $1 AND tenant_id = $3;
 
 -- name: CreateRole :one
 INSERT INTO roles (id, tenant_id, name, permissions, is_system)
@@ -205,13 +205,13 @@ LIMIT 1;
 -- name: ApproveTenantPurgeRequest :one
 UPDATE tenant_purge_requests
    SET status = 'approved', approved_by = $2, approved_at = now()
- WHERE id = $1 AND status = 'pending'
+ WHERE id = $1 AND status = 'pending' AND tenant_id = $3
 RETURNING *;
 
 -- name: CancelTenantPurgeRequest :one
 UPDATE tenant_purge_requests
    SET status = 'cancelled', cancelled_by = $2, cancelled_at = now()
- WHERE id = $1 AND status IN ('pending', 'approved')
+ WHERE id = $1 AND status IN ('pending', 'approved') AND tenant_id = $3
 RETURNING *;
 
 -- name: ListApprovedTenantPurgeRequests :many

@@ -362,10 +362,10 @@ func TestHandler_ChangePassword_Success(t *testing.T) {
 	tenantID := uuid.New()
 	userID := uuid.New()
 	h := NewHandler(newTestService(&mockRepo{
-		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*auth.UserRecord, error) {
+		getUserByIDFn: func(_ context.Context, _, id uuid.UUID) (*auth.UserRecord, error) {
 			return &auth.UserRecord{ID: id, PasswordHash: "hashed:old"}, nil
 		},
-		updatePasswordHashFn: func(_ context.Context, _ uuid.UUID, _ string) error { return nil },
+		updatePasswordHashFn: func(_ context.Context, _, _ uuid.UUID, _ string) error { return nil },
 	}))
 
 	resp, err := h.ChangePassword(memberCtxAs(tenantID, userID), &iamv1.ChangePasswordRequest{
@@ -398,11 +398,11 @@ func TestHandler_ChangePassword_ForgedSubjectDenied(t *testing.T) {
 	victimID := uuid.New()
 
 	h := NewHandler(newTestService(&mockRepo{
-		getUserByIDFn: func(context.Context, uuid.UUID) (*auth.UserRecord, error) {
+		getUserByIDFn: func(context.Context, uuid.UUID, uuid.UUID) (*auth.UserRecord, error) {
 			t.Fatal("a forged subject must be refused before the user is read")
 			return nil, nil
 		},
-		updatePasswordHashFn: func(context.Context, uuid.UUID, string) error {
+		updatePasswordHashFn: func(context.Context, uuid.UUID, uuid.UUID, string) error {
 			t.Fatal("a forged subject must never reach the password write")
 			return nil
 		},
@@ -425,11 +425,11 @@ func TestHandler_ChangePassword_UsesTheCallerAsSubject(t *testing.T) {
 	var gotReadID, gotWriteID uuid.UUID
 
 	h := NewHandler(newTestService(&mockRepo{
-		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*auth.UserRecord, error) {
+		getUserByIDFn: func(_ context.Context, _, id uuid.UUID) (*auth.UserRecord, error) {
 			gotReadID = id
 			return &auth.UserRecord{ID: id, PasswordHash: "hashed:old"}, nil
 		},
-		updatePasswordHashFn: func(_ context.Context, id uuid.UUID, _ string) error {
+		updatePasswordHashFn: func(_ context.Context, _, id uuid.UUID, _ string) error {
 			gotWriteID = id
 			return nil
 		},
@@ -455,11 +455,11 @@ func TestHandler_ChangePassword_UsesTheCallerAsSubject(t *testing.T) {
 func TestHandler_ChangePassword_NoCallerUnauthenticated(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(newTestService(&mockRepo{
-		getUserByIDFn: func(context.Context, uuid.UUID) (*auth.UserRecord, error) {
+		getUserByIDFn: func(context.Context, uuid.UUID, uuid.UUID) (*auth.UserRecord, error) {
 			t.Fatal("a tokenless call must never reach the repository")
 			return nil, nil
 		},
-		updatePasswordHashFn: func(context.Context, uuid.UUID, string) error {
+		updatePasswordHashFn: func(context.Context, uuid.UUID, uuid.UUID, string) error {
 			t.Fatal("a tokenless call must never reach the password write")
 			return nil
 		},
@@ -1255,7 +1255,7 @@ func TestHandler_ApproveTenantPurge_Success(t *testing.T) {
 		getTenantFn: func(_ context.Context, id uuid.UUID) (*Tenant, error) {
 			return &Tenant{ID: id, Status: TenantStatusPurgeEligible}, nil
 		},
-		approveTenantPurgeRequestFn: func(_ context.Context, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error) {
+		approveTenantPurgeRequestFn: func(_ context.Context, _, requestID, approverID uuid.UUID) (*TenantPurgeRequest, error) {
 			return &TenantPurgeRequest{ID: requestID, TenantID: tid, Status: PurgeRequestApproved, RequestedBy: requester, ApprovedBy: &approverID}, nil
 		},
 	}))
@@ -1289,7 +1289,7 @@ func TestHandler_ApproveTenantPurge_SelfApproval_FailedPrecondition(t *testing.T
 		getOpenTenantPurgeRequestFn: func(_ context.Context, _ uuid.UUID) (*TenantPurgeRequest, error) {
 			return &TenantPurgeRequest{ID: uuid.New(), TenantID: tid, Status: PurgeRequestPending, RequestedBy: uuid.UUID{}}, nil
 		},
-		approveTenantPurgeRequestFn: func(_ context.Context, _, _ uuid.UUID) (*TenantPurgeRequest, error) {
+		approveTenantPurgeRequestFn: func(_ context.Context, _, _, _ uuid.UUID) (*TenantPurgeRequest, error) {
 			t.Fatal("must not approve on self-approval")
 			return nil, nil
 		},
@@ -1306,7 +1306,7 @@ func TestHandler_CancelTenantPurge_Success(t *testing.T) {
 		getOpenTenantPurgeRequestFn: func(_ context.Context, _ uuid.UUID) (*TenantPurgeRequest, error) {
 			return openReq, nil
 		},
-		cancelTenantPurgeRequestFn: func(_ context.Context, requestID, _ uuid.UUID) (*TenantPurgeRequest, error) {
+		cancelTenantPurgeRequestFn: func(_ context.Context, _, requestID, _ uuid.UUID) (*TenantPurgeRequest, error) {
 			return &TenantPurgeRequest{ID: requestID, TenantID: tid, Status: PurgeRequestCancelled, RequestedBy: openReq.RequestedBy}, nil
 		},
 	}))

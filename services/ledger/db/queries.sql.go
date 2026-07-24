@@ -469,11 +469,20 @@ func (q *Queries) ListJournalEntries(ctx context.Context, arg ListJournalEntries
 }
 
 const listJournalLines = `-- name: ListJournalLines :many
-SELECT id, journal_id, account_id, debit_amount, credit_amount, currency, description FROM journal_lines WHERE journal_id = $1 ORDER BY id ASC
+SELECT jl.id, jl.journal_id, jl.account_id, jl.debit_amount, jl.credit_amount, jl.currency, jl.description
+FROM journal_lines jl
+JOIN journal_entries je ON je.id = jl.journal_id
+WHERE jl.journal_id = $1 AND je.tenant_id = $2
+ORDER BY jl.id ASC
 `
 
-func (q *Queries) ListJournalLines(ctx context.Context, journalID uuid.UUID) ([]JournalLine, error) {
-	rows, err := q.db.Query(ctx, listJournalLines, journalID)
+type ListJournalLinesParams struct {
+	JournalID uuid.UUID `json:"journal_id"`
+	TenantID  uuid.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) ListJournalLines(ctx context.Context, arg ListJournalLinesParams) ([]JournalLine, error) {
+	rows, err := q.db.Query(ctx, listJournalLines, arg.JournalID, arg.TenantID)
 	if err != nil {
 		return nil, err
 	}

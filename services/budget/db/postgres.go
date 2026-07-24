@@ -16,13 +16,12 @@ import (
 
 // Postgres implements budget.Repository backed by PostgreSQL.
 type Postgres struct {
-	q  *Queries
-	db *pgxpool.Pool
+	q *Queries
 }
 
 // NewPostgres creates a Postgres-backed budget repository.
 func NewPostgres(db *pgxpool.Pool) *Postgres {
-	return &Postgres{q: New(db), db: db}
+	return &Postgres{q: New(db)}
 }
 
 // Compile-time interface check.
@@ -74,23 +73,12 @@ func (p *Postgres) ListBudgets(ctx context.Context, tenantID, productionID uuid.
 	return result, nil
 }
 
-func (p *Postgres) UpdateBudgetStatus(ctx context.Context, id uuid.UUID, status string, approvedBy *uuid.UUID) error {
+func (p *Postgres) UpdateBudgetStatus(ctx context.Context, tenantID, id uuid.UUID, status string, approvedBy *uuid.UUID) error {
 	// The SQL uses the same $4 parameter for both submitted_by and approved_by
 	// (CASE WHEN $3='submitted' THEN $4 ELSE ... END).
 	var actor pgtype.UUID
 	if approvedBy != nil {
 		actor = pgtype.UUID{Bytes: *approvedBy, Valid: true}
-	}
-
-	// We need the tenant ID to satisfy the WHERE clause. Look it up first.
-	// Use a direct query since UpdateBudgetStatusParams requires tenant_id.
-	row := p.db.QueryRow(ctx, "SELECT tenant_id FROM budgets WHERE id = $1", id)
-	var tenantID uuid.UUID
-	if err := row.Scan(&tenantID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return budget.ErrBudgetNotFound
-		}
-		return fmt.Errorf("budget: resolve tenant for budget %s: %w", id, err)
 	}
 
 	_, err := p.q.UpdateBudgetStatus(ctx, UpdateBudgetStatusParams{

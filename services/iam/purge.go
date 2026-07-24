@@ -82,7 +82,7 @@ func (s *Service) ApproveTenantPurge(ctx context.Context, tenantID uuid.UUID, re
 		return nil, fmt.Errorf("iam: approve tenant purge %s (status %s): %w", tenantID, tenant.Status, ErrTenantNotPurgeable)
 	}
 
-	approved, err := s.repo.ApproveTenantPurgeRequest(ctx, open.ID, actor.UserID)
+	approved, err := s.repo.ApproveTenantPurgeRequest(ctx, tenantID, open.ID, actor.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("iam: approve tenant purge %s: %w", tenantID, err)
 	}
@@ -100,7 +100,7 @@ func (s *Service) CancelTenantPurge(ctx context.Context, tenantID uuid.UUID, rea
 	}
 
 	actor, _ := audit.ActorFromContext(ctx)
-	cancelled, err := s.repo.CancelTenantPurgeRequest(ctx, open.ID, actor.UserID)
+	cancelled, err := s.repo.CancelTenantPurgeRequest(ctx, tenantID, open.ID, actor.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("iam: cancel tenant purge %s: %w", tenantID, err)
 	}

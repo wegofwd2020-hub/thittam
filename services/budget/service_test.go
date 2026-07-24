@@ -18,7 +18,7 @@ type mockRepo struct {
 	createBudgetFn          func(ctx context.Context, b *Budget) error
 	getBudgetFn             func(ctx context.Context, tenantID, id uuid.UUID) (*Budget, error)
 	listBudgetsFn           func(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int) ([]Budget, error)
-	updateBudgetStatusFn    func(ctx context.Context, id uuid.UUID, status string, approvedBy *uuid.UUID) error
+	updateBudgetStatusFn    func(ctx context.Context, tenantID, id uuid.UUID, status string, approvedBy *uuid.UUID) error
 	createLineItemFn        func(ctx context.Context, li *BudgetLineItem) error
 	getLineItemFn           func(ctx context.Context, tenantID, id uuid.UUID) (*BudgetLineItem, error)
 	listLineItemsFn         func(ctx context.Context, tenantID, budgetID uuid.UUID, limit, offset int) ([]BudgetLineItem, error)
@@ -44,9 +44,9 @@ func (m *mockRepo) ListBudgets(ctx context.Context, tenantID, productionID uuid.
 	}
 	return nil, nil
 }
-func (m *mockRepo) UpdateBudgetStatus(ctx context.Context, id uuid.UUID, status string, approvedBy *uuid.UUID) error {
+func (m *mockRepo) UpdateBudgetStatus(ctx context.Context, tenantID, id uuid.UUID, status string, approvedBy *uuid.UUID) error {
 	if m.updateBudgetStatusFn != nil {
-		return m.updateBudgetStatusFn(ctx, id, status, approvedBy)
+		return m.updateBudgetStatusFn(ctx, tenantID, id, status, approvedBy)
 	}
 	return nil
 }
@@ -241,7 +241,7 @@ func TestApproveBudget_SubmittedStatus(t *testing.T) {
 		getBudgetFn: func(ctx context.Context, tenantID, id uuid.UUID) (*Budget, error) {
 			return &Budget{ID: id, TenantID: tenantID, Status: "submitted"}, nil
 		},
-		updateBudgetStatusFn: func(ctx context.Context, id uuid.UUID, status string, approvedBy *uuid.UUID) error {
+		updateBudgetStatusFn: func(ctx context.Context, tenantID, id uuid.UUID, status string, approvedBy *uuid.UUID) error {
 			capturedStatus = status
 			return nil
 		},
@@ -355,7 +355,7 @@ func TestSubmitBudget_Success(t *testing.T) {
 		getBudgetFn: func(_ context.Context, tenantID, id uuid.UUID) (*Budget, error) {
 			return &Budget{ID: id, TenantID: tenantID, Status: "draft"}, nil
 		},
-		updateBudgetStatusFn: func(_ context.Context, _ uuid.UUID, status string, _ *uuid.UUID) error {
+		updateBudgetStatusFn: func(_ context.Context, _, _ uuid.UUID, status string, _ *uuid.UUID) error {
 			capturedStatus = status
 			return nil
 		},

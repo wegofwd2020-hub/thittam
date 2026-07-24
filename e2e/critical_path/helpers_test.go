@@ -122,7 +122,7 @@ func (r *iamRepo) GetUserByEmail(_ context.Context, _ uuid.UUID, _ string) (*aut
 func (r *iamRepo) FindTenantByEmail(_ context.Context, _ string) (uuid.UUID, error) {
 	return uuid.Nil, nil
 }
-func (r *iamRepo) GetUserByID(_ context.Context, _ uuid.UUID) (*auth.UserRecord, error) {
+func (r *iamRepo) GetUserByID(_ context.Context, _, _ uuid.UUID) (*auth.UserRecord, error) {
 	return nil, nil
 }
 func (r *iamRepo) CreateOIDCUser(_ context.Context, _ uuid.UUID, _, _ string) (*auth.UserRecord, error) {
@@ -155,7 +155,7 @@ func (r *iamRepo) UpdateUser(_ context.Context, u *iam.User) error {
 	r.users[u.ID] = u
 	return nil
 }
-func (r *iamRepo) UpdatePasswordHash(_ context.Context, _ uuid.UUID, _ string) error { return nil }
+func (r *iamRepo) UpdatePasswordHash(_ context.Context, _, _ uuid.UUID, _ string) error { return nil }
 func (r *iamRepo) DeactivateUser(_ context.Context, _, _ uuid.UUID) error            { return nil }
 
 // Tenants
@@ -261,10 +261,10 @@ func (r *iamRepo) CreateTenantPurgeRequest(_ context.Context, _ *iam.TenantPurge
 func (r *iamRepo) GetOpenTenantPurgeRequest(_ context.Context, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
 	return nil, iam.ErrPurgeRequestNotFound
 }
-func (r *iamRepo) ApproveTenantPurgeRequest(_ context.Context, _, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
+func (r *iamRepo) ApproveTenantPurgeRequest(_ context.Context, _, _, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
 	return nil, iam.ErrPurgeRequestNotFound
 }
-func (r *iamRepo) CancelTenantPurgeRequest(_ context.Context, _, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
+func (r *iamRepo) CancelTenantPurgeRequest(_ context.Context, _, _, _ uuid.UUID) (*iam.TenantPurgeRequest, error) {
 	return nil, iam.ErrPurgeRequestNotFound
 }
 func (r *iamRepo) ListApprovedTenantPurgeRequests(_ context.Context, _ int) ([]*iam.TenantPurgeRequest, error) {
@@ -358,7 +358,7 @@ func (r *budgetRepo) GetBudget(_ context.Context, _, id uuid.UUID) (*budget.Budg
 func (r *budgetRepo) ListBudgets(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]budget.Budget, error) {
 	return nil, nil
 }
-func (r *budgetRepo) UpdateBudgetStatus(_ context.Context, id uuid.UUID, status string, approvedBy *uuid.UUID) error {
+func (r *budgetRepo) UpdateBudgetStatus(_ context.Context, _, id uuid.UUID, status string, approvedBy *uuid.UUID) error {
 	if b, ok := r.budgets[id]; ok {
 		b.Status = status
 		b.ApprovedBy = approvedBy
@@ -514,7 +514,7 @@ func (r *ledgerRepo) GetJournalEntry(_ context.Context, _, id uuid.UUID) (*ledge
 func (r *ledgerRepo) ListJournalEntries(_ context.Context, _ uuid.UUID, _ *uuid.UUID, _ string, _, _ int) ([]ledger.JournalEntry, error) {
 	return nil, nil
 }
-func (r *ledgerRepo) UpdateJournalStatus(_ context.Context, id uuid.UUID, status string, _ uuid.UUID, _ time.Time) error {
+func (r *ledgerRepo) UpdateJournalStatus(_ context.Context, _, id uuid.UUID, status string, _ uuid.UUID, _ time.Time) error {
 	if je, ok := r.entries[id]; ok {
 		je.Status = status
 		return nil
