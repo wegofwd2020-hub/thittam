@@ -38,6 +38,15 @@ func TestIAM_InvitationRoundTrip(t *testing.T) {
 
 	inviteeEmail := "invitee-" + uuid.NewString() + "@example.com"
 
+	// Clean up invitations after the seed helpers so LIFO cleanup runs this
+	// first, before seedIAMUser's cleanup tries to delete the inviter user.
+	// invitations.invited_by has no ON DELETE (default NO ACTION), so any
+	// pending invitations would cause a FK violation on the inviter delete.
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(),
+			`DELETE FROM invitations WHERE tenant_id = $1 AND email = $2`, tenant, inviteeEmail)
+	})
+
 	// --- InviteUser: proves the CreateInvitation INSERT (incl. role_id) and the
 	// ON CONFLICT target both work against real Postgres. ---
 	inv := &iam.Invitation{TenantID: tenant, Email: inviteeEmail, RoleID: &role, InvitedBy: inviter}
