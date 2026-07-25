@@ -462,6 +462,16 @@ func TestService_RejectExpense_AlreadyApproved(t *testing.T) {
 	require.ErrorIs(t, err, ErrAlreadyApproved)
 }
 
+func TestService_RejectExpense_AlreadyRejected(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "rejected"}, nil
+		},
+	})
+	err := svc.RejectExpense(context.Background(), uuid.New(), uuid.New(), "dup")
+	require.ErrorIs(t, err, ErrAlreadyRejected)
+}
+
 func TestService_RejectExpense_Success(t *testing.T) {
 	var gotReason string
 	svc := NewService(&mockRepo{
@@ -480,17 +490,24 @@ func TestService_RejectExpense_Success(t *testing.T) {
 func TestService_ApprovePurchaseOrder_SetsApproved(t *testing.T) {
 	var saved *PurchaseOrder
 	svc := NewService(&mockRepo{
-		getPOFn:    func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) { return &PurchaseOrder{ID: id, TenantID: tid, Status: "draft"}, nil },
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, Status: "draft"}, nil
+		},
 		updatePOFn: func(_ context.Context, po *PurchaseOrder) error { saved = po; return nil },
 	})
-	require.NoError(t, svc.ApprovePurchaseOrder(context.Background(), uuid.New(), uuid.New(), uuid.New()))
+	approverID := uuid.New()
+	require.NoError(t, svc.ApprovePurchaseOrder(context.Background(), uuid.New(), uuid.New(), approverID))
 	assert.Equal(t, "approved", saved.Status)
 	require.NotNil(t, saved.ApprovedAt)
+	require.NotNil(t, saved.ApprovedBy)
+	assert.Equal(t, approverID, *saved.ApprovedBy)
 }
 
 func TestService_ApprovePurchaseOrder_AlreadyApproved(t *testing.T) {
 	svc := NewService(&mockRepo{
-		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) { return &PurchaseOrder{ID: id, TenantID: tid, Status: "approved"}, nil },
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, Status: "approved"}, nil
+		},
 	})
 	assert.ErrorIs(t, svc.ApprovePurchaseOrder(context.Background(), uuid.New(), uuid.New(), uuid.New()), ErrAlreadyApproved)
 }
@@ -498,7 +515,9 @@ func TestService_ApprovePurchaseOrder_AlreadyApproved(t *testing.T) {
 func TestService_SettlePettyCash_SetsSettled(t *testing.T) {
 	var saved *PettyCashAdvance
 	svc := NewService(&mockRepo{
-		getPettyCashFn:    func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) { return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued"}, nil },
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued"}, nil
+		},
 		updatePettyCashFn: func(_ context.Context, pc *PettyCashAdvance) error { saved = pc; return nil },
 	})
 	require.NoError(t, svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), decimal.RequireFromString("12.50")))
@@ -516,4 +535,14 @@ func TestService_CreatePurchaseOrder_GeneratesPONumberWhenEmpty(t *testing.T) {
 	require.NoError(t, svc.CreatePurchaseOrder(context.Background(), po))
 	assert.NotEmpty(t, saved.PONumber)
 	assert.True(t, strings.HasPrefix(saved.PONumber, "PO-"))
+}
+
+func TestService_CreatePurchaseOrder_KeepsSuppliedPONumber(t *testing.T) {
+	var saved *PurchaseOrder
+	svc := NewService(&mockRepo{
+		createPOFn: func(_ context.Context, po *PurchaseOrder) error { saved = po; return nil },
+	})
+	po := &PurchaseOrder{TenantID: uuid.New(), ProductionID: uuid.New(), Amount: decimal.NewFromInt(100), PONumber: "PO-CUSTOM-1"}
+	require.NoError(t, svc.CreatePurchaseOrder(context.Background(), po))
+	assert.Equal(t, "PO-CUSTOM-1", saved.PONumber)
 }
