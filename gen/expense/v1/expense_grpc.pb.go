@@ -30,9 +30,12 @@ const (
 	ExpenseService_GetExpense_FullMethodName             = "/thittam.expense.v1.ExpenseService/GetExpense"
 	ExpenseService_ListExpenses_FullMethodName           = "/thittam.expense.v1.ExpenseService/ListExpenses"
 	ExpenseService_ApproveExpense_FullMethodName         = "/thittam.expense.v1.ExpenseService/ApproveExpense"
+	ExpenseService_RejectExpense_FullMethodName          = "/thittam.expense.v1.ExpenseService/RejectExpense"
+	ExpenseService_ApprovePurchaseOrder_FullMethodName   = "/thittam.expense.v1.ExpenseService/ApprovePurchaseOrder"
 	ExpenseService_CreatePettyCashAdvance_FullMethodName = "/thittam.expense.v1.ExpenseService/CreatePettyCashAdvance"
 	ExpenseService_GetPettyCashAdvance_FullMethodName    = "/thittam.expense.v1.ExpenseService/GetPettyCashAdvance"
 	ExpenseService_ListPettyCashAdvances_FullMethodName  = "/thittam.expense.v1.ExpenseService/ListPettyCashAdvances"
+	ExpenseService_SettlePettyCash_FullMethodName        = "/thittam.expense.v1.ExpenseService/SettlePettyCash"
 	ExpenseService_GetExpenseCategories_FullMethodName   = "/thittam.expense.v1.ExpenseService/GetExpenseCategories"
 	ExpenseService_GetApprovalLimits_FullMethodName      = "/thittam.expense.v1.ExpenseService/GetApprovalLimits"
 )
@@ -48,9 +51,12 @@ type ExpenseServiceClient interface {
 	GetExpense(ctx context.Context, in *GetExpenseRequest, opts ...grpc.CallOption) (*Expense, error)
 	ListExpenses(ctx context.Context, in *ListExpensesRequest, opts ...grpc.CallOption) (*ListExpensesResponse, error)
 	ApproveExpense(ctx context.Context, in *ApproveExpenseRequest, opts ...grpc.CallOption) (*Expense, error)
+	RejectExpense(ctx context.Context, in *RejectExpenseRequest, opts ...grpc.CallOption) (*Expense, error)
+	ApprovePurchaseOrder(ctx context.Context, in *ApprovePurchaseOrderRequest, opts ...grpc.CallOption) (*PurchaseOrder, error)
 	CreatePettyCashAdvance(ctx context.Context, in *CreatePettyCashAdvanceRequest, opts ...grpc.CallOption) (*PettyCashAdvance, error)
 	GetPettyCashAdvance(ctx context.Context, in *GetPettyCashAdvanceRequest, opts ...grpc.CallOption) (*PettyCashAdvance, error)
 	ListPettyCashAdvances(ctx context.Context, in *ListPettyCashAdvancesRequest, opts ...grpc.CallOption) (*ListPettyCashAdvancesResponse, error)
+	SettlePettyCash(ctx context.Context, in *SettlePettyCashRequest, opts ...grpc.CallOption) (*PettyCashAdvance, error)
 	GetExpenseCategories(ctx context.Context, in *GetExpenseCategoriesRequest, opts ...grpc.CallOption) (*GetExpenseCategoriesResponse, error)
 	GetApprovalLimits(ctx context.Context, in *GetApprovalLimitsRequest, opts ...grpc.CallOption) (*GetApprovalLimitsResponse, error)
 }
@@ -126,6 +132,24 @@ func (c *expenseServiceClient) ApproveExpense(ctx context.Context, in *ApproveEx
 	return out, nil
 }
 
+func (c *expenseServiceClient) RejectExpense(ctx context.Context, in *RejectExpenseRequest, opts ...grpc.CallOption) (*Expense, error) {
+	out := new(Expense)
+	err := c.cc.Invoke(ctx, ExpenseService_RejectExpense_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *expenseServiceClient) ApprovePurchaseOrder(ctx context.Context, in *ApprovePurchaseOrderRequest, opts ...grpc.CallOption) (*PurchaseOrder, error) {
+	out := new(PurchaseOrder)
+	err := c.cc.Invoke(ctx, ExpenseService_ApprovePurchaseOrder_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *expenseServiceClient) CreatePettyCashAdvance(ctx context.Context, in *CreatePettyCashAdvanceRequest, opts ...grpc.CallOption) (*PettyCashAdvance, error) {
 	out := new(PettyCashAdvance)
 	err := c.cc.Invoke(ctx, ExpenseService_CreatePettyCashAdvance_FullMethodName, in, out, opts...)
@@ -147,6 +171,15 @@ func (c *expenseServiceClient) GetPettyCashAdvance(ctx context.Context, in *GetP
 func (c *expenseServiceClient) ListPettyCashAdvances(ctx context.Context, in *ListPettyCashAdvancesRequest, opts ...grpc.CallOption) (*ListPettyCashAdvancesResponse, error) {
 	out := new(ListPettyCashAdvancesResponse)
 	err := c.cc.Invoke(ctx, ExpenseService_ListPettyCashAdvances_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *expenseServiceClient) SettlePettyCash(ctx context.Context, in *SettlePettyCashRequest, opts ...grpc.CallOption) (*PettyCashAdvance, error) {
+	out := new(PettyCashAdvance)
+	err := c.cc.Invoke(ctx, ExpenseService_SettlePettyCash_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -182,9 +215,12 @@ type ExpenseServiceServer interface {
 	GetExpense(context.Context, *GetExpenseRequest) (*Expense, error)
 	ListExpenses(context.Context, *ListExpensesRequest) (*ListExpensesResponse, error)
 	ApproveExpense(context.Context, *ApproveExpenseRequest) (*Expense, error)
+	RejectExpense(context.Context, *RejectExpenseRequest) (*Expense, error)
+	ApprovePurchaseOrder(context.Context, *ApprovePurchaseOrderRequest) (*PurchaseOrder, error)
 	CreatePettyCashAdvance(context.Context, *CreatePettyCashAdvanceRequest) (*PettyCashAdvance, error)
 	GetPettyCashAdvance(context.Context, *GetPettyCashAdvanceRequest) (*PettyCashAdvance, error)
 	ListPettyCashAdvances(context.Context, *ListPettyCashAdvancesRequest) (*ListPettyCashAdvancesResponse, error)
+	SettlePettyCash(context.Context, *SettlePettyCashRequest) (*PettyCashAdvance, error)
 	GetExpenseCategories(context.Context, *GetExpenseCategoriesRequest) (*GetExpenseCategoriesResponse, error)
 	GetApprovalLimits(context.Context, *GetApprovalLimitsRequest) (*GetApprovalLimitsResponse, error)
 	mustEmbedUnimplementedExpenseServiceServer()
@@ -215,6 +251,12 @@ func (UnimplementedExpenseServiceServer) ListExpenses(context.Context, *ListExpe
 func (UnimplementedExpenseServiceServer) ApproveExpense(context.Context, *ApproveExpenseRequest) (*Expense, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApproveExpense not implemented")
 }
+func (UnimplementedExpenseServiceServer) RejectExpense(context.Context, *RejectExpenseRequest) (*Expense, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RejectExpense not implemented")
+}
+func (UnimplementedExpenseServiceServer) ApprovePurchaseOrder(context.Context, *ApprovePurchaseOrderRequest) (*PurchaseOrder, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApprovePurchaseOrder not implemented")
+}
 func (UnimplementedExpenseServiceServer) CreatePettyCashAdvance(context.Context, *CreatePettyCashAdvanceRequest) (*PettyCashAdvance, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreatePettyCashAdvance not implemented")
 }
@@ -223,6 +265,9 @@ func (UnimplementedExpenseServiceServer) GetPettyCashAdvance(context.Context, *G
 }
 func (UnimplementedExpenseServiceServer) ListPettyCashAdvances(context.Context, *ListPettyCashAdvancesRequest) (*ListPettyCashAdvancesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPettyCashAdvances not implemented")
+}
+func (UnimplementedExpenseServiceServer) SettlePettyCash(context.Context, *SettlePettyCashRequest) (*PettyCashAdvance, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SettlePettyCash not implemented")
 }
 func (UnimplementedExpenseServiceServer) GetExpenseCategories(context.Context, *GetExpenseCategoriesRequest) (*GetExpenseCategoriesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetExpenseCategories not implemented")
@@ -369,6 +414,42 @@ func _ExpenseService_ApproveExpense_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ExpenseService_RejectExpense_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RejectExpenseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExpenseServiceServer).RejectExpense(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ExpenseService_RejectExpense_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExpenseServiceServer).RejectExpense(ctx, req.(*RejectExpenseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ExpenseService_ApprovePurchaseOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApprovePurchaseOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExpenseServiceServer).ApprovePurchaseOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ExpenseService_ApprovePurchaseOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExpenseServiceServer).ApprovePurchaseOrder(ctx, req.(*ApprovePurchaseOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ExpenseService_CreatePettyCashAdvance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreatePettyCashAdvanceRequest)
 	if err := dec(in); err != nil {
@@ -419,6 +500,24 @@ func _ExpenseService_ListPettyCashAdvances_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ExpenseServiceServer).ListPettyCashAdvances(ctx, req.(*ListPettyCashAdvancesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ExpenseService_SettlePettyCash_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SettlePettyCashRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExpenseServiceServer).SettlePettyCash(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ExpenseService_SettlePettyCash_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExpenseServiceServer).SettlePettyCash(ctx, req.(*SettlePettyCashRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -495,6 +594,14 @@ var ExpenseService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ExpenseService_ApproveExpense_Handler,
 		},
 		{
+			MethodName: "RejectExpense",
+			Handler:    _ExpenseService_RejectExpense_Handler,
+		},
+		{
+			MethodName: "ApprovePurchaseOrder",
+			Handler:    _ExpenseService_ApprovePurchaseOrder_Handler,
+		},
+		{
 			MethodName: "CreatePettyCashAdvance",
 			Handler:    _ExpenseService_CreatePettyCashAdvance_Handler,
 		},
@@ -505,6 +612,10 @@ var ExpenseService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPettyCashAdvances",
 			Handler:    _ExpenseService_ListPettyCashAdvances_Handler,
+		},
+		{
+			MethodName: "SettlePettyCash",
+			Handler:    _ExpenseService_SettlePettyCash_Handler,
 		},
 		{
 			MethodName: "GetExpenseCategories",
