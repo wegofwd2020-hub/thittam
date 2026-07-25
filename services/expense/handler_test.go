@@ -494,6 +494,15 @@ func TestHandler_RejectExpense_InvalidID(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestHandler_RejectExpense_EmptyReason(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().RejectExpense(ctxWithTenant(uuid.New()), &expensev1.RejectExpenseRequest{ExpenseId: uuid.New().String(), Reason: ""})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+
+	_, err = newHandler().RejectExpense(ctxWithTenant(uuid.New()), &expensev1.RejectExpenseRequest{ExpenseId: uuid.New().String(), Reason: "   "})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
 // --- CreatePettyCashAdvance ---
 
 func TestHandler_CreatePettyCashAdvance_Success(t *testing.T) {
@@ -692,6 +701,18 @@ func TestHandler_SettlePettyCash_InvalidAmount(t *testing.T) {
 func TestHandler_SettlePettyCash_NegativeAmount(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().SettlePettyCash(ctxWithTenant(uuid.New()), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "-5.00"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_SettlePettyCash_ExceedsAdvance(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.RequireFromString("100.00")}, nil
+		},
+	})).WithPermissionChecker(allowAllPerm{})
+
+	_, err := h.SettlePettyCash(ctxWithTenant(uuid.New()), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "150.00"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 

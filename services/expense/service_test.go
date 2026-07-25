@@ -525,7 +525,7 @@ func TestService_SettlePettyCash_SetsSettled(t *testing.T) {
 	var saved *PettyCashAdvance
 	svc := NewService(&mockRepo{
 		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
-			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued"}, nil
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.RequireFromString("50.00")}, nil
 		},
 		updatePettyCashFn: func(_ context.Context, pc *PettyCashAdvance) error { saved = pc; return nil },
 	})
@@ -533,6 +533,16 @@ func TestService_SettlePettyCash_SetsSettled(t *testing.T) {
 	assert.Equal(t, "settled", saved.Status)
 	assert.Equal(t, "12.50", saved.UnspentAmount.StringFixed(2))
 	require.NotNil(t, saved.SettledAt)
+}
+
+func TestService_SettlePettyCash_ExceedsAdvance(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.RequireFromString("100.00")}, nil
+		},
+	})
+	err := svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), decimal.RequireFromString("150.00"))
+	require.ErrorIs(t, err, ErrUnspentExceedsAdvance)
 }
 
 func TestService_CreatePurchaseOrder_GeneratesPONumberWhenEmpty(t *testing.T) {

@@ -212,6 +212,9 @@ func (s *Service) SettlePettyCash(ctx context.Context, tenantID, advanceID uuid.
 	if pc.Status == "settled" {
 		return ErrAlreadySettled
 	}
+	if unspent.GreaterThan(pc.Amount) {
+		return ErrUnspentExceedsAdvance
+	}
 	now := time.Now()
 	pc.Status = "settled"
 	pc.UnspentAmount = unspent

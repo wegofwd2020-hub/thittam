@@ -8,6 +8,7 @@ var (
 	ErrAlreadyApproved       = errors.New("expense: expense already approved")
 	ErrAlreadyRejected       = errors.New("expense: expense already rejected")
 	ErrAlreadySettled        = errors.New("expense: petty cash advance already settled")
+	ErrUnspentExceedsAdvance = errors.New("expense: unspent amount exceeds advance amount")
 	ErrApprovalLimitExceeded = errors.New("expense: amount exceeds approval limit for role")
 	ErrDualApprovalRequired  = errors.New("expense: amount exceeds dual approval threshold")
 	ErrPORequired            = errors.New("expense: purchase order required for this category")

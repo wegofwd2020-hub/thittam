@@ -3,6 +3,7 @@ package expense
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -338,6 +339,10 @@ func (h *Handler) RejectExpense(ctx context.Context, req *expensev1.RejectExpens
 		return nil, status.Error(codes.InvalidArgument, "invalid expense_id")
 	}
 
+	if strings.TrimSpace(req.GetReason()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "reason must not be empty")
+	}
+
 	if err := h.svc.RejectExpense(ctx, tenantID, expenseID, req.GetReason()); err != nil {
 		return nil, grpcErr(err)
 	}
@@ -603,6 +608,8 @@ func grpcErr(err error) error {
 		return status.Error(codes.NotFound, "purchase order not found")
 	case errors.Is(err, ErrAlreadyApproved), errors.Is(err, ErrAlreadyRejected), errors.Is(err, ErrAlreadySettled):
 		return status.Error(codes.FailedPrecondition, "expense is already approved")
+	case errors.Is(err, ErrUnspentExceedsAdvance):
+		return status.Error(codes.InvalidArgument, "unspent amount exceeds advance amount")
 	case errors.Is(err, ErrApprovalLimitExceeded):
 		return status.Error(codes.FailedPrecondition, "amount exceeds approval limit for role")
 	case errors.Is(err, ErrDualApprovalRequired):
