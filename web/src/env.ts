@@ -1,7 +1,7 @@
 // Local-dev routing for the grpc-gateway HTTP ports. Each service exposes its
 // own gateway on a dedicated port (iam: 9086, project-management: 9080,
 // budget-planning: 9081). Once Kong (#60 Phase B) is in front of everything,
-// set NEXT_PUBLIC_API_URL=http://localhost:8000 and it will route to all.
+// set NEXT_PUBLIC_API_URL=http://localhost:8500 and it will route to all.
 //
 // When a NEXT_PUBLIC_* env var is set, it wins. Otherwise, the URL is derived
 // from window.location.hostname at call time so the app works from any host —

@@ -72,6 +72,26 @@ services:
       "
     restart: "no"
 
+  kong:
+    image: kong:3.6
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: "0.0.0.0:8500"
+      KONG_ADMIN_LISTEN: "off"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./kong.yml:/kong/kong.yml:ro
+    ports:
+      - "8500:8500"   # single REST origin → per-service grpc-gateways (#60 Phase B)
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   pg_data:
   minio_data:

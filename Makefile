@@ -81,14 +81,14 @@ help:
 
 infra-up:
 	docker compose -f $(INFRA_FILE) up -d
-	@echo "==> Redis :6380, NATS :4222, MinIO :9000 ready."
+	@echo "==> Redis :6380, NATS :4222, MinIO :9000, Kong :8500 ready."
 
 infra-down:
 	docker compose -f $(INFRA_FILE) down
 
 infra-up-full:
 	docker compose -f $(INFRA_FULL) up -d
-	@echo "==> Redis :6380, NATS :4222, MinIO :9000, Postgres :5434 ready."
+	@echo "==> Redis :6380, NATS :4222, MinIO :9000, Postgres :5434, Kong :8500 ready."
 
 nats-provision:
 	@./infra/nats/provision.sh
@@ -214,6 +214,9 @@ seed-construction:
 
 dev-start:
 	@./scripts/dev-start.sh
+
+kong-check:
+	@./scripts/verify-kong.sh
 
 # dev-start-fresh — destructive convenience: rebuild dev DB then start.
 # Equivalent to: make db-reset && make dev-start.

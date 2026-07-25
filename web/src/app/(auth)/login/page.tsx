@@ -52,7 +52,7 @@ export default function LoginPage() {
 
   function handleSsoLogin() {
     // Redirect to OIDC authorization endpoint
-    const ssoUrl = `${process.env.NEXT_PUBLIC_PLATFORM_API_URL ?? "http://localhost:8086"}/api/v1/auth/sso/authorize`;
+    const ssoUrl = `${process.env.NEXT_PUBLIC_PLATFORM_API_URL ?? "http://localhost:8500"}/api/v1/auth/sso/authorize`;
     window.location.href = ssoUrl;
   }
 
