@@ -316,6 +316,9 @@ func (r *iamRepo) GetInvitationByToken(_ context.Context, _ string) (*iam.Invita
 	return nil, nil
 }
 func (r *iamRepo) MarkInvitationAccepted(_ context.Context, _ uuid.UUID) error { return nil }
+func (r *iamRepo) WithTx(ctx context.Context, fn func(iam.Repository) error) error {
+	return fn(r)
+}
 func (r *iamRepo) UpsertOIDCConfig(_ context.Context, _ iam.OIDCConfigParams) error {
 	return nil
 }

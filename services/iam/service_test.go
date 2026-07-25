@@ -300,6 +300,9 @@ func (m *mockRepo) MarkInvitationAccepted(ctx context.Context, id uuid.UUID) err
 	}
 	return nil
 }
+func (m *mockRepo) WithTx(ctx context.Context, fn func(Repository) error) error {
+	return fn(m) // no real tx; atomicity is a Postgres property (see integration test)
+}
 func (m *mockRepo) UpsertOIDCConfig(ctx context.Context, params OIDCConfigParams) error {
 	if m.upsertOIDCConfigFn != nil {
 		return m.upsertOIDCConfigFn(ctx, params)
@@ -1470,6 +1473,36 @@ func TestAcceptInvitation_RoleGone_ReturnsError(t *testing.T) {
 		},
 	})
 	_, err := svc.AcceptInvitation(context.Background(), "valid-token", "newpass")
+	require.ErrorIs(t, err, ErrRoleNotFound)
+}
+
+// A failed role grant must not issue a token: create-user, assign-role, and
+// mark-accepted all live inside the WithTx callback, so a role-grant failure
+// must roll back the user row too and never reach tokens.Issue.
+func TestAcceptInvitation_FailedGrant_IssuesNoToken(t *testing.T) {
+	roleID := uuid.New()
+	repo := &mockRepo{
+		getInvitationByTokenFn: func(_ context.Context, _ string) (*Invitation, error) {
+			return &Invitation{
+				ID: uuid.New(), TenantID: uuid.New(), Email: "invitee@example.com",
+				Status: "pending", RoleID: &roleID, InvitedBy: uuid.New(),
+				ExpiresAt: time.Now().UTC().Add(time.Hour),
+			}, nil
+		},
+		createUserFn: func(_ context.Context, _ *User) error { return nil },
+		getRoleByIDFn: func(_ context.Context, _, _ uuid.UUID) (*Role, error) {
+			return nil, ErrRoleNotFound // the grant fails inside the tx
+		},
+	}
+	issuer := &mockTokenIssuer{
+		issueFn: func(_ context.Context, _ *auth.AuthResult) (*auth.TokenPair, error) {
+			t.Fatal("tokens.Issue must not be called when the role grant fails")
+			return nil, nil
+		},
+	}
+	svc := NewService(repo, &mockAuthenticator{}, issuer, &mockHasher{}, &mockVerifier{})
+
+	_, err := svc.AcceptInvitation(context.Background(), "tok", "pw")
 	require.ErrorIs(t, err, ErrRoleNotFound)
 }
 

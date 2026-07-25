@@ -274,6 +274,18 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 
 // CreateUser creates a new user, hashing their password before persistence.
 func (s *Service) CreateUser(ctx context.Context, user *User, plainPassword string) (*User, error) {
+	if err := s.prepareNewUser(user, plainPassword); err != nil {
+		return nil, err
+	}
+	if err := s.repo.CreateUser(ctx, user); err != nil {
+		return nil, fmt.Errorf("iam: create user: %w", err)
+	}
+	return user, nil
+}
+
+// prepareNewUser fills in defaults and hashes the password on a not-yet-persisted
+// User. CPU-only (no I/O), so it is safe to call before opening a transaction.
+func (s *Service) prepareNewUser(user *User, plainPassword string) error {
 	if user.ID == uuid.Nil {
 		user.ID = uuid.New()
 	}
@@ -282,13 +294,10 @@ func (s *Service) CreateUser(ctx context.Context, user *User, plainPassword stri
 	}
 	hash, err := s.hasher.Hash(plainPassword)
 	if err != nil {
-		return nil, fmt.Errorf("iam: hash password: %w", err)
+		return fmt.Errorf("iam: hash password: %w", err)
 	}
 	user.PasswordHash = hash
-	if err := s.repo.CreateUser(ctx, user); err != nil {
-		return nil, fmt.Errorf("iam: create user: %w", err)
-	}
-	return user, nil
+	return nil
 }
 
 // GetUser retrieves a user by tenant and user ID.
@@ -744,26 +753,41 @@ func (s *Service) AcceptInvitation(ctx context.Context, token, plainPassword str
 		DisplayName: parts[0],
 		Status:      "active",
 	}
-	if _, err := s.CreateUser(ctx, user, plainPassword); err != nil {
-		return nil, fmt.Errorf("iam: accept invitation — create user: %w", err)
+	if err := s.prepareNewUser(user, plainPassword); err != nil {
+		return nil, fmt.Errorf("iam: accept invitation — prepare user: %w", err)
 	}
 
-	// Assign the pre-selected role if the invitation carried one. Route through
-	// s.AssignRole, not s.repo.AssignRole: the invitation may be seven days old and its
-	// role may have been deleted, and s.AssignRole re-checks that both the role and the
-	// new user belong to the invitation's tenant. A failed grant fails the acceptance —
-	// a role-less user holding a valid token is worse than a rejected invitation.
-	if inv.RoleID != nil {
-		if err := s.AssignRole(ctx, inv.TenantID, user.ID, *inv.RoleID, inv.InvitedBy); err != nil {
-			return nil, err
+	// All three writes commit together or roll back together (#148): a failed
+	// role grant must leave no user row and a still-pending invitation. Route
+	// through the tx-bound repo, not s.CreateUser/s.AssignRole (which use the
+	// pool-bound s.repo). The role is re-validated inside the tx because the
+	// invitation may be seven days old and its role since deleted; a role-less
+	// user holding a valid token is worse than a rejected invitation.
+	if err := s.repo.WithTx(ctx, func(tx Repository) error {
+		if err := tx.CreateUser(ctx, user); err != nil {
+			return fmt.Errorf("iam: create user: %w", err)
 		}
-	}
-
-	if err := s.repo.MarkInvitationAccepted(ctx, inv.ID); err != nil {
-		return nil, fmt.Errorf("iam: mark invitation accepted: %w", err)
+		if inv.RoleID != nil {
+			if _, err := tx.GetRoleByID(ctx, inv.TenantID, *inv.RoleID); err != nil {
+				return err // ErrRoleNotFound for a role outside the invitation's tenant
+			}
+			ur := &UserRole{
+				UserID:     user.ID,
+				RoleID:     *inv.RoleID,
+				AssignedBy: inv.InvitedBy,
+				AssignedAt: time.Now().UTC(),
+			}
+			if err := tx.AssignRole(ctx, ur); err != nil {
+				return fmt.Errorf("iam: assign role %s to user %s: %w", *inv.RoleID, user.ID, err)
+			}
+		}
+		return tx.MarkInvitationAccepted(ctx, inv.ID)
+	}); err != nil {
+		return nil, err
 	}
 
 	// Issue tokens directly — user just proved they control the invited email.
+	// AFTER commit: a session for a rolled-back user must never exist.
 	result := &auth.AuthResult{
 		UserID:          user.ID,
 		TenantID:        user.TenantID,
