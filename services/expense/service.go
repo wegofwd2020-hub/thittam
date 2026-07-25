@@ -209,6 +209,9 @@ func (s *Service) SettlePettyCash(ctx context.Context, tenantID, advanceID uuid.
 	if err != nil {
 		return fmt.Errorf("get petty cash advance: %w", err)
 	}
+	if pc.Status == "settled" {
+		return ErrAlreadySettled
+	}
 	now := time.Now()
 	pc.Status = "settled"
 	pc.UnspentAmount = unspent

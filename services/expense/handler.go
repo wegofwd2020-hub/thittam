@@ -467,6 +467,9 @@ func (h *Handler) SettlePettyCash(ctx context.Context, req *expensev1.SettlePett
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid unspent_amount: must be a decimal string")
 	}
+	if unspent.IsNegative() {
+		return nil, status.Error(codes.InvalidArgument, "unspent_amount must not be negative")
+	}
 
 	if err := h.svc.SettlePettyCash(ctx, tenantID, advanceID, unspent); err != nil {
 		return nil, grpcErr(err)
@@ -598,7 +601,7 @@ func grpcErr(err error) error {
 		return status.Error(codes.NotFound, "expense not found")
 	case errors.Is(err, ErrPONotFound):
 		return status.Error(codes.NotFound, "purchase order not found")
-	case errors.Is(err, ErrAlreadyApproved), errors.Is(err, ErrAlreadyRejected):
+	case errors.Is(err, ErrAlreadyApproved), errors.Is(err, ErrAlreadyRejected), errors.Is(err, ErrAlreadySettled):
 		return status.Error(codes.FailedPrecondition, "expense is already approved")
 	case errors.Is(err, ErrApprovalLimitExceeded):
 		return status.Error(codes.FailedPrecondition, "amount exceeds approval limit for role")

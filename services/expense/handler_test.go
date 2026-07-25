@@ -689,6 +689,12 @@ func TestHandler_SettlePettyCash_InvalidAmount(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestHandler_SettlePettyCash_NegativeAmount(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().SettlePettyCash(ctxWithTenant(uuid.New()), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "-5.00"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
 // --- Vertical metadata ---
 
 func TestHandler_GetExpenseCategories(t *testing.T) {

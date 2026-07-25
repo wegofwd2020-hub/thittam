@@ -512,6 +512,15 @@ func TestService_ApprovePurchaseOrder_AlreadyApproved(t *testing.T) {
 	assert.ErrorIs(t, svc.ApprovePurchaseOrder(context.Background(), uuid.New(), uuid.New(), uuid.New()), ErrAlreadyApproved)
 }
 
+func TestService_SettlePettyCash_AlreadySettled(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "settled"}, nil
+		},
+	})
+	require.ErrorIs(t, svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), decimal.RequireFromString("12.50")), ErrAlreadySettled)
+}
+
 func TestService_SettlePettyCash_SetsSettled(t *testing.T) {
 	var saved *PettyCashAdvance
 	svc := NewService(&mockRepo{
