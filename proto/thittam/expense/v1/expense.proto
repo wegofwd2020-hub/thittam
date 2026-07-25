@@ -9,23 +9,44 @@ package thittam.expense.v1;
 option go_package = "github.com/wegofwd2020/thittam/gen/expense/v1;expensev1";
 
 import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
 
 service ExpenseService {
-  rpc CreatePurchaseOrder(CreatePurchaseOrderRequest) returns (PurchaseOrder);
+  rpc CreatePurchaseOrder(CreatePurchaseOrderRequest) returns (PurchaseOrder) {
+    option (google.api.http) = { post: "/api/v1/purchase-orders" body: "*" };
+  }
   rpc GetPurchaseOrder(GetPurchaseOrderRequest) returns (PurchaseOrder);
-  rpc ListPurchaseOrders(ListPurchaseOrdersRequest) returns (ListPurchaseOrdersResponse);
+  rpc ListPurchaseOrders(ListPurchaseOrdersRequest) returns (ListPurchaseOrdersResponse) {
+    option (google.api.http) = { get: "/api/v1/purchase-orders" };
+  }
 
-  rpc SubmitExpense(SubmitExpenseRequest) returns (Expense);
-  rpc GetExpense(GetExpenseRequest) returns (Expense);
-  rpc ListExpenses(ListExpensesRequest) returns (ListExpensesResponse);
-  rpc ApproveExpense(ApproveExpenseRequest) returns (Expense);
+  rpc SubmitExpense(SubmitExpenseRequest) returns (Expense) {
+    option (google.api.http) = { post: "/api/v1/expenses" body: "*" };
+  }
+  rpc GetExpense(GetExpenseRequest) returns (Expense) {
+    option (google.api.http) = { get: "/api/v1/expenses/{id}" };
+  }
+  rpc ListExpenses(ListExpensesRequest) returns (ListExpensesResponse) {
+    option (google.api.http) = { get: "/api/v1/expenses" };
+  }
+  rpc ApproveExpense(ApproveExpenseRequest) returns (Expense) {
+    option (google.api.http) = { post: "/api/v1/expenses/{expense_id}/approve" body: "*" };
+  }
 
-  rpc CreatePettyCashAdvance(CreatePettyCashAdvanceRequest) returns (PettyCashAdvance);
+  rpc CreatePettyCashAdvance(CreatePettyCashAdvanceRequest) returns (PettyCashAdvance) {
+    option (google.api.http) = { post: "/api/v1/petty-cash" body: "*" };
+  }
   rpc GetPettyCashAdvance(GetPettyCashAdvanceRequest) returns (PettyCashAdvance);
-  rpc ListPettyCashAdvances(ListPettyCashAdvancesRequest) returns (ListPettyCashAdvancesResponse);
+  rpc ListPettyCashAdvances(ListPettyCashAdvancesRequest) returns (ListPettyCashAdvancesResponse) {
+    option (google.api.http) = { get: "/api/v1/petty-cash" };
+  }
 
-  rpc GetExpenseCategories(GetExpenseCategoriesRequest) returns (GetExpenseCategoriesResponse);
-  rpc GetApprovalLimits(GetApprovalLimitsRequest) returns (GetApprovalLimitsResponse);
+  rpc GetExpenseCategories(GetExpenseCategoriesRequest) returns (GetExpenseCategoriesResponse) {
+    option (google.api.http) = { get: "/api/v1/config/expense-categories" };
+  }
+  rpc GetApprovalLimits(GetApprovalLimitsRequest) returns (GetApprovalLimitsResponse) {
+    option (google.api.http) = { get: "/api/v1/config/approval-workflow" };
+  }
 }
 
 message PurchaseOrder {

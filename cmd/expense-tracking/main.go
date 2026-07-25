@@ -106,6 +106,19 @@ func main() {
 	srv.RegisterHealthChecker("nats", &natsChecker{nc: nc})
 	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
 
+	// --- REST gateway (grpc-gateway, #60 Phase C2) — via the shared helper. ---
+	go func() {
+		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
+			ServiceName:   "expense-tracking",
+			GRPCEndpoint:  "localhost:8082",
+			HTTPPort:      9082,
+			Register:      expensev1.RegisterExpenseServiceHandlerFromEndpoint,
+			ProjectHeader: true,
+		}); err != nil {
+			log.Fatalf("expense-tracking: gateway: %v", err)
+		}
+	}()
+
 	log.Printf("expense-tracking service ready on :8082")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("expense-tracking: %v", err)
