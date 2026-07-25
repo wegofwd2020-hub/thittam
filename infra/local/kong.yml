@@ -1,5 +1,5 @@
 # DB-less Kong declarative config for local dev (#60 Phase B). Routes the single
-# origin :8500 to the three services that have a grpc-gateway REST surface. The
+# origin :8500 to the six services that have a grpc-gateway REST surface. The
 # Go services run natively on the host, so upstreams use host.docker.internal.
 # strip_path:false keeps the /api/v1/... path intact for the gateway.
 _format_version: "3.0"
@@ -48,4 +48,11 @@ services:
         paths:
           - /api/v1/assets
           - /api/v1/config/inventory-categories
+        strip_path: false
+  - name: reporting
+    url: http://host.docker.internal:9085
+    routes:
+      - name: reporting
+        paths:
+          - /api/v1/reports
         strip_path: false

@@ -132,6 +132,19 @@ func main() {
 	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
 	srv.RegisterHealthChecker("projection-lag", reporting.NewLagChecker(repo))
 
+	// --- REST gateway (grpc-gateway, #60 / #190) — via the shared helper. ---
+	go func() {
+		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
+			ServiceName:   "reporting-analytics",
+			GRPCEndpoint:  "localhost:8085",
+			HTTPPort:      9085,
+			Register:      reportingv1.RegisterReportingServiceHandlerFromEndpoint,
+			ProjectHeader: false,
+		}); err != nil {
+			log.Fatalf("reporting-analytics: gateway: %v", err)
+		}
+	}()
+
 	log.Printf("reporting-analytics service ready on :8085")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("reporting-analytics: %v", err)
