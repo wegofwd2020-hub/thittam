@@ -6,12 +6,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	expensev1 "github.com/wegofwd2020/thittam/gen/expense/v1"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/tenant"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -202,6 +202,55 @@ func TestHandler_ListPurchaseOrders_Denied(t *testing.T) {
 
 	require.Error(t, err)
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+// --- ApprovePurchaseOrder ---
+
+func TestHandler_ApprovePurchaseOrder_Success(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	poID := uuid.New()
+	callCount := 0
+	h := NewHandler(NewService(&mockRepo{
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			callCount++
+			st := "draft"
+			if callCount > 1 {
+				st = "approved"
+			}
+			return &PurchaseOrder{ID: id, TenantID: tid, Status: st, Amount: decimal.NewFromInt(5000)}, nil
+		},
+		updatePOFn: func(_ context.Context, _ *PurchaseOrder) error { return nil },
+	})).WithPermissionChecker(allowAllPerm{})
+
+	resp, err := h.ApprovePurchaseOrder(ctxWithTenant(tenantID), &expensev1.ApprovePurchaseOrderRequest{Id: poID.String()})
+	require.NoError(t, err)
+	assert.Equal(t, "approved", resp.GetStatus())
+}
+
+func TestHandler_ApprovePurchaseOrder_Denied(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		getPOFn: func(context.Context, uuid.UUID, uuid.UUID) (*PurchaseOrder, error) {
+			t.Fatal("repo must not be reached when permission is denied")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.ApprovePurchaseOrder(ctxWithTenant(uuid.New()), &expensev1.ApprovePurchaseOrderRequest{Id: uuid.New().String()})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ApprovePurchaseOrder_NoTenant(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ApprovePurchaseOrder(ctxWithVertical(), &expensev1.ApprovePurchaseOrderRequest{Id: uuid.New().String()})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestHandler_ApprovePurchaseOrder_InvalidID(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ApprovePurchaseOrder(ctxWithTenant(uuid.New()), &expensev1.ApprovePurchaseOrderRequest{Id: "bad"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 // --- SubmitExpense ---
@@ -399,6 +448,52 @@ func TestHandler_ApproveExpense_InvalidID(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+// --- RejectExpense ---
+
+func TestHandler_RejectExpense_Success(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	expID := uuid.New()
+	callCount := 0
+	h := NewHandler(NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			callCount++
+			st := "submitted"
+			if callCount > 1 {
+				st = "rejected"
+			}
+			return &Expense{ID: id, TenantID: tid, Status: st, Amount: decimal.NewFromInt(5000)}, nil
+		},
+	})).WithPermissionChecker(allowAllPerm{})
+	resp, err := h.RejectExpense(ctxWithTenant(tenantID), &expensev1.RejectExpenseRequest{ExpenseId: expID.String(), Reason: "over budget"})
+	require.NoError(t, err)
+	assert.Equal(t, "rejected", resp.GetStatus())
+}
+
+func TestHandler_RejectExpense_Denied(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		getExpenseFn: func(context.Context, uuid.UUID, uuid.UUID) (*Expense, error) {
+			t.Fatal("repo must not be reached when permission is denied")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+	_, err := h.RejectExpense(ctxWithTenant(uuid.New()), &expensev1.RejectExpenseRequest{ExpenseId: uuid.New().String(), Reason: "x"})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_RejectExpense_NoTenant(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().RejectExpense(ctxWithVertical(), &expensev1.RejectExpenseRequest{ExpenseId: uuid.New().String(), Reason: "x"})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestHandler_RejectExpense_InvalidID(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().RejectExpense(ctxWithTenant(uuid.New()), &expensev1.RejectExpenseRequest{ExpenseId: "bad", Reason: "x"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
 // --- CreatePettyCashAdvance ---
 
 func TestHandler_CreatePettyCashAdvance_Success(t *testing.T) {
@@ -537,6 +632,61 @@ func TestHandler_ListPettyCashAdvances_Denied(t *testing.T) {
 
 	require.Error(t, err)
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+// --- SettlePettyCash ---
+
+func TestHandler_SettlePettyCash_Success(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	pcID := uuid.New()
+	callCount := 0
+	h := NewHandler(NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			callCount++
+			st := "issued"
+			if callCount > 1 {
+				st = "settled"
+			}
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: st, Amount: decimal.NewFromInt(5000)}, nil
+		},
+		updatePettyCashFn: func(_ context.Context, _ *PettyCashAdvance) error { return nil },
+	})).WithPermissionChecker(allowAllPerm{})
+
+	resp, err := h.SettlePettyCash(ctxWithTenant(tenantID), &expensev1.SettlePettyCashRequest{Id: pcID.String(), UnspentAmount: "500.00"})
+	require.NoError(t, err)
+	assert.Equal(t, "settled", resp.GetStatus())
+}
+
+func TestHandler_SettlePettyCash_Denied(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		getPettyCashFn: func(context.Context, uuid.UUID, uuid.UUID) (*PettyCashAdvance, error) {
+			t.Fatal("repo must not be reached when permission is denied")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.SettlePettyCash(ctxWithTenant(uuid.New()), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "500.00"})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_SettlePettyCash_NoTenant(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().SettlePettyCash(ctxWithVertical(), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "500.00"})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestHandler_SettlePettyCash_InvalidID(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().SettlePettyCash(ctxWithTenant(uuid.New()), &expensev1.SettlePettyCashRequest{Id: "bad", UnspentAmount: "500.00"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_SettlePettyCash_InvalidAmount(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().SettlePettyCash(ctxWithTenant(uuid.New()), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "abc"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 // --- Vertical metadata ---
