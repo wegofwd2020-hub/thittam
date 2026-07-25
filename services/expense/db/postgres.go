@@ -170,6 +170,21 @@ func (p *Postgres) UpdateExpense(ctx context.Context, e *expense.Expense) error 
 	return nil
 }
 
+func (p *Postgres) RejectExpense(ctx context.Context, tenantID, expenseID uuid.UUID, reason string) error {
+	_, err := p.q.RejectExpense(ctx, RejectExpenseParams{
+		ID:              expenseID,
+		TenantID:        tenantID,
+		RejectionReason: pgtype.Text{String: reason, Valid: true},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return expense.ErrExpenseNotFound
+		}
+		return fmt.Errorf("expense/db: reject expense: %w", err)
+	}
+	return nil
+}
+
 // --- Petty Cash ---
 
 func (p *Postgres) CreatePettyCashAdvance(ctx context.Context, pc *expense.PettyCashAdvance) error {

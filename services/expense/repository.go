@@ -19,6 +19,7 @@ type Repository interface {
 	GetExpense(ctx context.Context, tenantID, id uuid.UUID) (*Expense, error)
 	ListExpenses(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int) ([]Expense, error)
 	UpdateExpense(ctx context.Context, e *Expense) error
+	RejectExpense(ctx context.Context, tenantID, expenseID uuid.UUID, reason string) error
 
 	// Petty Cash
 	CreatePettyCashAdvance(ctx context.Context, pc *PettyCashAdvance) error
