@@ -3,9 +3,11 @@ package expense
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 )
 
@@ -115,6 +117,9 @@ func (s *Service) ListExpenses(ctx context.Context, tenantID, productionID uuid.
 
 // CreatePurchaseOrder creates a new purchase order.
 func (s *Service) CreatePurchaseOrder(ctx context.Context, po *PurchaseOrder) error {
+	if po.PONumber == "" {
+		po.PONumber = genPONumber()
+	}
 	if po.ID == uuid.Nil {
 		po.ID = uuid.New()
 	}
@@ -165,6 +170,57 @@ func (s *Service) GetExpenseCategories(ctx context.Context) []vertical.ExpenseCa
 func (s *Service) GetApprovalLimits(ctx context.Context) vertical.ApprovalWorkflow {
 	vcfg := vertical.MustFromContext(ctx)
 	return vcfg.ApprovalWorkflow
+}
+
+// RejectExpense rejects a submitted expense with a reason.
+func (s *Service) RejectExpense(ctx context.Context, tenantID, expenseID uuid.UUID, reason string) error {
+	exp, err := s.repo.GetExpense(ctx, tenantID, expenseID)
+	if err != nil {
+		return fmt.Errorf("get expense: %w", err)
+	}
+	if exp.Status == "approved" {
+		return ErrAlreadyApproved
+	}
+	if exp.Status == "rejected" {
+		return ErrAlreadyRejected
+	}
+	return s.repo.RejectExpense(ctx, tenantID, expenseID, reason)
+}
+
+// ApprovePurchaseOrder approves a purchase order.
+func (s *Service) ApprovePurchaseOrder(ctx context.Context, tenantID, poID, approverID uuid.UUID) error {
+	po, err := s.repo.GetPurchaseOrder(ctx, tenantID, poID)
+	if err != nil {
+		return fmt.Errorf("get purchase order: %w", err)
+	}
+	if po.Status == "approved" {
+		return ErrAlreadyApproved
+	}
+	now := time.Now()
+	po.Status = "approved"
+	po.ApprovedBy = &approverID
+	po.ApprovedAt = &now
+	return s.repo.UpdatePurchaseOrder(ctx, po)
+}
+
+// SettlePettyCash settles a petty cash advance, recording the unspent amount.
+func (s *Service) SettlePettyCash(ctx context.Context, tenantID, advanceID uuid.UUID, unspent decimal.Decimal) error {
+	pc, err := s.repo.GetPettyCashAdvance(ctx, tenantID, advanceID)
+	if err != nil {
+		return fmt.Errorf("get petty cash advance: %w", err)
+	}
+	now := time.Now()
+	pc.Status = "settled"
+	pc.UnspentAmount = unspent
+	pc.SettledAt = &now
+	return s.repo.UpdatePettyCashAdvance(ctx, pc)
+}
+
+// genPONumber produces a unique, human-readable PO number for the common case
+// where the UI does not collect one (po_number is NOT NULL UNIQUE, so an empty
+// string would collide on the second create).
+func genPONumber() string {
+	return "PO-" + time.Now().UTC().Format("2006") + "-" + strings.ToUpper(uuid.NewString()[:8])
 }
 
 // publish calls fn only when a publisher is configured, and logs but does not
