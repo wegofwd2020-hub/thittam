@@ -9,22 +9,16 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"os"
 	"time"
 
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
-	"github.com/rs/cors"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/encoding/protojson"
 
 	budgetv1 "github.com/wegofwd2020/thittam/gen/budget/v1"
 	"github.com/wegofwd2020/thittam/pkg/auth"
-	"github.com/wegofwd2020/thittam/pkg/corsutil"
 	"github.com/wegofwd2020/thittam/pkg/events"
 	"github.com/wegofwd2020/thittam/pkg/iamclient"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
@@ -118,51 +112,16 @@ func main() {
 	srv.RegisterHealthChecker("nats", &natsChecker{nc: nc})
 	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
 
-	// --- REST gateway (grpc-gateway, ADR-014 follow-up #60) ---
-	// UI calls REST endpoints like GET /api/v1/budgets. The generated mux
-	// lives on :9081 (grpc port 8081 + 1000, parallel to IAM's 8086/9086).
+	// --- REST gateway (grpc-gateway, #60) — via the shared helper. ---
 	go func() {
-		// x-caller-* and x-tenant-id are deliberately NOT forwarded: identity
-		// comes from the verified token (#138), and forwarding them would let a
-		// browser assert its own role. X-Project-Id selects a resource, not an
-		// identity. Authorization arrives without a matcher (permanent header).
-		headerMatcher := func(key string) (string, bool) {
-			if key == "X-Project-Id" {
-				return key, true
-			}
-			return runtime.DefaultHeaderMatcher(key)
-		}
-		gwMux := runtime.NewServeMux(
-			runtime.WithIncomingHeaderMatcher(headerMatcher),
-			runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
-				MarshalOptions: protojson.MarshalOptions{
-					UseProtoNames:   true,
-					EmitUnpopulated: true,
-				},
-				UnmarshalOptions: protojson.UnmarshalOptions{
-					DiscardUnknown: true,
-				},
-			}),
-		)
-		opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-		if err := budgetv1.RegisterBudgetServiceHandlerFromEndpoint(ctx, gwMux, "localhost:8081", opts); err != nil {
-			log.Fatalf("budget-planning: register gateway: %v", err)
-		}
-		extraOrigins := corsutil.ExtraOriginsFromEnv()
-		corsHandler := cors.New(cors.Options{
-			AllowOriginFunc: corsutil.OriginFunc(extraOrigins...),
-			AllowedMethods: []string{
-				http.MethodGet, http.MethodPost, http.MethodPut,
-				http.MethodPatch, http.MethodDelete, http.MethodOptions,
-			},
-			AllowedHeaders: []string{
-				"Content-Type", "Authorization", "Accept", "X-Project-Id",
-			},
-			AllowCredentials: true,
-		}).Handler(gwMux)
-		log.Printf("budget-planning REST gateway ready on :9081 (CORS: local-dev + %d extra origin(s))", len(extraOrigins))
-		if err := http.ListenAndServe(":9081", corsHandler); err != nil {
-			log.Fatalf("budget-planning: gateway listen: %v", err)
+		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
+			ServiceName:   "budget-planning",
+			GRPCEndpoint:  "localhost:8081",
+			HTTPPort:      9081,
+			Register:      budgetv1.RegisterBudgetServiceHandlerFromEndpoint,
+			ProjectHeader: true,
+		}); err != nil {
+			log.Fatalf("budget-planning: gateway: %v", err)
 		}
 	}()
 
