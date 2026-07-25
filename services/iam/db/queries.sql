@@ -178,18 +178,19 @@ JOIN user_roles ur ON ur.role_id = r.id
 WHERE ur.user_id = $1;
 
 -- name: CreateInvitation :one
-INSERT INTO invitations (id, tenant_id, email, invited_by, token, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO invitations (id, tenant_id, email, invited_by, token, expires_at, role_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (tenant_id, email) DO UPDATE
-    SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, accepted_at = NULL
+    SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at,
+        status = 'pending', role_id = EXCLUDED.role_id
 RETURNING *;
 
 -- name: GetInvitationByToken :one
 SELECT * FROM invitations
-WHERE token = $1 AND accepted_at IS NULL AND expires_at > now();
+WHERE token = $1 AND status = 'pending' AND expires_at > now();
 
 -- name: AcceptInvitation :exec
-UPDATE invitations SET accepted_at = now() WHERE id = $1;
+UPDATE invitations SET status = 'accepted' WHERE id = $1;
 
 -- name: CreateTenantPurgeRequest :one
 INSERT INTO tenant_purge_requests (
