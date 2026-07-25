@@ -30,3 +30,22 @@ services:
           - /api/v1/crew
           - /api/v1/config
         strip_path: false
+  - name: expense
+    url: http://host.docker.internal:9082
+    routes:
+      - name: expense
+        paths:
+          - /api/v1/expenses
+          - /api/v1/purchase-orders
+          - /api/v1/petty-cash
+          - /api/v1/config/expense-categories
+          - /api/v1/config/approval-workflow
+        strip_path: false
+  - name: inventory
+    url: http://host.docker.internal:9084
+    routes:
+      - name: inventory
+        paths:
+          - /api/v1/assets
+          - /api/v1/config/inventory-categories
+        strip_path: false
