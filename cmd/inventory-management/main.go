@@ -84,6 +84,19 @@ func main() {
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
 	srv.RegisterHealthChecker("redis", &redisChecker{rdb: rdb})
 
+	// --- REST gateway (grpc-gateway, #60 Phase C2) — via the shared helper. ---
+	go func() {
+		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
+			ServiceName:   "inventory-management",
+			GRPCEndpoint:  "localhost:8084",
+			HTTPPort:      9084,
+			Register:      inventoryv1.RegisterInventoryServiceHandlerFromEndpoint,
+			ProjectHeader: true,
+		}); err != nil {
+			log.Fatalf("inventory-management: gateway: %v", err)
+		}
+	}()
+
 	log.Printf("inventory-management service ready on :8084")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("inventory-management: %v", err)

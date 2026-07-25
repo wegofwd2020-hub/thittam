@@ -9,17 +9,30 @@ package thittam.inventory.v1;
 option go_package = "github.com/wegofwd2020/thittam/gen/inventory/v1;inventoryv1";
 
 import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
 
 service InventoryService {
-  rpc CreateAsset(CreateAssetRequest) returns (Asset);
-  rpc GetAsset(GetAssetRequest) returns (Asset);
-  rpc ListAssets(ListAssetsRequest) returns (ListAssetsResponse);
+  rpc CreateAsset(CreateAssetRequest) returns (Asset) {
+    option (google.api.http) = { post: "/api/v1/assets" body: "*" };
+  }
+  rpc GetAsset(GetAssetRequest) returns (Asset) {
+    option (google.api.http) = { get: "/api/v1/assets/{id}" };
+  }
+  rpc ListAssets(ListAssetsRequest) returns (ListAssetsResponse) {
+    option (google.api.http) = { get: "/api/v1/assets" };
+  }
 
-  rpc CheckOutAsset(CheckOutAssetRequest) returns (AssetCheckout);
+  rpc CheckOutAsset(CheckOutAssetRequest) returns (AssetCheckout) {
+    option (google.api.http) = { post: "/api/v1/assets/{asset_id}/check-out" body: "*" };
+  }
   rpc CheckInAsset(CheckInAssetRequest) returns (AssetCheckout);
-  rpc ListCheckouts(ListCheckoutsRequest) returns (ListCheckoutsResponse);
+  rpc ListCheckouts(ListCheckoutsRequest) returns (ListCheckoutsResponse) {
+    option (google.api.http) = { get: "/api/v1/assets/{asset_id}/checkouts" };
+  }
 
-  rpc GetInventoryCategories(GetInventoryCategoriesRequest) returns (GetInventoryCategoriesResponse);
+  rpc GetInventoryCategories(GetInventoryCategoriesRequest) returns (GetInventoryCategoriesResponse) {
+    option (google.api.http) = { get: "/api/v1/config/inventory-categories" };
+  }
 }
 
 message Asset {
