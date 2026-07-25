@@ -34,17 +34,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/jackc/pgx/v5/pgxpool"
 	nats "github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
-	"github.com/rs/cors"
 	iamv1 "github.com/wegofwd2020/thittam/gen/iam/v1"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/encoding/protojson"
 	"github.com/wegofwd2020/thittam/pkg/auth"
-	"github.com/wegofwd2020/thittam/pkg/corsutil"
 	appcrypto "github.com/wegofwd2020/thittam/pkg/crypto"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/jetstream"
@@ -242,68 +237,34 @@ func main() {
 	// NATS is intentionally NOT a readiness checker: it backs only the best-effort
 	// billing consumer, and iam (the auth SPOF) must stay ready during a NATS outage.
 
-	// --- REST gateway (grpc-gateway, ADR-014 follow-up #60) ---
-	// The UI calls REST endpoints (/api/v1/auth/login etc.). Mount the
-	// generated grpc-gateway mux on a separate HTTP port so the gRPC port
-	// stays a clean gRPC-only surface for service-to-service calls.
+	// --- REST gateway (grpc-gateway, #60) — via the shared helper. ---
+	// The auth rate-limiter is built here (it needs rdb + AUTH_RATE_* env) and
+	// wired into the gateway via GatewayConfig.Wrap, preserving the previous
+	// CORS(rateLimit(mux)) chain: /api/v1/auth/* is rate-limited, everything
+	// else goes straight through. iam does NOT forward X-Project-Id.
+	authRateLimiter := ratelimit.Middleware(rdb, ratelimit.Config{
+		Limit:     envInt("AUTH_RATE_LIMIT", 10),
+		Window:    envDuration("AUTH_RATE_WINDOW", time.Minute),
+		KeyPrefix: "iam:auth",
+	})
+	log.Printf("iam auth rate-limit: %d/%s", envInt("AUTH_RATE_LIMIT", 10), envDuration("AUTH_RATE_WINDOW", time.Minute))
 	go func() {
-		// UseProtoNames=true emits snake_case field names (matching the .proto)
-		// instead of grpc-gateway's default camelCase. The web client's TS types
-		// are snake_case (e.g. TokenPair.access_token), so this avoids per-field
-		// rename work on the UI side.
-		gwMux := runtime.NewServeMux(
-			runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
-				MarshalOptions: protojson.MarshalOptions{
-					UseProtoNames:   true,
-					EmitUnpopulated: true,
-				},
-				UnmarshalOptions: protojson.UnmarshalOptions{
-					DiscardUnknown: true,
-				},
-			}),
-		)
-		opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-		if err := iamv1.RegisterIAMServiceHandlerFromEndpoint(ctx, gwMux, "localhost:8086", opts); err != nil {
-			log.Fatalf("iam: register gateway: %v", err)
-		}
-		// Rate-limit /api/v1/auth/* by client IP to blunt credential stuffing.
-		// Defaults to 10 attempts per IP per minute; override with
-		// AUTH_RATE_LIMIT and AUTH_RATE_WINDOW env vars. Fails open if Redis
-		// is unreachable — the limiter is a safety net, not an auth layer.
-		authRateLimiter := ratelimit.Middleware(rdb, ratelimit.Config{
-			Limit:     envInt("AUTH_RATE_LIMIT", 10),
-			Window:    envDuration("AUTH_RATE_WINDOW", time.Minute),
-			KeyPrefix: "iam:auth",
-		})
-		// Wrap only /api/v1/auth/* with the limiter; everything else goes
-		// straight to the grpc-gateway mux.
-		routed := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.HasPrefix(r.URL.Path, "/api/v1/auth/") {
-				authRateLimiter(gwMux).ServeHTTP(w, r)
-				return
-			}
-			gwMux.ServeHTTP(w, r)
-		})
-
-		// CORS: accepts the Next.js dev server on :3100/:3000 from any
-		// loopback or RFC-1918 host (local dev, LAN demos) plus any exact
-		// origin listed in CORS_EXTRA_ORIGINS (pre-Kong cloud deploys).
-		// Production CORS is handled by Kong at the edge.
-		extraOrigins := corsutil.ExtraOriginsFromEnv()
-		corsHandler := cors.New(cors.Options{
-			AllowOriginFunc: corsutil.OriginFunc(extraOrigins...),
-			AllowedMethods: []string{
-				http.MethodGet, http.MethodPost, http.MethodPut,
-				http.MethodPatch, http.MethodDelete, http.MethodOptions,
+		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
+			ServiceName:  "iam",
+			GRPCEndpoint: "localhost:8086",
+			HTTPPort:     9086,
+			Register:     iamv1.RegisterIAMServiceHandlerFromEndpoint,
+			Wrap: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if strings.HasPrefix(r.URL.Path, "/api/v1/auth/") {
+						authRateLimiter(next).ServeHTTP(w, r)
+						return
+					}
+					next.ServeHTTP(w, r)
+				})
 			},
-			AllowedHeaders: []string{
-				"Content-Type", "Authorization", "Accept",
-			},
-			AllowCredentials: true,
-		}).Handler(routed)
-		log.Printf("iam REST gateway ready on :9086 (CORS: local-dev + %d extra origin(s); auth rate-limit: %d/%s)", len(extraOrigins), envInt("AUTH_RATE_LIMIT", 10), envDuration("AUTH_RATE_WINDOW", time.Minute))
-		if err := http.ListenAndServe(":9086", corsHandler); err != nil {
-			log.Fatalf("iam: gateway listen: %v", err)
+		}); err != nil {
+			log.Fatalf("iam: gateway: %v", err)
 		}
 	}()
 
