@@ -28,6 +28,11 @@ const (
 	ReportingService_GetExpenseFacts_FullMethodName       = "/thittam.reporting.v1.ReportingService/GetExpenseFacts"
 	ReportingService_GetBudgetFacts_FullMethodName        = "/thittam.reporting.v1.ReportingService/GetBudgetFacts"
 	ReportingService_GetDashboardSummary_FullMethodName   = "/thittam.reporting.v1.ReportingService/GetDashboardSummary"
+	ReportingService_GetPortfolioOverview_FullMethodName  = "/thittam.reporting.v1.ReportingService/GetPortfolioOverview"
+	ReportingService_GetFinancialSummary_FullMethodName   = "/thittam.reporting.v1.ReportingService/GetFinancialSummary"
+	ReportingService_GetApprovalPipeline_FullMethodName   = "/thittam.reporting.v1.ReportingService/GetApprovalPipeline"
+	ReportingService_GetTeamUtilization_FullMethodName    = "/thittam.reporting.v1.ReportingService/GetTeamUtilization"
+	ReportingService_GetComplianceStatus_FullMethodName   = "/thittam.reporting.v1.ReportingService/GetComplianceStatus"
 )
 
 // ReportingServiceClient is the client API for ReportingService service.
@@ -39,6 +44,11 @@ type ReportingServiceClient interface {
 	GetExpenseFacts(ctx context.Context, in *GetExpenseFactsRequest, opts ...grpc.CallOption) (*GetExpenseFactsResponse, error)
 	GetBudgetFacts(ctx context.Context, in *GetBudgetFactsRequest, opts ...grpc.CallOption) (*GetBudgetFactsResponse, error)
 	GetDashboardSummary(ctx context.Context, in *GetDashboardSummaryRequest, opts ...grpc.CallOption) (*DashboardSummary, error)
+	GetPortfolioOverview(ctx context.Context, in *GetPortfolioOverviewRequest, opts ...grpc.CallOption) (*PortfolioOverview, error)
+	GetFinancialSummary(ctx context.Context, in *GetFinancialSummaryRequest, opts ...grpc.CallOption) (*FinancialSummary, error)
+	GetApprovalPipeline(ctx context.Context, in *GetApprovalPipelineRequest, opts ...grpc.CallOption) (*ApprovalPipeline, error)
+	GetTeamUtilization(ctx context.Context, in *GetTeamUtilizationRequest, opts ...grpc.CallOption) (*TeamUtilization, error)
+	GetComplianceStatus(ctx context.Context, in *GetComplianceStatusRequest, opts ...grpc.CallOption) (*ComplianceStatus, error)
 }
 
 type reportingServiceClient struct {
@@ -94,6 +104,51 @@ func (c *reportingServiceClient) GetDashboardSummary(ctx context.Context, in *Ge
 	return out, nil
 }
 
+func (c *reportingServiceClient) GetPortfolioOverview(ctx context.Context, in *GetPortfolioOverviewRequest, opts ...grpc.CallOption) (*PortfolioOverview, error) {
+	out := new(PortfolioOverview)
+	err := c.cc.Invoke(ctx, ReportingService_GetPortfolioOverview_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *reportingServiceClient) GetFinancialSummary(ctx context.Context, in *GetFinancialSummaryRequest, opts ...grpc.CallOption) (*FinancialSummary, error) {
+	out := new(FinancialSummary)
+	err := c.cc.Invoke(ctx, ReportingService_GetFinancialSummary_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *reportingServiceClient) GetApprovalPipeline(ctx context.Context, in *GetApprovalPipelineRequest, opts ...grpc.CallOption) (*ApprovalPipeline, error) {
+	out := new(ApprovalPipeline)
+	err := c.cc.Invoke(ctx, ReportingService_GetApprovalPipeline_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *reportingServiceClient) GetTeamUtilization(ctx context.Context, in *GetTeamUtilizationRequest, opts ...grpc.CallOption) (*TeamUtilization, error) {
+	out := new(TeamUtilization)
+	err := c.cc.Invoke(ctx, ReportingService_GetTeamUtilization_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *reportingServiceClient) GetComplianceStatus(ctx context.Context, in *GetComplianceStatusRequest, opts ...grpc.CallOption) (*ComplianceStatus, error) {
+	out := new(ComplianceStatus)
+	err := c.cc.Invoke(ctx, ReportingService_GetComplianceStatus_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReportingServiceServer is the server API for ReportingService service.
 // All implementations must embed UnimplementedReportingServiceServer
 // for forward compatibility
@@ -103,6 +158,11 @@ type ReportingServiceServer interface {
 	GetExpenseFacts(context.Context, *GetExpenseFactsRequest) (*GetExpenseFactsResponse, error)
 	GetBudgetFacts(context.Context, *GetBudgetFactsRequest) (*GetBudgetFactsResponse, error)
 	GetDashboardSummary(context.Context, *GetDashboardSummaryRequest) (*DashboardSummary, error)
+	GetPortfolioOverview(context.Context, *GetPortfolioOverviewRequest) (*PortfolioOverview, error)
+	GetFinancialSummary(context.Context, *GetFinancialSummaryRequest) (*FinancialSummary, error)
+	GetApprovalPipeline(context.Context, *GetApprovalPipelineRequest) (*ApprovalPipeline, error)
+	GetTeamUtilization(context.Context, *GetTeamUtilizationRequest) (*TeamUtilization, error)
+	GetComplianceStatus(context.Context, *GetComplianceStatusRequest) (*ComplianceStatus, error)
 	mustEmbedUnimplementedReportingServiceServer()
 }
 
@@ -124,6 +184,21 @@ func (UnimplementedReportingServiceServer) GetBudgetFacts(context.Context, *GetB
 }
 func (UnimplementedReportingServiceServer) GetDashboardSummary(context.Context, *GetDashboardSummaryRequest) (*DashboardSummary, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetDashboardSummary not implemented")
+}
+func (UnimplementedReportingServiceServer) GetPortfolioOverview(context.Context, *GetPortfolioOverviewRequest) (*PortfolioOverview, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPortfolioOverview not implemented")
+}
+func (UnimplementedReportingServiceServer) GetFinancialSummary(context.Context, *GetFinancialSummaryRequest) (*FinancialSummary, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetFinancialSummary not implemented")
+}
+func (UnimplementedReportingServiceServer) GetApprovalPipeline(context.Context, *GetApprovalPipelineRequest) (*ApprovalPipeline, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetApprovalPipeline not implemented")
+}
+func (UnimplementedReportingServiceServer) GetTeamUtilization(context.Context, *GetTeamUtilizationRequest) (*TeamUtilization, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTeamUtilization not implemented")
+}
+func (UnimplementedReportingServiceServer) GetComplianceStatus(context.Context, *GetComplianceStatusRequest) (*ComplianceStatus, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetComplianceStatus not implemented")
 }
 func (UnimplementedReportingServiceServer) mustEmbedUnimplementedReportingServiceServer() {}
 
@@ -228,6 +303,96 @@ func _ReportingService_GetDashboardSummary_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ReportingService_GetPortfolioOverview_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPortfolioOverviewRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReportingServiceServer).GetPortfolioOverview(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReportingService_GetPortfolioOverview_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReportingServiceServer).GetPortfolioOverview(ctx, req.(*GetPortfolioOverviewRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReportingService_GetFinancialSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFinancialSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReportingServiceServer).GetFinancialSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReportingService_GetFinancialSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReportingServiceServer).GetFinancialSummary(ctx, req.(*GetFinancialSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReportingService_GetApprovalPipeline_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetApprovalPipelineRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReportingServiceServer).GetApprovalPipeline(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReportingService_GetApprovalPipeline_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReportingServiceServer).GetApprovalPipeline(ctx, req.(*GetApprovalPipelineRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReportingService_GetTeamUtilization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTeamUtilizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReportingServiceServer).GetTeamUtilization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReportingService_GetTeamUtilization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReportingServiceServer).GetTeamUtilization(ctx, req.(*GetTeamUtilizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReportingService_GetComplianceStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetComplianceStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReportingServiceServer).GetComplianceStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReportingService_GetComplianceStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReportingServiceServer).GetComplianceStatus(ctx, req.(*GetComplianceStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ReportingService_ServiceDesc is the grpc.ServiceDesc for ReportingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -254,6 +419,26 @@ var ReportingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetDashboardSummary",
 			Handler:    _ReportingService_GetDashboardSummary_Handler,
+		},
+		{
+			MethodName: "GetPortfolioOverview",
+			Handler:    _ReportingService_GetPortfolioOverview_Handler,
+		},
+		{
+			MethodName: "GetFinancialSummary",
+			Handler:    _ReportingService_GetFinancialSummary_Handler,
+		},
+		{
+			MethodName: "GetApprovalPipeline",
+			Handler:    _ReportingService_GetApprovalPipeline_Handler,
+		},
+		{
+			MethodName: "GetTeamUtilization",
+			Handler:    _ReportingService_GetTeamUtilization_Handler,
+		},
+		{
+			MethodName: "GetComplianceStatus",
+			Handler:    _ReportingService_GetComplianceStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -3,13 +3,15 @@ package reporting
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	reportingv1 "github.com/wegofwd2020/thittam/gen/reporting/v1"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/tenant"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -206,6 +208,222 @@ func TestHandler_GetDashboardSummary_Denied(t *testing.T) {
 func TestHandler_GetDashboardSummary_NoTenant(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().GetDashboardSummary(ctxWithVertical(), &reportingv1.GetDashboardSummaryRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- GetPortfolioOverview ---
+
+func TestHandler_GetPortfolioOverview_Success(t *testing.T) {
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getPortfolioOverviewFn: func(_ context.Context, tid uuid.UUID) (*PortfolioOverview, error) {
+			return &PortfolioOverview{
+				TenantID:     tid,
+				ProjectLabel: "Productions",
+				TotalActive:  3,
+				TotalBudget:  decimal.RequireFromString("100.00"),
+				TotalActual:  decimal.RequireFromString("40.00"),
+				// HealthCounts is recomputed by Service.GetPortfolioOverview from Projects'
+				// Health field (computeHealthCounts), so it is derived below, not set here.
+				Projects: []ProjectSummary{{ID: uuid.New(), Title: "P1", BudgetTotal: decimal.RequireFromString("50.00"), Health: "on_track"}},
+			}, nil
+		},
+	}), allowAllPerm{})
+
+	resp, err := h.GetPortfolioOverview(ctxWithCaller(tenantID), &reportingv1.GetPortfolioOverviewRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, tenantID.String(), resp.TenantId)
+	assert.Equal(t, int32(3), resp.TotalActive)
+	assert.Equal(t, "100.00", resp.TotalBudget)          // decimal → StringFixed(2)
+	assert.Equal(t, int32(1), resp.HealthCounts.OnTrack) // nested message; computed from Projects[0].Health
+	require.Len(t, resp.Projects, 1)
+	assert.Equal(t, "50.00", resp.Projects[0].BudgetTotal)
+}
+
+func TestHandler_GetPortfolioOverview_Denied(t *testing.T) {
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getPortfolioOverviewFn: func(context.Context, uuid.UUID) (*PortfolioOverview, error) {
+			t.Fatal("repo must not be reached when permission is denied")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.GetPortfolioOverview(ctxWithCaller(tenantID), &reportingv1.GetPortfolioOverviewRequest{})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_GetPortfolioOverview_NoTenant(t *testing.T) {
+	_, err := newHandler().GetPortfolioOverview(ctxWithVertical(), &reportingv1.GetPortfolioOverviewRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- GetFinancialSummary ---
+
+func TestHandler_GetFinancialSummary_Success(t *testing.T) {
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getFinancialSummaryFn: func(_ context.Context, tid uuid.UUID) (*FinancialSummary, error) {
+			return &FinancialSummary{
+				TenantID:      tid,
+				TotalBudgeted: decimal.RequireFromString("200.00"),
+				ByCategory:    []CategorySpend{{CategoryName: "cam", Actual: decimal.RequireFromString("10.00")}},
+			}, nil
+		},
+	}), allowAllPerm{})
+
+	resp, err := h.GetFinancialSummary(ctxWithCaller(tenantID), &reportingv1.GetFinancialSummaryRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, tenantID.String(), resp.TenantId)
+	assert.Equal(t, "200.00", resp.TotalBudgeted)
+	require.Len(t, resp.ByCategory, 1)
+	assert.Equal(t, "10.00", resp.ByCategory[0].Actual)
+}
+
+func TestHandler_GetFinancialSummary_Denied(t *testing.T) {
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getFinancialSummaryFn: func(context.Context, uuid.UUID) (*FinancialSummary, error) {
+			t.Fatal("repo must not be reached when permission is denied")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.GetFinancialSummary(ctxWithCaller(tenantID), &reportingv1.GetFinancialSummaryRequest{})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_GetFinancialSummary_NoTenant(t *testing.T) {
+	_, err := newHandler().GetFinancialSummary(ctxWithVertical(), &reportingv1.GetFinancialSummaryRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- GetApprovalPipeline ---
+
+func TestHandler_GetApprovalPipeline_Success(t *testing.T) {
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getApprovalPipelineFn: func(_ context.Context, tid uuid.UUID) (*ApprovalPipeline, error) {
+			// ByAge and PendingItems[i].AgeHours are recomputed by Service.GetApprovalPipeline
+			// from SubmittedAt (computeAgeBands), so ByAge is derived below, not set here.
+			return &ApprovalPipeline{
+				TenantID:     tid,
+				TotalPending: 4,
+				PendingItems: []PendingApproval{{Amount: decimal.RequireFromString("5.00"), SubmittedAt: time.Now().Add(-48 * time.Hour)}},
+			}, nil
+		},
+	}), allowAllPerm{})
+
+	resp, err := h.GetApprovalPipeline(ctxWithCaller(tenantID), &reportingv1.GetApprovalPipelineRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, tenantID.String(), resp.TenantId)
+	assert.Equal(t, int32(4), resp.TotalPending)
+	assert.Equal(t, int32(1), resp.ByAge.Days_1To_3) // 48h-old item falls in the 1-3 day band
+	require.Len(t, resp.PendingItems, 1)
+	assert.Equal(t, "5.00", resp.PendingItems[0].Amount)
+	assert.NotNil(t, resp.PendingItems[0].SubmittedAt)
+}
+
+func TestHandler_GetApprovalPipeline_Denied(t *testing.T) {
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getApprovalPipelineFn: func(context.Context, uuid.UUID) (*ApprovalPipeline, error) {
+			t.Fatal("repo must not be reached when permission is denied")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.GetApprovalPipeline(ctxWithCaller(tenantID), &reportingv1.GetApprovalPipelineRequest{})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_GetApprovalPipeline_NoTenant(t *testing.T) {
+	_, err := newHandler().GetApprovalPipeline(ctxWithVertical(), &reportingv1.GetApprovalPipelineRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- GetTeamUtilization ---
+
+func TestHandler_GetTeamUtilization_Success(t *testing.T) {
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getTeamUtilizationFn: func(_ context.Context, tid uuid.UUID) (*TeamUtilization, error) {
+			// UtilizationPct is recomputed by Service.GetTeamUtilization from
+			// Assigned/TotalMembers, so it is derived below, not set here.
+			return &TeamUtilization{
+				TenantID:     tid,
+				TotalMembers: 5,
+				Assigned:     3, // 3/5 = 60.00%
+				ByProject:    []ProjectTeam{{ProjectTitle: "P1", MemberCount: 2}},
+			}, nil
+		},
+	}), allowAllPerm{})
+
+	resp, err := h.GetTeamUtilization(ctxWithCaller(tenantID), &reportingv1.GetTeamUtilizationRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, tenantID.String(), resp.TenantId)
+	assert.Equal(t, int32(5), resp.TotalMembers)
+	assert.Equal(t, "60.00", resp.UtilizationPct)
+	require.Len(t, resp.ByProject, 1)
+	assert.Equal(t, int32(2), resp.ByProject[0].MemberCount)
+}
+
+func TestHandler_GetTeamUtilization_Denied(t *testing.T) {
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getTeamUtilizationFn: func(context.Context, uuid.UUID) (*TeamUtilization, error) {
+			t.Fatal("repo must not be reached when permission is denied")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.GetTeamUtilization(ctxWithCaller(tenantID), &reportingv1.GetTeamUtilizationRequest{})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_GetTeamUtilization_NoTenant(t *testing.T) {
+	_, err := newHandler().GetTeamUtilization(ctxWithVertical(), &reportingv1.GetTeamUtilizationRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- GetComplianceStatus ---
+
+func TestHandler_GetComplianceStatus_Success(t *testing.T) {
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getComplianceStatusFn: func(_ context.Context, tid uuid.UUID) (*ComplianceStatus, error) {
+			return &ComplianceStatus{
+				TenantID:         tid,
+				OverdueApprovals: 1,
+				RecentViolations: []ComplianceItem{{Severity: "high", DetectedAt: time.Now()}},
+			}, nil
+		},
+	}), allowAllPerm{})
+
+	resp, err := h.GetComplianceStatus(ctxWithCaller(tenantID), &reportingv1.GetComplianceStatusRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, tenantID.String(), resp.TenantId)
+	assert.Equal(t, int32(1), resp.OverdueApprovals)
+	require.Len(t, resp.RecentViolations, 1)
+	assert.Equal(t, "high", resp.RecentViolations[0].Severity)
+	assert.NotNil(t, resp.RecentViolations[0].DetectedAt)
+}
+
+func TestHandler_GetComplianceStatus_Denied(t *testing.T) {
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getComplianceStatusFn: func(context.Context, uuid.UUID) (*ComplianceStatus, error) {
+			t.Fatal("repo must not be reached when permission is denied")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.GetComplianceStatus(ctxWithCaller(tenantID), &reportingv1.GetComplianceStatusRequest{})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_GetComplianceStatus_NoTenant(t *testing.T) {
+	_, err := newHandler().GetComplianceStatus(ctxWithVertical(), &reportingv1.GetComplianceStatusRequest{})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 

@@ -62,8 +62,8 @@ export interface FinancialSummary {
 
 export interface ApprovalAgeBands {
   under_24h: number;
-  "1_to_3_days": number;
-  "3_to_7_days": number;
+  days_1_to_3: number;
+  days_3_to_7: number;
   over_7_days: number;
 }
 
@@ -131,7 +131,7 @@ export interface DashboardSummary {
 
 // ── API functions ───────────────────────────────────────────────────────────
 
-const BASE = "/v1/reports/dashboard";
+const BASE = "/api/v1/reports/dashboard";
 
 export async function getPortfolioOverview(): Promise<PortfolioOverview> {
   return api.get<PortfolioOverview>(`${BASE}/portfolio`);

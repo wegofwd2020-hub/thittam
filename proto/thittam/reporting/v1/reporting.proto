@@ -9,6 +9,7 @@ package thittam.reporting.v1;
 option go_package = "github.com/wegofwd2020/thittam/gen/reporting/v1;reportingv1";
 
 import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
 
 service ReportingService {
   rpc GetReportDefinition(GetReportDefinitionRequest) returns (ReportDefinition);
@@ -18,6 +19,22 @@ service ReportingService {
   rpc GetBudgetFacts(GetBudgetFactsRequest) returns (GetBudgetFactsResponse);
 
   rpc GetDashboardSummary(GetDashboardSummaryRequest) returns (DashboardSummary);
+
+  rpc GetPortfolioOverview(GetPortfolioOverviewRequest) returns (PortfolioOverview) {
+    option (google.api.http) = { get: "/api/v1/reports/dashboard/portfolio" };
+  }
+  rpc GetFinancialSummary(GetFinancialSummaryRequest) returns (FinancialSummary) {
+    option (google.api.http) = { get: "/api/v1/reports/dashboard/financial" };
+  }
+  rpc GetApprovalPipeline(GetApprovalPipelineRequest) returns (ApprovalPipeline) {
+    option (google.api.http) = { get: "/api/v1/reports/dashboard/approvals" };
+  }
+  rpc GetTeamUtilization(GetTeamUtilizationRequest) returns (TeamUtilization) {
+    option (google.api.http) = { get: "/api/v1/reports/dashboard/team" };
+  }
+  rpc GetComplianceStatus(GetComplianceStatusRequest) returns (ComplianceStatus) {
+    option (google.api.http) = { get: "/api/v1/reports/dashboard/compliance" };
+  }
 }
 
 message ReportDefinition {
@@ -66,3 +83,113 @@ message GetExpenseFactsResponse { repeated ExpenseFact facts = 1; }
 message GetBudgetFactsRequest { string production_id = 1; }
 message GetBudgetFactsResponse { repeated BudgetFact facts = 1; }
 message GetDashboardSummaryRequest {}
+
+message GetPortfolioOverviewRequest {}
+message GetFinancialSummaryRequest {}
+message GetApprovalPipelineRequest {}
+message GetTeamUtilizationRequest {}
+message GetComplianceStatusRequest {}
+
+message PortfolioOverview {
+  string tenant_id = 1;
+  string project_label = 2;
+  int32 total_active = 3;
+  string total_budget = 4;
+  string total_actual = 5;
+  BudgetHealthCount health_counts = 6;
+  repeated ProjectSummary projects = 7;
+}
+message BudgetHealthCount {
+  int32 on_track = 1;
+  int32 at_risk = 2;
+  int32 over_budget = 3;
+}
+message ProjectSummary {
+  string id = 1;
+  string title = 2;
+  string status = 3;
+  string current_phase = 4;
+  string budget_total = 5;
+  string actual_spend = 6;
+  string budget_used_pct = 7;
+  string health = 8;
+  string start_date = 9;
+}
+
+message FinancialSummary {
+  string tenant_id = 1;
+  string total_budgeted = 2;
+  string total_actual = 3;
+  string total_committed = 4;
+  string total_available = 5;
+  string burn_rate_per_month = 6;
+  repeated CategorySpend by_category = 7;
+  repeated MonthlySpend monthly_trend = 8;
+}
+message CategorySpend {
+  string category_id = 1;
+  string category_name = 2;
+  string budgeted = 3;
+  string actual = 4;
+  string percentage = 5;
+}
+message MonthlySpend {
+  string month = 1;
+  string actual = 2;
+  string budget = 3;
+}
+
+message ApprovalPipeline {
+  string tenant_id = 1;
+  int32 total_pending = 2;
+  string total_amount = 3;
+  ApprovalAgeBands by_age = 4;
+  repeated PendingApproval pending_items = 5;
+}
+message ApprovalAgeBands {
+  int32 under_24h = 1;
+  int32 days_1_to_3 = 2;
+  int32 days_3_to_7 = 3;
+  int32 over_7_days = 4;
+}
+message PendingApproval {
+  string id = 1;
+  string type = 2;
+  string description = 3;
+  string amount = 4;
+  string submitted_by = 5;
+  google.protobuf.Timestamp submitted_at = 6;
+  string project_title = 7;
+  int32 age_hours = 8;
+}
+
+message TeamUtilization {
+  string tenant_id = 1;
+  string team_member_label = 2;
+  int32 total_members = 3;
+  int32 assigned = 4;
+  int32 available = 5;
+  string utilization_pct = 6;
+  repeated ProjectTeam by_project = 7;
+}
+message ProjectTeam {
+  string project_id = 1;
+  string project_title = 2;
+  int32 member_count = 3;
+}
+
+message ComplianceStatus {
+  string tenant_id = 1;
+  int32 overdue_approvals = 2;
+  int32 policy_violations = 3;
+  int32 audit_flags = 4;
+  repeated ComplianceItem recent_violations = 5;
+}
+message ComplianceItem {
+  string id = 1;
+  string type = 2;
+  string description = 3;
+  string severity = 4;
+  google.protobuf.Timestamp detected_at = 5;
+  string project_title = 6;
+}
