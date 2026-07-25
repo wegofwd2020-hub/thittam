@@ -2,6 +2,7 @@ package expense
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -14,18 +15,19 @@ import (
 // --- Mock repository ---
 
 type mockRepo struct {
-	createExpenseFn     func(ctx context.Context, e *Expense) error
-	getExpenseFn        func(ctx context.Context, tenantID, id uuid.UUID) (*Expense, error)
-	listExpensesFn      func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]Expense, error)
-	updateExpenseFn     func(ctx context.Context, e *Expense) error
-	createPOFn          func(ctx context.Context, po *PurchaseOrder) error
-	getPOFn             func(ctx context.Context, tenantID, id uuid.UUID) (*PurchaseOrder, error)
-	listPOsFn           func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PurchaseOrder, error)
-	updatePOFn          func(ctx context.Context, po *PurchaseOrder) error
-	createPettyCashFn   func(ctx context.Context, pc *PettyCashAdvance) error
-	getPettyCashFn      func(ctx context.Context, tenantID, id uuid.UUID) (*PettyCashAdvance, error)
-	listPettyCashFn     func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PettyCashAdvance, error)
-	updatePettyCashFn   func(ctx context.Context, pc *PettyCashAdvance) error
+	createExpenseFn   func(ctx context.Context, e *Expense) error
+	getExpenseFn      func(ctx context.Context, tenantID, id uuid.UUID) (*Expense, error)
+	listExpensesFn    func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]Expense, error)
+	updateExpenseFn   func(ctx context.Context, e *Expense) error
+	rejectExpenseFn   func(ctx context.Context, tenantID, expenseID uuid.UUID, reason string) error
+	createPOFn        func(ctx context.Context, po *PurchaseOrder) error
+	getPOFn           func(ctx context.Context, tenantID, id uuid.UUID) (*PurchaseOrder, error)
+	listPOsFn         func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PurchaseOrder, error)
+	updatePOFn        func(ctx context.Context, po *PurchaseOrder) error
+	createPettyCashFn func(ctx context.Context, pc *PettyCashAdvance) error
+	getPettyCashFn    func(ctx context.Context, tenantID, id uuid.UUID) (*PettyCashAdvance, error)
+	listPettyCashFn   func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PettyCashAdvance, error)
+	updatePettyCashFn func(ctx context.Context, pc *PettyCashAdvance) error
 }
 
 func (m *mockRepo) CreateExpense(ctx context.Context, e *Expense) error {
@@ -49,6 +51,12 @@ func (m *mockRepo) ListExpenses(ctx context.Context, tenantID, prodID uuid.UUID,
 func (m *mockRepo) UpdateExpense(ctx context.Context, e *Expense) error {
 	if m.updateExpenseFn != nil {
 		return m.updateExpenseFn(ctx, e)
+	}
+	return nil
+}
+func (m *mockRepo) RejectExpense(ctx context.Context, tenantID, expenseID uuid.UUID, reason string) error {
+	if m.rejectExpenseFn != nil {
+		return m.rejectExpenseFn(ctx, tenantID, expenseID, reason)
 	}
 	return nil
 }
@@ -442,4 +450,118 @@ func TestCreatePettyCashAdvance_GeneratesID(t *testing.T) {
 	err := svc.CreatePettyCashAdvance(context.Background(), pc)
 	require.NoError(t, err)
 	assert.NotEqual(t, uuid.Nil, saved.ID)
+}
+
+func TestService_RejectExpense_AlreadyApproved(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "approved"}, nil
+		},
+	})
+	err := svc.RejectExpense(context.Background(), uuid.New(), uuid.New(), "dup")
+	require.ErrorIs(t, err, ErrAlreadyApproved)
+}
+
+func TestService_RejectExpense_AlreadyRejected(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "rejected"}, nil
+		},
+	})
+	err := svc.RejectExpense(context.Background(), uuid.New(), uuid.New(), "dup")
+	require.ErrorIs(t, err, ErrAlreadyRejected)
+}
+
+func TestService_RejectExpense_Success(t *testing.T) {
+	var gotReason string
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "submitted"}, nil
+		},
+		rejectExpenseFn: func(_ context.Context, _, _ uuid.UUID, reason string) error {
+			gotReason = reason
+			return nil
+		},
+	})
+	require.NoError(t, svc.RejectExpense(context.Background(), uuid.New(), uuid.New(), "over budget"))
+	assert.Equal(t, "over budget", gotReason)
+}
+
+func TestService_ApprovePurchaseOrder_SetsApproved(t *testing.T) {
+	var saved *PurchaseOrder
+	svc := NewService(&mockRepo{
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, Status: "draft"}, nil
+		},
+		updatePOFn: func(_ context.Context, po *PurchaseOrder) error { saved = po; return nil },
+	})
+	approverID := uuid.New()
+	require.NoError(t, svc.ApprovePurchaseOrder(context.Background(), uuid.New(), uuid.New(), approverID))
+	assert.Equal(t, "approved", saved.Status)
+	require.NotNil(t, saved.ApprovedAt)
+	require.NotNil(t, saved.ApprovedBy)
+	assert.Equal(t, approverID, *saved.ApprovedBy)
+}
+
+func TestService_ApprovePurchaseOrder_AlreadyApproved(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, Status: "approved"}, nil
+		},
+	})
+	assert.ErrorIs(t, svc.ApprovePurchaseOrder(context.Background(), uuid.New(), uuid.New(), uuid.New()), ErrAlreadyApproved)
+}
+
+func TestService_SettlePettyCash_AlreadySettled(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "settled"}, nil
+		},
+	})
+	require.ErrorIs(t, svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), decimal.RequireFromString("12.50")), ErrAlreadySettled)
+}
+
+func TestService_SettlePettyCash_SetsSettled(t *testing.T) {
+	var saved *PettyCashAdvance
+	svc := NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.RequireFromString("50.00")}, nil
+		},
+		updatePettyCashFn: func(_ context.Context, pc *PettyCashAdvance) error { saved = pc; return nil },
+	})
+	require.NoError(t, svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), decimal.RequireFromString("12.50")))
+	assert.Equal(t, "settled", saved.Status)
+	assert.Equal(t, "12.50", saved.UnspentAmount.StringFixed(2))
+	require.NotNil(t, saved.SettledAt)
+}
+
+func TestService_SettlePettyCash_ExceedsAdvance(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.RequireFromString("100.00")}, nil
+		},
+	})
+	err := svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), decimal.RequireFromString("150.00"))
+	require.ErrorIs(t, err, ErrUnspentExceedsAdvance)
+}
+
+func TestService_CreatePurchaseOrder_GeneratesPONumberWhenEmpty(t *testing.T) {
+	var saved *PurchaseOrder
+	svc := NewService(&mockRepo{
+		createPOFn: func(_ context.Context, po *PurchaseOrder) error { saved = po; return nil },
+	})
+	po := &PurchaseOrder{TenantID: uuid.New(), ProductionID: uuid.New(), Amount: decimal.NewFromInt(100)}
+	require.NoError(t, svc.CreatePurchaseOrder(context.Background(), po))
+	assert.NotEmpty(t, saved.PONumber)
+	assert.True(t, strings.HasPrefix(saved.PONumber, "PO-"))
+}
+
+func TestService_CreatePurchaseOrder_KeepsSuppliedPONumber(t *testing.T) {
+	var saved *PurchaseOrder
+	svc := NewService(&mockRepo{
+		createPOFn: func(_ context.Context, po *PurchaseOrder) error { saved = po; return nil },
+	})
+	po := &PurchaseOrder{TenantID: uuid.New(), ProductionID: uuid.New(), Amount: decimal.NewFromInt(100), PONumber: "PO-CUSTOM-1"}
+	require.NoError(t, svc.CreatePurchaseOrder(context.Background(), po))
+	assert.Equal(t, "PO-CUSTOM-1", saved.PONumber)
 }

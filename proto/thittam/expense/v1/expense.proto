@@ -32,6 +32,13 @@ service ExpenseService {
   rpc ApproveExpense(ApproveExpenseRequest) returns (Expense) {
     option (google.api.http) = { post: "/api/v1/expenses/{expense_id}/approve" body: "*" };
   }
+  rpc RejectExpense(RejectExpenseRequest) returns (Expense) {
+    option (google.api.http) = { post: "/api/v1/expenses/{expense_id}/reject" body: "*" };
+  }
+
+  rpc ApprovePurchaseOrder(ApprovePurchaseOrderRequest) returns (PurchaseOrder) {
+    option (google.api.http) = { post: "/api/v1/purchase-orders/{id}/approve" body: "*" };
+  }
 
   rpc CreatePettyCashAdvance(CreatePettyCashAdvanceRequest) returns (PettyCashAdvance) {
     option (google.api.http) = { post: "/api/v1/petty-cash" body: "*" };
@@ -39,6 +46,9 @@ service ExpenseService {
   rpc GetPettyCashAdvance(GetPettyCashAdvanceRequest) returns (PettyCashAdvance);
   rpc ListPettyCashAdvances(ListPettyCashAdvancesRequest) returns (ListPettyCashAdvancesResponse) {
     option (google.api.http) = { get: "/api/v1/petty-cash" };
+  }
+  rpc SettlePettyCash(SettlePettyCashRequest) returns (PettyCashAdvance) {
+    option (google.api.http) = { post: "/api/v1/petty-cash/{id}/settle" body: "*" };
   }
 
   rpc GetExpenseCategories(GetExpenseCategoriesRequest) returns (GetExpenseCategoriesResponse) {
@@ -143,6 +153,9 @@ message GetExpenseRequest { string id = 1; }
 message ListExpensesRequest { string production_id = 1; string status = 2; int32 limit = 3; string after = 4; }
 message ListExpensesResponse { repeated Expense expenses = 1; }
 message ApproveExpenseRequest { string expense_id = 1; }
+message RejectExpenseRequest { string expense_id = 1; string reason = 2; }
+message ApprovePurchaseOrderRequest { string id = 1; }
+message SettlePettyCashRequest { string id = 1; string unspent_amount = 2; }
 
 message CreatePettyCashAdvanceRequest {
   string production_id = 1;

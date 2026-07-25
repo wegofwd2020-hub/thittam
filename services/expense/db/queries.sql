@@ -71,3 +71,9 @@ SET status         = $3,
     settled_at     = CASE WHEN $3 = 'settled' THEN now() ELSE settled_at END
 WHERE id = $1 AND tenant_id = $2
 RETURNING *;
+
+-- name: RejectExpense :one
+UPDATE expenses
+SET status = 'rejected', rejection_reason = $3, rejected_at = now()
+WHERE id = $1 AND tenant_id = $2
+RETURNING *;

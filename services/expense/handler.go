@@ -3,6 +3,7 @@ package expense
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -146,6 +147,33 @@ func (h *Handler) ListPurchaseOrders(ctx context.Context, req *expensev1.ListPur
 		out[i] = purchaseOrderToProto(&pos[i])
 	}
 	return &expensev1.ListPurchaseOrdersResponse{PurchaseOrders: out}, nil
+}
+
+func (h *Handler) ApprovePurchaseOrder(ctx context.Context, req *expensev1.ApprovePurchaseOrderRequest) (*expensev1.PurchaseOrder, error) {
+	tenantID, ok := tenant.IDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:approve"); err != nil {
+		return nil, err
+	}
+
+	poID, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid id")
+	}
+
+	// approverID is populated by the auth interceptor once wired.
+	if err := h.svc.ApprovePurchaseOrder(ctx, tenantID, poID, uuid.Nil); err != nil {
+		return nil, grpcErr(err)
+	}
+
+	po, err := h.svc.GetPurchaseOrder(ctx, tenantID, poID)
+	if err != nil {
+		return nil, grpcErr(err)
+	}
+	return purchaseOrderToProto(po), nil
 }
 
 // --- Expenses ---
@@ -296,6 +324,36 @@ func (h *Handler) ApproveExpense(ctx context.Context, req *expensev1.ApproveExpe
 	return expenseToProto(e), nil
 }
 
+func (h *Handler) RejectExpense(ctx context.Context, req *expensev1.RejectExpenseRequest) (*expensev1.Expense, error) {
+	tenantID, ok := tenant.IDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:approve"); err != nil {
+		return nil, err
+	}
+
+	expenseID, err := uuid.Parse(req.GetExpenseId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid expense_id")
+	}
+
+	if strings.TrimSpace(req.GetReason()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "reason must not be empty")
+	}
+
+	if err := h.svc.RejectExpense(ctx, tenantID, expenseID, req.GetReason()); err != nil {
+		return nil, grpcErr(err)
+	}
+
+	e, err := h.svc.GetExpense(ctx, tenantID, expenseID)
+	if err != nil {
+		return nil, grpcErr(err)
+	}
+	return expenseToProto(e), nil
+}
+
 // --- Petty Cash ---
 
 func (h *Handler) CreatePettyCashAdvance(ctx context.Context, req *expensev1.CreatePettyCashAdvanceRequest) (*expensev1.PettyCashAdvance, error) {
@@ -393,6 +451,40 @@ func (h *Handler) ListPettyCashAdvances(ctx context.Context, req *expensev1.List
 		out[i] = pettyCashToProto(&advances[i])
 	}
 	return &expensev1.ListPettyCashAdvancesResponse{Advances: out}, nil
+}
+
+func (h *Handler) SettlePettyCash(ctx context.Context, req *expensev1.SettlePettyCashRequest) (*expensev1.PettyCashAdvance, error) {
+	tenantID, ok := tenant.IDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, "expense:submit"); err != nil {
+		return nil, err
+	}
+
+	advanceID, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid id")
+	}
+
+	unspent, err := decimal.NewFromString(req.GetUnspentAmount())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid unspent_amount: must be a decimal string")
+	}
+	if unspent.IsNegative() {
+		return nil, status.Error(codes.InvalidArgument, "unspent_amount must not be negative")
+	}
+
+	if err := h.svc.SettlePettyCash(ctx, tenantID, advanceID, unspent); err != nil {
+		return nil, grpcErr(err)
+	}
+
+	pc, err := h.svc.GetPettyCashAdvance(ctx, tenantID, advanceID)
+	if err != nil {
+		return nil, grpcErr(err)
+	}
+	return pettyCashToProto(pc), nil
 }
 
 // --- Vertical metadata ---
@@ -514,8 +606,10 @@ func grpcErr(err error) error {
 		return status.Error(codes.NotFound, "expense not found")
 	case errors.Is(err, ErrPONotFound):
 		return status.Error(codes.NotFound, "purchase order not found")
-	case errors.Is(err, ErrAlreadyApproved):
+	case errors.Is(err, ErrAlreadyApproved), errors.Is(err, ErrAlreadyRejected), errors.Is(err, ErrAlreadySettled):
 		return status.Error(codes.FailedPrecondition, "expense is already approved")
+	case errors.Is(err, ErrUnspentExceedsAdvance):
+		return status.Error(codes.InvalidArgument, "unspent amount exceeds advance amount")
 	case errors.Is(err, ErrApprovalLimitExceeded):
 		return status.Error(codes.FailedPrecondition, "amount exceeds approval limit for role")
 	case errors.Is(err, ErrDualApprovalRequired):
