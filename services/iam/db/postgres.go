@@ -702,6 +702,7 @@ func (p *Postgres) CreateInvitation(ctx context.Context, inv *iam.Invitation) er
 		InvitedBy: inv.InvitedBy,
 		Token:     inv.Token,
 		ExpiresAt: inv.ExpiresAt,
+		RoleID:    pgUUIDFromPtr(inv.RoleID),
 	}
 	row, err := p.q.CreateInvitation(ctx, params)
 	if err != nil {

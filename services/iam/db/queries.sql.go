@@ -14,7 +14,7 @@ import (
 )
 
 const acceptInvitation = `-- name: AcceptInvitation :exec
-UPDATE invitations SET accepted_at = now() WHERE id = $1
+UPDATE invitations SET status = 'accepted' WHERE id = $1
 `
 
 func (q *Queries) AcceptInvitation(ctx context.Context, id uuid.UUID) error {
@@ -177,20 +177,22 @@ func (q *Queries) CountTenantsOnHold(ctx context.Context) (int64, error) {
 }
 
 const createInvitation = `-- name: CreateInvitation :one
-INSERT INTO invitations (id, tenant_id, email, invited_by, token, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO invitations (id, tenant_id, email, invited_by, token, expires_at, role_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (tenant_id, email) DO UPDATE
-    SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, accepted_at = NULL
+    SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at,
+        status = 'pending', role_id = EXCLUDED.role_id
 RETURNING id, tenant_id, email, role_id, token, status, invited_by, expires_at, created_at
 `
 
 type CreateInvitationParams struct {
-	ID        uuid.UUID `json:"id"`
-	TenantID  uuid.UUID `json:"tenant_id"`
-	Email     string    `json:"email"`
-	InvitedBy uuid.UUID `json:"invited_by"`
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
+	ID        uuid.UUID   `json:"id"`
+	TenantID  uuid.UUID   `json:"tenant_id"`
+	Email     string      `json:"email"`
+	InvitedBy uuid.UUID   `json:"invited_by"`
+	Token     string      `json:"token"`
+	ExpiresAt time.Time   `json:"expires_at"`
+	RoleID    pgtype.UUID `json:"role_id"`
 }
 
 func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error) {
@@ -201,6 +203,7 @@ func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationPara
 		arg.InvitedBy,
 		arg.Token,
 		arg.ExpiresAt,
+		arg.RoleID,
 	)
 	var i Invitation
 	err := row.Scan(
@@ -437,7 +440,7 @@ func (q *Queries) FindTenantByNormalizedName(ctx context.Context, btrim string) 
 
 const getInvitationByToken = `-- name: GetInvitationByToken :one
 SELECT id, tenant_id, email, role_id, token, status, invited_by, expires_at, created_at FROM invitations
-WHERE token = $1 AND accepted_at IS NULL AND expires_at > now()
+WHERE token = $1 AND status = 'pending' AND expires_at > now()
 `
 
 func (q *Queries) GetInvitationByToken(ctx context.Context, token string) (Invitation, error) {
