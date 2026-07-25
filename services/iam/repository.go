@@ -116,6 +116,12 @@ type Repository interface {
 	GetInvitationByToken(ctx context.Context, token string) (*Invitation, error)
 	MarkInvitationAccepted(ctx context.Context, id uuid.UUID) error
 
+	// WithTx runs fn against a repository bound to a single transaction. Every
+	// write fn performs commits together when fn returns nil, or rolls back
+	// together when fn returns an error. Implementations backed by an in-memory
+	// store run fn directly and do not model rollback.
+	WithTx(ctx context.Context, fn func(Repository) error) error
+
 	// OIDC configuration
 	// UpsertOIDCConfig creates or replaces the OIDC configuration for a tenant.
 	// ClientSecretEnc in params must be pre-encrypted by the caller.

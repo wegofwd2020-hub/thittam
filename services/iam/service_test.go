@@ -300,6 +300,9 @@ func (m *mockRepo) MarkInvitationAccepted(ctx context.Context, id uuid.UUID) err
 	}
 	return nil
 }
+func (m *mockRepo) WithTx(ctx context.Context, fn func(Repository) error) error {
+	return fn(m) // no real tx; atomicity is a Postgres property (see integration test)
+}
 func (m *mockRepo) UpsertOIDCConfig(ctx context.Context, params OIDCConfigParams) error {
 	if m.upsertOIDCConfigFn != nil {
 		return m.upsertOIDCConfigFn(ctx, params)

@@ -17,16 +17,37 @@ import (
 
 // Postgres implements iam.Repository using sqlc-generated queries over a pgx/v5 pool.
 type Postgres struct {
-	q  *Queries
-	db *pgxpool.Pool
+	q    *Queries
+	db   DBTX          // pool normally; a pgx.Tx inside WithTx — all query methods use this
+	pool *pgxpool.Pool // only for Begin; nil on a tx-bound instance
 }
 
 // NewPostgres creates a Postgres repository backed by the given pgx connection pool.
-func NewPostgres(db *pgxpool.Pool) *Postgres {
+func NewPostgres(pool *pgxpool.Pool) *Postgres {
 	return &Postgres{
-		q:  New(db),
-		db: db,
+		q:    New(pool),
+		db:   pool,
+		pool: pool,
 	}
+}
+
+// WithTx runs fn against a *Postgres bound to a single pgx.Tx. Commits when fn
+// returns nil, rolls back otherwise. Not re-entrant: a tx-bound instance has a
+// nil pool and refuses to open a nested transaction.
+func (p *Postgres) WithTx(ctx context.Context, fn func(iam.Repository) error) error {
+	if p.pool == nil {
+		return errors.New("iam/db: WithTx cannot nest inside a transaction")
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("iam/db: begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }() // no-op after a successful Commit
+	txRepo := &Postgres{q: p.q.WithTx(tx), db: tx, pool: nil}
+	if err := fn(txRepo); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // Compile-time interface checks.
@@ -1108,7 +1129,7 @@ func (p *Postgres) PurgeTenantSchemaAndTombstone(ctx context.Context, tenantID, 
 	// uuid.UUID (see pkg/tenantdb doc: uuid.String() yields only hex+hyphens).
 	schema := "tenant_" + tenantID.String()
 
-	tx, err := p.db.Begin(ctx)
+	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("iam/db: purge begin tx: %w", err)
 	}
