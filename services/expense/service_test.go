@@ -14,18 +14,19 @@ import (
 // --- Mock repository ---
 
 type mockRepo struct {
-	createExpenseFn     func(ctx context.Context, e *Expense) error
-	getExpenseFn        func(ctx context.Context, tenantID, id uuid.UUID) (*Expense, error)
-	listExpensesFn      func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]Expense, error)
-	updateExpenseFn     func(ctx context.Context, e *Expense) error
-	createPOFn          func(ctx context.Context, po *PurchaseOrder) error
-	getPOFn             func(ctx context.Context, tenantID, id uuid.UUID) (*PurchaseOrder, error)
-	listPOsFn           func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PurchaseOrder, error)
-	updatePOFn          func(ctx context.Context, po *PurchaseOrder) error
-	createPettyCashFn   func(ctx context.Context, pc *PettyCashAdvance) error
-	getPettyCashFn      func(ctx context.Context, tenantID, id uuid.UUID) (*PettyCashAdvance, error)
-	listPettyCashFn     func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PettyCashAdvance, error)
-	updatePettyCashFn   func(ctx context.Context, pc *PettyCashAdvance) error
+	createExpenseFn   func(ctx context.Context, e *Expense) error
+	getExpenseFn      func(ctx context.Context, tenantID, id uuid.UUID) (*Expense, error)
+	listExpensesFn    func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]Expense, error)
+	updateExpenseFn   func(ctx context.Context, e *Expense) error
+	rejectExpenseFn   func(ctx context.Context, tenantID, expenseID uuid.UUID, reason string) error
+	createPOFn        func(ctx context.Context, po *PurchaseOrder) error
+	getPOFn           func(ctx context.Context, tenantID, id uuid.UUID) (*PurchaseOrder, error)
+	listPOsFn         func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PurchaseOrder, error)
+	updatePOFn        func(ctx context.Context, po *PurchaseOrder) error
+	createPettyCashFn func(ctx context.Context, pc *PettyCashAdvance) error
+	getPettyCashFn    func(ctx context.Context, tenantID, id uuid.UUID) (*PettyCashAdvance, error)
+	listPettyCashFn   func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PettyCashAdvance, error)
+	updatePettyCashFn func(ctx context.Context, pc *PettyCashAdvance) error
 }
 
 func (m *mockRepo) CreateExpense(ctx context.Context, e *Expense) error {
@@ -49,6 +50,12 @@ func (m *mockRepo) ListExpenses(ctx context.Context, tenantID, prodID uuid.UUID,
 func (m *mockRepo) UpdateExpense(ctx context.Context, e *Expense) error {
 	if m.updateExpenseFn != nil {
 		return m.updateExpenseFn(ctx, e)
+	}
+	return nil
+}
+func (m *mockRepo) RejectExpense(ctx context.Context, tenantID, expenseID uuid.UUID, reason string) error {
+	if m.rejectExpenseFn != nil {
+		return m.rejectExpenseFn(ctx, tenantID, expenseID, reason)
 	}
 	return nil
 }

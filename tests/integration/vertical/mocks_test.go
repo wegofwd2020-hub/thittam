@@ -63,6 +63,7 @@ func (m *expenseMock) CreateExpense(ctx context.Context, e *expense.Expense) err
 func (m *expenseMock) GetExpense(ctx context.Context, tid, id uuid.UUID) (*expense.Expense, error) { return nil, nil }
 func (m *expenseMock) ListExpenses(ctx context.Context, tid, pid uuid.UUID, status string, limit, offset int) ([]expense.Expense, error) { return nil, nil }
 func (m *expenseMock) UpdateExpense(ctx context.Context, e *expense.Expense) error { return nil }
+func (m *expenseMock) RejectExpense(ctx context.Context, tid, id uuid.UUID, reason string) error { return nil }
 func (m *expenseMock) CreatePettyCashAdvance(ctx context.Context, pc *expense.PettyCashAdvance) error { return nil }
 func (m *expenseMock) GetPettyCashAdvance(ctx context.Context, tid, id uuid.UUID) (*expense.PettyCashAdvance, error) { return nil, nil }
 func (m *expenseMock) ListPettyCashAdvances(ctx context.Context, tid, pid uuid.UUID, status string, limit, offset int) ([]expense.PettyCashAdvance, error) { return nil, nil }
