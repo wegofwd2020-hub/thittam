@@ -406,7 +406,7 @@ func (r *expenseRepo) UpdateExpense(_ context.Context, e *expense.Expense) error
 	r.expenses[e.ID] = e
 	return nil
 }
-func (r *expenseRepo) RejectExpense(_ context.Context, _, _ uuid.UUID, _ string) error {
+func (r *expenseRepo) RejectExpense(_ context.Context, _, _, _ uuid.UUID, _ string) error {
 	return nil
 }
 func (r *expenseRepo) CreatePurchaseOrder(_ context.Context, _ *expense.PurchaseOrder) error {

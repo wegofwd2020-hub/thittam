@@ -19,7 +19,7 @@ type mockRepo struct {
 	getExpenseFn      func(ctx context.Context, tenantID, id uuid.UUID) (*Expense, error)
 	listExpensesFn    func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]Expense, error)
 	updateExpenseFn   func(ctx context.Context, e *Expense) error
-	rejectExpenseFn   func(ctx context.Context, tenantID, expenseID uuid.UUID, reason string) error
+	rejectExpenseFn   func(ctx context.Context, tenantID, expenseID, rejecterID uuid.UUID, reason string) error
 	createPOFn        func(ctx context.Context, po *PurchaseOrder) error
 	getPOFn           func(ctx context.Context, tenantID, id uuid.UUID) (*PurchaseOrder, error)
 	listPOsFn         func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PurchaseOrder, error)
@@ -54,9 +54,9 @@ func (m *mockRepo) UpdateExpense(ctx context.Context, e *Expense) error {
 	}
 	return nil
 }
-func (m *mockRepo) RejectExpense(ctx context.Context, tenantID, expenseID uuid.UUID, reason string) error {
+func (m *mockRepo) RejectExpense(ctx context.Context, tenantID, expenseID, rejecterID uuid.UUID, reason string) error {
 	if m.rejectExpenseFn != nil {
-		return m.rejectExpenseFn(ctx, tenantID, expenseID, reason)
+		return m.rejectExpenseFn(ctx, tenantID, expenseID, rejecterID, reason)
 	}
 	return nil
 }
@@ -458,7 +458,7 @@ func TestService_RejectExpense_AlreadyApproved(t *testing.T) {
 			return &Expense{ID: id, TenantID: tid, Status: "approved"}, nil
 		},
 	})
-	err := svc.RejectExpense(context.Background(), uuid.New(), uuid.New(), "dup")
+	err := svc.RejectExpense(context.Background(), uuid.New(), uuid.New(), uuid.New(), "dup")
 	require.ErrorIs(t, err, ErrAlreadyApproved)
 }
 
@@ -468,23 +468,27 @@ func TestService_RejectExpense_AlreadyRejected(t *testing.T) {
 			return &Expense{ID: id, TenantID: tid, Status: "rejected"}, nil
 		},
 	})
-	err := svc.RejectExpense(context.Background(), uuid.New(), uuid.New(), "dup")
+	err := svc.RejectExpense(context.Background(), uuid.New(), uuid.New(), uuid.New(), "dup")
 	require.ErrorIs(t, err, ErrAlreadyRejected)
 }
 
 func TestService_RejectExpense_Success(t *testing.T) {
+	rejecter := uuid.New()
 	var gotReason string
+	var gotRejecter uuid.UUID
 	svc := NewService(&mockRepo{
 		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
 			return &Expense{ID: id, TenantID: tid, Status: "submitted"}, nil
 		},
-		rejectExpenseFn: func(_ context.Context, _, _ uuid.UUID, reason string) error {
+		rejectExpenseFn: func(_ context.Context, _, _, rejecterID uuid.UUID, reason string) error {
 			gotReason = reason
+			gotRejecter = rejecterID
 			return nil
 		},
 	})
-	require.NoError(t, svc.RejectExpense(context.Background(), uuid.New(), uuid.New(), "over budget"))
+	require.NoError(t, svc.RejectExpense(context.Background(), uuid.New(), uuid.New(), rejecter, "over budget"))
 	assert.Equal(t, "over budget", gotReason)
+	assert.Equal(t, rejecter, gotRejecter)
 }
 
 func TestService_ApprovePurchaseOrder_SetsApproved(t *testing.T) {

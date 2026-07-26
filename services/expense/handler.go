@@ -359,7 +359,11 @@ func (h *Handler) RejectExpense(ctx context.Context, req *expensev1.RejectExpens
 		return nil, status.Error(codes.InvalidArgument, "reason must not be empty")
 	}
 
-	if err := h.svc.RejectExpense(ctx, tenantID, expenseID, req.GetReason()); err != nil {
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
+	}
+	if err := h.svc.RejectExpense(ctx, tenantID, expenseID, caller.UserID, req.GetReason()); err != nil {
 		return nil, grpcErr(err)
 	}
 
