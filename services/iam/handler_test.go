@@ -287,39 +287,6 @@ func TestHandler_UpdateUser_RequiresUserManage(t *testing.T) {
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
-// #139 slice B (Task 3): a client updating only a display name omits status,
-// so the request carries status: "". This test proves the handler passes
-// that empty value straight through rather than trying to "fix" it here —
-// the fix belongs in the SQL (Postgres.UpdateUser), since that is the only
-// layer that knows whether an empty status means "leave it alone" (a
-// profile edit) or is simply what the caller sent. See
-// user_status_preserve_integration_test.go for the SQL-level proof.
-func TestHandler_UpdateUser_EmptyStatusIsNotAWipe(t *testing.T) {
-	t.Parallel()
-	tid := uuid.New()
-	var got *User
-
-	h := newHandlerWithRepo(&mockRepo{
-		getUserPermissionsFn: grantUserManage(),
-		updateUserFn: func(_ context.Context, u *User) error {
-			got = u
-			return nil
-		},
-	})
-
-	_, err := h.UpdateUser(memberCtx(tid), &iamv1.UpdateUserRequest{
-		TenantId:    tid.String(),
-		Id:          uuid.New().String(),
-		DisplayName: "Renamed",
-		// Status deliberately omitted -- a profile edit must not touch it.
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	require.Empty(t, got.Status,
-		"handler must pass through an empty status; the SQL decides to preserve it")
-}
-
 // --- DeactivateUser ---
 
 func TestHandler_DeactivateUser_Success(t *testing.T) {
@@ -351,6 +318,41 @@ func TestHandler_DeactivateUser_InvalidTenantID(t *testing.T) {
 func TestHandler_DeactivateUser_InvalidID(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().DeactivateUser(platformAdminCtx(), &iamv1.DeactivateUserRequest{TenantId: uuid.New().String(), Id: "bad"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// --- ActivateUser ---
+
+func TestHandler_ActivateUser_Success(t *testing.T) {
+	t.Parallel()
+	resp, err := newHandlerWithRepo(&mockRepo{activateUserFn: func(_ context.Context, _, _ uuid.UUID) error { return nil }}).
+		ActivateUser(platformAdminCtx(), &iamv1.ActivateUserRequest{TenantId: uuid.New().String(), Id: uuid.New().String()})
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+
+func TestHandler_ActivateUser_PermissionDenied(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ActivateUser(context.Background(), &iamv1.ActivateUserRequest{TenantId: uuid.New().String(), Id: uuid.New().String()})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ActivateUser_NotDeactivated(t *testing.T) {
+	t.Parallel()
+	_, err := newHandlerWithRepo(&mockRepo{activateUserFn: func(_ context.Context, _, _ uuid.UUID) error { return ErrNotDeactivated }}).
+		ActivateUser(platformAdminCtx(), &iamv1.ActivateUserRequest{TenantId: uuid.New().String(), Id: uuid.New().String()})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
+func TestHandler_ActivateUser_InvalidTenantID(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ActivateUser(platformAdminCtx(), &iamv1.ActivateUserRequest{TenantId: "bad", Id: uuid.New().String()})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_ActivateUser_InvalidID(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ActivateUser(platformAdminCtx(), &iamv1.ActivateUserRequest{TenantId: uuid.New().String(), Id: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 

@@ -195,7 +195,6 @@ func (h *Handler) UpdateUser(ctx context.Context, req *iamv1.UpdateUserRequest) 
 		ID:          id,
 		TenantID:    tenantID,
 		DisplayName: req.GetDisplayName(),
-		Status:      req.GetStatus(),
 	}
 	updated, err := h.svc.UpdateUser(ctx, user)
 	if err != nil {
@@ -220,6 +219,24 @@ func (h *Handler) DeactivateUser(ctx context.Context, req *iamv1.DeactivateUserR
 		return nil, grpcError(err)
 	}
 	return &iamv1.DeactivateUserResponse{}, nil
+}
+
+func (h *Handler) ActivateUser(ctx context.Context, req *iamv1.ActivateUserRequest) (*iamv1.ActivateUserResponse, error) {
+	if err := interceptor.RequireRole(ctx, interceptor.RolePlatformAdmin); err != nil {
+		return nil, err
+	}
+	tenantID, err := uuid.Parse(req.GetTenantId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tenant_id")
+	}
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid id")
+	}
+	if err := h.svc.ActivateUser(ctx, tenantID, id); err != nil {
+		return nil, grpcError(err)
+	}
+	return &iamv1.ActivateUserResponse{}, nil
 }
 
 func (h *Handler) ChangePassword(ctx context.Context, req *iamv1.ChangePasswordRequest) (*iamv1.ChangePasswordResponse, error) {
@@ -802,7 +819,8 @@ func grpcError(err error) error {
 
 	case errors.Is(err, ErrTenantNotHoldable),
 		errors.Is(err, ErrTenantHoldExists),
-		errors.Is(err, ErrHoldNarrowsIndefinite):
+		errors.Is(err, ErrHoldNarrowsIndefinite),
+		errors.Is(err, ErrNotDeactivated):
 		return status.Error(codes.FailedPrecondition, err.Error())
 
 	case errors.Is(err, ErrTenantNotPurgeable),

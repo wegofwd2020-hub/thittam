@@ -321,19 +321,12 @@ func (s *Service) ListUsers(ctx context.Context, tenantID uuid.UUID, status stri
 	return users, nil
 }
 
-// UpdateUser updates a user's mutable fields (display name, status).
+// UpdateUser updates a user's mutable profile fields (display name). Status is no
+// longer settable here — it goes through ActivateUser/DeactivateUser, which pair
+// the status change with the matching session-revoke behavior atomically (#162).
 func (s *Service) UpdateUser(ctx context.Context, user *User) (*User, error) {
 	if err := s.repo.UpdateUser(ctx, user); err != nil {
 		return nil, fmt.Errorf("iam: update user %s: %w", user.ID, err)
-	}
-	// UpdateUser is a second path that sets status (handler passes req.Status straight
-	// through). A non-active status blocks new logins but, like DeactivateUser before
-	// #154, leaves live refresh tokens working — revoke them. Empty status is a repo
-	// no-op (leave-alone) and "active" is reactivation, so neither revokes. (#181)
-	if user.Status != "" && user.Status != "active" {
-		if err := s.tokens.RevokeAllForUser(ctx, user.ID); err != nil {
-			return nil, fmt.Errorf("iam: update user %s: revoke sessions: %w", user.ID, err)
-		}
 	}
 	return user, nil
 }
