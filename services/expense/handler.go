@@ -603,6 +603,15 @@ func expenseToProto(e *Expense) *expensev1.Expense {
 	if e.ApprovedAt != nil {
 		out.ApprovedAt = timestamppb.New(*e.ApprovedAt)
 	}
+	if e.RejectedBy != nil {
+		out.RejectedBy = e.RejectedBy.String()
+	}
+	if e.RejectionReason != nil {
+		out.RejectionReason = *e.RejectionReason
+	}
+	if e.RejectedAt != nil {
+		out.RejectedAt = timestamppb.New(*e.RejectedAt)
+	}
 	return out
 }
 
