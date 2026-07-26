@@ -222,6 +222,29 @@ func TestOIDCProvider_TenantSuspended(t *testing.T) {
 	assert.ErrorIs(t, err, ErrTenantSuspended)
 }
 
+func TestOIDCProvider_TenantInactiveStatuses(t *testing.T) {
+	for _, st := range []string{"grace", "deactivated", "purge_eligible"} {
+		st := st
+		t.Run(st, func(t *testing.T) {
+			t.Parallel()
+			p := newTestOIDCProvider(func(op *OIDCProvider) {
+				op.tenants = &mockTenantStore{
+					statusFn: func(ctx context.Context, tenantID uuid.UUID) (string, error) {
+						return st, nil
+					},
+				}
+			})
+
+			_, err := p.Authenticate(context.Background(), AuthRequest{
+				TenantID:          testTenantID,
+				AuthorizationCode: "auth-code-123",
+			})
+			require.Error(t, err)
+			assert.ErrorIs(t, err, ErrTenantInactive)
+		})
+	}
+}
+
 func TestOIDCProvider_DeactivatedUser(t *testing.T) {
 	t.Parallel()
 	p := newTestOIDCProvider(func(op *OIDCProvider) {
