@@ -233,21 +233,28 @@ func TestHandler_UpdateUser_Success(t *testing.T) {
 	t.Parallel()
 	userID := uuid.New()
 	tenantID := uuid.New()
+	var saved *User
 	h := NewHandler(newTestService(&mockRepo{
 		getUserFn: func(_ context.Context, _, id uuid.UUID) (*User, error) {
 			return &User{ID: id, TenantID: tenantID, Email: "u@x.com", DisplayName: "Updated", Status: "active"}, nil
 		},
+		updateUserFn:         func(_ context.Context, u *User) error { saved = u; return nil },
 		getUserPermissionsFn: grantUserManage(),
 	}))
 
+	// The request carries a deactivating status; UpdateUser must IGNORE it — status
+	// transitions go only through the platform_admin-gated Activate/DeactivateUser (#162).
 	resp, err := h.UpdateUser(memberCtx(tenantID), &iamv1.UpdateUserRequest{
 		TenantId:    tenantID.String(),
 		Id:          userID.String(),
 		DisplayName: "Updated",
-		Status:      "active",
+		Status:      "deactivated",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, userID.String(), resp.GetId())
+	require.NotNil(t, saved, "UpdateUser must reach the repo")
+	assert.Equal(t, "Updated", saved.DisplayName)
+	assert.Empty(t, saved.Status, "UpdateUser must NOT carry a request-supplied status to the repo (bypass closed, #162)")
 }
 
 func TestHandler_UpdateUser_InvalidTenantID(t *testing.T) {
