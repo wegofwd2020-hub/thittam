@@ -812,7 +812,7 @@ func TestHandler_AssignProjectRole_InvalidArgs(t *testing.T) {
 			}
 			switch tc.field {
 			case "tenant":
-				req.TenantId = "bad"
+				req.TenantId = "bad" //nolint:staticcheck // intentionally sets the deprecated-but-still-parsed tenant_id to exercise the invalid-id reject path
 			case "user":
 				req.UserId = "bad"
 			case "role":
