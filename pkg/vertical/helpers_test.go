@@ -238,3 +238,28 @@ func TestRoleLabelFor_NilMap(t *testing.T) {
 	cfg := &Config{}
 	assert.Equal(t, "manager", cfg.RoleLabelFor("manager"))
 }
+
+func TestMaxLimitForRoles(t *testing.T) {
+	aw := &ApprovalWorkflow{Limits: []ApprovalLimit{
+		{Role: "coordinator", MaxAmount: decimal.NewFromInt(200000)},
+		{Role: "manager", MaxAmount: decimal.NewFromInt(1000000)},
+	}}
+	// max across multiple configured roles
+	got := aw.MaxLimitForRoles([]string{"coordinator", "manager"})
+	if got == nil || !got.Equal(decimal.NewFromInt(1000000)) {
+		t.Fatalf("want 1000000, got %v", got)
+	}
+	// single configured role
+	got = aw.MaxLimitForRoles([]string{"coordinator"})
+	if got == nil || !got.Equal(decimal.NewFromInt(200000)) {
+		t.Fatalf("want 200000, got %v", got)
+	}
+	// no configured role → nil (fail-closed)
+	if aw.MaxLimitForRoles([]string{"member", "inventory_manager"}) != nil {
+		t.Fatal("want nil for unconfigured roles")
+	}
+	// empty set → nil
+	if aw.MaxLimitForRoles(nil) != nil {
+		t.Fatal("want nil for empty roles")
+	}
+}

@@ -66,6 +66,21 @@ func (a *ApprovalWorkflow) LimitForRole(role string) *decimal.Decimal {
 	return nil
 }
 
+// MaxLimitForRoles returns the highest configured approval limit among the given
+// roles, or nil if none of them has a configured limit. A caller holding several
+// roles gets their most permissive entitlement; nil means no approval authority.
+func (a *ApprovalWorkflow) MaxLimitForRoles(roles []string) *decimal.Decimal {
+	var max *decimal.Decimal
+	for _, r := range roles {
+		if lim := a.LimitForRole(r); lim != nil {
+			if max == nil || lim.GreaterThan(*max) {
+				max = lim
+			}
+		}
+	}
+	return max
+}
+
 // FindBudgetTemplate returns the BudgetTemplate with the given name, or nil.
 func (c *Config) FindBudgetTemplate(name string) *BudgetTemplate {
 	for i := range c.BudgetTemplates {
