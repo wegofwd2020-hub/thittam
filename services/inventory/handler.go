@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -120,7 +121,7 @@ func (h *Handler) ListAssets(ctx context.Context, req *inventoryv1.ListAssetsReq
 		return nil, err
 	}
 
-	assets, err := h.svc.ListAssets(ctx, tenantID, req.GetStatus(), int(req.GetLimit()), 0)
+	assets, err := h.svc.ListAssets(ctx, tenantID, req.GetStatus(), req.GetCategoryId(), req.GetSearch(), int(req.GetLimit()), 0)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -242,7 +243,13 @@ func (h *Handler) ListCheckouts(ctx context.Context, req *inventoryv1.ListChecko
 		return nil, status.Error(codes.InvalidArgument, "invalid asset_id")
 	}
 
-	checkouts, err := h.svc.ListCheckouts(ctx, tenantID, assetID)
+	if after := req.GetAfter(); after != "" {
+		if _, err := time.Parse(time.RFC3339, after); err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid after: must be an RFC3339 timestamp")
+		}
+	}
+
+	checkouts, err := h.svc.ListCheckouts(ctx, tenantID, assetID, int(req.GetLimit()), req.GetAfter())
 	if err != nil {
 		return nil, grpcErr(err)
 	}

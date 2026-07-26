@@ -152,6 +152,22 @@ func TestHandler_ListAssets_Denied(t *testing.T) {
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
+func TestHandler_ListAssets_PassesFilters(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	var gotCat, gotSearch string
+	h := NewHandler(NewService(&mockRepo{
+		listAssetsFn: func(_ context.Context, _ uuid.UUID, _, cat, search string, _, _ int) ([]Asset, error) {
+			gotCat, gotSearch = cat, search
+			return nil, nil
+		},
+	})).WithPermissionChecker(allowAllPerm{})
+	_, err := h.ListAssets(ctxWithTenant(tenantID), &inventoryv1.ListAssetsRequest{CategoryId: "cam", Search: "arri"})
+	require.NoError(t, err)
+	assert.Equal(t, "cam", gotCat)
+	assert.Equal(t, "arri", gotSearch)
+}
+
 // --- CheckOutAsset ---
 
 func TestHandler_CheckOutAsset_Success(t *testing.T) {
@@ -295,6 +311,12 @@ func TestHandler_ListCheckouts_NoTenant(t *testing.T) {
 func TestHandler_ListCheckouts_InvalidAssetID(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().ListCheckouts(ctxWithTenant(uuid.New()), &inventoryv1.ListCheckoutsRequest{AssetId: "bad"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_ListCheckouts_BadAfter(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ListCheckouts(ctxWithTenant(uuid.New()), &inventoryv1.ListCheckoutsRequest{AssetId: uuid.New().String(), After: "nonsense"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 

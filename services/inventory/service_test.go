@@ -302,7 +302,7 @@ func TestListAssets_DefaultLimit(t *testing.T) {
 		},
 	})
 
-	_, err := svc.ListAssets(context.Background(), uuid.New(), "", 0, 0)
+	_, err := svc.ListAssets(context.Background(), uuid.New(), "", "", "", 0, 0)
 	require.NoError(t, err)
 	assert.Equal(t, 20, capturedLimit)
 }
@@ -317,7 +317,7 @@ func TestListAssets_MaxLimitEnforced(t *testing.T) {
 		},
 	})
 
-	_, err := svc.ListAssets(context.Background(), uuid.New(), "", 9999, 0)
+	_, err := svc.ListAssets(context.Background(), uuid.New(), "", "", "", 9999, 0)
 	require.NoError(t, err)
 	assert.Equal(t, 20, capturedLimit)
 }
@@ -331,9 +331,58 @@ func TestListCheckouts_Success(t *testing.T) {
 		},
 	})
 
-	checkouts, err := svc.ListCheckouts(context.Background(), uuid.New(), assetID)
+	checkouts, err := svc.ListCheckouts(context.Background(), uuid.New(), assetID, 20, "")
 	require.NoError(t, err)
 	assert.Len(t, checkouts, 1)
+}
+
+func TestService_ListAssets_ThreadsCategoryAndSearch(t *testing.T) {
+	t.Parallel()
+	var gotCat, gotSearch string
+	svc := NewService(&mockRepo{
+		listAssetsFn: func(_ context.Context, _ uuid.UUID, _, cat, search string, _, _ int) ([]Asset, error) {
+			gotCat, gotSearch = cat, search
+			return nil, nil
+		},
+	})
+	_, err := svc.ListAssets(context.Background(), uuid.New(), "", "cam", "arri", 20, 0)
+	require.NoError(t, err)
+	assert.Equal(t, "cam", gotCat)
+	assert.Equal(t, "arri", gotSearch)
+}
+
+func TestService_ListCheckouts_LimitClamped(t *testing.T) {
+	t.Parallel()
+	var gotLimit int
+	svc := NewService(&mockRepo{
+		listCheckoutsFn: func(_ context.Context, _, _ uuid.UUID, limit int, _ string) ([]AssetCheckout, error) {
+			gotLimit = limit
+			return nil, nil
+		},
+	})
+	_, err := svc.ListCheckouts(context.Background(), uuid.New(), uuid.New(), 9999, "")
+	require.NoError(t, err)
+	assert.Equal(t, 20, gotLimit)
+
+	_, err = svc.ListCheckouts(context.Background(), uuid.New(), uuid.New(), 0, "")
+	require.NoError(t, err)
+	assert.Equal(t, 20, gotLimit)
+}
+
+func TestService_ListCheckouts_ThreadsLimitAndAfter(t *testing.T) {
+	t.Parallel()
+	var gotLimit int
+	var gotAfter string
+	svc := NewService(&mockRepo{
+		listCheckoutsFn: func(_ context.Context, _, _ uuid.UUID, limit int, after string) ([]AssetCheckout, error) {
+			gotLimit, gotAfter = limit, after
+			return nil, nil
+		},
+	})
+	_, err := svc.ListCheckouts(context.Background(), uuid.New(), uuid.New(), 50, "2026-07-25T00:00:00Z")
+	require.NoError(t, err)
+	assert.Equal(t, 50, gotLimit)
+	assert.Equal(t, "2026-07-25T00:00:00Z", gotAfter)
 }
 
 func TestCheckInAsset_Error(t *testing.T) {

@@ -40,11 +40,11 @@ func (s *Service) GetAsset(ctx context.Context, tenantID, id uuid.UUID) (*Asset,
 }
 
 // ListAssets lists assets for a tenant.
-func (s *Service) ListAssets(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]Asset, error) {
+func (s *Service) ListAssets(ctx context.Context, tenantID uuid.UUID, status, categoryID, search string, limit, offset int) ([]Asset, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	return s.repo.ListAssets(ctx, tenantID, status, "", "", limit, offset)
+	return s.repo.ListAssets(ctx, tenantID, status, categoryID, search, limit, offset)
 }
 
 // CheckOutAsset checks out an asset, verifying it is available.
@@ -104,16 +104,11 @@ func (s *Service) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*Ass
 }
 
 // ListCheckouts lists checkouts for an asset, scoped to the caller's tenant.
-// Capped at 200 — a single prop realistically has tens of checkout records;
-// 200 bounds a runaway scan.
-func (s *Service) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error) {
-	const maxCheckouts = 200
-	checkouts, err := s.repo.ListCheckouts(ctx, tenantID, assetID, maxCheckouts, "")
-	if err != nil {
-		return nil, err
+// limit is clamped to (0, 200]; the DB LIMIT enforces the cap. after is an
+// opaque RFC3339 cursor on checked_out_at for keyset pagination.
+func (s *Service) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID, limit int, after string) ([]AssetCheckout, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 20
 	}
-	if len(checkouts) > maxCheckouts {
-		checkouts = checkouts[:maxCheckouts]
-	}
-	return checkouts, nil
+	return s.repo.ListCheckouts(ctx, tenantID, assetID, limit, after)
 }
