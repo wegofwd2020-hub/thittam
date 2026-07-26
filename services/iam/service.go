@@ -640,6 +640,12 @@ func (s *Service) SuspendTenant(
 		return nil, fmt.Errorf("iam: suspend tenant %s: %w", id, err)
 	}
 
+	// A suspended tenant whose users keep refreshing tokens for the full window
+	// defeats suspension. One INCR revokes every session in the tenant (#182).
+	if err := s.tokens.RevokeAllForTenant(ctx, id); err != nil {
+		return nil, fmt.Errorf("iam: suspend tenant %s: revoke sessions: %w", id, err)
+	}
+
 	after, err := s.repo.GetTenant(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("iam: suspend tenant %s: %w", id, err)

@@ -1132,6 +1132,40 @@ func TestSuspendTenant_BareSuspend_EmitsNoLegalHoldAuditEvent(t *testing.T) {
 	assert.Empty(t, store.snapshot(), "bare suspend must not emit legal-hold audit event")
 }
 
+func TestSuspendTenant_RevokesAllSessions(t *testing.T) {
+	t.Parallel()
+	var revokedFor uuid.UUID
+	called := false
+	tokens := &mockTokenIssuer{revokeAllForTenantFn: func(_ context.Context, tid uuid.UUID) error {
+		called = true
+		revokedFor = tid
+		return nil
+	}}
+	repo := &mockRepo{
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string, _ *time.Time, _ *string) error { return nil },
+		getTenantFn:          func(_ context.Context, id uuid.UUID) (*Tenant, error) { return &Tenant{ID: id}, nil },
+	}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+	_, err := svc.SuspendTenant(context.Background(), fixedTenantID, nil, nil)
+	require.NoError(t, err)
+	assert.True(t, called, "suspending a tenant must revoke every session in it")
+	assert.Equal(t, fixedTenantID, revokedFor)
+}
+
+func TestSuspendTenant_RevokeFailure_IsReported(t *testing.T) {
+	t.Parallel()
+	tokens := &mockTokenIssuer{revokeAllForTenantFn: func(_ context.Context, _ uuid.UUID) error {
+		return errors.New("redis down")
+	}}
+	repo := &mockRepo{
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string, _ *time.Time, _ *string) error { return nil },
+		getTenantFn:          func(_ context.Context, id uuid.UUID) (*Tenant, error) { return &Tenant{ID: id}, nil },
+	}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+	_, err := svc.SuspendTenant(context.Background(), fixedTenantID, nil, nil)
+	require.Error(t, err)
+}
+
 func TestClearTenantLegalHold_ClearsFieldsAndEmitsAudit(t *testing.T) {
 	// Not t.Parallel() — waits on audit flush.
 	holdUntil := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
