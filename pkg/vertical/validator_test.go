@@ -2,6 +2,8 @@ package vertical
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -311,4 +313,36 @@ vertical:
 		}
 	}
 	assert.True(t, hasCatRef, "should detect invalid category_id in budget template line item")
+}
+
+// validYAMLWithApprovalLimitRole returns a real, otherwise-valid vertical
+// config with one approval-limit role swapped for a bogus (non-RBAC) role
+// name. movie-production's first limit role is "coordinator".
+func validYAMLWithApprovalLimitRole(t *testing.T, role string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("configs", "movie-production.yaml"))
+	require.NoError(t, err)
+	out := strings.Replace(string(data), "- role: coordinator", "- role: "+role, 1)
+	require.NotEqual(t, string(data), out, "expected to replace a limit role")
+	return []byte(out)
+}
+
+func TestValidate_ApprovalLimitRoleNotSystemRole(t *testing.T) {
+	t.Parallel()
+
+	// A config identical to a valid one except one approval limit uses a
+	// non-RBAC role name.
+	yamlData := validYAMLWithApprovalLimitRole(t, "site_manager")
+
+	errs, parseErr := Validate(yamlData)
+	require.NoError(t, parseErr)
+	require.NotEmpty(t, errs)
+	found := false
+	for _, e := range errs {
+		if e.Field == "vertical.approval_workflow.limits" &&
+			strings.Contains(e.Message, "site_manager") {
+			found = true
+		}
+	}
+	assert.True(t, found, "expected an approval-limit role validation error, got: %v", errs)
 }
