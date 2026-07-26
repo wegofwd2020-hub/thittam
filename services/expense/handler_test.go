@@ -452,6 +452,19 @@ func TestHandler_ApproveExpense_Success(t *testing.T) {
 	assert.Equal(t, "approved", resp.GetStatus())
 }
 
+func TestHandler_ApproveExpense_PaidNotApprovable(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID, Roles: []string{"manager"}}
+	h := NewHandler(NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "paid", Amount: decimal.NewFromInt(5000)}, nil
+		},
+	})).WithPermissionChecker(allowAllPerm{})
+	_, err := h.ApproveExpense(ctxWithCaller(caller), &expensev1.ApproveExpenseRequest{ExpenseId: uuid.New().String()})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
 func TestHandler_ApproveExpense_NoCaller(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().ApproveExpense(ctxTenantNoCaller(uuid.New()), &expensev1.ApproveExpenseRequest{ExpenseId: uuid.New().String()})
