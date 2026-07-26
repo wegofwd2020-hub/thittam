@@ -814,7 +814,10 @@ func grpcError(err error) error {
 
 	case errors.Is(err, ErrInvalidPlan),
 		errors.Is(err, ErrRoleNotProjectScoped),
-		errors.Is(err, ErrHoldUntilInPast):
+		errors.Is(err, ErrHoldUntilInPast),
+		errors.Is(err, ErrCountryRequired),
+		errors.Is(err, ErrUnknownCountry),
+		errors.Is(err, ErrAmbiguousEmail):
 		return status.Error(codes.InvalidArgument, err.Error())
 
 	case errors.Is(err, ErrTenantNotHoldable),
@@ -824,7 +827,8 @@ func grpcError(err error) error {
 		return status.Error(codes.FailedPrecondition, err.Error())
 
 	case errors.Is(err, ErrTenantNotPurgeable),
-		errors.Is(err, ErrSelfApproval):
+		errors.Is(err, ErrSelfApproval),
+		errors.Is(err, ErrPurgeRequestNotApproved):
 		return status.Error(codes.FailedPrecondition, err.Error())
 
 	case errors.Is(err, ErrPurgeRequestExists):
@@ -845,7 +849,8 @@ func grpcError(err error) error {
 
 	case errors.Is(err, auth.ErrTenantSuspended),
 		errors.Is(err, auth.ErrTenantInactive),
-		errors.Is(err, auth.ErrAccountDeactivated):
+		errors.Is(err, auth.ErrAccountDeactivated),
+		errors.Is(err, ErrNotPlatformAdmin):
 		return status.Error(codes.PermissionDenied, err.Error())
 
 	case errors.Is(err, auth.ErrAccountInvited):
