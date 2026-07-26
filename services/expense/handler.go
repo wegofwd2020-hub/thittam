@@ -642,6 +642,8 @@ func grpcErr(err error) error {
 		return status.Error(codes.NotFound, "purchase order not found")
 	case errors.Is(err, ErrAlreadyApproved), errors.Is(err, ErrAlreadyRejected), errors.Is(err, ErrAlreadySettled):
 		return status.Error(codes.FailedPrecondition, "expense is already approved")
+	case errors.Is(err, ErrNotApprovable):
+		return status.Error(codes.FailedPrecondition, "record is not in an approvable state")
 	case errors.Is(err, ErrUnspentExceedsAdvance):
 		return status.Error(codes.InvalidArgument, "unspent amount exceeds advance amount")
 	case errors.Is(err, ErrApprovalLimitExceeded):

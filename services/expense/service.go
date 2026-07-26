@@ -85,8 +85,15 @@ func (s *Service) ApproveExpense(ctx context.Context, tenantID, expenseID uuid.U
 		return fmt.Errorf("get expense: %w", err)
 	}
 
-	if exp.Status == "approved" {
+	switch exp.Status {
+	case "approved":
 		return ErrAlreadyApproved
+	case "rejected":
+		return ErrAlreadyRejected
+	case "submitted":
+		// approvable — proceed
+	default:
+		return ErrNotApprovable // draft, paid, or any unknown/terminal status
 	}
 
 	// Role-based approval limit — super_admin has unlimited authority and skips it.
@@ -210,8 +217,13 @@ func (s *Service) ApprovePurchaseOrder(ctx context.Context, tenantID, poID, appr
 	if err != nil {
 		return fmt.Errorf("get purchase order: %w", err)
 	}
-	if po.Status == "approved" {
+	switch po.Status {
+	case "approved":
 		return ErrAlreadyApproved
+	case "draft":
+		// approvable — proceed
+	default:
+		return ErrNotApprovable // partially_invoiced, closed, cancelled, or unknown
 	}
 
 	// Role-based approval limit — super_admin has unlimited authority and skips it.

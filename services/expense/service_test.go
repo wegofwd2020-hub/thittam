@@ -639,6 +639,46 @@ func TestService_ApprovePurchaseOrder_DualApproval(t *testing.T) {
 	assert.ErrorIs(t, svc.ApprovePurchaseOrder(ctx, uuid.New(), uuid.New(), uuid.New(), []string{"manager"}), ErrDualApprovalRequired)
 }
 
+func TestService_ApproveExpense_RejectedNotApprovable(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "rejected", Amount: decimal.NewFromInt(5000)}, nil
+		},
+	})
+	err := svc.ApproveExpense(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), []string{"manager"})
+	assert.ErrorIs(t, err, ErrAlreadyRejected)
+}
+
+func TestService_ApproveExpense_PaidNotApprovable(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "paid", Amount: decimal.NewFromInt(5000)}, nil
+		},
+	})
+	err := svc.ApproveExpense(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), []string{"manager"})
+	assert.ErrorIs(t, err, ErrNotApprovable)
+}
+
+func TestService_ApproveExpense_DraftNotApprovable(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "draft", Amount: decimal.NewFromInt(5000)}, nil
+		},
+	})
+	err := svc.ApproveExpense(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), []string{"manager"})
+	assert.ErrorIs(t, err, ErrNotApprovable)
+}
+
+func TestService_ApprovePurchaseOrder_CancelledNotApprovable(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, Status: "cancelled", Amount: decimal.NewFromInt(5000)}, nil
+		},
+	})
+	err := svc.ApprovePurchaseOrder(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), []string{"manager"})
+	assert.ErrorIs(t, err, ErrNotApprovable)
+}
+
 func TestService_ApprovePurchaseOrder_AlreadyApproved(t *testing.T) {
 	svc := NewService(&mockRepo{
 		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {

@@ -15,4 +15,5 @@ var (
 	ErrInvalidCategory       = errors.New("expense: invalid expense category for this vertical")
 	ErrInsufficientBudget    = errors.New("expense: insufficient budget remaining")
 	ErrNotAdvanceHolder      = errors.New("expense: caller is not the petty cash advance holder")
+	ErrNotApprovable         = errors.New("expense: record is not in an approvable state")
 )
