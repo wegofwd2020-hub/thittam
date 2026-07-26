@@ -164,8 +164,11 @@ func (h *Handler) ApprovePurchaseOrder(ctx context.Context, req *expensev1.Appro
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
 
-	// approverID is populated by the auth interceptor once wired.
-	if err := h.svc.ApprovePurchaseOrder(ctx, tenantID, poID, uuid.Nil); err != nil {
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
+	}
+	if err := h.svc.ApprovePurchaseOrder(ctx, tenantID, poID, caller.UserID, caller.Roles); err != nil {
 		return nil, grpcErr(err)
 	}
 
@@ -312,8 +315,11 @@ func (h *Handler) ApproveExpense(ctx context.Context, req *expensev1.ApproveExpe
 		return nil, status.Error(codes.InvalidArgument, "invalid expense_id")
 	}
 
-	// approverID and approverRole are populated by the auth interceptor once wired.
-	if err := h.svc.ApproveExpense(ctx, tenantID, expenseID, uuid.Nil, ""); err != nil {
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
+	}
+	if err := h.svc.ApproveExpense(ctx, tenantID, expenseID, caller.UserID, caller.Roles); err != nil {
 		return nil, grpcErr(err)
 	}
 

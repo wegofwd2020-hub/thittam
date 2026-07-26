@@ -11,7 +11,6 @@ import (
 	expensev1 "github.com/wegofwd2020/thittam/gen/expense/v1"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/tenant"
-	"github.com/wegofwd2020/thittam/pkg/vertical"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -38,6 +37,16 @@ func (denyPerm) CheckPermission(_ context.Context, _ uuid.UUID, _ string, _ *uui
 func ctxWithTenant(tenantID uuid.UUID) context.Context {
 	ctx := tenant.WithID(ctxWithVertical(), tenantID)
 	return interceptor.WithCaller(ctx, interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID})
+}
+
+// ctxWithCaller injects the vertical config, the caller's tenant, and the given caller.
+func ctxWithCaller(caller interceptor.CallerInfo) context.Context {
+	return interceptor.WithCaller(tenant.WithID(ctxWithVertical(), caller.TenantID), caller)
+}
+
+// ctxTenantNoCaller injects vertical + tenant but NO caller (to exercise the caller guard).
+func ctxTenantNoCaller(tenantID uuid.UUID) context.Context {
+	return tenant.WithID(ctxWithVertical(), tenantID)
 }
 
 func newHandler() *Handler {
@@ -210,6 +219,7 @@ func TestHandler_ApprovePurchaseOrder_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	poID := uuid.New()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID, Roles: []string{"manager"}}
 	callCount := 0
 	h := NewHandler(NewService(&mockRepo{
 		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
@@ -223,9 +233,15 @@ func TestHandler_ApprovePurchaseOrder_Success(t *testing.T) {
 		updatePOFn: func(_ context.Context, _ *PurchaseOrder) error { return nil },
 	})).WithPermissionChecker(allowAllPerm{})
 
-	resp, err := h.ApprovePurchaseOrder(ctxWithTenant(tenantID), &expensev1.ApprovePurchaseOrderRequest{Id: poID.String()})
+	resp, err := h.ApprovePurchaseOrder(ctxWithCaller(caller), &expensev1.ApprovePurchaseOrderRequest{Id: poID.String()})
 	require.NoError(t, err)
 	assert.Equal(t, "approved", resp.GetStatus())
+}
+
+func TestHandler_ApprovePurchaseOrder_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ApprovePurchaseOrder(ctxTenantNoCaller(uuid.New()), &expensev1.ApprovePurchaseOrderRequest{Id: uuid.New().String()})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
 func TestHandler_ApprovePurchaseOrder_Denied(t *testing.T) {
@@ -407,33 +423,27 @@ func TestHandler_ApproveExpense_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	expID := uuid.New()
-	// Build a vertical config that includes an approval limit for the empty role
-	// (the handler passes uuid.Nil as approverID and "" as approverRole).
-	cfg := movieProductionConfig()
-	cfg.ApprovalWorkflow.Limits = append(cfg.ApprovalWorkflow.Limits, vertical.ApprovalLimit{
-		Role:      "",
-		MaxAmount: decimal.NewFromInt(999999999),
-	})
-	ctx := interceptor.WithCaller(
-		tenant.WithID(vertical.WithConfig(context.Background(), cfg), tenantID),
-		interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID},
-	)
-
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID, Roles: []string{"manager"}}
 	callCount := 0
 	h := NewHandler(NewService(&mockRepo{
 		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
 			callCount++
-			status := "submitted"
+			st := "submitted"
 			if callCount > 1 {
-				status = "approved"
+				st = "approved"
 			}
-			return &Expense{ID: id, TenantID: tid, Status: status, Amount: decimal.NewFromInt(5000)}, nil
+			return &Expense{ID: id, TenantID: tid, Status: st, Amount: decimal.NewFromInt(5000)}, nil
 		},
 	})).WithPermissionChecker(allowAllPerm{})
-
-	resp, err := h.ApproveExpense(ctx, &expensev1.ApproveExpenseRequest{ExpenseId: expID.String()})
+	resp, err := h.ApproveExpense(ctxWithCaller(caller), &expensev1.ApproveExpenseRequest{ExpenseId: expID.String()})
 	require.NoError(t, err)
 	assert.Equal(t, "approved", resp.GetStatus())
+}
+
+func TestHandler_ApproveExpense_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ApproveExpense(ctxTenantNoCaller(uuid.New()), &expensev1.ApproveExpenseRequest{ExpenseId: uuid.New().String()})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
 func TestHandler_ApproveExpense_NoTenant(t *testing.T) {
