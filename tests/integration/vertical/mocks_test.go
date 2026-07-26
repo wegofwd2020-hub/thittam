@@ -75,12 +75,13 @@ type inventoryMock struct{ status string }
 
 func (m *inventoryMock) CreateAsset(ctx context.Context, a *inventory.Asset) error { return nil }
 func (m *inventoryMock) GetAsset(ctx context.Context, tid, id uuid.UUID) (*inventory.Asset, error) { return &inventory.Asset{ID: id, TenantID: tid, Status: m.status}, nil }
-func (m *inventoryMock) ListAssets(ctx context.Context, tid uuid.UUID, status string, limit, offset int) ([]inventory.Asset, error) { return nil, nil }
+func (m *inventoryMock) ListAssets(ctx context.Context, tid uuid.UUID, status, categoryID, search string, limit, offset int) ([]inventory.Asset, error) { return nil, nil }
 func (m *inventoryMock) UpdateAssetStatus(ctx context.Context, tid, id uuid.UUID, status string) error { return nil }
 func (m *inventoryMock) CheckOutAsset(ctx context.Context, c *inventory.AssetCheckout) error { return nil }
-func (m *inventoryMock) CheckInAsset(ctx context.Context, tid, checkoutID uuid.UUID, conditionIn string) error { return nil }
+func (m *inventoryMock) GetActiveCheckout(ctx context.Context, tid, assetID uuid.UUID) (*inventory.AssetCheckout, error) { return &inventory.AssetCheckout{}, nil }
+func (m *inventoryMock) CheckInAsset(ctx context.Context, tid, checkoutID uuid.UUID, in inventory.CheckInInput) (*inventory.AssetCheckout, error) { return &inventory.AssetCheckout{}, nil }
 func (m *inventoryMock) GetCheckout(ctx context.Context, tid, id uuid.UUID) (*inventory.AssetCheckout, error) { return &inventory.AssetCheckout{ID: id, TenantID: tid}, nil }
-func (m *inventoryMock) ListCheckouts(ctx context.Context, tid, assetID uuid.UUID) ([]inventory.AssetCheckout, error) { return nil, nil }
+func (m *inventoryMock) ListCheckouts(ctx context.Context, tid, assetID uuid.UUID, limit int, after string) ([]inventory.AssetCheckout, error) { return nil, nil }
 
 // --- reporting mock ---
 

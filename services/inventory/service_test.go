@@ -17,12 +17,13 @@ import (
 type mockRepo struct {
 	createAssetFn       func(ctx context.Context, a *Asset) error
 	getAssetFn          func(ctx context.Context, tenantID, id uuid.UUID) (*Asset, error)
-	listAssetsFn        func(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]Asset, error)
+	listAssetsFn        func(ctx context.Context, tenantID uuid.UUID, status, categoryID, search string, limit, offset int) ([]Asset, error)
 	updateAssetStatusFn func(ctx context.Context, tenantID, id uuid.UUID, status string) error
 	checkOutAssetFn     func(ctx context.Context, c *AssetCheckout) error
-	checkInAssetFn      func(ctx context.Context, tenantID, checkoutID uuid.UUID, conditionIn string) error
+	getActiveCheckoutFn func(ctx context.Context, tenantID, assetID uuid.UUID) (*AssetCheckout, error)
+	checkInAssetFn      func(ctx context.Context, tenantID, checkoutID uuid.UUID, in CheckInInput) (*AssetCheckout, error)
 	getCheckoutFn       func(ctx context.Context, tenantID, id uuid.UUID) (*AssetCheckout, error)
-	listCheckoutsFn     func(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error)
+	listCheckoutsFn     func(ctx context.Context, tenantID, assetID uuid.UUID, limit int, after string) ([]AssetCheckout, error)
 }
 
 func (m *mockRepo) CreateAsset(ctx context.Context, a *Asset) error {
@@ -37,9 +38,9 @@ func (m *mockRepo) GetAsset(ctx context.Context, tenantID, id uuid.UUID) (*Asset
 	}
 	return &Asset{ID: id, TenantID: tenantID, Name: "Test Asset", Status: "available"}, nil
 }
-func (m *mockRepo) ListAssets(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]Asset, error) {
+func (m *mockRepo) ListAssets(ctx context.Context, tenantID uuid.UUID, status, categoryID, search string, limit, offset int) ([]Asset, error) {
 	if m.listAssetsFn != nil {
-		return m.listAssetsFn(ctx, tenantID, status, limit, offset)
+		return m.listAssetsFn(ctx, tenantID, status, categoryID, search, limit, offset)
 	}
 	return nil, nil
 }
@@ -55,11 +56,17 @@ func (m *mockRepo) CheckOutAsset(ctx context.Context, c *AssetCheckout) error {
 	}
 	return nil
 }
-func (m *mockRepo) CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, conditionIn string) error {
-	if m.checkInAssetFn != nil {
-		return m.checkInAssetFn(ctx, tenantID, checkoutID, conditionIn)
+func (m *mockRepo) GetActiveCheckout(ctx context.Context, tenantID, assetID uuid.UUID) (*AssetCheckout, error) {
+	if m.getActiveCheckoutFn != nil {
+		return m.getActiveCheckoutFn(ctx, tenantID, assetID)
 	}
-	return nil
+	return &AssetCheckout{ID: uuid.New(), TenantID: tenantID, AssetID: assetID}, nil
+}
+func (m *mockRepo) CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, in CheckInInput) (*AssetCheckout, error) {
+	if m.checkInAssetFn != nil {
+		return m.checkInAssetFn(ctx, tenantID, checkoutID, in)
+	}
+	return &AssetCheckout{ID: checkoutID, TenantID: tenantID}, nil
 }
 func (m *mockRepo) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*AssetCheckout, error) {
 	if m.getCheckoutFn != nil {
@@ -67,9 +74,9 @@ func (m *mockRepo) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*As
 	}
 	return &AssetCheckout{ID: id, TenantID: tenantID}, nil
 }
-func (m *mockRepo) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error) {
+func (m *mockRepo) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID, limit int, after string) ([]AssetCheckout, error) {
 	if m.listCheckoutsFn != nil {
-		return m.listCheckoutsFn(ctx, tenantID, assetID)
+		return m.listCheckoutsFn(ctx, tenantID, assetID, limit, after)
 	}
 	return nil, nil
 }
@@ -206,7 +213,6 @@ func TestCheckInAsset(t *testing.T) {
 	var updatedStatus string
 	tenantID := uuid.New()
 	assetID := uuid.New()
-	checkoutID := uuid.New()
 
 	svc := NewService(&mockRepo{
 		updateAssetStatusFn: func(ctx context.Context, tid, id uuid.UUID, status string) error {
@@ -215,9 +221,50 @@ func TestCheckInAsset(t *testing.T) {
 		},
 	})
 
-	err := svc.CheckInAsset(context.Background(), tenantID, checkoutID, assetID, "good")
+	_, err := svc.CheckInAsset(context.Background(), tenantID, assetID, CheckInInput{ConditionIn: "good"})
 	require.NoError(t, err)
 	assert.Equal(t, "available", updatedStatus)
+}
+
+func TestService_CheckInAsset_DamageSetsUnderRepair(t *testing.T) {
+	var gotStatus string
+	assetID := uuid.New()
+	svc := NewService(&mockRepo{
+		getActiveCheckoutFn: func(_ context.Context, tid, aid uuid.UUID) (*AssetCheckout, error) {
+			return &AssetCheckout{ID: uuid.New(), TenantID: tid, AssetID: aid}, nil
+		},
+		checkInAssetFn: func(_ context.Context, tid, cid uuid.UUID, in CheckInInput) (*AssetCheckout, error) {
+			return &AssetCheckout{ID: cid, TenantID: tid, ReportDamage: in.ReportDamage}, nil
+		},
+		updateAssetStatusFn: func(_ context.Context, _, _ uuid.UUID, s string) error { gotStatus = s; return nil },
+	})
+	_, err := svc.CheckInAsset(context.Background(), uuid.New(), assetID, CheckInInput{ReportDamage: true, DamageSeverity: "severe"})
+	require.NoError(t, err)
+	assert.Equal(t, "under_repair", gotStatus)
+}
+
+func TestService_CheckInAsset_NoDamageSetsAvailable(t *testing.T) {
+	var gotStatus string
+	svc := NewService(&mockRepo{
+		getActiveCheckoutFn: func(_ context.Context, tid, aid uuid.UUID) (*AssetCheckout, error) {
+			return &AssetCheckout{ID: uuid.New(), TenantID: tid, AssetID: aid}, nil
+		},
+		checkInAssetFn: func(_ context.Context, tid, cid uuid.UUID, in CheckInInput) (*AssetCheckout, error) {
+			return &AssetCheckout{ID: cid, TenantID: tid}, nil
+		},
+		updateAssetStatusFn: func(_ context.Context, _, _ uuid.UUID, s string) error { gotStatus = s; return nil },
+	})
+	_, err := svc.CheckInAsset(context.Background(), uuid.New(), uuid.New(), CheckInInput{ConditionIn: "good"})
+	require.NoError(t, err)
+	assert.Equal(t, "available", gotStatus)
+}
+
+func TestService_CheckInAsset_NoOpenCheckout(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getActiveCheckoutFn: func(_ context.Context, _, _ uuid.UUID) (*AssetCheckout, error) { return nil, ErrNoActiveCheckout },
+	})
+	_, err := svc.CheckInAsset(context.Background(), uuid.New(), uuid.New(), CheckInInput{})
+	assert.ErrorIs(t, err, ErrNoActiveCheckout)
 }
 
 func TestGetInventoryCategories(t *testing.T) {
@@ -249,13 +296,13 @@ func TestListAssets_DefaultLimit(t *testing.T) {
 	t.Parallel()
 	var capturedLimit int
 	svc := NewService(&mockRepo{
-		listAssetsFn: func(_ context.Context, _ uuid.UUID, _ string, limit, _ int) ([]Asset, error) {
+		listAssetsFn: func(_ context.Context, _ uuid.UUID, _, _, _ string, limit, _ int) ([]Asset, error) {
 			capturedLimit = limit
 			return nil, nil
 		},
 	})
 
-	_, err := svc.ListAssets(context.Background(), uuid.New(), "", 0, 0)
+	_, err := svc.ListAssets(context.Background(), uuid.New(), "", "", "", 0, 0)
 	require.NoError(t, err)
 	assert.Equal(t, 20, capturedLimit)
 }
@@ -264,13 +311,13 @@ func TestListAssets_MaxLimitEnforced(t *testing.T) {
 	t.Parallel()
 	var capturedLimit int
 	svc := NewService(&mockRepo{
-		listAssetsFn: func(_ context.Context, _ uuid.UUID, _ string, limit, _ int) ([]Asset, error) {
+		listAssetsFn: func(_ context.Context, _ uuid.UUID, _, _, _ string, limit, _ int) ([]Asset, error) {
 			capturedLimit = limit
 			return nil, nil
 		},
 	})
 
-	_, err := svc.ListAssets(context.Background(), uuid.New(), "", 9999, 0)
+	_, err := svc.ListAssets(context.Background(), uuid.New(), "", "", "", 9999, 0)
 	require.NoError(t, err)
 	assert.Equal(t, 20, capturedLimit)
 }
@@ -279,24 +326,73 @@ func TestListCheckouts_Success(t *testing.T) {
 	t.Parallel()
 	assetID := uuid.New()
 	svc := NewService(&mockRepo{
-		listCheckoutsFn: func(_ context.Context, _, id uuid.UUID) ([]AssetCheckout, error) {
+		listCheckoutsFn: func(_ context.Context, _, id uuid.UUID, _ int, _ string) ([]AssetCheckout, error) {
 			return []AssetCheckout{{ID: uuid.New(), AssetID: id}}, nil
 		},
 	})
 
-	checkouts, err := svc.ListCheckouts(context.Background(), uuid.New(), assetID)
+	checkouts, err := svc.ListCheckouts(context.Background(), uuid.New(), assetID, 20, "")
 	require.NoError(t, err)
 	assert.Len(t, checkouts, 1)
+}
+
+func TestService_ListAssets_ThreadsCategoryAndSearch(t *testing.T) {
+	t.Parallel()
+	var gotCat, gotSearch string
+	svc := NewService(&mockRepo{
+		listAssetsFn: func(_ context.Context, _ uuid.UUID, _, cat, search string, _, _ int) ([]Asset, error) {
+			gotCat, gotSearch = cat, search
+			return nil, nil
+		},
+	})
+	_, err := svc.ListAssets(context.Background(), uuid.New(), "", "cam", "arri", 20, 0)
+	require.NoError(t, err)
+	assert.Equal(t, "cam", gotCat)
+	assert.Equal(t, "arri", gotSearch)
+}
+
+func TestService_ListCheckouts_LimitClamped(t *testing.T) {
+	t.Parallel()
+	var gotLimit int
+	svc := NewService(&mockRepo{
+		listCheckoutsFn: func(_ context.Context, _, _ uuid.UUID, limit int, _ string) ([]AssetCheckout, error) {
+			gotLimit = limit
+			return nil, nil
+		},
+	})
+	_, err := svc.ListCheckouts(context.Background(), uuid.New(), uuid.New(), 9999, "")
+	require.NoError(t, err)
+	assert.Equal(t, 20, gotLimit)
+
+	_, err = svc.ListCheckouts(context.Background(), uuid.New(), uuid.New(), 0, "")
+	require.NoError(t, err)
+	assert.Equal(t, 20, gotLimit)
+}
+
+func TestService_ListCheckouts_ThreadsLimitAndAfter(t *testing.T) {
+	t.Parallel()
+	var gotLimit int
+	var gotAfter string
+	svc := NewService(&mockRepo{
+		listCheckoutsFn: func(_ context.Context, _, _ uuid.UUID, limit int, after string) ([]AssetCheckout, error) {
+			gotLimit, gotAfter = limit, after
+			return nil, nil
+		},
+	})
+	_, err := svc.ListCheckouts(context.Background(), uuid.New(), uuid.New(), 50, "2026-07-25T00:00:00Z")
+	require.NoError(t, err)
+	assert.Equal(t, 50, gotLimit)
+	assert.Equal(t, "2026-07-25T00:00:00Z", gotAfter)
 }
 
 func TestCheckInAsset_Error(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{
-		checkInAssetFn: func(_ context.Context, _, _ uuid.UUID, _ string) error {
-			return fmt.Errorf("db error")
+		checkInAssetFn: func(_ context.Context, _, _ uuid.UUID, _ CheckInInput) (*AssetCheckout, error) {
+			return nil, fmt.Errorf("db error")
 		},
 	})
 
-	err := svc.CheckInAsset(context.Background(), uuid.New(), uuid.New(), uuid.New(), "good")
+	_, err := svc.CheckInAsset(context.Background(), uuid.New(), uuid.New(), CheckInInput{ConditionIn: "good"})
 	require.Error(t, err)
 }

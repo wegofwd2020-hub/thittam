@@ -3,6 +3,8 @@ package inventory
 import (
 	"context"
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -119,7 +121,7 @@ func (h *Handler) ListAssets(ctx context.Context, req *inventoryv1.ListAssetsReq
 		return nil, err
 	}
 
-	assets, err := h.svc.ListAssets(ctx, tenantID, req.GetStatus(), int(req.GetLimit()), 0)
+	assets, err := h.svc.ListAssets(ctx, tenantID, req.GetStatus(), req.GetCategoryId(), req.GetSearch(), int(req.GetLimit()), 0)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -193,25 +195,37 @@ func (h *Handler) CheckInAsset(ctx context.Context, req *inventoryv1.CheckInAsse
 		return nil, err
 	}
 
-	checkoutID, err := uuid.Parse(req.GetCheckoutId())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid checkout_id")
-	}
-
 	assetID, err := uuid.Parse(req.GetAssetId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid asset_id")
 	}
 
-	if err := h.svc.CheckInAsset(ctx, tenantID, checkoutID, assetID, req.GetConditionIn()); err != nil {
-		return nil, grpcErr(err)
+	in := CheckInInput{
+		ConditionIn:       req.GetConditionIn(),
+		Notes:             req.GetNotes(),
+		ReportDamage:      req.GetReportDamage(),
+		DamageSeverity:    req.GetDamageSeverity(),
+		DamageDescription: req.GetDamageDescription(),
+	}
+	if s := req.GetRepairCost(); s != "" {
+		cost, err := decimal.NewFromString(s)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid repair_cost: must be a decimal string")
+		}
+		if cost.IsNegative() {
+			return nil, status.Error(codes.InvalidArgument, "repair_cost must not be negative")
+		}
+		in.RepairCost = &cost
+	}
+	if in.ReportDamage && strings.TrimSpace(in.DamageSeverity) == "" {
+		return nil, status.Error(codes.InvalidArgument, "damage_severity is required when report_damage is set")
 	}
 
-	out, err := h.svc.GetCheckout(ctx, tenantID, checkoutID)
+	co, err := h.svc.CheckInAsset(ctx, tenantID, assetID, in)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
-	return checkoutToProto(out), nil
+	return checkoutToProto(co), nil
 }
 
 func (h *Handler) ListCheckouts(ctx context.Context, req *inventoryv1.ListCheckoutsRequest) (*inventoryv1.ListCheckoutsResponse, error) {
@@ -229,7 +243,13 @@ func (h *Handler) ListCheckouts(ctx context.Context, req *inventoryv1.ListChecko
 		return nil, status.Error(codes.InvalidArgument, "invalid asset_id")
 	}
 
-	checkouts, err := h.svc.ListCheckouts(ctx, tenantID, assetID)
+	if after := req.GetAfter(); after != "" {
+		if _, err := time.Parse(time.RFC3339, after); err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid after: must be an RFC3339 timestamp")
+		}
+	}
+
+	checkouts, err := h.svc.ListCheckouts(ctx, tenantID, assetID, int(req.GetLimit()), req.GetAfter())
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -301,6 +321,13 @@ func checkoutToProto(c *AssetCheckout) *inventoryv1.AssetCheckout {
 	if c.CheckedInAt != nil {
 		out.CheckedInAt = timestamppb.New(*c.CheckedInAt)
 	}
+	out.Notes = c.Notes
+	out.ReportDamage = c.ReportDamage
+	out.DamageSeverity = c.DamageSeverity
+	out.DamageDescription = c.DamageDescription
+	if c.RepairCost != nil {
+		out.RepairCost = c.RepairCost.StringFixed(2)
+	}
 	return out
 }
 
@@ -315,6 +342,8 @@ func grpcErr(err error) error {
 		return status.Error(codes.FailedPrecondition, "asset is already checked out")
 	case errors.Is(err, ErrInvalidCategory):
 		return status.Error(codes.InvalidArgument, "invalid category for this vertical")
+	case errors.Is(err, ErrNoActiveCheckout):
+		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, vertical.ErrNotFound):
 		return status.Error(codes.FailedPrecondition, "vertical config not found for tenant")
 	}

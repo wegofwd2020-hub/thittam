@@ -17,6 +17,7 @@ SELECT * FROM assets
 WHERE tenant_id = $1
   AND ($2 = '' OR status = $2)
   AND ($3 = '' OR category_id = $3)
+  AND ($6 = '' OR name ILIKE '%' || $6 || '%' OR asset_code ILIKE '%' || $6 || '%')
 ORDER BY name ASC
 LIMIT $4 OFFSET $5;
 
@@ -42,7 +43,13 @@ RETURNING *;
 
 -- name: CheckinAsset :one
 UPDATE asset_checkouts
-SET checked_in_at = now(), condition_in = $3
+SET checked_in_at = now(),
+    condition_in = $3,
+    notes = $4,
+    report_damage = $5,
+    damage_severity = $6,
+    damage_description = $7,
+    repair_cost = $8
 WHERE id = $1 AND tenant_id = $2
 RETURNING *;
 
@@ -50,9 +57,9 @@ RETURNING *;
 SELECT * FROM asset_checkouts
 WHERE tenant_id = sqlc.arg('tenant_id')::uuid
   AND (sqlc.narg('asset_id')::uuid IS NULL OR asset_id = sqlc.narg('asset_id')::uuid)
-  AND (sqlc.narg('production_id')::uuid IS NULL OR production_id = sqlc.narg('production_id')::uuid)
+  AND (sqlc.narg('after')::timestamptz IS NULL OR checked_out_at < sqlc.narg('after')::timestamptz)
 ORDER BY checked_out_at DESC
-LIMIT sqlc.arg('limit')::int OFFSET sqlc.arg('offset')::int;
+LIMIT sqlc.arg('limit')::int;
 
 -- name: GetActiveCheckout :one
 SELECT * FROM asset_checkouts

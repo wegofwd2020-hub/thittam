@@ -37,4 +37,21 @@ type AssetCheckout struct {
 	CheckedInAt    *time.Time `json:"checked_in_at,omitempty"`
 	ConditionOut   string     `json:"condition_out,omitempty"`
 	ConditionIn    string     `json:"condition_in,omitempty"`
+
+	Notes             string           `json:"notes,omitempty"`
+	ReportDamage      bool             `json:"report_damage"`
+	DamageSeverity    string           `json:"damage_severity,omitempty"`
+	DamageDescription string           `json:"damage_description,omitempty"`
+	RepairCost        *decimal.Decimal `json:"repair_cost,omitempty"`
+}
+
+// CheckInInput carries the check-in payload; the open checkout is resolved from
+// the asset server-side, so no checkout ID is required.
+type CheckInInput struct {
+	ConditionIn       string
+	Notes             string
+	ReportDamage      bool
+	DamageSeverity    string
+	DamageDescription string
+	RepairCost        *decimal.Decimal // nil when the client omits it
 }

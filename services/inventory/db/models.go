@@ -28,14 +28,19 @@ type Asset struct {
 }
 
 type AssetCheckout struct {
-	ID             uuid.UUID          `json:"id"`
-	AssetID        uuid.UUID          `json:"asset_id"`
-	ProductionID   uuid.UUID          `json:"production_id"`
-	TenantID       uuid.UUID          `json:"tenant_id"`
-	CheckedOutTo   uuid.UUID          `json:"checked_out_to"`
-	CheckedOutAt   time.Time          `json:"checked_out_at"`
-	ExpectedReturn pgtype.Date        `json:"expected_return"`
-	CheckedInAt    pgtype.Timestamptz `json:"checked_in_at"`
-	ConditionOut   pgtype.Text        `json:"condition_out"`
-	ConditionIn    pgtype.Text        `json:"condition_in"`
+	ID                uuid.UUID          `json:"id"`
+	AssetID           uuid.UUID          `json:"asset_id"`
+	ProductionID      uuid.UUID          `json:"production_id"`
+	TenantID          uuid.UUID          `json:"tenant_id"`
+	CheckedOutTo      uuid.UUID          `json:"checked_out_to"`
+	CheckedOutAt      time.Time          `json:"checked_out_at"`
+	ExpectedReturn    pgtype.Date        `json:"expected_return"`
+	CheckedInAt       pgtype.Timestamptz `json:"checked_in_at"`
+	ConditionOut      pgtype.Text        `json:"condition_out"`
+	ConditionIn       pgtype.Text        `json:"condition_in"`
+	Notes             pgtype.Text        `json:"notes"`
+	ReportDamage      bool               `json:"report_damage"`
+	DamageSeverity    pgtype.Text        `json:"damage_severity"`
+	DamageDescription pgtype.Text        `json:"damage_description"`
+	RepairCost        pgtype.Numeric     `json:"repair_cost"`
 }

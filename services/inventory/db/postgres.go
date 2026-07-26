@@ -61,13 +61,14 @@ func (p *Postgres) GetAsset(ctx context.Context, tenantID, id uuid.UUID) (*inven
 	return assetFromDB(row), nil
 }
 
-func (p *Postgres) ListAssets(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]inventory.Asset, error) {
+func (p *Postgres) ListAssets(ctx context.Context, tenantID uuid.UUID, status, categoryID, search string, limit, offset int) ([]inventory.Asset, error) {
 	rows, err := p.q.ListAssets(ctx, ListAssetsParams{
 		TenantID: tenantID,
-		Column2:  status,   // status filter; "" = no filter
-		Column3:  "",       // category filter not exposed by this interface
+		Column2:  status,     // status filter; "" = no filter
+		Column3:  categoryID, // category filter; "" = no filter
 		Limit:    int32(limit),
 		Offset:   int32(offset),
+		Column6:  search, // name/asset_code search; "" = no filter
 	})
 	if err != nil {
 		return nil, fmt.Errorf("inventory: list assets: %w", err)
@@ -112,19 +113,38 @@ func (p *Postgres) CheckOutAsset(ctx context.Context, c *inventory.AssetCheckout
 	return nil
 }
 
-func (p *Postgres) CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, conditionIn string) error {
-	_, err := p.q.CheckinAsset(ctx, CheckinAssetParams{
-		ID:          checkoutID,
-		TenantID:    tenantID,
-		ConditionIn: pgTextFromString(conditionIn),
+func (p *Postgres) GetActiveCheckout(ctx context.Context, tenantID, assetID uuid.UUID) (*inventory.AssetCheckout, error) {
+	row, err := p.q.GetActiveCheckout(ctx, GetActiveCheckoutParams{
+		AssetID:  assetID,
+		TenantID: tenantID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return inventory.ErrAssetNotFound
+			return nil, inventory.ErrNoActiveCheckout
 		}
-		return fmt.Errorf("inventory: check in asset: %w", err)
+		return nil, fmt.Errorf("inventory: get active checkout: %w", err)
 	}
-	return nil
+	return checkoutFromDB(row), nil
+}
+
+func (p *Postgres) CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, in inventory.CheckInInput) (*inventory.AssetCheckout, error) {
+	row, err := p.q.CheckinAsset(ctx, CheckinAssetParams{
+		ID:                checkoutID,
+		TenantID:          tenantID,
+		ConditionIn:       pgTextFromString(in.ConditionIn),
+		Notes:             pgTextFromString(in.Notes),
+		ReportDamage:      in.ReportDamage,
+		DamageSeverity:    pgTextFromString(in.DamageSeverity),
+		DamageDescription: pgTextFromString(in.DamageDescription),
+		RepairCost:        pgNumericFromDecimalPtr(in.RepairCost),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, inventory.ErrAssetNotFound
+		}
+		return nil, fmt.Errorf("inventory: check in asset: %w", err)
+	}
+	return checkoutFromDB(row), nil
 }
 
 func (p *Postgres) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*inventory.AssetCheckout, error) {
@@ -139,17 +159,21 @@ func (p *Postgres) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*in
 }
 
 // ListCheckouts lists checkout records for an asset, scoped to the caller's
-// tenant. maxCheckouts bounds the query itself (rather than relying solely
-// on the service-layer post-fetch clamp) now that the query accepts a limit.
-const maxCheckoutsQueryLimit = 200
-
-func (p *Postgres) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID) ([]inventory.AssetCheckout, error) {
+// tenant, newest-first, using a keyset cursor (after) on checked_out_at.
+func (p *Postgres) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID, limit int, after string) ([]inventory.AssetCheckout, error) {
+	var afterTS pgtype.Timestamptz
+	if after != "" {
+		t, err := time.Parse(time.RFC3339, after)
+		if err != nil {
+			return nil, fmt.Errorf("inventory/db: invalid after cursor: %w", err)
+		}
+		afterTS = pgtype.Timestamptz{Time: t, Valid: true}
+	}
 	rows, err := p.q.ListCheckouts(ctx, ListCheckoutsParams{
-		TenantID:     tenantID,
-		AssetID:      pgtype.UUID{Bytes: assetID, Valid: true},
-		ProductionID: pgtype.UUID{}, // no production filter for this interface
-		Limit:        maxCheckoutsQueryLimit,
-		Offset:       0,
+		TenantID: tenantID,
+		AssetID:  pgtype.UUID{Bytes: assetID, Valid: true},
+		After:    afterTS,
+		Limit:    int32(limit),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("inventory: list checkouts: %w", err)
@@ -183,14 +207,19 @@ func assetFromDB(row Asset) *inventory.Asset {
 
 func checkoutFromDB(row AssetCheckout) *inventory.AssetCheckout {
 	c := &inventory.AssetCheckout{
-		ID:           row.ID,
-		AssetID:      row.AssetID,
-		ProductionID: row.ProductionID,
-		TenantID:     row.TenantID,
-		CheckedOutTo: row.CheckedOutTo,
-		CheckedOutAt: row.CheckedOutAt,
-		ConditionOut: stringFromPgText(row.ConditionOut),
-		ConditionIn:  stringFromPgText(row.ConditionIn),
+		ID:                row.ID,
+		AssetID:           row.AssetID,
+		ProductionID:      row.ProductionID,
+		TenantID:          row.TenantID,
+		CheckedOutTo:      row.CheckedOutTo,
+		CheckedOutAt:      row.CheckedOutAt,
+		ConditionOut:      stringFromPgText(row.ConditionOut),
+		ConditionIn:       stringFromPgText(row.ConditionIn),
+		Notes:             stringFromPgText(row.Notes),
+		ReportDamage:      row.ReportDamage,
+		DamageSeverity:    stringFromPgText(row.DamageSeverity),
+		DamageDescription: stringFromPgText(row.DamageDescription),
+		RepairCost:        decimalPtrFromPgNumeric(row.RepairCost),
 	}
 	c.ExpectedReturn = ptrStringFromPgDate(row.ExpectedReturn)
 	if row.CheckedInAt.Valid {
@@ -213,6 +242,25 @@ func decimalFromPgNumeric(n pgtype.Numeric) decimal.Decimal {
 		return decimal.Zero
 	}
 	return decimal.NewFromBigInt(n.Int, n.Exp)
+}
+
+// pgNumericFromDecimalPtr converts an optional decimal to pgtype.Numeric,
+// returning an invalid (NULL) Numeric when d is nil.
+func pgNumericFromDecimalPtr(d *decimal.Decimal) pgtype.Numeric {
+	if d == nil {
+		return pgtype.Numeric{}
+	}
+	return pgNumericFromDecimal(*d)
+}
+
+// decimalPtrFromPgNumeric converts a pgtype.Numeric to an optional decimal,
+// returning nil when the DB value is NULL.
+func decimalPtrFromPgNumeric(n pgtype.Numeric) *decimal.Decimal {
+	if !n.Valid {
+		return nil
+	}
+	d := decimalFromPgNumeric(n)
+	return &d
 }
 
 func pgTextFromString(s string) pgtype.Text {

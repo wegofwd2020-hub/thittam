@@ -40,11 +40,11 @@ func (s *Service) GetAsset(ctx context.Context, tenantID, id uuid.UUID) (*Asset,
 }
 
 // ListAssets lists assets for a tenant.
-func (s *Service) ListAssets(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]Asset, error) {
+func (s *Service) ListAssets(ctx context.Context, tenantID uuid.UUID, status, categoryID, search string, limit, offset int) ([]Asset, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	return s.repo.ListAssets(ctx, tenantID, status, limit, offset)
+	return s.repo.ListAssets(ctx, tenantID, status, categoryID, search, limit, offset)
 }
 
 // CheckOutAsset checks out an asset, verifying it is available.
@@ -69,12 +69,26 @@ func (s *Service) CheckOutAsset(ctx context.Context, c *AssetCheckout) error {
 	return s.repo.UpdateAssetStatus(ctx, c.TenantID, c.AssetID, "checked_out")
 }
 
-// CheckInAsset checks in an asset and sets status back to available.
-func (s *Service) CheckInAsset(ctx context.Context, tenantID, checkoutID, assetID uuid.UUID, conditionIn string) error {
-	if err := s.repo.CheckInAsset(ctx, tenantID, checkoutID, conditionIn); err != nil {
-		return err
+// CheckInAsset resolves the open checkout for the asset, records the
+// check-in (including any reported damage), and updates the asset status
+// accordingly.
+func (s *Service) CheckInAsset(ctx context.Context, tenantID, assetID uuid.UUID, in CheckInInput) (*AssetCheckout, error) {
+	co, err := s.repo.GetActiveCheckout(ctx, tenantID, assetID)
+	if err != nil {
+		return nil, err // ErrNoActiveCheckout maps to FailedPrecondition
 	}
-	return s.repo.UpdateAssetStatus(ctx, tenantID, assetID, "available")
+	updated, err := s.repo.CheckInAsset(ctx, tenantID, co.ID, in)
+	if err != nil {
+		return nil, err
+	}
+	status := "available"
+	if in.ReportDamage {
+		status = "under_repair"
+	}
+	if err := s.repo.UpdateAssetStatus(ctx, tenantID, assetID, status); err != nil {
+		return nil, err
+	}
+	return updated, nil
 }
 
 // GetInventoryCategories returns the vertical's inventory categories.
@@ -90,16 +104,11 @@ func (s *Service) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*Ass
 }
 
 // ListCheckouts lists checkouts for an asset, scoped to the caller's tenant.
-// Capped at 200 — a single prop realistically has tens of checkout records;
-// 200 bounds a runaway scan.
-func (s *Service) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error) {
-	checkouts, err := s.repo.ListCheckouts(ctx, tenantID, assetID)
-	if err != nil {
-		return nil, err
+// limit is clamped to (0, 200]; the DB LIMIT enforces the cap. after is an
+// opaque RFC3339 cursor on checked_out_at for keyset pagination.
+func (s *Service) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID, limit int, after string) ([]AssetCheckout, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 20
 	}
-	const maxCheckouts = 200
-	if len(checkouts) > maxCheckouts {
-		checkouts = checkouts[:maxCheckouts]
-	}
-	return checkouts, nil
+	return s.repo.ListCheckouts(ctx, tenantID, assetID, limit, after)
 }
