@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-07-25T05:19:05+00:00",
+  "generated": "2026-07-26T05:37:18+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -361,8 +361,8 @@
     {
       "id": "#60",
       "name": "feat(api): REST\u2192gRPC bridge \u2014 grpc-gateway in services + Kong in local stack",
-      "status": "in-progress",
-      "commits": 8
+      "status": "done",
+      "commits": 23
     },
     {
       "id": "#61",
@@ -889,8 +889,8 @@
     {
       "id": "#148",
       "name": "AcceptInvitation is not transactional: a failed role grant leaves a committed user row",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 4
     },
     {
       "id": "#149",
@@ -943,8 +943,8 @@
     {
       "id": "#157",
       "name": "security(project): phase and crew RPCs have no tenant filter \u2014 cross-tenant read and write by id",
-      "status": "in-progress",
-      "commits": 7
+      "status": "done",
+      "commits": 8
     },
     {
       "id": "#158",
@@ -1111,8 +1111,86 @@
     {
       "id": "#185",
       "name": "Invitations SQL is broken against real Postgres: queries reference accepted_at + a nonexistent ON CONFLICT target",
+      "status": "done",
+      "commits": 3
+    },
+    {
+      "id": "#186",
+      "name": "fix(iam): repair invitations SQL drift (accepted_at, ON CONFLICT, role_id) + first real-Postgres coverage (#185)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#187",
+      "name": "fix(iam): make AcceptInvitation transactional via Repository.WithTx (#148)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#188",
+      "name": "feat(infra): Kong single-origin local proxy on :8500 (#60 Phase B)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#189",
+      "name": "refactor(api): shared RunRESTGateway helper + migrate iam/budget/project (#60 Phase C1)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#190",
+      "name": "feat(reporting): dashboard RPCs + gateway (#60 Phase C, follow-up)",
+      "status": "done",
+      "commits": 5
+    },
+    {
+      "id": "#191",
+      "name": "feat(expense): RejectExpense / ApprovePurchaseOrder / SettlePettyCash RPCs (#60 Phase C, follow-up)",
+      "status": "done",
+      "commits": 9
+    },
+    {
+      "id": "#192",
+      "name": "fix(inventory): CheckInAsset contract + list filter/pagination fields (#60 Phase C, follow-up)",
+      "status": "done",
+      "commits": 7
+    },
+    {
+      "id": "#193",
+      "name": "feat(api): expense + inventory REST gateways via RunRESTGateway (#60 Phase C2)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#194",
+      "name": "feat(reporting): dashboard RPCs + REST gateway :9085 (#190)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#195",
+      "name": "feat(expense): reject/PO-approve/settle write RPCs + po_number fix (#191)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#196",
+      "name": "expense: ApprovePurchaseOrder skips the approval-limit/dual-approval checks ApproveExpense enforces (authorization parity)",
       "status": "pending",
       "commits": 0
+    },
+    {
+      "id": "#197",
+      "name": "expense: SettlePettyCash has no issued_to ownership check and gates on expense:submit (settle actor undecided)",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#198",
+      "name": "feat(inventory): CheckInAsset resolve-from-asset + damage, ListAssets/ListCheckouts filters (#192)",
+      "status": "done",
+      "commits": 1
     }
   ]
 }
