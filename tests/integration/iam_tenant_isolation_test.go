@@ -241,4 +241,5 @@ func (noopTokenIssuer) Issue(context.Context, *auth.AuthResult) (*auth.TokenPair
 func (noopTokenIssuer) Refresh(context.Context, string) (*auth.TokenPair, error) { return nil, nil }
 func (noopTokenIssuer) Revoke(context.Context, string) error                     { return nil }
 func (noopTokenIssuer) RevokeAllForUser(context.Context, uuid.UUID) error        { return nil }
+func (noopTokenIssuer) RevokeAllForTenant(context.Context, uuid.UUID) error      { return nil }
 func (noopTokenIssuer) Validate(context.Context, string) (*auth.Claims, error)   { return nil, nil }

@@ -336,11 +336,12 @@ func (m *mockAuthenticator) Authenticate(ctx context.Context, req auth.AuthReque
 // --- Mock TokenIssuer ---
 
 type mockTokenIssuer struct {
-	issueFn            func(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error)
-	refreshFn          func(ctx context.Context, refreshToken string) (*auth.TokenPair, error)
-	revokeFn           func(ctx context.Context, refreshToken string) error
-	validateFn         func(ctx context.Context, accessToken string) (*auth.Claims, error)
-	revokeAllForUserFn func(ctx context.Context, userID uuid.UUID) error
+	issueFn              func(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error)
+	refreshFn            func(ctx context.Context, refreshToken string) (*auth.TokenPair, error)
+	revokeFn             func(ctx context.Context, refreshToken string) error
+	validateFn           func(ctx context.Context, accessToken string) (*auth.Claims, error)
+	revokeAllForUserFn   func(ctx context.Context, userID uuid.UUID) error
+	revokeAllForTenantFn func(ctx context.Context, tenantID uuid.UUID) error
 }
 
 func (m *mockTokenIssuer) Issue(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error) {
@@ -370,6 +371,12 @@ func (m *mockTokenIssuer) Validate(ctx context.Context, accessToken string) (*au
 func (m *mockTokenIssuer) RevokeAllForUser(ctx context.Context, userID uuid.UUID) error {
 	if m.revokeAllForUserFn != nil {
 		return m.revokeAllForUserFn(ctx, userID)
+	}
+	return nil
+}
+func (m *mockTokenIssuer) RevokeAllForTenant(ctx context.Context, tenantID uuid.UUID) error {
+	if m.revokeAllForTenantFn != nil {
+		return m.revokeAllForTenantFn(ctx, tenantID)
 	}
 	return nil
 }
@@ -1125,6 +1132,40 @@ func TestSuspendTenant_BareSuspend_EmitsNoLegalHoldAuditEvent(t *testing.T) {
 	assert.Empty(t, store.snapshot(), "bare suspend must not emit legal-hold audit event")
 }
 
+func TestSuspendTenant_RevokesAllSessions(t *testing.T) {
+	t.Parallel()
+	var revokedFor uuid.UUID
+	called := false
+	tokens := &mockTokenIssuer{revokeAllForTenantFn: func(_ context.Context, tid uuid.UUID) error {
+		called = true
+		revokedFor = tid
+		return nil
+	}}
+	repo := &mockRepo{
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string, _ *time.Time, _ *string) error { return nil },
+		getTenantFn:          func(_ context.Context, id uuid.UUID) (*Tenant, error) { return &Tenant{ID: id}, nil },
+	}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+	_, err := svc.SuspendTenant(context.Background(), fixedTenantID, nil, nil)
+	require.NoError(t, err)
+	assert.True(t, called, "suspending a tenant must revoke every session in it")
+	assert.Equal(t, fixedTenantID, revokedFor)
+}
+
+func TestSuspendTenant_RevokeFailure_IsReported(t *testing.T) {
+	t.Parallel()
+	tokens := &mockTokenIssuer{revokeAllForTenantFn: func(_ context.Context, _ uuid.UUID) error {
+		return errors.New("redis down")
+	}}
+	repo := &mockRepo{
+		updateTenantStatusFn: func(_ context.Context, _ uuid.UUID, _ string, _ *time.Time, _ *string) error { return nil },
+		getTenantFn:          func(_ context.Context, id uuid.UUID) (*Tenant, error) { return &Tenant{ID: id}, nil },
+	}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+	_, err := svc.SuspendTenant(context.Background(), fixedTenantID, nil, nil)
+	require.Error(t, err)
+}
+
 func TestClearTenantLegalHold_ClearsFieldsAndEmitsAudit(t *testing.T) {
 	// Not t.Parallel() — waits on audit flush.
 	holdUntil := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
@@ -1548,6 +1589,55 @@ func TestUpdateUser_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Updated Name", result.DisplayName)
 	assert.Equal(t, fixedUserID, saved.ID)
+}
+
+func TestUpdateUser_RevokesSessionsOnDeactivate(t *testing.T) {
+	t.Parallel()
+	var revokedFor uuid.UUID
+	called := false
+	tokens := &mockTokenIssuer{revokeAllForUserFn: func(_ context.Context, id uuid.UUID) error {
+		called = true
+		revokedFor = id
+		return nil
+	}}
+	repo := &mockRepo{updateUserFn: func(_ context.Context, _ *User) error { return nil }}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+
+	_, err := svc.UpdateUser(context.Background(), &User{ID: fixedUserID, TenantID: fixedTenantID, Status: "deactivated"})
+	require.NoError(t, err)
+	assert.True(t, called, "deactivating via UpdateUser must revoke sessions")
+	assert.Equal(t, fixedUserID, revokedFor)
+}
+
+func TestUpdateUser_NoRevokeOnActiveOrEmpty(t *testing.T) {
+	t.Parallel()
+	for _, st := range []string{"active", ""} {
+		st := st
+		t.Run("status="+st, func(t *testing.T) {
+			t.Parallel()
+			called := false
+			tokens := &mockTokenIssuer{revokeAllForUserFn: func(_ context.Context, _ uuid.UUID) error {
+				called = true
+				return nil
+			}}
+			repo := &mockRepo{updateUserFn: func(_ context.Context, _ *User) error { return nil }}
+			svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+			_, err := svc.UpdateUser(context.Background(), &User{ID: fixedUserID, TenantID: fixedTenantID, Status: st})
+			require.NoError(t, err)
+			assert.False(t, called, "profile edit / reactivation must NOT revoke")
+		})
+	}
+}
+
+func TestUpdateUser_RevokeFailure_IsReported(t *testing.T) {
+	t.Parallel()
+	tokens := &mockTokenIssuer{revokeAllForUserFn: func(_ context.Context, _ uuid.UUID) error {
+		return errors.New("redis down")
+	}}
+	repo := &mockRepo{updateUserFn: func(_ context.Context, _ *User) error { return nil }}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+	_, err := svc.UpdateUser(context.Background(), &User{ID: fixedUserID, TenantID: fixedTenantID, Status: "deactivated"})
+	require.Error(t, err)
 }
 
 func TestDeactivateUser_Success(t *testing.T) {

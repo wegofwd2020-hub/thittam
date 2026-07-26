@@ -326,6 +326,15 @@ func (s *Service) UpdateUser(ctx context.Context, user *User) (*User, error) {
 	if err := s.repo.UpdateUser(ctx, user); err != nil {
 		return nil, fmt.Errorf("iam: update user %s: %w", user.ID, err)
 	}
+	// UpdateUser is a second path that sets status (handler passes req.Status straight
+	// through). A non-active status blocks new logins but, like DeactivateUser before
+	// #154, leaves live refresh tokens working — revoke them. Empty status is a repo
+	// no-op (leave-alone) and "active" is reactivation, so neither revokes. (#181)
+	if user.Status != "" && user.Status != "active" {
+		if err := s.tokens.RevokeAllForUser(ctx, user.ID); err != nil {
+			return nil, fmt.Errorf("iam: update user %s: revoke sessions: %w", user.ID, err)
+		}
+	}
 	return user, nil
 }
 
@@ -629,6 +638,12 @@ func (s *Service) SuspendTenant(
 
 	if err := s.repo.UpdateTenantStatus(ctx, id, TenantStatusSuspended, holdUntil, freezeReason); err != nil {
 		return nil, fmt.Errorf("iam: suspend tenant %s: %w", id, err)
+	}
+
+	// A suspended tenant whose users keep refreshing tokens for the full window
+	// defeats suspension. One INCR revokes every session in the tenant (#182).
+	if err := s.tokens.RevokeAllForTenant(ctx, id); err != nil {
+		return nil, fmt.Errorf("iam: suspend tenant %s: revoke sessions: %w", id, err)
 	}
 
 	after, err := s.repo.GetTenant(ctx, id)
