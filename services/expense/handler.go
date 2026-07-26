@@ -642,7 +642,7 @@ func grpcErr(err error) error {
 	case errors.Is(err, ErrInsufficientBudget):
 		return status.Error(codes.FailedPrecondition, "insufficient budget remaining")
 	case errors.Is(err, ErrNotAdvanceHolder):
-		return status.Error(codes.PermissionDenied, err.Error())
+		return status.Error(codes.PermissionDenied, "caller is not the petty cash advance holder")
 	case errors.Is(err, vertical.ErrNotFound):
 		return status.Error(codes.FailedPrecondition, "vertical config not found for tenant")
 	}

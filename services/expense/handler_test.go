@@ -81,6 +81,12 @@ func TestHandler_CreatePurchaseOrder_NoTenant(t *testing.T) {
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
+func TestHandler_CreatePurchaseOrder_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().CreatePurchaseOrder(ctxTenantNoCaller(uuid.New()), &expensev1.CreatePurchaseOrderRequest{ProductionId: uuid.New().String(), VendorName: "v", Amount: "100"})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
 func TestHandler_CreatePurchaseOrder_InvalidProductionID(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().CreatePurchaseOrder(ctxWithTenant(uuid.New()), &expensev1.CreatePurchaseOrderRequest{
@@ -293,6 +299,12 @@ func TestHandler_SubmitExpense_NoTenant(t *testing.T) {
 		ProductionId: uuid.New().String(),
 		Amount:       "100.00",
 	})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestHandler_SubmitExpense_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().SubmitExpense(ctxTenantNoCaller(uuid.New()), &expensev1.SubmitExpenseRequest{ProductionId: uuid.New().String(), CategoryId: "catering", Amount: "100"})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
