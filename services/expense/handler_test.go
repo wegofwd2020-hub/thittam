@@ -736,7 +736,9 @@ func TestHandler_SettlePettyCash_NotHolder(t *testing.T) {
 	tenantID := uuid.New()
 	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID}
 	h := NewHandler(NewService(&mockRepo{
-		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) { return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.NewFromInt(1000), IssuedTo: uuid.New()}, nil },
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.NewFromInt(1000), IssuedTo: uuid.New()}, nil
+		},
 	})).WithPermissionChecker(allowAllPerm{})
 	_, err := h.SettlePettyCash(ctxWithCaller(caller), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "10.00"})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -748,7 +750,9 @@ func TestHandler_SettlePettyCash_HolderSucceeds(t *testing.T) {
 	holder := uuid.New()
 	caller := interceptor.CallerInfo{UserID: holder, TenantID: tenantID}
 	h := NewHandler(NewService(&mockRepo{
-		getPettyCashFn:    func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) { return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.NewFromInt(1000), IssuedTo: holder}, nil },
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.NewFromInt(1000), IssuedTo: holder}, nil
+		},
 		updatePettyCashFn: func(_ context.Context, _ *PettyCashAdvance) error { return nil },
 	})).WithPermissionChecker(allowAllPerm{})
 	resp, err := h.SettlePettyCash(ctxWithCaller(caller), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "10.00"})
@@ -822,4 +826,36 @@ func TestGrpcErr_AllCodes(t *testing.T) {
 	for _, tc := range cases {
 		assert.Equal(t, tc.wantCode, status.Code(grpcErr(tc.err)))
 	}
+}
+
+func TestHandler_CreatePurchaseOrder_SetsRaisedBy(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID}
+	var saved *PurchaseOrder
+	h := NewHandler(NewService(&mockRepo{
+		createPOFn: func(_ context.Context, po *PurchaseOrder) error { saved = po; return nil },
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid}, nil
+		},
+	})).WithPermissionChecker(allowAllPerm{})
+	_, err := h.CreatePurchaseOrder(ctxWithCaller(caller), &expensev1.CreatePurchaseOrderRequest{ProductionId: uuid.New().String(), VendorName: "v", Amount: "100"})
+	require.NoError(t, err)
+	assert.Equal(t, caller.UserID, saved.RaisedBy)
+}
+
+func TestHandler_SubmitExpense_SetsSubmittedBy(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID}
+	var saved *Expense
+	h := NewHandler(NewService(&mockRepo{
+		createExpenseFn: func(_ context.Context, e *Expense) error { saved = e; return nil },
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid}, nil
+		},
+	})).WithPermissionChecker(allowAllPerm{})
+	_, err := h.SubmitExpense(ctxWithCaller(caller), &expensev1.SubmitExpenseRequest{ProductionId: uuid.New().String(), CategoryId: "catering", Amount: "100"})
+	require.NoError(t, err)
+	assert.Equal(t, caller.UserID, saved.SubmittedBy)
 }

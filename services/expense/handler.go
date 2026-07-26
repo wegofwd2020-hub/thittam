@@ -50,6 +50,11 @@ func (h *Handler) CreatePurchaseOrder(ctx context.Context, req *expensev1.Create
 		return nil, err
 	}
 
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
+	}
+
 	productionID, err := uuid.Parse(req.GetProductionId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")
@@ -74,7 +79,7 @@ func (h *Handler) CreatePurchaseOrder(ctx context.Context, req *expensev1.Create
 		Description:  req.GetDescription(),
 		Amount:       amount,
 		Currency:     currency,
-		RaisedBy:     uuid.Nil, // populated by auth interceptor once wired
+		RaisedBy:     caller.UserID,
 	}
 
 	if s := req.GetBudgetLineId(); s != "" {
@@ -191,6 +196,11 @@ func (h *Handler) SubmitExpense(ctx context.Context, req *expensev1.SubmitExpens
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
+	}
+
 	productionID, err := uuid.Parse(req.GetProductionId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")
@@ -217,7 +227,7 @@ func (h *Handler) SubmitExpense(ctx context.Context, req *expensev1.SubmitExpens
 		Amount:       amount,
 		Currency:     currency,
 		TaxAmount:    taxAmount,
-		SubmittedBy:  uuid.Nil, // populated by auth interceptor once wired
+		SubmittedBy:  caller.UserID,
 	}
 
 	if s := req.GetBudgetLineId(); s != "" {
