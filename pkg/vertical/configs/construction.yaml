@@ -156,11 +156,11 @@ vertical:
 
   approval_workflow:
     limits:
-      - role: site_manager
+      - role: coordinator
         max_amount: 100000
-      - role: project_manager
+      - role: accountant
         max_amount: 500000
-      - role: contracts_manager
+      - role: manager
         max_amount: 2000000
     dual_approval_above: 1000000
 

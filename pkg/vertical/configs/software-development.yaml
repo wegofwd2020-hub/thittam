@@ -174,11 +174,11 @@ vertical:
 
   approval_workflow:
     limits:
-      - role: team_lead
+      - role: coordinator
         max_amount: 50000
-      - role: project_manager
+      - role: project_supervisor
         max_amount: 200000
-      - role: director
+      - role: manager
         max_amount: 1000000
     dual_approval_above: 500000
 
