@@ -553,7 +553,9 @@ func TestService_SettlePettyCash_HolderSucceeds(t *testing.T) {
 	holder := uuid.New()
 	var saved *PettyCashAdvance
 	svc := NewService(&mockRepo{
-		getPettyCashFn:    func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) { return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.NewFromInt(1000), IssuedTo: holder}, nil },
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.NewFromInt(1000), IssuedTo: holder}, nil
+		},
 		updatePettyCashFn: func(_ context.Context, pc *PettyCashAdvance) error { saved = pc; return nil },
 	})
 	require.NoError(t, svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), holder, decimal.NewFromInt(10)))
@@ -575,7 +577,9 @@ func TestService_ApproveExpense_SucceedsWithRoleLimit(t *testing.T) {
 	// Regression: proves the P0 fix — an empty role used to always fail.
 	var saved *Expense
 	svc := NewService(&mockRepo{
-		getExpenseFn:    func(_ context.Context, tid, id uuid.UUID) (*Expense, error) { return &Expense{ID: id, TenantID: tid, Status: "submitted", Amount: decimal.NewFromInt(5000)}, nil },
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "submitted", Amount: decimal.NewFromInt(5000)}, nil
+		},
 		updateExpenseFn: func(_ context.Context, e *Expense) error { saved = e; return nil },
 	})
 	err := svc.ApproveExpense(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), []string{"manager"})
@@ -585,7 +589,9 @@ func TestService_ApproveExpense_SucceedsWithRoleLimit(t *testing.T) {
 
 func TestService_ApproveExpense_NoLimitRoleFails(t *testing.T) {
 	svc := NewService(&mockRepo{
-		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) { return &Expense{ID: id, TenantID: tid, Status: "submitted", Amount: decimal.NewFromInt(5000)}, nil },
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "submitted", Amount: decimal.NewFromInt(5000)}, nil
+		},
 	})
 	err := svc.ApproveExpense(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), []string{"member"})
 	assert.ErrorIs(t, err, ErrApprovalLimitExceeded)
@@ -594,7 +600,9 @@ func TestService_ApproveExpense_NoLimitRoleFails(t *testing.T) {
 func TestService_ApprovePurchaseOrder_WithinLimit(t *testing.T) {
 	var saved *PurchaseOrder
 	svc := NewService(&mockRepo{
-		getPOFn:    func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) { return &PurchaseOrder{ID: id, TenantID: tid, Status: "draft", Amount: decimal.NewFromInt(5000)}, nil },
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, Status: "draft", Amount: decimal.NewFromInt(5000)}, nil
+		},
 		updatePOFn: func(_ context.Context, po *PurchaseOrder) error { saved = po; return nil },
 	})
 	require.NoError(t, svc.ApprovePurchaseOrder(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), []string{"manager"}))
@@ -603,7 +611,9 @@ func TestService_ApprovePurchaseOrder_WithinLimit(t *testing.T) {
 
 func TestService_ApprovePurchaseOrder_OverLimit(t *testing.T) {
 	svc := NewService(&mockRepo{
-		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) { return &PurchaseOrder{ID: id, TenantID: tid, Status: "draft", Amount: decimal.NewFromInt(500000)}, nil },
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, Status: "draft", Amount: decimal.NewFromInt(500000)}, nil
+		},
 	})
 	assert.ErrorIs(t, svc.ApprovePurchaseOrder(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), []string{"coordinator"}), ErrApprovalLimitExceeded)
 }
@@ -618,14 +628,18 @@ func TestService_ApprovePurchaseOrder_DualApproval(t *testing.T) {
 	ctx := vertical.WithConfig(context.Background(), cfg)
 
 	svc := NewService(&mockRepo{
-		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) { return &PurchaseOrder{ID: id, TenantID: tid, Status: "draft", Amount: decimal.NewFromInt(2000000)}, nil },
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, Status: "draft", Amount: decimal.NewFromInt(2000000)}, nil
+		},
 	})
 	assert.ErrorIs(t, svc.ApprovePurchaseOrder(ctx, uuid.New(), uuid.New(), uuid.New(), []string{"manager"}), ErrDualApprovalRequired)
 }
 
 func TestService_ApprovePurchaseOrder_AlreadyApproved(t *testing.T) {
 	svc := NewService(&mockRepo{
-		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) { return &PurchaseOrder{ID: id, TenantID: tid, Status: "approved", Amount: decimal.NewFromInt(5000)}, nil },
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, Status: "approved", Amount: decimal.NewFromInt(5000)}, nil
+		},
 	})
 	assert.ErrorIs(t, svc.ApprovePurchaseOrder(ctxWithVertical(), uuid.New(), uuid.New(), uuid.New(), []string{"manager"}), ErrAlreadyApproved)
 }
