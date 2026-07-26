@@ -95,7 +95,8 @@ func (stubTokenIssuer) Revoke(_ context.Context, _ string) error { return nil }
 func (stubTokenIssuer) Validate(_ context.Context, _ string) (*auth.Claims, error) {
 	return &auth.Claims{}, nil
 }
-func (stubTokenIssuer) RevokeAllForUser(_ context.Context, _ uuid.UUID) error { return nil }
+func (stubTokenIssuer) RevokeAllForUser(_ context.Context, _ uuid.UUID) error   { return nil }
+func (stubTokenIssuer) RevokeAllForTenant(_ context.Context, _ uuid.UUID) error { return nil }
 
 type stubVerifier struct{}
 
@@ -157,7 +158,7 @@ func (r *iamRepo) UpdateUser(_ context.Context, u *iam.User) error {
 	return nil
 }
 func (r *iamRepo) UpdatePasswordHash(_ context.Context, _, _ uuid.UUID, _ string) error { return nil }
-func (r *iamRepo) DeactivateUser(_ context.Context, _, _ uuid.UUID) error            { return nil }
+func (r *iamRepo) DeactivateUser(_ context.Context, _, _ uuid.UUID) error               { return nil }
 
 // Tenants
 func (r *iamRepo) CreateTenant(_ context.Context, t *iam.Tenant) error {

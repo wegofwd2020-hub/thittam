@@ -336,11 +336,12 @@ func (m *mockAuthenticator) Authenticate(ctx context.Context, req auth.AuthReque
 // --- Mock TokenIssuer ---
 
 type mockTokenIssuer struct {
-	issueFn            func(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error)
-	refreshFn          func(ctx context.Context, refreshToken string) (*auth.TokenPair, error)
-	revokeFn           func(ctx context.Context, refreshToken string) error
-	validateFn         func(ctx context.Context, accessToken string) (*auth.Claims, error)
-	revokeAllForUserFn func(ctx context.Context, userID uuid.UUID) error
+	issueFn              func(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error)
+	refreshFn            func(ctx context.Context, refreshToken string) (*auth.TokenPair, error)
+	revokeFn             func(ctx context.Context, refreshToken string) error
+	validateFn           func(ctx context.Context, accessToken string) (*auth.Claims, error)
+	revokeAllForUserFn   func(ctx context.Context, userID uuid.UUID) error
+	revokeAllForTenantFn func(ctx context.Context, tenantID uuid.UUID) error
 }
 
 func (m *mockTokenIssuer) Issue(ctx context.Context, result *auth.AuthResult) (*auth.TokenPair, error) {
@@ -370,6 +371,12 @@ func (m *mockTokenIssuer) Validate(ctx context.Context, accessToken string) (*au
 func (m *mockTokenIssuer) RevokeAllForUser(ctx context.Context, userID uuid.UUID) error {
 	if m.revokeAllForUserFn != nil {
 		return m.revokeAllForUserFn(ctx, userID)
+	}
+	return nil
+}
+func (m *mockTokenIssuer) RevokeAllForTenant(ctx context.Context, tenantID uuid.UUID) error {
+	if m.revokeAllForTenantFn != nil {
+		return m.revokeAllForTenantFn(ctx, tenantID)
 	}
 	return nil
 }

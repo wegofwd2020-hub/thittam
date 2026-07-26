@@ -43,6 +43,10 @@ type TokenIssuer interface {
 	// (password change, deactivation, role revocation — #154).
 	RevokeAllForUser(ctx context.Context, userID uuid.UUID) error
 
+	// RevokeAllForTenant invalidates every outstanding refresh token for every user
+	// in a tenant (tenant suspension — #182).
+	RevokeAllForTenant(ctx context.Context, tenantID uuid.UUID) error
+
 	// Validate parses and validates an access token, returning its claims.
 	Validate(ctx context.Context, accessToken string) (*Claims, error)
 }

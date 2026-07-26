@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"strings"
 	"sync/atomic"
@@ -561,4 +562,137 @@ func TestJWTIssuer_RevokeAllForUser_ScopedToUser(t *testing.T) {
 
 	_, err = iss.Refresh(ctx, pair.RefreshToken)
 	require.NoError(t, err, "revoking one user must not revoke another's sessions")
+}
+
+// --- RevokeAllForTenant (#182) ---
+
+// RevokeAllForTenant rejects a refresh token minted before the bump.
+func TestJWTIssuer_RevokeAllForTenant_RejectsPriorRefreshToken(t *testing.T) {
+	iss, _ := testIssuer(t)
+	ctx := context.Background()
+
+	pair, err := iss.Issue(ctx, &AuthResult{UserID: fixtureUserID, TenantID: fixtureTenantID, Email: "u@example.com"})
+	require.NoError(t, err)
+
+	require.NoError(t, iss.RevokeAllForTenant(ctx, fixtureTenantID))
+
+	_, err = iss.Refresh(ctx, pair.RefreshToken)
+	require.Error(t, err, "a refresh token issued before tenant revoke-all must be rejected")
+	assert.ErrorIs(t, err, ErrSessionRevoked)
+}
+
+// A token issued AFTER the tenant revocation must work — revoke-all must not
+// wedge the tenant out permanently.
+func TestJWTIssuer_RevokeAllForTenant_NewTokenStillWorks(t *testing.T) {
+	iss, _ := testIssuer(t)
+	ctx := context.Background()
+
+	require.NoError(t, iss.RevokeAllForTenant(ctx, fixtureTenantID))
+
+	pair, err := iss.Issue(ctx, &AuthResult{UserID: fixtureUserID, TenantID: fixtureTenantID, Email: "u@example.com"})
+	require.NoError(t, err)
+	_, err = iss.Refresh(ctx, pair.RefreshToken)
+	require.NoError(t, err)
+}
+
+// THE test that pins `!=` over `<` on the tenant dimension. With the counter
+// key deleted (TTL expiry, flush, cold-replica failover) a stale token must
+// still be rejected.
+func TestJWTIssuer_RevokeAllForTenant_CounterResetStillRejects(t *testing.T) {
+	iss, mr := testIssuer(t)
+	ctx := context.Background()
+
+	// Establish a nonzero baseline generation first — see the analogous usergen
+	// test for why this is required to distinguish `!=` from `<`.
+	require.NoError(t, iss.RevokeAllForTenant(ctx, fixtureTenantID))
+
+	pair, err := iss.Issue(ctx, &AuthResult{UserID: fixtureUserID, TenantID: fixtureTenantID, Email: "u@example.com"})
+	require.NoError(t, err)
+	require.NoError(t, iss.RevokeAllForTenant(ctx, fixtureTenantID))
+
+	// Simulate the counter disappearing while the refresh token is still alive.
+	mr.Del(tenantgenKeyPrefix + fixtureTenantID.String())
+
+	_, err = iss.Refresh(ctx, pair.RefreshToken)
+	require.Error(t, err, "a reset tenant counter must not resurrect a revoked session")
+	assert.ErrorIs(t, err, ErrSessionRevoked)
+}
+
+// Revoking one tenant must not touch another's sessions.
+func TestJWTIssuer_RevokeAllForTenant_ScopedToTenant(t *testing.T) {
+	iss, _ := testIssuer(t)
+	ctx := context.Background()
+	otherTenant := uuid.MustParse("b1000000-0000-0000-0000-0000000000ff")
+
+	pair, err := iss.Issue(ctx, &AuthResult{UserID: fixtureUserID, TenantID: otherTenant, Email: "u@example.com"})
+	require.NoError(t, err)
+
+	require.NoError(t, iss.RevokeAllForTenant(ctx, fixtureTenantID))
+
+	_, err = iss.Refresh(ctx, pair.RefreshToken)
+	require.NoError(t, err, "revoking one tenant must not revoke another tenant's sessions")
+}
+
+// TestJWTIssuer_Refresh_TOCTOU_RevokeTenantMidRefresh mirrors
+// TestJWTIssuer_Refresh_TOCTOU_RevokeMidRefresh but on the tenant dimension: a
+// RevokeAllForTenant INCR landing between Refresh's compare-read of the tenant
+// generation counter and the re-issue must not be baked into the freshly
+// issued token.
+func TestJWTIssuer_Refresh_TOCTOU_RevokeTenantMidRefresh(t *testing.T) {
+	issuer, _, rdb := testIssuerWithClient(t)
+	ctx := context.Background()
+
+	original, err := issuer.Issue(ctx, fixtureAuthResult())
+	require.NoError(t, err)
+
+	hook := &midRefreshRevokeHook{
+		rdb: rdb,
+		key: tenantgenKeyPrefix + fixtureTenantID.String(),
+	}
+	rdb.AddHook(hook)
+
+	refreshed, err := issuer.Refresh(ctx, original.RefreshToken)
+	require.NoError(t, err, "the in-flight refresh must complete using the generation it already validated")
+	require.True(t, hook.fired.Load(), "test setup bug: the race hook never observed the expected GET")
+
+	_, err = issuer.Refresh(ctx, refreshed.RefreshToken)
+	assert.ErrorIs(t, err, ErrSessionRevoked,
+		"a refresh token minted during the TOCTOU window must not survive the tenant revocation that raced it")
+}
+
+// Back-compat: a refresh payload minted before this change deserializes with
+// TenantGeneration == 0 (Go's zero value for a missing JSON field). A
+// never-bumped tenant's counter also reads 0, so the comparison passes — no
+// forced logout on deploy.
+func TestJWTIssuer_Refresh_PreTenantgenPayloadStillWorks(t *testing.T) {
+	iss, _ := testIssuer(t)
+	ctx := context.Background()
+
+	// Simulate a refresh token minted by pre-#182 code: marshal a JSON payload
+	// with no "tenant_generation" field at all, and store it directly under the
+	// refresh key exactly as issueRefreshToken would.
+	token, err := generateToken()
+	require.NoError(t, err)
+
+	legacyPayload := struct {
+		UserID      uuid.UUID    `json:"user_id"`
+		TenantID    uuid.UUID    `json:"tenant_id"`
+		Email       string       `json:"email"`
+		Roles       []string     `json:"roles"`
+		Permissions []string     `json:"permissions"`
+		AuthMethod  ProviderType `json:"auth_method"`
+		Generation  int64        `json:"generation"`
+	}{
+		UserID:     fixtureUserID,
+		TenantID:   fixtureTenantID,
+		Email:      "u@example.com",
+		AuthMethod: ProviderLocal,
+		Generation: 0,
+	}
+	data, err := json.Marshal(legacyPayload)
+	require.NoError(t, err)
+	require.NoError(t, iss.rdb.Set(ctx, refreshKeyPrefix+token, data, 10*time.Second).Err())
+
+	_, err = iss.Refresh(ctx, token)
+	require.NoError(t, err, "a pre-#182 refresh payload (no tenant_generation field) must still refresh against a never-bumped tenant")
 }
