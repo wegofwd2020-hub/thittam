@@ -43,6 +43,7 @@ service IAMService {
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
   rpc UpdateUser(UpdateUserRequest) returns (User);
   rpc DeactivateUser(DeactivateUserRequest) returns (DeactivateUserResponse);
+  rpc ActivateUser(ActivateUserRequest) returns (ActivateUserResponse);
   rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
 
   // --- Roles & Permissions ---
@@ -248,6 +249,9 @@ message UpdateUserRequest {
   string tenant_id = 1;
   string id = 2;
   string display_name = 3;
+  // Deprecated: ignored. Account status transitions go through the platform_admin-gated
+  // ActivateUser / DeactivateUser RPCs, not this profile-edit path (#162). Kept for
+  // wire-compat; the server no longer reads it.
   string status = 4;
 }
 
@@ -257,6 +261,13 @@ message DeactivateUserRequest {
 }
 
 message DeactivateUserResponse {}
+
+message ActivateUserRequest {
+  string tenant_id = 1;
+  string id = 2;
+}
+
+message ActivateUserResponse {}
 
 message ChangePasswordRequest {
   // Deprecated: ignored. The subject is derived from the caller's verified token

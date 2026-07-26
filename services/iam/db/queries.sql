@@ -150,6 +150,11 @@ LIMIT $3 OFFSET $4;
 -- name: UpdateUserStatus :one
 UPDATE users SET status = $2 WHERE id = $1 AND tenant_id = $3 RETURNING *;
 
+-- name: ReactivateUser :one
+UPDATE users SET status = 'active'
+WHERE id = $1 AND tenant_id = $2 AND status = 'deactivated'
+RETURNING *;
+
 -- name: UpdateUserPasswordHash :execrows
 UPDATE users SET password_hash = $2 WHERE id = $1 AND tenant_id = $3;
 
