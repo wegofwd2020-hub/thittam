@@ -16,7 +16,7 @@ const createExpense = `-- name: CreateExpense :one
 INSERT INTO expenses (id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, submitted_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, status, submitted_by, approved_by, submitted_at, approved_at, created_at, rejection_reason, rejected_at
+RETURNING id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, status, submitted_by, approved_by, submitted_at, approved_at, created_at, rejection_reason, rejected_at, rejected_by
 `
 
 type CreateExpenseParams struct {
@@ -67,6 +67,7 @@ func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (E
 		&i.CreatedAt,
 		&i.RejectionReason,
 		&i.RejectedAt,
+		&i.RejectedBy,
 	)
 	return i, err
 }
@@ -172,7 +173,7 @@ func (q *Queries) CreatePurchaseOrder(ctx context.Context, arg CreatePurchaseOrd
 }
 
 const getExpense = `-- name: GetExpense :one
-SELECT id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, status, submitted_by, approved_by, submitted_at, approved_at, created_at, rejection_reason, rejected_at FROM expenses WHERE id = $1 AND tenant_id = $2
+SELECT id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, status, submitted_by, approved_by, submitted_at, approved_at, created_at, rejection_reason, rejected_at, rejected_by FROM expenses WHERE id = $1 AND tenant_id = $2
 `
 
 type GetExpenseParams struct {
@@ -202,6 +203,7 @@ func (q *Queries) GetExpense(ctx context.Context, arg GetExpenseParams) (Expense
 		&i.CreatedAt,
 		&i.RejectionReason,
 		&i.RejectedAt,
+		&i.RejectedBy,
 	)
 	return i, err
 }
@@ -267,7 +269,7 @@ func (q *Queries) GetPurchaseOrder(ctx context.Context, arg GetPurchaseOrderPara
 }
 
 const listExpenses = `-- name: ListExpenses :many
-SELECT id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, status, submitted_by, approved_by, submitted_at, approved_at, created_at, rejection_reason, rejected_at FROM expenses
+SELECT id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, status, submitted_by, approved_by, submitted_at, approved_at, created_at, rejection_reason, rejected_at, rejected_by FROM expenses
 WHERE tenant_id = $1
   AND ($2::uuid IS NULL OR production_id = $2)
   AND ($3 = '' OR status = $3)
@@ -317,6 +319,7 @@ func (q *Queries) ListExpenses(ctx context.Context, arg ListExpensesParams) ([]E
 			&i.CreatedAt,
 			&i.RejectionReason,
 			&i.RejectedAt,
+			&i.RejectedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -436,19 +439,25 @@ func (q *Queries) ListPurchaseOrders(ctx context.Context, arg ListPurchaseOrders
 
 const rejectExpense = `-- name: RejectExpense :one
 UPDATE expenses
-SET status = 'rejected', rejection_reason = $3, rejected_at = now()
+SET status = 'rejected', rejection_reason = $3, rejected_at = now(), rejected_by = $4
 WHERE id = $1 AND tenant_id = $2
-RETURNING id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, status, submitted_by, approved_by, submitted_at, approved_at, created_at, rejection_reason, rejected_at
+RETURNING id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, status, submitted_by, approved_by, submitted_at, approved_at, created_at, rejection_reason, rejected_at, rejected_by
 `
 
 type RejectExpenseParams struct {
 	ID              uuid.UUID   `json:"id"`
 	TenantID        uuid.UUID   `json:"tenant_id"`
 	RejectionReason pgtype.Text `json:"rejection_reason"`
+	RejectedBy      pgtype.UUID `json:"rejected_by"`
 }
 
 func (q *Queries) RejectExpense(ctx context.Context, arg RejectExpenseParams) (Expense, error) {
-	row := q.db.QueryRow(ctx, rejectExpense, arg.ID, arg.TenantID, arg.RejectionReason)
+	row := q.db.QueryRow(ctx, rejectExpense,
+		arg.ID,
+		arg.TenantID,
+		arg.RejectionReason,
+		arg.RejectedBy,
+	)
 	var i Expense
 	err := row.Scan(
 		&i.ID,
@@ -469,6 +478,7 @@ func (q *Queries) RejectExpense(ctx context.Context, arg RejectExpenseParams) (E
 		&i.CreatedAt,
 		&i.RejectionReason,
 		&i.RejectedAt,
+		&i.RejectedBy,
 	)
 	return i, err
 }
@@ -519,7 +529,7 @@ SET status      = $3,
     submitted_at = CASE WHEN $3 = 'submitted' THEN now() ELSE submitted_at END,
     approved_at  = CASE WHEN $3 = 'approved'  THEN now() ELSE approved_at  END
 WHERE id = $1 AND tenant_id = $2
-RETURNING id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, status, submitted_by, approved_by, submitted_at, approved_at, created_at, rejection_reason, rejected_at
+RETURNING id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, status, submitted_by, approved_by, submitted_at, approved_at, created_at, rejection_reason, rejected_at, rejected_by
 `
 
 type UpdateExpenseStatusParams struct {
@@ -556,6 +566,7 @@ func (q *Queries) UpdateExpenseStatus(ctx context.Context, arg UpdateExpenseStat
 		&i.CreatedAt,
 		&i.RejectionReason,
 		&i.RejectedAt,
+		&i.RejectedBy,
 	)
 	return i, err
 }

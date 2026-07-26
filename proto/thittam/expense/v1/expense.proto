@@ -95,6 +95,9 @@ message Expense {
   google.protobuf.Timestamp submitted_at = 14;
   google.protobuf.Timestamp approved_at = 15;
   google.protobuf.Timestamp created_at = 16;
+  string rejected_by = 17;
+  string rejection_reason = 18;
+  google.protobuf.Timestamp rejected_at = 19;
 }
 
 message PettyCashAdvance {

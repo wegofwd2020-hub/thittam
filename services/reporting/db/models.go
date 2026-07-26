@@ -105,6 +105,7 @@ type Expense struct {
 	CreatedAt       time.Time          `json:"created_at"`
 	RejectionReason pgtype.Text        `json:"rejection_reason"`
 	RejectedAt      pgtype.Timestamptz `json:"rejected_at"`
+	RejectedBy      pgtype.UUID        `json:"rejected_by"`
 }
 
 type ExpenseFact struct {
