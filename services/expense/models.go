@@ -43,6 +43,7 @@ type Expense struct {
 	Status          string          `json:"status"` // draft, submitted, approved, rejected, paid
 	SubmittedBy     uuid.UUID       `json:"submitted_by"`
 	ApprovedBy      *uuid.UUID      `json:"approved_by,omitempty"`
+	RejectedBy      *uuid.UUID      `json:"rejected_by,omitempty"`
 	SubmittedAt     *time.Time      `json:"submitted_at,omitempty"`
 	ApprovedAt      *time.Time      `json:"approved_at,omitempty"`
 	CreatedAt       time.Time       `json:"created_at"`

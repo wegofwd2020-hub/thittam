@@ -187,7 +187,7 @@ func (s *Service) GetApprovalLimits(ctx context.Context) vertical.ApprovalWorkfl
 }
 
 // RejectExpense rejects a submitted expense with a reason.
-func (s *Service) RejectExpense(ctx context.Context, tenantID, expenseID uuid.UUID, reason string) error {
+func (s *Service) RejectExpense(ctx context.Context, tenantID, expenseID, rejecterID uuid.UUID, reason string) error {
 	exp, err := s.repo.GetExpense(ctx, tenantID, expenseID)
 	if err != nil {
 		return fmt.Errorf("get expense: %w", err)
@@ -198,7 +198,7 @@ func (s *Service) RejectExpense(ctx context.Context, tenantID, expenseID uuid.UU
 	if exp.Status == "rejected" {
 		return ErrAlreadyRejected
 	}
-	return s.repo.RejectExpense(ctx, tenantID, expenseID, reason)
+	return s.repo.RejectExpense(ctx, tenantID, expenseID, rejecterID, reason)
 }
 
 // ApprovePurchaseOrder validates the approver's role against the vertical's

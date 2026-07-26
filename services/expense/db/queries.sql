@@ -74,6 +74,6 @@ RETURNING *;
 
 -- name: RejectExpense :one
 UPDATE expenses
-SET status = 'rejected', rejection_reason = $3, rejected_at = now()
+SET status = 'rejected', rejection_reason = $3, rejected_at = now(), rejected_by = $4
 WHERE id = $1 AND tenant_id = $2
 RETURNING *;

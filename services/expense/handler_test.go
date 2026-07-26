@@ -476,20 +476,30 @@ func TestHandler_RejectExpense_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	expID := uuid.New()
+	rejecter := uuid.New()
+	caller := interceptor.CallerInfo{UserID: rejecter, TenantID: tenantID}
 	callCount := 0
 	h := NewHandler(NewService(&mockRepo{
 		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
 			callCount++
-			st := "submitted"
 			if callCount > 1 {
-				st = "rejected"
+				// second call: GetExpense after reject → return the rejected record
+				return &Expense{ID: id, TenantID: tid, Status: "rejected", Amount: decimal.NewFromInt(5000), RejectedBy: &rejecter}, nil
 			}
-			return &Expense{ID: id, TenantID: tid, Status: st, Amount: decimal.NewFromInt(5000)}, nil
+			return &Expense{ID: id, TenantID: tid, Status: "submitted", Amount: decimal.NewFromInt(5000)}, nil
 		},
 	})).WithPermissionChecker(allowAllPerm{})
-	resp, err := h.RejectExpense(ctxWithTenant(tenantID), &expensev1.RejectExpenseRequest{ExpenseId: expID.String(), Reason: "over budget"})
+	resp, err := h.RejectExpense(ctxWithCaller(caller), &expensev1.RejectExpenseRequest{ExpenseId: expID.String(), Reason: "over budget"})
 	require.NoError(t, err)
 	assert.Equal(t, "rejected", resp.GetStatus())
+	assert.Equal(t, rejecter.String(), resp.GetRejectedBy())
+}
+
+func TestHandler_RejectExpense_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().RejectExpense(ctxTenantNoCaller(uuid.New()),
+		&expensev1.RejectExpenseRequest{ExpenseId: uuid.New().String(), Reason: "over budget"})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
 func TestHandler_RejectExpense_Denied(t *testing.T) {

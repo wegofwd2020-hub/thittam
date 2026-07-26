@@ -170,11 +170,12 @@ func (p *Postgres) UpdateExpense(ctx context.Context, e *expense.Expense) error 
 	return nil
 }
 
-func (p *Postgres) RejectExpense(ctx context.Context, tenantID, expenseID uuid.UUID, reason string) error {
+func (p *Postgres) RejectExpense(ctx context.Context, tenantID, expenseID, rejecterID uuid.UUID, reason string) error {
 	_, err := p.q.RejectExpense(ctx, RejectExpenseParams{
 		ID:              expenseID,
 		TenantID:        tenantID,
 		RejectionReason: pgtype.Text{String: reason, Valid: true},
+		RejectedBy:      pgtype.UUID{Bytes: rejecterID, Valid: true},
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -314,6 +315,18 @@ func expenseFromDB(row Expense) *expense.Expense {
 	if row.ApprovedAt.Valid {
 		t := row.ApprovedAt.Time
 		e.ApprovedAt = &t
+	}
+	if row.RejectedBy.Valid {
+		id := uuid.UUID(row.RejectedBy.Bytes)
+		e.RejectedBy = &id
+	}
+	if row.RejectionReason.Valid {
+		s := row.RejectionReason.String
+		e.RejectionReason = &s
+	}
+	if row.RejectedAt.Valid {
+		t := row.RejectedAt.Time
+		e.RejectedAt = &t
 	}
 	return e
 }
