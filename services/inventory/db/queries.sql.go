@@ -14,19 +14,39 @@ import (
 
 const checkinAsset = `-- name: CheckinAsset :one
 UPDATE asset_checkouts
-SET checked_in_at = now(), condition_in = $3
+SET checked_in_at = now(),
+    condition_in = $3,
+    notes = $4,
+    report_damage = $5,
+    damage_severity = $6,
+    damage_description = $7,
+    repair_cost = $8
 WHERE id = $1 AND tenant_id = $2
-RETURNING id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in
+RETURNING id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in, notes, report_damage, damage_severity, damage_description, repair_cost
 `
 
 type CheckinAssetParams struct {
-	ID          uuid.UUID   `json:"id"`
-	TenantID    uuid.UUID   `json:"tenant_id"`
-	ConditionIn pgtype.Text `json:"condition_in"`
+	ID                uuid.UUID      `json:"id"`
+	TenantID          uuid.UUID      `json:"tenant_id"`
+	ConditionIn       pgtype.Text    `json:"condition_in"`
+	Notes             pgtype.Text    `json:"notes"`
+	ReportDamage      bool           `json:"report_damage"`
+	DamageSeverity    pgtype.Text    `json:"damage_severity"`
+	DamageDescription pgtype.Text    `json:"damage_description"`
+	RepairCost        pgtype.Numeric `json:"repair_cost"`
 }
 
 func (q *Queries) CheckinAsset(ctx context.Context, arg CheckinAssetParams) (AssetCheckout, error) {
-	row := q.db.QueryRow(ctx, checkinAsset, arg.ID, arg.TenantID, arg.ConditionIn)
+	row := q.db.QueryRow(ctx, checkinAsset,
+		arg.ID,
+		arg.TenantID,
+		arg.ConditionIn,
+		arg.Notes,
+		arg.ReportDamage,
+		arg.DamageSeverity,
+		arg.DamageDescription,
+		arg.RepairCost,
+	)
 	var i AssetCheckout
 	err := row.Scan(
 		&i.ID,
@@ -39,6 +59,11 @@ func (q *Queries) CheckinAsset(ctx context.Context, arg CheckinAssetParams) (Ass
 		&i.CheckedInAt,
 		&i.ConditionOut,
 		&i.ConditionIn,
+		&i.Notes,
+		&i.ReportDamage,
+		&i.DamageSeverity,
+		&i.DamageDescription,
+		&i.RepairCost,
 	)
 	return i, err
 }
@@ -47,7 +72,7 @@ const checkoutAsset = `-- name: CheckoutAsset :one
 INSERT INTO asset_checkouts (id, asset_id, production_id, tenant_id, checked_out_to, expected_return, condition_out)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in
+RETURNING id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in, notes, report_damage, damage_severity, damage_description, repair_cost
 `
 
 type CheckoutAssetParams struct {
@@ -82,6 +107,11 @@ func (q *Queries) CheckoutAsset(ctx context.Context, arg CheckoutAssetParams) (A
 		&i.CheckedInAt,
 		&i.ConditionOut,
 		&i.ConditionIn,
+		&i.Notes,
+		&i.ReportDamage,
+		&i.DamageSeverity,
+		&i.DamageDescription,
+		&i.RepairCost,
 	)
 	return i, err
 }
@@ -143,7 +173,7 @@ func (q *Queries) CreateAsset(ctx context.Context, arg CreateAssetParams) (Asset
 }
 
 const getActiveCheckout = `-- name: GetActiveCheckout :one
-SELECT id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in FROM asset_checkouts
+SELECT id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in, notes, report_damage, damage_severity, damage_description, repair_cost FROM asset_checkouts
 WHERE asset_id = $1 AND tenant_id = $2 AND checked_in_at IS NULL
 LIMIT 1
 `
@@ -167,6 +197,11 @@ func (q *Queries) GetActiveCheckout(ctx context.Context, arg GetActiveCheckoutPa
 		&i.CheckedInAt,
 		&i.ConditionOut,
 		&i.ConditionIn,
+		&i.Notes,
+		&i.ReportDamage,
+		&i.DamageSeverity,
+		&i.DamageDescription,
+		&i.RepairCost,
 	)
 	return i, err
 }
@@ -232,7 +267,7 @@ func (q *Queries) GetAssetByCode(ctx context.Context, arg GetAssetByCodeParams) 
 }
 
 const getCheckout = `-- name: GetCheckout :one
-SELECT id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in FROM asset_checkouts WHERE id = $1 AND tenant_id = $2
+SELECT id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in, notes, report_damage, damage_severity, damage_description, repair_cost FROM asset_checkouts WHERE id = $1 AND tenant_id = $2
 `
 
 type GetCheckoutParams struct {
@@ -254,6 +289,11 @@ func (q *Queries) GetCheckout(ctx context.Context, arg GetCheckoutParams) (Asset
 		&i.CheckedInAt,
 		&i.ConditionOut,
 		&i.ConditionIn,
+		&i.Notes,
+		&i.ReportDamage,
+		&i.DamageSeverity,
+		&i.DamageDescription,
+		&i.RepairCost,
 	)
 	return i, err
 }
@@ -263,6 +303,7 @@ SELECT id, tenant_id, asset_code, name, category_id, description, ownership_type
 WHERE tenant_id = $1
   AND ($2 = '' OR status = $2)
   AND ($3 = '' OR category_id = $3)
+  AND ($6 = '' OR name ILIKE '%' || $6 || '%' OR asset_code ILIKE '%' || $6 || '%')
 ORDER BY name ASC
 LIMIT $4 OFFSET $5
 `
@@ -273,6 +314,7 @@ type ListAssetsParams struct {
 	Column3  interface{} `json:"column_3"`
 	Limit    int32       `json:"limit"`
 	Offset   int32       `json:"offset"`
+	Column6  interface{} `json:"column_6"`
 }
 
 func (q *Queries) ListAssets(ctx context.Context, arg ListAssetsParams) ([]Asset, error) {
@@ -282,6 +324,7 @@ func (q *Queries) ListAssets(ctx context.Context, arg ListAssetsParams) ([]Asset
 		arg.Column3,
 		arg.Limit,
 		arg.Offset,
+		arg.Column6,
 	)
 	if err != nil {
 		return nil, err
@@ -316,28 +359,26 @@ func (q *Queries) ListAssets(ctx context.Context, arg ListAssetsParams) ([]Asset
 }
 
 const listCheckouts = `-- name: ListCheckouts :many
-SELECT id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in FROM asset_checkouts
+SELECT id, asset_id, production_id, tenant_id, checked_out_to, checked_out_at, expected_return, checked_in_at, condition_out, condition_in, notes, report_damage, damage_severity, damage_description, repair_cost FROM asset_checkouts
 WHERE tenant_id = $1::uuid
   AND ($2::uuid IS NULL OR asset_id = $2::uuid)
-  AND ($3::uuid IS NULL OR production_id = $3::uuid)
+  AND ($3::timestamptz IS NULL OR checked_out_at < $3::timestamptz)
 ORDER BY checked_out_at DESC
-LIMIT $5::int OFFSET $4::int
+LIMIT $4::int
 `
 
 type ListCheckoutsParams struct {
-	TenantID     uuid.UUID   `json:"tenant_id"`
-	AssetID      pgtype.UUID `json:"asset_id"`
-	ProductionID pgtype.UUID `json:"production_id"`
-	Offset       int32       `json:"offset"`
-	Limit        int32       `json:"limit"`
+	TenantID uuid.UUID          `json:"tenant_id"`
+	AssetID  pgtype.UUID        `json:"asset_id"`
+	After    pgtype.Timestamptz `json:"after"`
+	Limit    int32              `json:"limit"`
 }
 
 func (q *Queries) ListCheckouts(ctx context.Context, arg ListCheckoutsParams) ([]AssetCheckout, error) {
 	rows, err := q.db.Query(ctx, listCheckouts,
 		arg.TenantID,
 		arg.AssetID,
-		arg.ProductionID,
-		arg.Offset,
+		arg.After,
 		arg.Limit,
 	)
 	if err != nil {
@@ -358,6 +399,11 @@ func (q *Queries) ListCheckouts(ctx context.Context, arg ListCheckoutsParams) ([
 			&i.CheckedInAt,
 			&i.ConditionOut,
 			&i.ConditionIn,
+			&i.Notes,
+			&i.ReportDamage,
+			&i.DamageSeverity,
+			&i.DamageDescription,
+			&i.RepairCost,
 		); err != nil {
 			return nil, err
 		}

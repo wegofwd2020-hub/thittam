@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	inventoryv1 "github.com/wegofwd2020/thittam/gen/inventory/v1"
 	"github.com/wegofwd2020/thittam/pkg/interceptor"
 	"github.com/wegofwd2020/thittam/pkg/tenant"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -121,7 +121,7 @@ func TestHandler_ListAssets_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listAssetsFn: func(_ context.Context, _ uuid.UUID, _ string, _, _ int) ([]Asset, error) {
+		listAssetsFn: func(_ context.Context, _ uuid.UUID, _, _, _ string, _, _ int) ([]Asset, error) {
 			return []Asset{{ID: uuid.New(), TenantID: tenantID, Status: "available"}}, nil
 		},
 	})).WithPermissionChecker(allowAllPerm{})
@@ -140,7 +140,7 @@ func TestHandler_ListAssets_NoTenant(t *testing.T) {
 func TestHandler_ListAssets_Denied(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		listAssetsFn: func(_ context.Context, _ uuid.UUID, _ string, _, _ int) ([]Asset, error) {
+		listAssetsFn: func(_ context.Context, _ uuid.UUID, _, _, _ string, _, _ int) ([]Asset, error) {
 			t.Fatal("repository reached: ListAssets must deny before querying")
 			return nil, nil
 		},
@@ -256,7 +256,7 @@ func TestHandler_ListCheckouts_Success(t *testing.T) {
 	t.Parallel()
 	assetID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listCheckoutsFn: func(_ context.Context, _, _ uuid.UUID) ([]AssetCheckout, error) {
+		listCheckoutsFn: func(_ context.Context, _, _ uuid.UUID, _ int, _ string) ([]AssetCheckout, error) {
 			return []AssetCheckout{{ID: uuid.New(), AssetID: assetID}}, nil
 		},
 	})).WithPermissionChecker(allowAllPerm{})
@@ -282,7 +282,7 @@ func TestHandler_ListCheckouts_Denied(t *testing.T) {
 	t.Parallel()
 	assetID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listCheckoutsFn: func(_ context.Context, _, _ uuid.UUID) ([]AssetCheckout, error) {
+		listCheckoutsFn: func(_ context.Context, _, _ uuid.UUID, _ int, _ string) ([]AssetCheckout, error) {
 			t.Fatal("repository reached: ListCheckouts must deny before querying")
 			return nil, nil
 		},
@@ -308,7 +308,7 @@ type checkoutRecordingRepo struct {
 	gotCheckInTenant uuid.UUID
 }
 
-func (r *checkoutRecordingRepo) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error) {
+func (r *checkoutRecordingRepo) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID, limit int, after string) ([]AssetCheckout, error) {
 	r.gotListTenant = tenantID
 	return nil, nil
 }
@@ -318,9 +318,9 @@ func (r *checkoutRecordingRepo) GetCheckout(ctx context.Context, tenantID, id uu
 	return &AssetCheckout{ID: id, TenantID: tenantID}, nil
 }
 
-func (r *checkoutRecordingRepo) CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, conditionIn string) error {
+func (r *checkoutRecordingRepo) CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, in CheckInInput) (*AssetCheckout, error) {
 	r.gotCheckInTenant = tenantID
-	return nil
+	return &AssetCheckout{ID: checkoutID, TenantID: tenantID}, nil
 }
 
 func TestHandler_ListCheckouts_PassesCallerTenantToRepo(t *testing.T) {

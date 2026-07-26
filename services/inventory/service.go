@@ -44,7 +44,7 @@ func (s *Service) ListAssets(ctx context.Context, tenantID uuid.UUID, status str
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	return s.repo.ListAssets(ctx, tenantID, status, limit, offset)
+	return s.repo.ListAssets(ctx, tenantID, status, "", "", limit, offset)
 }
 
 // CheckOutAsset checks out an asset, verifying it is available.
@@ -71,7 +71,7 @@ func (s *Service) CheckOutAsset(ctx context.Context, c *AssetCheckout) error {
 
 // CheckInAsset checks in an asset and sets status back to available.
 func (s *Service) CheckInAsset(ctx context.Context, tenantID, checkoutID, assetID uuid.UUID, conditionIn string) error {
-	if err := s.repo.CheckInAsset(ctx, tenantID, checkoutID, conditionIn); err != nil {
+	if _, err := s.repo.CheckInAsset(ctx, tenantID, checkoutID, CheckInInput{ConditionIn: conditionIn}); err != nil {
 		return err
 	}
 	return s.repo.UpdateAssetStatus(ctx, tenantID, assetID, "available")
@@ -93,11 +93,11 @@ func (s *Service) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*Ass
 // Capped at 200 — a single prop realistically has tens of checkout records;
 // 200 bounds a runaway scan.
 func (s *Service) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error) {
-	checkouts, err := s.repo.ListCheckouts(ctx, tenantID, assetID)
+	const maxCheckouts = 200
+	checkouts, err := s.repo.ListCheckouts(ctx, tenantID, assetID, maxCheckouts, "")
 	if err != nil {
 		return nil, err
 	}
-	const maxCheckouts = 200
 	if len(checkouts) > maxCheckouts {
 		checkouts = checkouts[:maxCheckouts]
 	}

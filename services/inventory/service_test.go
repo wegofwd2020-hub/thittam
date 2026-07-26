@@ -17,12 +17,13 @@ import (
 type mockRepo struct {
 	createAssetFn       func(ctx context.Context, a *Asset) error
 	getAssetFn          func(ctx context.Context, tenantID, id uuid.UUID) (*Asset, error)
-	listAssetsFn        func(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]Asset, error)
+	listAssetsFn        func(ctx context.Context, tenantID uuid.UUID, status, categoryID, search string, limit, offset int) ([]Asset, error)
 	updateAssetStatusFn func(ctx context.Context, tenantID, id uuid.UUID, status string) error
 	checkOutAssetFn     func(ctx context.Context, c *AssetCheckout) error
-	checkInAssetFn      func(ctx context.Context, tenantID, checkoutID uuid.UUID, conditionIn string) error
+	getActiveCheckoutFn func(ctx context.Context, tenantID, assetID uuid.UUID) (*AssetCheckout, error)
+	checkInAssetFn      func(ctx context.Context, tenantID, checkoutID uuid.UUID, in CheckInInput) (*AssetCheckout, error)
 	getCheckoutFn       func(ctx context.Context, tenantID, id uuid.UUID) (*AssetCheckout, error)
-	listCheckoutsFn     func(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error)
+	listCheckoutsFn     func(ctx context.Context, tenantID, assetID uuid.UUID, limit int, after string) ([]AssetCheckout, error)
 }
 
 func (m *mockRepo) CreateAsset(ctx context.Context, a *Asset) error {
@@ -37,9 +38,9 @@ func (m *mockRepo) GetAsset(ctx context.Context, tenantID, id uuid.UUID) (*Asset
 	}
 	return &Asset{ID: id, TenantID: tenantID, Name: "Test Asset", Status: "available"}, nil
 }
-func (m *mockRepo) ListAssets(ctx context.Context, tenantID uuid.UUID, status string, limit, offset int) ([]Asset, error) {
+func (m *mockRepo) ListAssets(ctx context.Context, tenantID uuid.UUID, status, categoryID, search string, limit, offset int) ([]Asset, error) {
 	if m.listAssetsFn != nil {
-		return m.listAssetsFn(ctx, tenantID, status, limit, offset)
+		return m.listAssetsFn(ctx, tenantID, status, categoryID, search, limit, offset)
 	}
 	return nil, nil
 }
@@ -55,11 +56,17 @@ func (m *mockRepo) CheckOutAsset(ctx context.Context, c *AssetCheckout) error {
 	}
 	return nil
 }
-func (m *mockRepo) CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, conditionIn string) error {
-	if m.checkInAssetFn != nil {
-		return m.checkInAssetFn(ctx, tenantID, checkoutID, conditionIn)
+func (m *mockRepo) GetActiveCheckout(ctx context.Context, tenantID, assetID uuid.UUID) (*AssetCheckout, error) {
+	if m.getActiveCheckoutFn != nil {
+		return m.getActiveCheckoutFn(ctx, tenantID, assetID)
 	}
-	return nil
+	return &AssetCheckout{ID: uuid.New(), TenantID: tenantID, AssetID: assetID}, nil
+}
+func (m *mockRepo) CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, in CheckInInput) (*AssetCheckout, error) {
+	if m.checkInAssetFn != nil {
+		return m.checkInAssetFn(ctx, tenantID, checkoutID, in)
+	}
+	return &AssetCheckout{ID: checkoutID, TenantID: tenantID}, nil
 }
 func (m *mockRepo) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*AssetCheckout, error) {
 	if m.getCheckoutFn != nil {
@@ -67,9 +74,9 @@ func (m *mockRepo) GetCheckout(ctx context.Context, tenantID, id uuid.UUID) (*As
 	}
 	return &AssetCheckout{ID: id, TenantID: tenantID}, nil
 }
-func (m *mockRepo) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID) ([]AssetCheckout, error) {
+func (m *mockRepo) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID, limit int, after string) ([]AssetCheckout, error) {
 	if m.listCheckoutsFn != nil {
-		return m.listCheckoutsFn(ctx, tenantID, assetID)
+		return m.listCheckoutsFn(ctx, tenantID, assetID, limit, after)
 	}
 	return nil, nil
 }
@@ -249,7 +256,7 @@ func TestListAssets_DefaultLimit(t *testing.T) {
 	t.Parallel()
 	var capturedLimit int
 	svc := NewService(&mockRepo{
-		listAssetsFn: func(_ context.Context, _ uuid.UUID, _ string, limit, _ int) ([]Asset, error) {
+		listAssetsFn: func(_ context.Context, _ uuid.UUID, _, _, _ string, limit, _ int) ([]Asset, error) {
 			capturedLimit = limit
 			return nil, nil
 		},
@@ -264,7 +271,7 @@ func TestListAssets_MaxLimitEnforced(t *testing.T) {
 	t.Parallel()
 	var capturedLimit int
 	svc := NewService(&mockRepo{
-		listAssetsFn: func(_ context.Context, _ uuid.UUID, _ string, limit, _ int) ([]Asset, error) {
+		listAssetsFn: func(_ context.Context, _ uuid.UUID, _, _, _ string, limit, _ int) ([]Asset, error) {
 			capturedLimit = limit
 			return nil, nil
 		},
@@ -279,7 +286,7 @@ func TestListCheckouts_Success(t *testing.T) {
 	t.Parallel()
 	assetID := uuid.New()
 	svc := NewService(&mockRepo{
-		listCheckoutsFn: func(_ context.Context, _, id uuid.UUID) ([]AssetCheckout, error) {
+		listCheckoutsFn: func(_ context.Context, _, id uuid.UUID, _ int, _ string) ([]AssetCheckout, error) {
 			return []AssetCheckout{{ID: uuid.New(), AssetID: id}}, nil
 		},
 	})
@@ -292,8 +299,8 @@ func TestListCheckouts_Success(t *testing.T) {
 func TestCheckInAsset_Error(t *testing.T) {
 	t.Parallel()
 	svc := NewService(&mockRepo{
-		checkInAssetFn: func(_ context.Context, _, _ uuid.UUID, _ string) error {
-			return fmt.Errorf("db error")
+		checkInAssetFn: func(_ context.Context, _, _ uuid.UUID, _ CheckInInput) (*AssetCheckout, error) {
+			return nil, fmt.Errorf("db error")
 		},
 	})
 
