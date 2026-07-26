@@ -63,6 +63,18 @@ func (s *Service) SubmitExpense(ctx context.Context, e *Expense) error {
 	return nil
 }
 
+// hasSuperAdmin reports whether the caller holds the super_admin RBAC role, which
+// carries unlimited approval authority (it holds every permission; a per-role money
+// limit on it is meaningless). The dual-approval threshold still applies to all callers.
+func hasSuperAdmin(roles []string) bool {
+	for _, r := range roles {
+		if r == "super_admin" {
+			return true
+		}
+	}
+	return false
+}
+
 // ApproveExpense validates the approver's role against the vertical's approval
 // workflow limits and dual-approval threshold, then approves the expense.
 func (s *Service) ApproveExpense(ctx context.Context, tenantID, expenseID uuid.UUID, approverID uuid.UUID, roles []string) error {
@@ -77,13 +89,15 @@ func (s *Service) ApproveExpense(ctx context.Context, tenantID, expenseID uuid.U
 		return ErrAlreadyApproved
 	}
 
-	// Check role-based approval limit
-	limit := vcfg.ApprovalWorkflow.MaxLimitForRoles(roles)
-	if limit == nil {
-		return fmt.Errorf("%w: caller roles %v have no configured approval limit", ErrApprovalLimitExceeded, roles)
-	}
-	if exp.Amount.GreaterThan(*limit) {
-		return fmt.Errorf("%w: %s exceeds %s limit", ErrApprovalLimitExceeded, exp.Amount, *limit)
+	// Role-based approval limit — super_admin has unlimited authority and skips it.
+	if !hasSuperAdmin(roles) {
+		limit := vcfg.ApprovalWorkflow.MaxLimitForRoles(roles)
+		if limit == nil {
+			return fmt.Errorf("%w: caller roles %v have no configured approval limit", ErrApprovalLimitExceeded, roles)
+		}
+		if exp.Amount.GreaterThan(*limit) {
+			return fmt.Errorf("%w: %s exceeds %s limit", ErrApprovalLimitExceeded, exp.Amount, *limit)
+		}
 	}
 
 	// Check dual approval threshold
@@ -200,13 +214,15 @@ func (s *Service) ApprovePurchaseOrder(ctx context.Context, tenantID, poID, appr
 		return ErrAlreadyApproved
 	}
 
-	// Check role-based approval limit
-	limit := vcfg.ApprovalWorkflow.MaxLimitForRoles(roles)
-	if limit == nil {
-		return fmt.Errorf("%w: caller roles %v have no configured approval limit", ErrApprovalLimitExceeded, roles)
-	}
-	if po.Amount.GreaterThan(*limit) {
-		return fmt.Errorf("%w: %s exceeds %s limit", ErrApprovalLimitExceeded, po.Amount, *limit)
+	// Role-based approval limit — super_admin has unlimited authority and skips it.
+	if !hasSuperAdmin(roles) {
+		limit := vcfg.ApprovalWorkflow.MaxLimitForRoles(roles)
+		if limit == nil {
+			return fmt.Errorf("%w: caller roles %v have no configured approval limit", ErrApprovalLimitExceeded, roles)
+		}
+		if po.Amount.GreaterThan(*limit) {
+			return fmt.Errorf("%w: %s exceeds %s limit", ErrApprovalLimitExceeded, po.Amount, *limit)
+		}
 	}
 
 	// Check dual approval threshold

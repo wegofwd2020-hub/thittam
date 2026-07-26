@@ -653,3 +653,94 @@ func TestService_CreatePurchaseOrder_KeepsSuppliedPONumber(t *testing.T) {
 	require.NoError(t, svc.CreatePurchaseOrder(context.Background(), po))
 	assert.Equal(t, "PO-CUSTOM-1", saved.PONumber)
 }
+
+// --- super_admin approval bypass (#199) ---
+
+// approvalConfigConstruction mirrors the (post-#199) construction approval tiers:
+// coordinator 100k / accountant 500k / manager 2M, dual-approval above 1M.
+func approvalConfigConstruction() *vertical.Config {
+	c := movieProductionConfig()
+	c.ApprovalWorkflow = vertical.ApprovalWorkflow{
+		Limits: []vertical.ApprovalLimit{
+			{Role: "coordinator", MaxAmount: decimal.NewFromInt(100000)},
+			{Role: "accountant", MaxAmount: decimal.NewFromInt(500000)},
+			{Role: "manager", MaxAmount: decimal.NewFromInt(2000000)},
+		},
+		DualApprovalAbove: decimal.NewFromInt(1000000),
+	}
+	return c
+}
+
+func ctxConstruction() context.Context {
+	return vertical.WithConfig(context.Background(), approvalConfigConstruction())
+}
+
+func TestService_ApproveExpense_SuperAdminBypassesLimit(t *testing.T) {
+	// 800k exceeds every configured per-role limit reachable by ["super_admin"]
+	// (which has no limit entry → MaxLimitForRoles=nil), but is below the 1M dual
+	// threshold. Without the bypass this would fail ErrApprovalLimitExceeded.
+	var saved *Expense
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "submitted", Amount: decimal.NewFromInt(800000)}, nil
+		},
+		updateExpenseFn: func(_ context.Context, e *Expense) error { saved = e; return nil },
+	})
+	err := svc.ApproveExpense(ctxConstruction(), uuid.New(), uuid.New(), uuid.New(), []string{"super_admin"})
+	require.NoError(t, err)
+	assert.Equal(t, "approved", saved.Status)
+}
+
+func TestService_ApproveExpense_SuperAdminStillHitsDualApproval(t *testing.T) {
+	// 1.5M is above the 1M dual threshold — dual approval applies to everyone.
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "submitted", Amount: decimal.NewFromInt(1500000)}, nil
+		},
+	})
+	err := svc.ApproveExpense(ctxConstruction(), uuid.New(), uuid.New(), uuid.New(), []string{"super_admin"})
+	assert.ErrorIs(t, err, ErrDualApprovalRequired)
+}
+
+func TestService_ApproveExpense_AccountantWithinTier(t *testing.T) {
+	var saved *Expense
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "submitted", Amount: decimal.NewFromInt(400000)}, nil
+		},
+		updateExpenseFn: func(_ context.Context, e *Expense) error { saved = e; return nil },
+	})
+	require.NoError(t, svc.ApproveExpense(ctxConstruction(), uuid.New(), uuid.New(), uuid.New(), []string{"accountant"}))
+	assert.Equal(t, "approved", saved.Status)
+}
+
+func TestService_ApproveExpense_AccountantAboveTierFails(t *testing.T) {
+	// 600k exceeds accountant's 500k limit (accountant is not super_admin).
+	svc := NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, Status: "submitted", Amount: decimal.NewFromInt(600000)}, nil
+		},
+	})
+	assert.ErrorIs(t, svc.ApproveExpense(ctxConstruction(), uuid.New(), uuid.New(), uuid.New(), []string{"accountant"}), ErrApprovalLimitExceeded)
+}
+
+func TestService_ApprovePurchaseOrder_SuperAdminBypassesLimit(t *testing.T) {
+	var saved *PurchaseOrder
+	svc := NewService(&mockRepo{
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, Status: "draft", Amount: decimal.NewFromInt(800000)}, nil
+		},
+		updatePOFn: func(_ context.Context, po *PurchaseOrder) error { saved = po; return nil },
+	})
+	require.NoError(t, svc.ApprovePurchaseOrder(ctxConstruction(), uuid.New(), uuid.New(), uuid.New(), []string{"super_admin"}))
+	assert.Equal(t, "approved", saved.Status)
+}
+
+func TestService_ApprovePurchaseOrder_SuperAdminStillHitsDualApproval(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, Status: "draft", Amount: decimal.NewFromInt(1500000)}, nil
+		},
+	})
+	assert.ErrorIs(t, svc.ApprovePurchaseOrder(ctxConstruction(), uuid.New(), uuid.New(), uuid.New(), []string{"super_admin"}), ErrDualApprovalRequired)
+}
