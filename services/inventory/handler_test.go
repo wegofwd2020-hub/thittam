@@ -258,6 +258,12 @@ func TestHandler_CheckInAsset_BadRepairCost(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestHandler_CheckInAsset_NegativeRepairCost(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().CheckInAsset(ctxWithTenant(uuid.New()), &inventoryv1.CheckInAssetRequest{AssetId: uuid.New().String(), RepairCost: "-5.00"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
 func TestHandler_CheckInAsset_DamageWithoutSeverity(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().CheckInAsset(ctxWithTenant(uuid.New()), &inventoryv1.CheckInAssetRequest{AssetId: uuid.New().String(), ReportDamage: true})
@@ -321,6 +327,7 @@ type checkoutRecordingRepo struct {
 	gotGetTenant            uuid.UUID
 	gotActiveCheckoutTenant uuid.UUID
 	gotCheckInTenant        uuid.UUID
+	gotUpdateStatusTenant   uuid.UUID
 }
 
 func (r *checkoutRecordingRepo) ListCheckouts(ctx context.Context, tenantID, assetID uuid.UUID, limit int, after string) ([]AssetCheckout, error) {
@@ -333,14 +340,26 @@ func (r *checkoutRecordingRepo) GetCheckout(ctx context.Context, tenantID, id uu
 	return &AssetCheckout{ID: id, TenantID: tenantID}, nil
 }
 
+// GetActiveCheckout deliberately returns a checkout whose TenantID is a
+// DIFFERENT uuid than the caller's tenant (not the caller's tenant, and not
+// zero). If the service ever forwarded co.TenantID to the downstream
+// CheckInAsset/UpdateAssetStatus calls instead of the caller's tenant, the
+// gotCheckInTenant/gotUpdateStatusTenant captures below would diverge from
+// callerTenant and the test would fail. Only r.gotActiveCheckoutTenant (the
+// tenant this call itself received) is expected to equal callerTenant.
 func (r *checkoutRecordingRepo) GetActiveCheckout(ctx context.Context, tenantID, assetID uuid.UUID) (*AssetCheckout, error) {
 	r.gotActiveCheckoutTenant = tenantID
-	return &AssetCheckout{ID: uuid.New(), TenantID: tenantID, AssetID: assetID}, nil
+	return &AssetCheckout{ID: uuid.New(), TenantID: uuid.New(), AssetID: assetID}, nil
 }
 
 func (r *checkoutRecordingRepo) CheckInAsset(ctx context.Context, tenantID, checkoutID uuid.UUID, in CheckInInput) (*AssetCheckout, error) {
 	r.gotCheckInTenant = tenantID
 	return &AssetCheckout{ID: checkoutID, TenantID: tenantID}, nil
+}
+
+func (r *checkoutRecordingRepo) UpdateAssetStatus(ctx context.Context, tenantID, id uuid.UUID, status string) error {
+	r.gotUpdateStatusTenant = tenantID
+	return nil
 }
 
 func TestHandler_ListCheckouts_PassesCallerTenantToRepo(t *testing.T) {
@@ -374,6 +393,8 @@ func TestHandler_CheckInAsset_PassesCallerTenantToRepo(t *testing.T) {
 		"CheckInAsset must resolve the open checkout with the caller's tenant")
 	require.Equal(t, callerTenant, repo.gotCheckInTenant,
 		"CheckInAsset must write with the caller's tenant, which Service already held")
+	require.Equal(t, callerTenant, repo.gotUpdateStatusTenant,
+		"CheckInAsset must update the asset status with the caller's tenant")
 }
 
 // --- GetInventoryCategories ---
@@ -417,6 +438,7 @@ func TestGrpcErr_AllCodes(t *testing.T) {
 		{ErrAssetNotFound, codes.NotFound},
 		{ErrAssetNotAvailable, codes.FailedPrecondition},
 		{ErrInvalidCategory, codes.InvalidArgument},
+		{ErrNoActiveCheckout, codes.FailedPrecondition},
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.wantCode, status.Code(grpcErr(tc.err)))
