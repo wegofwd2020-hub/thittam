@@ -14,4 +14,5 @@ var (
 	ErrPORequired            = errors.New("expense: purchase order required for this category")
 	ErrInvalidCategory       = errors.New("expense: invalid expense category for this vertical")
 	ErrInsufficientBudget    = errors.New("expense: insufficient budget remaining")
+	ErrNotAdvanceHolder      = errors.New("expense: caller is not the petty cash advance holder")
 )

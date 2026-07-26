@@ -65,7 +65,7 @@ func (s *Service) SubmitExpense(ctx context.Context, e *Expense) error {
 
 // ApproveExpense validates the approver's role against the vertical's approval
 // workflow limits and dual-approval threshold, then approves the expense.
-func (s *Service) ApproveExpense(ctx context.Context, tenantID, expenseID uuid.UUID, approverID uuid.UUID, approverRole string) error {
+func (s *Service) ApproveExpense(ctx context.Context, tenantID, expenseID uuid.UUID, approverID uuid.UUID, roles []string) error {
 	vcfg := vertical.MustFromContext(ctx)
 
 	exp, err := s.repo.GetExpense(ctx, tenantID, expenseID)
@@ -78,12 +78,12 @@ func (s *Service) ApproveExpense(ctx context.Context, tenantID, expenseID uuid.U
 	}
 
 	// Check role-based approval limit
-	limit := vcfg.ApprovalWorkflow.LimitForRole(approverRole)
+	limit := vcfg.ApprovalWorkflow.MaxLimitForRoles(roles)
 	if limit == nil {
-		return fmt.Errorf("%w: role %q has no configured approval limit", ErrApprovalLimitExceeded, approverRole)
+		return fmt.Errorf("%w: caller roles %v have no configured approval limit", ErrApprovalLimitExceeded, roles)
 	}
 	if exp.Amount.GreaterThan(*limit) {
-		return fmt.Errorf("%w: %s exceeds %s limit for %q", ErrApprovalLimitExceeded, exp.Amount, *limit, approverRole)
+		return fmt.Errorf("%w: %s exceeds %s limit", ErrApprovalLimitExceeded, exp.Amount, *limit)
 	}
 
 	// Check dual approval threshold
@@ -187,8 +187,11 @@ func (s *Service) RejectExpense(ctx context.Context, tenantID, expenseID uuid.UU
 	return s.repo.RejectExpense(ctx, tenantID, expenseID, reason)
 }
 
-// ApprovePurchaseOrder approves a purchase order.
-func (s *Service) ApprovePurchaseOrder(ctx context.Context, tenantID, poID, approverID uuid.UUID) error {
+// ApprovePurchaseOrder validates the approver's role against the vertical's
+// approval workflow limits and dual-approval threshold, then approves the PO.
+func (s *Service) ApprovePurchaseOrder(ctx context.Context, tenantID, poID, approverID uuid.UUID, roles []string) error {
+	vcfg := vertical.MustFromContext(ctx)
+
 	po, err := s.repo.GetPurchaseOrder(ctx, tenantID, poID)
 	if err != nil {
 		return fmt.Errorf("get purchase order: %w", err)
@@ -196,6 +199,21 @@ func (s *Service) ApprovePurchaseOrder(ctx context.Context, tenantID, poID, appr
 	if po.Status == "approved" {
 		return ErrAlreadyApproved
 	}
+
+	// Check role-based approval limit
+	limit := vcfg.ApprovalWorkflow.MaxLimitForRoles(roles)
+	if limit == nil {
+		return fmt.Errorf("%w: caller roles %v have no configured approval limit", ErrApprovalLimitExceeded, roles)
+	}
+	if po.Amount.GreaterThan(*limit) {
+		return fmt.Errorf("%w: %s exceeds %s limit", ErrApprovalLimitExceeded, po.Amount, *limit)
+	}
+
+	// Check dual approval threshold
+	if po.Amount.GreaterThan(vcfg.ApprovalWorkflow.DualApprovalAbove) {
+		return fmt.Errorf("%w: %s exceeds dual approval threshold %s", ErrDualApprovalRequired, po.Amount, vcfg.ApprovalWorkflow.DualApprovalAbove)
+	}
+
 	now := time.Now()
 	po.Status = "approved"
 	po.ApprovedBy = &approverID
@@ -204,10 +222,13 @@ func (s *Service) ApprovePurchaseOrder(ctx context.Context, tenantID, poID, appr
 }
 
 // SettlePettyCash settles a petty cash advance, recording the unspent amount.
-func (s *Service) SettlePettyCash(ctx context.Context, tenantID, advanceID uuid.UUID, unspent decimal.Decimal) error {
+func (s *Service) SettlePettyCash(ctx context.Context, tenantID, advanceID, callerID uuid.UUID, unspent decimal.Decimal) error {
 	pc, err := s.repo.GetPettyCashAdvance(ctx, tenantID, advanceID)
 	if err != nil {
 		return fmt.Errorf("get petty cash advance: %w", err)
+	}
+	if pc.IssuedTo != callerID {
+		return ErrNotAdvanceHolder
 	}
 	if pc.Status == "settled" {
 		return ErrAlreadySettled

@@ -147,7 +147,7 @@ func TestCriticalPath_ExpenseLifecycle(t *testing.T) {
 
 	// Step 2: Approve by coordinator (limit 500k, amount 150k — within limit).
 	approverID := uuid.MustParse("a0000000-0000-0000-0000-000000000098")
-	err = svc.ApproveExpense(ctx, fixedTenantID, fixedExpenseID, approverID, "coordinator")
+	err = svc.ApproveExpense(ctx, fixedTenantID, fixedExpenseID, approverID, []string{"coordinator"})
 	require.NoError(t, err)
 
 	approved, err := svc.GetExpense(ctx, fixedTenantID, fixedExpenseID)

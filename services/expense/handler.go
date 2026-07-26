@@ -50,6 +50,11 @@ func (h *Handler) CreatePurchaseOrder(ctx context.Context, req *expensev1.Create
 		return nil, err
 	}
 
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
+	}
+
 	productionID, err := uuid.Parse(req.GetProductionId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid production ID")
@@ -74,7 +79,7 @@ func (h *Handler) CreatePurchaseOrder(ctx context.Context, req *expensev1.Create
 		Description:  req.GetDescription(),
 		Amount:       amount,
 		Currency:     currency,
-		RaisedBy:     uuid.Nil, // populated by auth interceptor once wired
+		RaisedBy:     caller.UserID,
 	}
 
 	if s := req.GetBudgetLineId(); s != "" {
@@ -164,8 +169,11 @@ func (h *Handler) ApprovePurchaseOrder(ctx context.Context, req *expensev1.Appro
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
 
-	// approverID is populated by the auth interceptor once wired.
-	if err := h.svc.ApprovePurchaseOrder(ctx, tenantID, poID, uuid.Nil); err != nil {
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
+	}
+	if err := h.svc.ApprovePurchaseOrder(ctx, tenantID, poID, caller.UserID, caller.Roles); err != nil {
 		return nil, grpcErr(err)
 	}
 
@@ -186,6 +194,11 @@ func (h *Handler) SubmitExpense(ctx context.Context, req *expensev1.SubmitExpens
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
 	}
 
 	productionID, err := uuid.Parse(req.GetProductionId())
@@ -214,7 +227,7 @@ func (h *Handler) SubmitExpense(ctx context.Context, req *expensev1.SubmitExpens
 		Amount:       amount,
 		Currency:     currency,
 		TaxAmount:    taxAmount,
-		SubmittedBy:  uuid.Nil, // populated by auth interceptor once wired
+		SubmittedBy:  caller.UserID,
 	}
 
 	if s := req.GetBudgetLineId(); s != "" {
@@ -312,8 +325,11 @@ func (h *Handler) ApproveExpense(ctx context.Context, req *expensev1.ApproveExpe
 		return nil, status.Error(codes.InvalidArgument, "invalid expense_id")
 	}
 
-	// approverID and approverRole are populated by the auth interceptor once wired.
-	if err := h.svc.ApproveExpense(ctx, tenantID, expenseID, uuid.Nil, ""); err != nil {
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
+	}
+	if err := h.svc.ApproveExpense(ctx, tenantID, expenseID, caller.UserID, caller.Roles); err != nil {
 		return nil, grpcErr(err)
 	}
 
@@ -476,7 +492,12 @@ func (h *Handler) SettlePettyCash(ctx context.Context, req *expensev1.SettlePett
 		return nil, status.Error(codes.InvalidArgument, "unspent_amount must not be negative")
 	}
 
-	if err := h.svc.SettlePettyCash(ctx, tenantID, advanceID, unspent); err != nil {
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
+	}
+
+	if err := h.svc.SettlePettyCash(ctx, tenantID, advanceID, caller.UserID, unspent); err != nil {
 		return nil, grpcErr(err)
 	}
 
@@ -620,6 +641,8 @@ func grpcErr(err error) error {
 		return status.Error(codes.InvalidArgument, "invalid expense category for this vertical")
 	case errors.Is(err, ErrInsufficientBudget):
 		return status.Error(codes.FailedPrecondition, "insufficient budget remaining")
+	case errors.Is(err, ErrNotAdvanceHolder):
+		return status.Error(codes.PermissionDenied, "caller is not the petty cash advance holder")
 	case errors.Is(err, vertical.ErrNotFound):
 		return status.Error(codes.FailedPrecondition, "vertical config not found for tenant")
 	}
