@@ -33,6 +33,7 @@ const (
 	IAMService_ListUsers_FullMethodName            = "/thittam.iam.v1.IAMService/ListUsers"
 	IAMService_UpdateUser_FullMethodName           = "/thittam.iam.v1.IAMService/UpdateUser"
 	IAMService_DeactivateUser_FullMethodName       = "/thittam.iam.v1.IAMService/DeactivateUser"
+	IAMService_ActivateUser_FullMethodName         = "/thittam.iam.v1.IAMService/ActivateUser"
 	IAMService_ChangePassword_FullMethodName       = "/thittam.iam.v1.IAMService/ChangePassword"
 	IAMService_AssignRole_FullMethodName           = "/thittam.iam.v1.IAMService/AssignRole"
 	IAMService_AssignProjectRole_FullMethodName    = "/thittam.iam.v1.IAMService/AssignProjectRole"
@@ -66,6 +67,9 @@ type IAMServiceClient interface {
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*TokenPair, error)
 	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*TokenPair, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
+	// Deprecated: retired. Services verify JWTs in-process against the shared
+	// public key (#138). Returns Unimplemented. Not deleted: buf's FILE breaking
+	// category makes RPC removal a breaking change (#139 slice I).
 	ValidateToken(ctx context.Context, in *ValidateTokenRequest, opts ...grpc.CallOption) (*Claims, error)
 	// GetCurrentUser returns the user + tenant identified by the bearer token
 	// in the Authorization header. The UI's session-hydration flow calls this
@@ -77,6 +81,7 @@ type IAMServiceClient interface {
 	ListUsers(ctx context.Context, in *ListUsersRequest, opts ...grpc.CallOption) (*ListUsersResponse, error)
 	UpdateUser(ctx context.Context, in *UpdateUserRequest, opts ...grpc.CallOption) (*User, error)
 	DeactivateUser(ctx context.Context, in *DeactivateUserRequest, opts ...grpc.CallOption) (*DeactivateUserResponse, error)
+	ActivateUser(ctx context.Context, in *ActivateUserRequest, opts ...grpc.CallOption) (*ActivateUserResponse, error)
 	ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*ChangePasswordResponse, error)
 	// --- Roles & Permissions ---
 	AssignRole(ctx context.Context, in *AssignRoleRequest, opts ...grpc.CallOption) (*AssignRoleResponse, error)
@@ -114,7 +119,10 @@ type IAMServiceClient interface {
 	AcceptInvitation(ctx context.Context, in *AcceptInvitationRequest, opts ...grpc.CallOption) (*TokenPair, error)
 	// --- OIDC configuration ---
 	SetOIDCConfig(ctx context.Context, in *SetOIDCConfigRequest, opts ...grpc.CallOption) (*SetOIDCConfigResponse, error)
-	// --- Impersonation (platform_admin only) ---
+	// --- Impersonation (RETIRED, #139 §5) ---
+	// Deprecated: both RPCs return Unimplemented. The feature minted no token and
+	// set no act/impersonator claim, so it never actually impersonated anyone.
+	// Not deleted: buf's FILE breaking category makes RPC removal a breaking change.
 	StartImpersonation(ctx context.Context, in *StartImpersonationRequest, opts ...grpc.CallOption) (*ImpersonationSession, error)
 	EndImpersonation(ctx context.Context, in *EndImpersonationRequest, opts ...grpc.CallOption) (*EndImpersonationResponse, error)
 }
@@ -211,6 +219,15 @@ func (c *iAMServiceClient) UpdateUser(ctx context.Context, in *UpdateUserRequest
 func (c *iAMServiceClient) DeactivateUser(ctx context.Context, in *DeactivateUserRequest, opts ...grpc.CallOption) (*DeactivateUserResponse, error) {
 	out := new(DeactivateUserResponse)
 	err := c.cc.Invoke(ctx, IAMService_DeactivateUser_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *iAMServiceClient) ActivateUser(ctx context.Context, in *ActivateUserRequest, opts ...grpc.CallOption) (*ActivateUserResponse, error) {
+	out := new(ActivateUserResponse)
+	err := c.cc.Invoke(ctx, IAMService_ActivateUser_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -408,6 +425,9 @@ type IAMServiceServer interface {
 	Login(context.Context, *LoginRequest) (*TokenPair, error)
 	RefreshToken(context.Context, *RefreshTokenRequest) (*TokenPair, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
+	// Deprecated: retired. Services verify JWTs in-process against the shared
+	// public key (#138). Returns Unimplemented. Not deleted: buf's FILE breaking
+	// category makes RPC removal a breaking change (#139 slice I).
 	ValidateToken(context.Context, *ValidateTokenRequest) (*Claims, error)
 	// GetCurrentUser returns the user + tenant identified by the bearer token
 	// in the Authorization header. The UI's session-hydration flow calls this
@@ -419,6 +439,7 @@ type IAMServiceServer interface {
 	ListUsers(context.Context, *ListUsersRequest) (*ListUsersResponse, error)
 	UpdateUser(context.Context, *UpdateUserRequest) (*User, error)
 	DeactivateUser(context.Context, *DeactivateUserRequest) (*DeactivateUserResponse, error)
+	ActivateUser(context.Context, *ActivateUserRequest) (*ActivateUserResponse, error)
 	ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error)
 	// --- Roles & Permissions ---
 	AssignRole(context.Context, *AssignRoleRequest) (*AssignRoleResponse, error)
@@ -456,7 +477,10 @@ type IAMServiceServer interface {
 	AcceptInvitation(context.Context, *AcceptInvitationRequest) (*TokenPair, error)
 	// --- OIDC configuration ---
 	SetOIDCConfig(context.Context, *SetOIDCConfigRequest) (*SetOIDCConfigResponse, error)
-	// --- Impersonation (platform_admin only) ---
+	// --- Impersonation (RETIRED, #139 §5) ---
+	// Deprecated: both RPCs return Unimplemented. The feature minted no token and
+	// set no act/impersonator claim, so it never actually impersonated anyone.
+	// Not deleted: buf's FILE breaking category makes RPC removal a breaking change.
 	StartImpersonation(context.Context, *StartImpersonationRequest) (*ImpersonationSession, error)
 	EndImpersonation(context.Context, *EndImpersonationRequest) (*EndImpersonationResponse, error)
 	mustEmbedUnimplementedIAMServiceServer()
@@ -495,6 +519,9 @@ func (UnimplementedIAMServiceServer) UpdateUser(context.Context, *UpdateUserRequ
 }
 func (UnimplementedIAMServiceServer) DeactivateUser(context.Context, *DeactivateUserRequest) (*DeactivateUserResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeactivateUser not implemented")
+}
+func (UnimplementedIAMServiceServer) ActivateUser(context.Context, *ActivateUserRequest) (*ActivateUserResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ActivateUser not implemented")
 }
 func (UnimplementedIAMServiceServer) ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangePassword not implemented")
@@ -745,6 +772,24 @@ func _IAMService_DeactivateUser_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(IAMServiceServer).DeactivateUser(ctx, req.(*DeactivateUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IAMService_ActivateUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ActivateUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IAMServiceServer).ActivateUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IAMService_ActivateUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IAMServiceServer).ActivateUser(ctx, req.(*ActivateUserRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1155,6 +1200,10 @@ var IAMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeactivateUser",
 			Handler:    _IAMService_DeactivateUser_Handler,
+		},
+		{
+			MethodName: "ActivateUser",
+			Handler:    _IAMService_ActivateUser_Handler,
 		},
 		{
 			MethodName: "ChangePassword",

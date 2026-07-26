@@ -41,6 +41,7 @@ type mockRepo struct {
 	updateUserFn                      func(ctx context.Context, user *User) error
 	updatePasswordHashFn              func(ctx context.Context, tenantID, userID uuid.UUID, hash string) error
 	deactivateUserFn                  func(ctx context.Context, tenantID, id uuid.UUID) error
+	activateUserFn                    func(ctx context.Context, tenantID, id uuid.UUID) error
 	createTenantFn                    func(ctx context.Context, tenant *Tenant) error
 	getTenantFn                       func(ctx context.Context, id uuid.UUID) (*Tenant, error)
 	findTenantByNormalizedNameFn      func(ctx context.Context, name string) (*Tenant, error)
@@ -135,6 +136,12 @@ func (m *mockRepo) UpdatePasswordHash(ctx context.Context, tenantID, userID uuid
 func (m *mockRepo) DeactivateUser(ctx context.Context, tenantID, id uuid.UUID) error {
 	if m.deactivateUserFn != nil {
 		return m.deactivateUserFn(ctx, tenantID, id)
+	}
+	return nil
+}
+func (m *mockRepo) ActivateUser(ctx context.Context, tenantID, id uuid.UUID) error {
+	if m.activateUserFn != nil {
+		return m.activateUserFn(ctx, tenantID, id)
 	}
 	return nil
 }
@@ -1591,55 +1598,6 @@ func TestUpdateUser_Success(t *testing.T) {
 	assert.Equal(t, fixedUserID, saved.ID)
 }
 
-func TestUpdateUser_RevokesSessionsOnDeactivate(t *testing.T) {
-	t.Parallel()
-	var revokedFor uuid.UUID
-	called := false
-	tokens := &mockTokenIssuer{revokeAllForUserFn: func(_ context.Context, id uuid.UUID) error {
-		called = true
-		revokedFor = id
-		return nil
-	}}
-	repo := &mockRepo{updateUserFn: func(_ context.Context, _ *User) error { return nil }}
-	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
-
-	_, err := svc.UpdateUser(context.Background(), &User{ID: fixedUserID, TenantID: fixedTenantID, Status: "deactivated"})
-	require.NoError(t, err)
-	assert.True(t, called, "deactivating via UpdateUser must revoke sessions")
-	assert.Equal(t, fixedUserID, revokedFor)
-}
-
-func TestUpdateUser_NoRevokeOnActiveOrEmpty(t *testing.T) {
-	t.Parallel()
-	for _, st := range []string{"active", ""} {
-		st := st
-		t.Run("status="+st, func(t *testing.T) {
-			t.Parallel()
-			called := false
-			tokens := &mockTokenIssuer{revokeAllForUserFn: func(_ context.Context, _ uuid.UUID) error {
-				called = true
-				return nil
-			}}
-			repo := &mockRepo{updateUserFn: func(_ context.Context, _ *User) error { return nil }}
-			svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
-			_, err := svc.UpdateUser(context.Background(), &User{ID: fixedUserID, TenantID: fixedTenantID, Status: st})
-			require.NoError(t, err)
-			assert.False(t, called, "profile edit / reactivation must NOT revoke")
-		})
-	}
-}
-
-func TestUpdateUser_RevokeFailure_IsReported(t *testing.T) {
-	t.Parallel()
-	tokens := &mockTokenIssuer{revokeAllForUserFn: func(_ context.Context, _ uuid.UUID) error {
-		return errors.New("redis down")
-	}}
-	repo := &mockRepo{updateUserFn: func(_ context.Context, _ *User) error { return nil }}
-	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
-	_, err := svc.UpdateUser(context.Background(), &User{ID: fixedUserID, TenantID: fixedTenantID, Status: "deactivated"})
-	require.Error(t, err)
-}
-
 func TestDeactivateUser_Success(t *testing.T) {
 	t.Parallel()
 	var deactivatedID uuid.UUID
@@ -1673,6 +1631,26 @@ func TestDeactivateUser_RevokesAllSessions(t *testing.T) {
 
 	require.NoError(t, svc.DeactivateUser(context.Background(), fixedTenantID, fixedUserID))
 	assert.Equal(t, fixedUserID, revokedFor, "deactivating a user must revoke every session")
+}
+
+func TestActivateUser_Success(t *testing.T) {
+	t.Parallel()
+	var gotID uuid.UUID
+	revoked := false
+	tokens := &mockTokenIssuer{revokeAllForUserFn: func(_ context.Context, _ uuid.UUID) error { revoked = true; return nil }}
+	repo := &mockRepo{activateUserFn: func(_ context.Context, _, id uuid.UUID) error { gotID = id; return nil }}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+	require.NoError(t, svc.ActivateUser(context.Background(), fixedTenantID, fixedUserID))
+	assert.Equal(t, fixedUserID, gotID)
+	assert.False(t, revoked, "activation must not revoke sessions")
+}
+
+func TestActivateUser_NotDeactivated_Propagated(t *testing.T) {
+	t.Parallel()
+	repo := &mockRepo{activateUserFn: func(_ context.Context, _, _ uuid.UUID) error { return ErrNotDeactivated }}
+	svc := NewService(repo, &mockAuthenticator{}, &mockTokenIssuer{}, &mockHasher{}, &mockVerifier{})
+	err := svc.ActivateUser(context.Background(), fixedTenantID, fixedUserID)
+	assert.ErrorIs(t, err, ErrNotDeactivated)
 }
 
 func TestDeactivateUser_Error(t *testing.T) {

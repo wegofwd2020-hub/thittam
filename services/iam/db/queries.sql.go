@@ -859,6 +859,32 @@ func (q *Queries) MarkTenantPurgeRequestFailed(ctx context.Context, arg MarkTena
 	return i, err
 }
 
+const reactivateUser = `-- name: ReactivateUser :one
+UPDATE users SET status = 'active'
+WHERE id = $1 AND tenant_id = $2 AND status = 'deactivated'
+RETURNING id, tenant_id, email, display_name, password_hash, status, created_at
+`
+
+type ReactivateUserParams struct {
+	ID       uuid.UUID `json:"id"`
+	TenantID uuid.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) ReactivateUser(ctx context.Context, arg ReactivateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, reactivateUser, arg.ID, arg.TenantID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Email,
+		&i.DisplayName,
+		&i.PasswordHash,
+		&i.Status,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const revokeRole = `-- name: RevokeRole :exec
 DELETE FROM user_roles WHERE user_id = $1 AND role_id = $2
 `
