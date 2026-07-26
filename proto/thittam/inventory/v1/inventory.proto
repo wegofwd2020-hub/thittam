@@ -62,6 +62,11 @@ message AssetCheckout {
   google.protobuf.Timestamp checked_in_at = 8;
   string condition_out = 9;
   string condition_in = 10;
+  string notes = 11;
+  bool report_damage = 12;
+  string damage_severity = 13;
+  string damage_description = 14;
+  string repair_cost = 15;
 }
 
 message InventoryCategoryInfo {
@@ -74,11 +79,20 @@ message InventoryCategoryInfo {
 // Request/Response messages
 message CreateAssetRequest { string asset_code = 1; string name = 2; string category_id = 3; string description = 4; string ownership_type = 5; string purchase_date = 6; string purchase_cost = 7; string serial_number = 8; }
 message GetAssetRequest { string id = 1; }
-message ListAssetsRequest { string status = 1; int32 limit = 2; string after = 3; }
+message ListAssetsRequest { string status = 1; int32 limit = 2; string after = 3; string category_id = 4; string search = 5; }
 message ListAssetsResponse { repeated Asset assets = 1; }
 message CheckOutAssetRequest { string asset_id = 1; string production_id = 2; string checked_out_to = 3; string expected_return = 4; string condition_out = 5; }
-message CheckInAssetRequest { string checkout_id = 1; string asset_id = 2; string condition_in = 3; }
-message ListCheckoutsRequest { string asset_id = 1; }
+message CheckInAssetRequest {
+  string checkout_id = 1;  // Deprecated: ignored; the open checkout is resolved from asset_id server-side.
+  string asset_id = 2;
+  string condition_in = 3;
+  string notes = 4;
+  bool report_damage = 5;
+  string damage_severity = 6;
+  string damage_description = 7;
+  string repair_cost = 8;
+}
+message ListCheckoutsRequest { string asset_id = 1; int32 limit = 2; string after = 3; }
 message ListCheckoutsResponse { repeated AssetCheckout checkouts = 1; }
 message GetInventoryCategoriesRequest {}
 message GetInventoryCategoriesResponse { repeated InventoryCategoryInfo categories = 1; }
