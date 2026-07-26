@@ -20,6 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 // ── 0. JSON Schema file is valid JSON ────────────────────────────────────────
@@ -373,6 +374,41 @@ func minimalValidYAML(t *testing.T, mutate func(*minimalVertical)) string {
       data_sources: [budget-planning]
       default_columns: [total]
 `
+}
+
+// TestApprovalLimitRolesAreSystemRoles loads every real config YAML and asserts
+// each approval_workflow.limits[].role is a canonical RBAC system role. This is
+// the regression guard for #199 — the hand-rolled fixtures in service_test.go and
+// tests/integration/vertical never load the real YAMLs, so they were blind to it.
+func TestApprovalLimitRolesAreSystemRoles(t *testing.T) {
+	t.Parallel()
+
+	valid := make(map[string]bool, len(SystemRoleNames))
+	for _, name := range SystemRoleNames {
+		valid[name] = true
+	}
+
+	paths, err := filepath.Glob(filepath.Join("configs", "*.yaml"))
+	require.NoError(t, err)
+	require.NotEmpty(t, paths)
+
+	for _, path := range paths {
+		path := path
+		verticalID := strings.TrimSuffix(filepath.Base(path), ".yaml")
+		t.Run(verticalID, func(t *testing.T) {
+			t.Parallel()
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			var root struct {
+				Vertical VerticalYAML `yaml:"vertical"`
+			}
+			require.NoError(t, yaml.Unmarshal(data, &root))
+			for _, lim := range root.Vertical.ApprovalWorkflow.Limits {
+				assert.True(t, valid[lim.Role],
+					"%s: approval limit role %q is not a system role", verticalID, lim.Role)
+			}
+		})
+	}
 }
 
 func formatValidationErrors(errs []ValidationError) string {

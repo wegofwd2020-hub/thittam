@@ -271,6 +271,21 @@ func Validate(yamlData []byte) ([]ValidationError, error) {
 		}
 	}
 
+	// Approval-limit roles must be canonical RBAC role names — otherwise
+	// MaxLimitForRoles(caller.Roles) never matches and approvals fail-closed (#199).
+	validRole := make(map[string]bool, len(SystemRoleNames))
+	for _, name := range SystemRoleNames {
+		validRole[name] = true
+	}
+	for _, lim := range v.ApprovalWorkflow.Limits {
+		if !validRole[lim.Role] {
+			errs = append(errs, ValidationError{
+				"vertical.approval_workflow.limits",
+				fmt.Sprintf("limit role %q is not a system role", lim.Role),
+			})
+		}
+	}
+
 	if len(errs) > 0 {
 		return errs, nil
 	}
