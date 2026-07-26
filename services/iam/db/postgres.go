@@ -334,6 +334,30 @@ func (p *Postgres) DeactivateUser(ctx context.Context, tenantID, id uuid.UUID) e
 	return nil
 }
 
+// ActivateUser reverses a deactivation, restoring a 'deactivated' user to
+// 'active' (#162). Guarded by the conditional ReactivateUser query — a no-row
+// result means either the user doesn't exist (wrong id/tenant) or the user
+// exists but wasn't 'deactivated'. GetUser disambiguates the two so the
+// caller gets the correct error (and, upstream, the correct gRPC code).
+func (p *Postgres) ActivateUser(ctx context.Context, tenantID, id uuid.UUID) error {
+	_, err := p.q.ReactivateUser(ctx, ReactivateUserParams{ID: id, TenantID: tenantID})
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("iam/db: activate user: %w", err)
+	}
+	// No row updated: user absent (wrong id/tenant) or present-but-not-deactivated.
+	// Disambiguate for a correct gRPC code.
+	if _, gerr := p.q.GetUser(ctx, GetUserParams{ID: id, TenantID: tenantID}); gerr != nil {
+		if errors.Is(gerr, pgx.ErrNoRows) {
+			return iam.ErrUserNotFound
+		}
+		return fmt.Errorf("iam/db: activate user: %w", gerr)
+	}
+	return iam.ErrNotDeactivated
+}
+
 // --- iam.Repository: Tenants ---
 
 func (p *Postgres) CreateTenant(ctx context.Context, t *iam.Tenant) error {

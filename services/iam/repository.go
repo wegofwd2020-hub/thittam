@@ -34,6 +34,11 @@ type Repository interface {
 	UpdateUser(ctx context.Context, user *User) error
 	UpdatePasswordHash(ctx context.Context, tenantID, userID uuid.UUID, hash string) error
 	DeactivateUser(ctx context.Context, tenantID, id uuid.UUID) error
+	// ActivateUser reverses a deactivation, restoring a 'deactivated' user to
+	// 'active'. Guarded: returns ErrNotDeactivated if the user is not currently
+	// 'deactivated' (already active, or an unaccepted 'invited' user) — this
+	// reverses a deactivation only, it does not force-activate (#162).
+	ActivateUser(ctx context.Context, tenantID, id uuid.UUID) error
 
 	// Tenants
 	CreateTenant(ctx context.Context, tenant *Tenant) error

@@ -351,6 +351,16 @@ func (s *Service) DeactivateUser(ctx context.Context, tenantID, id uuid.UUID) er
 	return nil
 }
 
+// ActivateUser reverses a deactivation, restoring a 'deactivated' user to 'active'.
+// No session revoke — a deactivated user has no live sessions (#154 revoked them at
+// deactivation); and it does not force-activate an invited/active user (ErrNotDeactivated).
+func (s *Service) ActivateUser(ctx context.Context, tenantID, id uuid.UUID) error {
+	if err := s.repo.ActivateUser(ctx, tenantID, id); err != nil {
+		return fmt.Errorf("iam: activate user %s: %w", id, err)
+	}
+	return nil
+}
+
 // ChangePassword verifies the current password then replaces the hash.
 func (s *Service) ChangePassword(ctx context.Context, tenantID, userID uuid.UUID, oldPassword, newPassword string) error {
 	record, err := s.repo.GetUserByID(ctx, tenantID, userID)

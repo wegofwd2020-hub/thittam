@@ -12,8 +12,12 @@ var (
 	// caller that does not hold the platform_admin role.
 	ErrNotPlatformAdmin = errors.New("iam: caller does not have platform_admin role")
 
-	ErrTenantNotFound     = errors.New("iam: tenant not found")
-	ErrUserNotFound       = errors.New("iam: user not found")
+	ErrTenantNotFound = errors.New("iam: tenant not found")
+	ErrUserNotFound   = errors.New("iam: user not found")
+	// ErrNotDeactivated is returned by ActivateUser when the target user is not in
+	// 'deactivated' status (already active, or an unaccepted 'invited' user). ActivateUser
+	// reverses a deactivation only; it does not force-activate (#162).
+	ErrNotDeactivated     = errors.New("iam: user is not deactivated")
 	ErrUserAlreadyExists  = errors.New("iam: user already exists for tenant")
 	ErrRoleNotFound       = errors.New("iam: role not found")
 	ErrInvitationNotFound = errors.New("iam: invitation not found")

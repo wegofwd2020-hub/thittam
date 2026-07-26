@@ -159,6 +159,7 @@ func (r *iamRepo) UpdateUser(_ context.Context, u *iam.User) error {
 }
 func (r *iamRepo) UpdatePasswordHash(_ context.Context, _, _ uuid.UUID, _ string) error { return nil }
 func (r *iamRepo) DeactivateUser(_ context.Context, _, _ uuid.UUID) error               { return nil }
+func (r *iamRepo) ActivateUser(_ context.Context, _, _ uuid.UUID) error                 { return nil }
 
 // Tenants
 func (r *iamRepo) CreateTenant(_ context.Context, t *iam.Tenant) error {
