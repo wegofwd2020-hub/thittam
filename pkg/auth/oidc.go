@@ -10,7 +10,7 @@ import (
 // OIDCConfig holds the OIDC configuration for a tenant.
 type OIDCConfig struct {
 	TenantID     uuid.UUID `json:"tenant_id"`
-	IssuerURL    string    `json:"issuer_url"`    // e.g., "https://accounts.google.com"
+	IssuerURL    string    `json:"issuer_url"` // e.g., "https://accounts.google.com"
 	ClientID     string    `json:"client_id"`
 	ClientSecret string    `json:"client_secret"` // encrypted at rest
 	Scopes       []string  `json:"scopes"`        // default: ["openid", "email", "profile"]
@@ -21,8 +21,8 @@ type OIDCConfig struct {
 	GroupsClaim      string `json:"groups_claim"`       // optional: maps IdP groups to Thittam roles
 
 	// Behaviour
-	AutoProvision bool `json:"auto_provision"` // JIT create user on first login
-	DefaultRole   string `json:"default_role"`  // role assigned to JIT-provisioned users
+	AutoProvision bool   `json:"auto_provision"` // JIT create user on first login
+	DefaultRole   string `json:"default_role"`   // role assigned to JIT-provisioned users
 }
 
 // OIDCConfigStore retrieves OIDC configuration per tenant.
@@ -40,7 +40,7 @@ type OIDCTokenExchanger interface {
 
 // OIDCClaims represents the relevant claims extracted from an ID token.
 type OIDCClaims struct {
-	Subject     string   // IdP's user identifier (sub claim)
+	Subject     string // IdP's user identifier (sub claim)
 	Email       string
 	DisplayName string
 	Groups      []string // optional; used for role mapping
@@ -77,8 +77,8 @@ func (p *OIDCProvider) Authenticate(ctx context.Context, req AuthRequest) (*Auth
 	if err != nil {
 		return nil, fmt.Errorf("auth: check tenant: %w", err)
 	}
-	if status == "suspended" {
-		return nil, ErrTenantSuspended
+	if err := tenantStatusError(status); err != nil {
+		return nil, err
 	}
 
 	// Load OIDC configuration for this tenant

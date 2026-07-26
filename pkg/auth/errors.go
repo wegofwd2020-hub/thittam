@@ -15,6 +15,10 @@ var (
 	// ErrTenantSuspended is returned when the tenant is suspended.
 	ErrTenantSuspended = errors.New("auth: tenant is suspended")
 
+	// ErrTenantInactive is returned when the tenant is past 'active' in the retention
+	// lifecycle (grace/deactivated/purge_eligible) and may not authenticate (#206).
+	ErrTenantInactive = errors.New("auth: tenant is not active")
+
 	// ErrTokenExpired is returned when a JWT has expired.
 	ErrTokenExpired = errors.New("auth: token has expired")
 

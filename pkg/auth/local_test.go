@@ -13,9 +13,9 @@ import (
 // --- Mocks ---
 
 type mockUserStore struct {
-	getByEmailFn  func(ctx context.Context, tenantID uuid.UUID, email string) (*UserRecord, error)
-	getByIDFn     func(ctx context.Context, tenantID, userID uuid.UUID) (*UserRecord, error)
-	createOIDCFn  func(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*UserRecord, error)
+	getByEmailFn func(ctx context.Context, tenantID uuid.UUID, email string) (*UserRecord, error)
+	getByIDFn    func(ctx context.Context, tenantID, userID uuid.UUID) (*UserRecord, error)
+	createOIDCFn func(ctx context.Context, tenantID uuid.UUID, email, displayName string) (*UserRecord, error)
 }
 
 func (m *mockUserStore) GetUserByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*UserRecord, error) {
@@ -195,6 +195,30 @@ func TestLocalProvider_TenantSuspended(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrTenantSuspended)
+}
+
+func TestLocalProvider_TenantInactiveStatuses(t *testing.T) {
+	for _, st := range []string{"grace", "deactivated", "purge_eligible"} {
+		st := st
+		t.Run(st, func(t *testing.T) {
+			t.Parallel()
+			p := newTestLocalProvider(func(lp *LocalProvider) {
+				lp.tenants = &mockTenantStore{
+					statusFn: func(ctx context.Context, tenantID uuid.UUID) (string, error) {
+						return st, nil
+					},
+				}
+			})
+
+			_, err := p.Authenticate(context.Background(), AuthRequest{
+				TenantID: testTenantID,
+				Email:    "admin@acme.com",
+				Password: "securepass",
+			})
+			require.Error(t, err)
+			assert.ErrorIs(t, err, ErrTenantInactive)
+		})
+	}
 }
 
 func TestLocalProvider_OIDCOnlyUser(t *testing.T) {

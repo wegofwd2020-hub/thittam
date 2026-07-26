@@ -826,6 +826,7 @@ func grpcError(err error) error {
 		return status.Error(codes.Unauthenticated, err.Error())
 
 	case errors.Is(err, auth.ErrTenantSuspended),
+		errors.Is(err, auth.ErrTenantInactive),
 		errors.Is(err, auth.ErrAccountDeactivated):
 		return status.Error(codes.PermissionDenied, err.Error())
 

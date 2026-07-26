@@ -71,8 +71,8 @@ func (p *LocalProvider) Authenticate(ctx context.Context, req AuthRequest) (*Aut
 	if err != nil {
 		return nil, fmt.Errorf("auth: check tenant: %w", err)
 	}
-	if status == "suspended" {
-		return nil, ErrTenantSuspended
+	if err := tenantStatusError(status); err != nil {
+		return nil, err
 	}
 
 	// Look up user
