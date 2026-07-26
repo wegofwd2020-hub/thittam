@@ -1550,6 +1550,55 @@ func TestUpdateUser_Success(t *testing.T) {
 	assert.Equal(t, fixedUserID, saved.ID)
 }
 
+func TestUpdateUser_RevokesSessionsOnDeactivate(t *testing.T) {
+	t.Parallel()
+	var revokedFor uuid.UUID
+	called := false
+	tokens := &mockTokenIssuer{revokeAllForUserFn: func(_ context.Context, id uuid.UUID) error {
+		called = true
+		revokedFor = id
+		return nil
+	}}
+	repo := &mockRepo{updateUserFn: func(_ context.Context, _ *User) error { return nil }}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+
+	_, err := svc.UpdateUser(context.Background(), &User{ID: fixedUserID, TenantID: fixedTenantID, Status: "deactivated"})
+	require.NoError(t, err)
+	assert.True(t, called, "deactivating via UpdateUser must revoke sessions")
+	assert.Equal(t, fixedUserID, revokedFor)
+}
+
+func TestUpdateUser_NoRevokeOnActiveOrEmpty(t *testing.T) {
+	t.Parallel()
+	for _, st := range []string{"active", ""} {
+		st := st
+		t.Run("status="+st, func(t *testing.T) {
+			t.Parallel()
+			called := false
+			tokens := &mockTokenIssuer{revokeAllForUserFn: func(_ context.Context, _ uuid.UUID) error {
+				called = true
+				return nil
+			}}
+			repo := &mockRepo{updateUserFn: func(_ context.Context, _ *User) error { return nil }}
+			svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+			_, err := svc.UpdateUser(context.Background(), &User{ID: fixedUserID, TenantID: fixedTenantID, Status: st})
+			require.NoError(t, err)
+			assert.False(t, called, "profile edit / reactivation must NOT revoke")
+		})
+	}
+}
+
+func TestUpdateUser_RevokeFailure_IsReported(t *testing.T) {
+	t.Parallel()
+	tokens := &mockTokenIssuer{revokeAllForUserFn: func(_ context.Context, _ uuid.UUID) error {
+		return errors.New("redis down")
+	}}
+	repo := &mockRepo{updateUserFn: func(_ context.Context, _ *User) error { return nil }}
+	svc := NewService(repo, &mockAuthenticator{}, tokens, &mockHasher{}, &mockVerifier{})
+	_, err := svc.UpdateUser(context.Background(), &User{ID: fixedUserID, TenantID: fixedTenantID, Status: "deactivated"})
+	require.Error(t, err)
+}
+
 func TestDeactivateUser_Success(t *testing.T) {
 	t.Parallel()
 	var deactivatedID uuid.UUID
