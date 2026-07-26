@@ -213,7 +213,6 @@ func TestCheckInAsset(t *testing.T) {
 	var updatedStatus string
 	tenantID := uuid.New()
 	assetID := uuid.New()
-	checkoutID := uuid.New()
 
 	svc := NewService(&mockRepo{
 		updateAssetStatusFn: func(ctx context.Context, tid, id uuid.UUID, status string) error {
@@ -222,9 +221,50 @@ func TestCheckInAsset(t *testing.T) {
 		},
 	})
 
-	err := svc.CheckInAsset(context.Background(), tenantID, checkoutID, assetID, "good")
+	_, err := svc.CheckInAsset(context.Background(), tenantID, assetID, CheckInInput{ConditionIn: "good"})
 	require.NoError(t, err)
 	assert.Equal(t, "available", updatedStatus)
+}
+
+func TestService_CheckInAsset_DamageSetsUnderRepair(t *testing.T) {
+	var gotStatus string
+	assetID := uuid.New()
+	svc := NewService(&mockRepo{
+		getActiveCheckoutFn: func(_ context.Context, tid, aid uuid.UUID) (*AssetCheckout, error) {
+			return &AssetCheckout{ID: uuid.New(), TenantID: tid, AssetID: aid}, nil
+		},
+		checkInAssetFn: func(_ context.Context, tid, cid uuid.UUID, in CheckInInput) (*AssetCheckout, error) {
+			return &AssetCheckout{ID: cid, TenantID: tid, ReportDamage: in.ReportDamage}, nil
+		},
+		updateAssetStatusFn: func(_ context.Context, _, _ uuid.UUID, s string) error { gotStatus = s; return nil },
+	})
+	_, err := svc.CheckInAsset(context.Background(), uuid.New(), assetID, CheckInInput{ReportDamage: true, DamageSeverity: "severe"})
+	require.NoError(t, err)
+	assert.Equal(t, "under_repair", gotStatus)
+}
+
+func TestService_CheckInAsset_NoDamageSetsAvailable(t *testing.T) {
+	var gotStatus string
+	svc := NewService(&mockRepo{
+		getActiveCheckoutFn: func(_ context.Context, tid, aid uuid.UUID) (*AssetCheckout, error) {
+			return &AssetCheckout{ID: uuid.New(), TenantID: tid, AssetID: aid}, nil
+		},
+		checkInAssetFn: func(_ context.Context, tid, cid uuid.UUID, in CheckInInput) (*AssetCheckout, error) {
+			return &AssetCheckout{ID: cid, TenantID: tid}, nil
+		},
+		updateAssetStatusFn: func(_ context.Context, _, _ uuid.UUID, s string) error { gotStatus = s; return nil },
+	})
+	_, err := svc.CheckInAsset(context.Background(), uuid.New(), uuid.New(), CheckInInput{ConditionIn: "good"})
+	require.NoError(t, err)
+	assert.Equal(t, "available", gotStatus)
+}
+
+func TestService_CheckInAsset_NoOpenCheckout(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getActiveCheckoutFn: func(_ context.Context, _, _ uuid.UUID) (*AssetCheckout, error) { return nil, ErrNoActiveCheckout },
+	})
+	_, err := svc.CheckInAsset(context.Background(), uuid.New(), uuid.New(), CheckInInput{})
+	assert.ErrorIs(t, err, ErrNoActiveCheckout)
 }
 
 func TestGetInventoryCategories(t *testing.T) {
@@ -304,6 +344,6 @@ func TestCheckInAsset_Error(t *testing.T) {
 		},
 	})
 
-	err := svc.CheckInAsset(context.Background(), uuid.New(), uuid.New(), uuid.New(), "good")
+	_, err := svc.CheckInAsset(context.Background(), uuid.New(), uuid.New(), CheckInInput{ConditionIn: "good"})
 	require.Error(t, err)
 }

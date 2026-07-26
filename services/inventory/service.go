@@ -69,12 +69,26 @@ func (s *Service) CheckOutAsset(ctx context.Context, c *AssetCheckout) error {
 	return s.repo.UpdateAssetStatus(ctx, c.TenantID, c.AssetID, "checked_out")
 }
 
-// CheckInAsset checks in an asset and sets status back to available.
-func (s *Service) CheckInAsset(ctx context.Context, tenantID, checkoutID, assetID uuid.UUID, conditionIn string) error {
-	if _, err := s.repo.CheckInAsset(ctx, tenantID, checkoutID, CheckInInput{ConditionIn: conditionIn}); err != nil {
-		return err
+// CheckInAsset resolves the open checkout for the asset, records the
+// check-in (including any reported damage), and updates the asset status
+// accordingly.
+func (s *Service) CheckInAsset(ctx context.Context, tenantID, assetID uuid.UUID, in CheckInInput) (*AssetCheckout, error) {
+	co, err := s.repo.GetActiveCheckout(ctx, tenantID, assetID)
+	if err != nil {
+		return nil, err // ErrNoActiveCheckout maps to FailedPrecondition
 	}
-	return s.repo.UpdateAssetStatus(ctx, tenantID, assetID, "available")
+	updated, err := s.repo.CheckInAsset(ctx, tenantID, co.ID, in)
+	if err != nil {
+		return nil, err
+	}
+	status := "available"
+	if in.ReportDamage {
+		status = "under_repair"
+	}
+	if err := s.repo.UpdateAssetStatus(ctx, tenantID, assetID, status); err != nil {
+		return nil, err
+	}
+	return updated, nil
 }
 
 // GetInventoryCategories returns the vertical's inventory categories.
