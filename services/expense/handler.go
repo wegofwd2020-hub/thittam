@@ -482,7 +482,12 @@ func (h *Handler) SettlePettyCash(ctx context.Context, req *expensev1.SettlePett
 		return nil, status.Error(codes.InvalidArgument, "unspent_amount must not be negative")
 	}
 
-	if err := h.svc.SettlePettyCash(ctx, tenantID, advanceID, unspent); err != nil {
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
+	}
+
+	if err := h.svc.SettlePettyCash(ctx, tenantID, advanceID, caller.UserID, unspent); err != nil {
 		return nil, grpcErr(err)
 	}
 
@@ -626,6 +631,8 @@ func grpcErr(err error) error {
 		return status.Error(codes.InvalidArgument, "invalid expense category for this vertical")
 	case errors.Is(err, ErrInsufficientBudget):
 		return status.Error(codes.FailedPrecondition, "insufficient budget remaining")
+	case errors.Is(err, ErrNotAdvanceHolder):
+		return status.Error(codes.PermissionDenied, err.Error())
 	case errors.Is(err, vertical.ErrNotFound):
 		return status.Error(codes.FailedPrecondition, "vertical config not found for tenant")
 	}

@@ -222,10 +222,13 @@ func (s *Service) ApprovePurchaseOrder(ctx context.Context, tenantID, poID, appr
 }
 
 // SettlePettyCash settles a petty cash advance, recording the unspent amount.
-func (s *Service) SettlePettyCash(ctx context.Context, tenantID, advanceID uuid.UUID, unspent decimal.Decimal) error {
+func (s *Service) SettlePettyCash(ctx context.Context, tenantID, advanceID, callerID uuid.UUID, unspent decimal.Decimal) error {
 	pc, err := s.repo.GetPettyCashAdvance(ctx, tenantID, advanceID)
 	if err != nil {
 		return fmt.Errorf("get petty cash advance: %w", err)
+	}
+	if pc.IssuedTo != callerID {
+		return ErrNotAdvanceHolder
 	}
 	if pc.Status == "settled" {
 		return ErrAlreadySettled

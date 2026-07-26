@@ -504,36 +504,60 @@ func TestService_ApprovePurchaseOrder_SetsApproved(t *testing.T) {
 }
 
 func TestService_SettlePettyCash_AlreadySettled(t *testing.T) {
+	holder := uuid.New()
 	svc := NewService(&mockRepo{
 		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
-			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "settled"}, nil
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "settled", IssuedTo: holder}, nil
 		},
 	})
-	require.ErrorIs(t, svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), decimal.RequireFromString("12.50")), ErrAlreadySettled)
+	require.ErrorIs(t, svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), holder, decimal.RequireFromString("12.50")), ErrAlreadySettled)
 }
 
 func TestService_SettlePettyCash_SetsSettled(t *testing.T) {
+	holder := uuid.New()
 	var saved *PettyCashAdvance
 	svc := NewService(&mockRepo{
 		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
-			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.RequireFromString("50.00")}, nil
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.RequireFromString("50.00"), IssuedTo: holder}, nil
 		},
 		updatePettyCashFn: func(_ context.Context, pc *PettyCashAdvance) error { saved = pc; return nil },
 	})
-	require.NoError(t, svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), decimal.RequireFromString("12.50")))
+	require.NoError(t, svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), holder, decimal.RequireFromString("12.50")))
 	assert.Equal(t, "settled", saved.Status)
 	assert.Equal(t, "12.50", saved.UnspentAmount.StringFixed(2))
 	require.NotNil(t, saved.SettledAt)
 }
 
 func TestService_SettlePettyCash_ExceedsAdvance(t *testing.T) {
+	holder := uuid.New()
 	svc := NewService(&mockRepo{
 		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
-			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.RequireFromString("100.00")}, nil
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.RequireFromString("100.00"), IssuedTo: holder}, nil
 		},
 	})
-	err := svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), decimal.RequireFromString("150.00"))
+	err := svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), holder, decimal.RequireFromString("150.00"))
 	require.ErrorIs(t, err, ErrUnspentExceedsAdvance)
+}
+
+func TestService_SettlePettyCash_NotHolder(t *testing.T) {
+	svc := NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.NewFromInt(1000), IssuedTo: uuid.New()}, nil
+		},
+	})
+	err := svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), uuid.New(), decimal.NewFromInt(10))
+	assert.ErrorIs(t, err, ErrNotAdvanceHolder)
+}
+
+func TestService_SettlePettyCash_HolderSucceeds(t *testing.T) {
+	holder := uuid.New()
+	var saved *PettyCashAdvance
+	svc := NewService(&mockRepo{
+		getPettyCashFn:    func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) { return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.NewFromInt(1000), IssuedTo: holder}, nil },
+		updatePettyCashFn: func(_ context.Context, pc *PettyCashAdvance) error { saved = pc; return nil },
+	})
+	require.NoError(t, svc.SettlePettyCash(context.Background(), uuid.New(), uuid.New(), holder, decimal.NewFromInt(10)))
+	assert.Equal(t, "settled", saved.Status)
 }
 
 func TestService_CreatePurchaseOrder_GeneratesPONumberWhenEmpty(t *testing.T) {

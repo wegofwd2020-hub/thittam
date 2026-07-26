@@ -659,6 +659,8 @@ func TestHandler_SettlePettyCash_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	pcID := uuid.New()
+	holder := uuid.New()
+	caller := interceptor.CallerInfo{UserID: holder, TenantID: tenantID}
 	callCount := 0
 	h := NewHandler(NewService(&mockRepo{
 		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
@@ -667,12 +669,12 @@ func TestHandler_SettlePettyCash_Success(t *testing.T) {
 			if callCount > 1 {
 				st = "settled"
 			}
-			return &PettyCashAdvance{ID: id, TenantID: tid, Status: st, Amount: decimal.NewFromInt(5000)}, nil
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: st, Amount: decimal.NewFromInt(5000), IssuedTo: holder}, nil
 		},
 		updatePettyCashFn: func(_ context.Context, _ *PettyCashAdvance) error { return nil },
 	})).WithPermissionChecker(allowAllPerm{})
 
-	resp, err := h.SettlePettyCash(ctxWithTenant(tenantID), &expensev1.SettlePettyCashRequest{Id: pcID.String(), UnspentAmount: "500.00"})
+	resp, err := h.SettlePettyCash(ctxWithCaller(caller), &expensev1.SettlePettyCashRequest{Id: pcID.String(), UnspentAmount: "500.00"})
 	require.NoError(t, err)
 	assert.Equal(t, "settled", resp.GetStatus())
 }
@@ -716,14 +718,48 @@ func TestHandler_SettlePettyCash_NegativeAmount(t *testing.T) {
 
 func TestHandler_SettlePettyCash_ExceedsAdvance(t *testing.T) {
 	t.Parallel()
+	tenantID := uuid.New()
+	holder := uuid.New()
+	caller := interceptor.CallerInfo{UserID: holder, TenantID: tenantID}
 	h := NewHandler(NewService(&mockRepo{
 		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
-			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.RequireFromString("100.00")}, nil
+			return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.RequireFromString("100.00"), IssuedTo: holder}, nil
 		},
 	})).WithPermissionChecker(allowAllPerm{})
 
-	_, err := h.SettlePettyCash(ctxWithTenant(uuid.New()), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "150.00"})
+	_, err := h.SettlePettyCash(ctxWithCaller(caller), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "150.00"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestHandler_SettlePettyCash_NotHolder(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID}
+	h := NewHandler(NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) { return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.NewFromInt(1000), IssuedTo: uuid.New()}, nil },
+	})).WithPermissionChecker(allowAllPerm{})
+	_, err := h.SettlePettyCash(ctxWithCaller(caller), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "10.00"})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_SettlePettyCash_HolderSucceeds(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	holder := uuid.New()
+	caller := interceptor.CallerInfo{UserID: holder, TenantID: tenantID}
+	h := NewHandler(NewService(&mockRepo{
+		getPettyCashFn:    func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) { return &PettyCashAdvance{ID: id, TenantID: tid, Status: "issued", Amount: decimal.NewFromInt(1000), IssuedTo: holder}, nil },
+		updatePettyCashFn: func(_ context.Context, _ *PettyCashAdvance) error { return nil },
+	})).WithPermissionChecker(allowAllPerm{})
+	resp, err := h.SettlePettyCash(ctxWithCaller(caller), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "10.00"})
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+
+func TestHandler_SettlePettyCash_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().SettlePettyCash(ctxTenantNoCaller(uuid.New()), &expensev1.SettlePettyCashRequest{Id: uuid.New().String(), UnspentAmount: "10.00"})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
 // --- Vertical metadata ---
