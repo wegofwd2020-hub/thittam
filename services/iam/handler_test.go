@@ -883,13 +883,8 @@ func TestHandler_SetTenantAddress_MissingCountry(t *testing.T) {
 	_, err := h.SetTenantAddress(memberCtx(tid), &iamv1.SetTenantAddressRequest{
 		TenantId: tid.String(),
 	})
-	// Service.SetTenantAddress returns the sentinel ErrCountryRequired, but
-	// grpcError has no case for it, so it falls to the default branch and
-	// comes back as a fresh status.Error(Internal, "internal error") that
-	// does not wrap the sentinel — errors.Is/ErrorIs can't see through it.
-	// Assert on the status code that default branch actually produces.
 	require.Error(t, err)
-	require.Equal(t, codes.Internal, status.Code(err))
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 // #139 slice B (Task 2): SetTenantAddress was tenant-bounded but enforced no
@@ -1514,6 +1509,12 @@ func TestGrpcErr_AllCodes(t *testing.T) {
 		{auth.ErrTenantSuspended, codes.PermissionDenied},
 		{auth.ErrAccountDeactivated, codes.PermissionDenied},
 		{auth.ErrAccountInvited, codes.FailedPrecondition},
+		{ErrCountryRequired, codes.InvalidArgument},
+		{ErrUnknownCountry, codes.InvalidArgument},
+		{ErrAmbiguousEmail, codes.InvalidArgument},
+		{ErrPurgeRequestNotApproved, codes.FailedPrecondition},
+		{ErrNotPlatformAdmin, codes.PermissionDenied},
+		{fmt.Errorf("wrapped: %w", ErrUnknownCountry), codes.InvalidArgument},
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.wantCode, status.Code(grpcError(tc.err)))
