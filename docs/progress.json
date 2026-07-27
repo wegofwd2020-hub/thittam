@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-07-26T05:37:18+00:00",
+  "generated": "2026-07-27T05:55:46+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -973,14 +973,14 @@
     {
       "id": "#162",
       "name": "security(iam): DeactivateUser's platform_admin gate is bypassable via UpdateUser",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 7
     },
     {
       "id": "#163",
       "name": "fix(iam): validation sentinels surface as codes.Internal, not InvalidArgument",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 3
     },
     {
       "id": "#164",
@@ -1087,14 +1087,14 @@
     {
       "id": "#181",
       "name": "security(iam): UpdateUser is a second deactivation path that leaves sessions alive",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 3
     },
     {
       "id": "#182",
       "name": "security(iam): SuspendTenant leaves every user in the tenant with working sessions",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 4
     },
     {
       "id": "#183",
@@ -1177,18 +1177,96 @@
     {
       "id": "#196",
       "name": "expense: ApprovePurchaseOrder skips the approval-limit/dual-approval checks ApproveExpense enforces (authorization parity)",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 4
     },
     {
       "id": "#197",
       "name": "expense: SettlePettyCash has no issued_to ownership check and gates on expense:submit (settle actor undecided)",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 3
     },
     {
       "id": "#198",
       "name": "feat(inventory): CheckInAsset resolve-from-asset + damage, ListAssets/ListCheckouts filters (#192)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#199",
+      "name": "expense/vertical: approval-limit role names don't match RBAC roles (approvals fail-closed outside movie-production)",
+      "status": "done",
+      "commits": 5
+    },
+    {
+      "id": "#200",
+      "name": "fix(expense): wire caller identity into approvals + petty-cash settlement (#196, #197)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#201",
+      "name": "expense: RejectExpense records no rejecter identity (RejectedBy attribution)",
+      "status": "done",
+      "commits": 5
+    },
+    {
+      "id": "#202",
+      "name": "expense: Approve* allows approving an already-rejected record",
+      "status": "done",
+      "commits": 3
+    },
+    {
+      "id": "#203",
+      "name": "fix(vertical): reconcile approval-limit roles to RBAC + super_admin bypass (#199)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#204",
+      "name": "feat(expense): record + surface rejecter identity on RejectExpense (#201)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#205",
+      "name": "fix(expense): approve only from the awaiting-approval state (#202)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#206",
+      "name": "security(iam): tenant login gate only blocks 'suspended' \u2014 grace/deactivated/purge_eligible reopen sessions",
+      "status": "done",
+      "commits": 3
+    },
+    {
+      "id": "#207",
+      "name": "fix(iam): revoke sessions on UpdateUser-deactivate + SuspendTenant (#181, #182)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#208",
+      "name": "fix(iam): gate login to active tenants only (#206)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#209",
+      "name": "fix(iam): dedicated ActivateUser RPC; UpdateUser ignores status (close bypass) (#162)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#210",
+      "name": "chore: sweep all services' grpcErr/grpcError for sentinels defaulting to codes.Internal",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#211",
+      "name": "fix(iam): map validation sentinels to correct gRPC codes, not Internal (#163)",
       "status": "done",
       "commits": 1
     }
