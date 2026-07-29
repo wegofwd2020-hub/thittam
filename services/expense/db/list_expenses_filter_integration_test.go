@@ -72,6 +72,13 @@ func TestExpense_ListExpenses_SubmittedByFilter(t *testing.T) {
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []uuid.UUID{expAP1, expBP1}, expenseIDs(byP1),
 		"production_id filter must still work independently of submitted_by")
+
+	// Both filters AND-compose: submittedBy=A AND productionID=P1 -> only A/P1
+	// (excludes A/P2, same submitter other production; and B/P1, same production other submitter).
+	byAP1, err := repo.ListExpenses(ctx, tenantID, prodP1, "", 20, 0, submitterA)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []uuid.UUID{expAP1}, expenseIDs(byAP1),
+		"submitted_by and production_id must AND-compose, not widen each other")
 }
 
 func expenseIDs(rows []expense.Expense) []uuid.UUID {
