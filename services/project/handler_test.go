@@ -46,7 +46,7 @@ func callerCtx() context.Context {
 }
 
 func newHandler() *Handler {
-	return NewHandler(NewService(&mockRepo{})).WithPermissionChecker(allowAllPerm{})
+	return NewHandler(NewService(&mockRepo{}), allowAllPerm{})
 }
 
 // --- CreateProduction ---
@@ -82,7 +82,7 @@ func TestHandler_GetProduction_Success(t *testing.T) {
 		getProductionFn: func(_ context.Context, tid, id uuid.UUID) (*Production, error) {
 			return &Production{ID: id, TenantID: tid, Title: "Test", Status: "active"}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.GetProduction(ctxWithTenant(tenantID), &projectv1.GetProductionRequest{Id: prodID.String()})
 	require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestHandler_GetProduction_NotFound(t *testing.T) {
 		getProductionFn: func(_ context.Context, _, _ uuid.UUID) (*Production, error) {
 			return nil, ErrProductionNotFound
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 	_, err := h.GetProduction(ctxWithTenant(uuid.New()), &projectv1.GetProductionRequest{Id: uuid.New().String()})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
@@ -120,7 +120,7 @@ func TestHandler_GetProduction_Denied(t *testing.T) {
 			t.Fatal("gate must fire before the repository is read")
 			return nil, nil
 		},
-	})).WithPermissionChecker(denyPerm{})
+	}), denyPerm{})
 
 	_, err := h.GetProduction(ctxWithTenant(tenantID), &projectv1.GetProductionRequest{
 		Id: uuid.New().String(),
@@ -137,7 +137,7 @@ func TestHandler_ListProductions_Success(t *testing.T) {
 		listProductionsFn: func(_ context.Context, _ uuid.UUID, _ string, _, _ int) ([]Production, error) {
 			return []Production{{ID: uuid.New(), TenantID: tenantID, Status: "active"}}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.ListProductions(ctxWithTenant(tenantID), &projectv1.ListProductionsRequest{})
 	require.NoError(t, err)
@@ -158,7 +158,7 @@ func TestHandler_ListProductions_Denied(t *testing.T) {
 			t.Fatal("gate must fire before the repository is read")
 			return nil, nil
 		},
-	})).WithPermissionChecker(denyPerm{})
+	}), denyPerm{})
 
 	_, err := h.ListProductions(ctxWithTenant(tenantID), &projectv1.ListProductionsRequest{})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -227,7 +227,7 @@ func TestHandler_CreatePhase_Success(t *testing.T) {
 		getPhaseFn: func(_ context.Context, tenantID, id uuid.UUID) (*Phase, error) {
 			return &Phase{ID: id, TenantID: tenantID, PhaseType: "production", Status: "pending"}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.CreatePhase(ctxWithTenant(tenantID), &projectv1.CreatePhaseRequest{
 		ProductionId: prodID.String(),
@@ -291,7 +291,7 @@ func (r *tripwireListPhasesRepo) ListPhases(context.Context, uuid.UUID, uuid.UUI
 func TestHandler_ListPhases_Denied(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
-	h := NewHandler(NewService(&tripwireListPhasesRepo{t: t})).WithPermissionChecker(denyPerm{})
+	h := NewHandler(NewService(&tripwireListPhasesRepo{t: t}), denyPerm{})
 
 	_, err := h.ListPhases(ctxWithTenant(tenantID), &projectv1.ListPhasesRequest{
 		ProductionId: uuid.New().String(),
@@ -314,7 +314,7 @@ func TestHandler_UpdatePhaseStatus_Success(t *testing.T) {
 			}
 			return &Phase{ID: id, TenantID: tenantID, PhaseType: phaseType, Status: "active"}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.UpdatePhaseStatus(ctxWithTenant(uuid.New()), &projectv1.UpdatePhaseStatusRequest{
 		PhaseId:      phaseID.String(),
@@ -385,7 +385,7 @@ func TestHandler_ListCrewMembers_Success(t *testing.T) {
 		listCrewFn: func(_ context.Context, _, _ uuid.UUID) ([]CrewMember, error) {
 			return []CrewMember{{ID: uuid.New(), Name: "John", Role: "DP"}}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.ListCrewMembers(ctxWithTenant(uuid.New()), &projectv1.ListCrewMembersRequest{ProductionId: prodID.String()})
 	require.NoError(t, err)
@@ -406,7 +406,7 @@ func TestHandler_ListCrewMembers_Denied(t *testing.T) {
 			t.Fatal("gate must fire before the repository is read")
 			return nil, nil
 		},
-	})).WithPermissionChecker(denyPerm{})
+	}), denyPerm{})
 
 	_, err := h.ListCrewMembers(ctxWithTenant(tenantID), &projectv1.ListCrewMembersRequest{
 		ProductionId: uuid.New().String(),
@@ -456,7 +456,7 @@ func TestHandler_GetPhaseTypes(t *testing.T) {
 // the nil-checker guard around RequirePermission and nothing would catch it.
 func TestCreateProduction_NoPermissionChecker_Denies(t *testing.T) {
 	t.Parallel()
-	h := NewHandler(NewService(&mockRepo{})) // deliberately no WithPermissionChecker
+	h := NewHandler(NewService(&mockRepo{}), nil) // deliberately nil: no permission checker wired
 
 	_, err := h.CreateProduction(ctxWithTenant(uuid.New()), &projectv1.CreateProductionRequest{
 		Title: "Ponniyin Selvan 3",
@@ -518,7 +518,7 @@ func TestHandler_ListPhases_PassesCallerTenantToRepo(t *testing.T) {
 	t.Parallel()
 	callerTenant := uuid.New()
 	repo := &tenantRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	_, err := h.ListPhases(ctxWithTenant(callerTenant), &projectv1.ListPhasesRequest{
 		ProductionId: uuid.New().String(),
@@ -532,7 +532,7 @@ func TestHandler_ListPhases_PassesCallerTenantToRepo(t *testing.T) {
 func TestHandler_ListPhases_NoTenantUnauthenticated(t *testing.T) {
 	t.Parallel()
 	repo := &tenantRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	// callerCtx() carries a caller but NO tenant.
 	_, err := h.ListPhases(callerCtx(), &projectv1.ListPhasesRequest{
@@ -549,7 +549,7 @@ func TestHandler_UpdatePhaseStatus_PassesCallerTenantToRepo(t *testing.T) {
 	t.Parallel()
 	callerTenant := uuid.New()
 	repo := &tenantRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	// tenantRecordingRepo.GetPhase always returns PhaseType "development"; the
 	// movie-production vertical only allows development -> pre_production, so
@@ -570,7 +570,7 @@ func TestHandler_UpdatePhaseStatus_PassesCallerTenantToRepo(t *testing.T) {
 func TestHandler_UpdatePhaseStatus_NoTenantUnauthenticated(t *testing.T) {
 	t.Parallel()
 	repo := &tenantRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	// callerCtx() carries a caller but NO tenant.
 	_, err := h.UpdatePhaseStatus(callerCtx(), &projectv1.UpdatePhaseStatusRequest{
@@ -607,7 +607,7 @@ func TestHandler_ListCrewMembers_PassesCallerTenantToRepo(t *testing.T) {
 	t.Parallel()
 	callerTenant := uuid.New()
 	repo := &crewRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	_, err := h.ListCrewMembers(ctxWithTenant(callerTenant), &projectv1.ListCrewMembersRequest{
 		ProductionId: uuid.New().String(),
@@ -621,7 +621,7 @@ func TestHandler_ListCrewMembers_PassesCallerTenantToRepo(t *testing.T) {
 func TestHandler_ListCrewMembers_NoTenantUnauthenticated(t *testing.T) {
 	t.Parallel()
 	repo := &crewRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	// callerCtx() carries a caller but NO tenant.
 	_, err := h.ListCrewMembers(callerCtx(), &projectv1.ListCrewMembersRequest{
@@ -638,7 +638,7 @@ func TestHandler_RemoveCrewMember_PassesCallerTenantToRepo(t *testing.T) {
 	t.Parallel()
 	callerTenant := uuid.New()
 	repo := &crewRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	_, err := h.RemoveCrewMember(ctxWithTenant(callerTenant), &projectv1.RemoveCrewMemberRequest{
 		Id: uuid.New().String(),
@@ -652,7 +652,7 @@ func TestHandler_RemoveCrewMember_PassesCallerTenantToRepo(t *testing.T) {
 func TestHandler_RemoveCrewMember_NoTenantDoesNotDelete(t *testing.T) {
 	t.Parallel()
 	repo := &crewRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	// callerCtx() carries a caller but NO tenant.
 	_, err := h.RemoveCrewMember(callerCtx(), &projectv1.RemoveCrewMemberRequest{

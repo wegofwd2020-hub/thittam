@@ -19,17 +19,17 @@ const EnvAddr = "IAM_SERVICE_ADDR"
 // DialFromEnv connects to the IAM service via gRPC and returns a configured
 // PermissionChecker, plus a close function the caller should defer.
 //
-// If IAM_SERVICE_ADDR is unset, returns (nil, no-op close, nil) — the caller
-// is expected to log this and proceed without permission enforcement. This is
-// the rollback-safe default during the PROJECT_SCOPED_RBAC rollout: services
-// keep serving without IAM as a hard dependency.
+// If IAM_SERVICE_ADDR is unset, returns (nil, no-op close, nil) — a nil
+// checker. The caller decides what that means: gated RPCs fail closed with
+// Internal (#138), so a service that requires authz should Fatalf on a nil
+// checker rather than start.
 //
 // Inside the Istio service mesh we use plain credentials; Envoy sidecars
 // terminate mTLS. Match the billing→document pattern in cmd/billing/main.go.
 func DialFromEnv(serviceName string) (*PermissionChecker, func() error, error) {
 	addr := os.Getenv(EnvAddr)
 	if addr == "" {
-		log.Printf("%s: %s unset — IAM permission checks DISABLED (handlers run without authz)", serviceName, EnvAddr)
+		log.Printf("%s: %s unset — no IAM permission checker; gated RPCs fail closed with Internal (#138). A service that requires authz should refuse to start.", serviceName, EnvAddr)
 		return nil, func() error { return nil }, nil
 	}
 

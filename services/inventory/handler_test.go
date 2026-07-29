@@ -39,7 +39,7 @@ func ctxWithTenant(tenantID uuid.UUID) context.Context {
 }
 
 func newHandler() *Handler {
-	return NewHandler(NewService(&mockRepo{})).WithPermissionChecker(allowAllPerm{})
+	return NewHandler(NewService(&mockRepo{}), allowAllPerm{})
 }
 
 // --- CreateAsset ---
@@ -79,7 +79,7 @@ func TestHandler_GetAsset_Success(t *testing.T) {
 		getAssetFn: func(_ context.Context, tid, id uuid.UUID) (*Asset, error) {
 			return &Asset{ID: id, TenantID: tid, Status: "available"}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.GetAsset(ctxWithTenant(tenantID), &inventoryv1.GetAssetRequest{Id: assetID.String()})
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestHandler_GetAsset_Denied(t *testing.T) {
 			t.Fatal("repository reached: GetAsset must deny before querying")
 			return nil, nil
 		},
-	})).WithPermissionChecker(denyPerm{})
+	}), denyPerm{})
 
 	_, err := h.GetAsset(ctxWithTenant(uuid.New()), &inventoryv1.GetAssetRequest{
 		Id: uuid.New().String(),
@@ -124,7 +124,7 @@ func TestHandler_ListAssets_Success(t *testing.T) {
 		listAssetsFn: func(_ context.Context, _ uuid.UUID, _, _, _ string, _, _ int) ([]Asset, error) {
 			return []Asset{{ID: uuid.New(), TenantID: tenantID, Status: "available"}}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.ListAssets(ctxWithTenant(tenantID), &inventoryv1.ListAssetsRequest{})
 	require.NoError(t, err)
@@ -144,7 +144,7 @@ func TestHandler_ListAssets_Denied(t *testing.T) {
 			t.Fatal("repository reached: ListAssets must deny before querying")
 			return nil, nil
 		},
-	})).WithPermissionChecker(denyPerm{})
+	}), denyPerm{})
 
 	_, err := h.ListAssets(ctxWithTenant(uuid.New()), &inventoryv1.ListAssetsRequest{})
 
@@ -161,7 +161,7 @@ func TestHandler_ListAssets_PassesFilters(t *testing.T) {
 			gotCat, gotSearch = cat, search
 			return nil, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 	_, err := h.ListAssets(ctxWithTenant(tenantID), &inventoryv1.ListAssetsRequest{CategoryId: "cam", Search: "arri"})
 	require.NoError(t, err)
 	assert.Equal(t, "cam", gotCat)
@@ -178,7 +178,7 @@ func TestHandler_CheckOutAsset_Success(t *testing.T) {
 		getAssetFn: func(_ context.Context, tid, id uuid.UUID) (*Asset, error) {
 			return &Asset{ID: id, TenantID: tid, Status: "available"}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.CheckOutAsset(ctxWithTenant(tenantID), &inventoryv1.CheckOutAssetRequest{
 		AssetId:      assetID.String(),
@@ -237,7 +237,7 @@ func TestHandler_CheckInAsset_Success(t *testing.T) {
 			return &AssetCheckout{ID: cid, TenantID: tid, ConditionIn: in.ConditionIn}, nil
 		},
 		updateAssetStatusFn: func(_ context.Context, _, _ uuid.UUID, _ string) error { return nil },
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.CheckInAsset(ctxWithTenant(tenantID), &inventoryv1.CheckInAssetRequest{AssetId: uuid.New().String(), ConditionIn: "good"})
 	require.NoError(t, err)
@@ -251,7 +251,7 @@ func TestHandler_CheckInAsset_Denied(t *testing.T) {
 			t.Fatal("must not reach repo when denied")
 			return nil, nil
 		},
-	})).WithPermissionChecker(denyPerm{})
+	}), denyPerm{})
 	_, err := h.CheckInAsset(ctxWithTenant(uuid.New()), &inventoryv1.CheckInAssetRequest{AssetId: uuid.New().String(), ConditionIn: "x"})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
@@ -295,7 +295,7 @@ func TestHandler_ListCheckouts_Success(t *testing.T) {
 		listCheckoutsFn: func(_ context.Context, _, _ uuid.UUID, _ int, _ string) ([]AssetCheckout, error) {
 			return []AssetCheckout{{ID: uuid.New(), AssetID: assetID}}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.ListCheckouts(ctxWithTenant(uuid.New()), &inventoryv1.ListCheckoutsRequest{AssetId: assetID.String()})
 	require.NoError(t, err)
@@ -328,7 +328,7 @@ func TestHandler_ListCheckouts_Denied(t *testing.T) {
 			t.Fatal("repository reached: ListCheckouts must deny before querying")
 			return nil, nil
 		},
-	})).WithPermissionChecker(denyPerm{})
+	}), denyPerm{})
 
 	_, err := h.ListCheckouts(ctxWithTenant(uuid.New()), &inventoryv1.ListCheckoutsRequest{
 		AssetId: assetID.String(),
@@ -388,7 +388,7 @@ func TestHandler_ListCheckouts_PassesCallerTenantToRepo(t *testing.T) {
 	t.Parallel()
 	callerTenant := uuid.New()
 	repo := &checkoutRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	_, err := h.ListCheckouts(ctxWithTenant(callerTenant), &inventoryv1.ListCheckoutsRequest{
 		AssetId: uuid.New().String(),
@@ -403,7 +403,7 @@ func TestHandler_CheckInAsset_PassesCallerTenantToRepo(t *testing.T) {
 	t.Parallel()
 	callerTenant := uuid.New()
 	repo := &checkoutRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	_, err := h.CheckInAsset(ctxWithTenant(callerTenant), &inventoryv1.CheckInAssetRequest{
 		AssetId:     uuid.New().String(),
@@ -437,7 +437,7 @@ func TestHandler_GetInventoryCategories(t *testing.T) {
 // the nil-checker guard around RequirePermission and nothing would catch it.
 func TestCreateAsset_NoPermissionChecker_Denies(t *testing.T) {
 	t.Parallel()
-	h := NewHandler(NewService(&mockRepo{})) // deliberately no WithPermissionChecker
+	h := NewHandler(NewService(&mockRepo{}), nil) // deliberately nil: no permission checker wired
 
 	_, err := h.CreateAsset(ctxWithTenant(uuid.New()), &inventoryv1.CreateAssetRequest{
 		AssetCode:     "CAM-001",

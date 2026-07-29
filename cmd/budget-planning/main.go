@@ -72,21 +72,19 @@ func main() {
 	pub := jetstream.NewPublisher(js)
 
 	// --- IAM permission checker (ADR-014 Phase 2) ---
-	// Optional: when IAM_SERVICE_ADDR is unset, RequirePermission calls in
-	// the handler are no-ops. This is the rollback-safe default.
 	iamPerm, closeIAM, err := iamclient.DialFromEnv("budget-planning")
 	if err != nil {
 		log.Fatalf("budget-planning: startup: dial IAM: %v", err)
 	}
 	defer func() { _ = closeIAM() }()
+	if iamPerm == nil {
+		log.Fatalf("budget-planning: startup: %s is not set; budget-planning cannot authorize without a permission checker", iamclient.EnvAddr)
+	}
 
 	// --- Repository and service ---
 	repo := budgetdb.NewPostgres(pool)
 	svc := budget.NewService(repo, &budgetPublisher{pub: pub})
-	handler := budget.NewHandler(svc)
-	if iamPerm != nil {
-		handler = handler.WithPermissionChecker(iamPerm)
-	}
+	handler := budget.NewHandler(svc, iamPerm)
 
 	// --- gRPC server ---
 	// UnaryAuthInterceptor verifies the caller's JWT (#138) and populates the

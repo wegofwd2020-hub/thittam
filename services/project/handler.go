@@ -22,16 +22,11 @@ type Handler struct {
 	perm interceptor.PermissionChecker // nil fails closed: RequirePermission returns Internal (#138)
 }
 
-// NewHandler creates a Handler wrapping the given Service.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
-}
-
-// WithPermissionChecker attaches an IAM permission checker so handlers can
-// enforce ADR-014 project-scoped RBAC. Returns the receiver for chaining.
-func (h *Handler) WithPermissionChecker(p interceptor.PermissionChecker) *Handler {
-	h.perm = p
-	return h
+// NewHandler creates a Handler wrapping the given Service. perm is required, not
+// optional: a nil here is a test or a bug, and RequirePermission fails such a call
+// closed with Internal (#138). cmd/project-management refuses to start on a nil checker.
+func NewHandler(svc *Service, perm interceptor.PermissionChecker) *Handler {
+	return &Handler{svc: svc, perm: perm}
 }
 
 // Compile-time interface check.

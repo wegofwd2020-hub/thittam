@@ -80,14 +80,14 @@ func main() {
 		log.Fatalf("project-management: startup: dial IAM: %v", err)
 	}
 	defer func() { _ = closeIAM() }()
+	if iamPerm == nil {
+		log.Fatalf("project-management: startup: %s is not set; project-management cannot authorize without a permission checker", iamclient.EnvAddr)
+	}
 
 	// --- Repository and service ---
 	repo := projectdb.NewPostgres(pool)
 	svc := project.NewService(repo, &projectPublisher{pub: pub})
-	handler := project.NewHandler(svc)
-	if iamPerm != nil {
-		handler = handler.WithPermissionChecker(iamPerm)
-	}
+	handler := project.NewHandler(svc, iamPerm)
 
 	// --- gRPC server ---
 	verifier, err := auth.VerifierFromEnv(ctx)
