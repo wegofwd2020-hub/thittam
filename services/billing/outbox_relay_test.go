@@ -227,6 +227,12 @@ func TestRelay_MoveToDeadError_TickContinues(t *testing.T) {
 		claimUnsentOutboxFn: func(_ context.Context, _ int) ([]*OutboxEvent, error) { return []*OutboxEvent{poison, healthy}, nil },
 		markOutboxSentFn:    func(_ context.Context, _ uuid.UUID) error { return nil },
 		moveOutboxToDeadFn:  func(_ context.Context, _ uuid.UUID, _ string) error { return fmt.Errorf("db down") },
+		// Pin that a MoveOutboxToDead error is NOT re-recorded as a plain failure —
+		// the poison row must not be both attempted-dead and RecordOutboxFailure'd.
+		recordOutboxFailureFn: func(_ context.Context, _ uuid.UUID, _ string) error {
+			t.Fatal("a failed MoveOutboxToDead must not fall through to RecordOutboxFailure")
+			return nil
+		},
 	}
 	pub := &fakeOutboxPublisher{failFor: map[uuid.UUID]error{poison.TenantID: fmt.Errorf("malformed")}}
 	r := NewRelay(repo, pub)

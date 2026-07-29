@@ -326,11 +326,15 @@ func (r *billingRepo) OutboxStats(_ context.Context) (*billing.OutboxStats, erro
 func (r *billingRepo) ListDeadOutbox(_ context.Context, limit int) ([]*billing.OutboxEvent, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// The real query returns most-recently-died first (ORDER BY died_at DESC).
+	// MoveOutboxToDead appends in died order, so reverse-insertion is that order.
 	if limit > len(r.dead) {
 		limit = len(r.dead)
 	}
-	out := make([]*billing.OutboxEvent, limit)
-	copy(out, r.dead[:limit])
+	out := make([]*billing.OutboxEvent, 0, limit)
+	for i := len(r.dead) - 1; i >= 0 && len(out) < limit; i-- {
+		out = append(out, r.dead[i])
+	}
 	return out, nil
 }
 
