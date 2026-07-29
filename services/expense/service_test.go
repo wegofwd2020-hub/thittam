@@ -15,19 +15,23 @@ import (
 // --- Mock repository ---
 
 type mockRepo struct {
-	createExpenseFn   func(ctx context.Context, e *Expense) error
-	getExpenseFn      func(ctx context.Context, tenantID, id uuid.UUID) (*Expense, error)
-	listExpensesFn    func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]Expense, error)
-	updateExpenseFn   func(ctx context.Context, e *Expense) error
-	rejectExpenseFn   func(ctx context.Context, tenantID, expenseID, rejecterID uuid.UUID, reason string) error
-	createPOFn        func(ctx context.Context, po *PurchaseOrder) error
-	getPOFn           func(ctx context.Context, tenantID, id uuid.UUID) (*PurchaseOrder, error)
-	listPOsFn         func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PurchaseOrder, error)
-	updatePOFn        func(ctx context.Context, po *PurchaseOrder) error
-	createPettyCashFn func(ctx context.Context, pc *PettyCashAdvance) error
-	getPettyCashFn    func(ctx context.Context, tenantID, id uuid.UUID) (*PettyCashAdvance, error)
-	listPettyCashFn   func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PettyCashAdvance, error)
-	updatePettyCashFn func(ctx context.Context, pc *PettyCashAdvance) error
+	createExpenseFn func(ctx context.Context, e *Expense) error
+	getExpenseFn    func(ctx context.Context, tenantID, id uuid.UUID) (*Expense, error)
+	listExpensesFn  func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int, submittedBy uuid.UUID) ([]Expense, error)
+	// lastListExpensesSubmittedBy records the submittedBy arg from the most
+	// recent ListExpenses call, so Task 3's handler test can assert the
+	// submitted_by_me flag actually reached the repo call.
+	lastListExpensesSubmittedBy uuid.UUID
+	updateExpenseFn             func(ctx context.Context, e *Expense) error
+	rejectExpenseFn             func(ctx context.Context, tenantID, expenseID, rejecterID uuid.UUID, reason string) error
+	createPOFn                  func(ctx context.Context, po *PurchaseOrder) error
+	getPOFn                     func(ctx context.Context, tenantID, id uuid.UUID) (*PurchaseOrder, error)
+	listPOsFn                   func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PurchaseOrder, error)
+	updatePOFn                  func(ctx context.Context, po *PurchaseOrder) error
+	createPettyCashFn           func(ctx context.Context, pc *PettyCashAdvance) error
+	getPettyCashFn              func(ctx context.Context, tenantID, id uuid.UUID) (*PettyCashAdvance, error)
+	listPettyCashFn             func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PettyCashAdvance, error)
+	updatePettyCashFn           func(ctx context.Context, pc *PettyCashAdvance) error
 }
 
 func (m *mockRepo) CreateExpense(ctx context.Context, e *Expense) error {
@@ -42,9 +46,10 @@ func (m *mockRepo) GetExpense(ctx context.Context, tenantID, id uuid.UUID) (*Exp
 	}
 	return &Expense{ID: id, TenantID: tenantID, Amount: decimal.NewFromInt(5000), Status: "submitted"}, nil
 }
-func (m *mockRepo) ListExpenses(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]Expense, error) {
+func (m *mockRepo) ListExpenses(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int, submittedBy uuid.UUID) ([]Expense, error) {
+	m.lastListExpensesSubmittedBy = submittedBy
 	if m.listExpensesFn != nil {
-		return m.listExpensesFn(ctx, tenantID, prodID, status, limit, offset)
+		return m.listExpensesFn(ctx, tenantID, prodID, status, limit, offset, submittedBy)
 	}
 	return nil, nil
 }
@@ -365,13 +370,13 @@ func TestListExpenses_DefaultLimit(t *testing.T) {
 	t.Parallel()
 	var capturedLimit int
 	svc := NewService(&mockRepo{
-		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, limit, _ int) ([]Expense, error) {
+		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, limit, _ int, _ uuid.UUID) ([]Expense, error) {
 			capturedLimit = limit
 			return nil, nil
 		},
 	})
 
-	_, err := svc.ListExpenses(ctxWithVertical(), uuid.New(), uuid.New(), "", 0, 0)
+	_, err := svc.ListExpenses(ctxWithVertical(), uuid.New(), uuid.New(), "", 0, 0, uuid.Nil)
 	require.NoError(t, err)
 	assert.Equal(t, 20, capturedLimit)
 }
@@ -380,13 +385,13 @@ func TestListExpenses_MaxLimitEnforced(t *testing.T) {
 	t.Parallel()
 	var capturedLimit int
 	svc := NewService(&mockRepo{
-		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, limit, _ int) ([]Expense, error) {
+		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, limit, _ int, _ uuid.UUID) ([]Expense, error) {
 			capturedLimit = limit
 			return nil, nil
 		},
 	})
 
-	_, err := svc.ListExpenses(ctxWithVertical(), uuid.New(), uuid.New(), "", 9999, 0)
+	_, err := svc.ListExpenses(ctxWithVertical(), uuid.New(), uuid.New(), "", 9999, 0, uuid.Nil)
 	require.NoError(t, err)
 	assert.Equal(t, 20, capturedLimit)
 }

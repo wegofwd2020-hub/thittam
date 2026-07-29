@@ -398,7 +398,7 @@ func TestHandler_ListExpenses_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]Expense, error) {
+		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]Expense, error) {
 			return []Expense{{ID: uuid.New(), TenantID: tenantID}}, nil
 		},
 	})).WithPermissionChecker(allowAllPerm{})
@@ -417,7 +417,7 @@ func TestHandler_ListExpenses_NoTenant(t *testing.T) {
 func TestHandler_ListExpenses_Denied(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]Expense, error) {
+		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]Expense, error) {
 			t.Fatal("repository reached: ListExpenses must deny before querying")
 			return nil, nil
 		},

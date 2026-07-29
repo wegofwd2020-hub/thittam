@@ -132,11 +132,11 @@ func (p *Postgres) GetExpense(ctx context.Context, tenantID, id uuid.UUID) (*exp
 	return expenseFromDB(row), nil
 }
 
-func (p *Postgres) ListExpenses(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int) ([]expense.Expense, error) {
+func (p *Postgres) ListExpenses(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int, submittedBy uuid.UUID) ([]expense.Expense, error) {
 	rows, err := p.q.ListExpenses(ctx, ListExpensesParams{
 		TenantID:     tenantID,
 		ProductionID: nullableUUID(productionID),
-		SubmittedBy:  pgtype.UUID{}, // NULL until Task 2 threads the arg
+		SubmittedBy:  nullableUUID(submittedBy),
 		Status:       status,
 		Limit:        int32(limit),
 		Offset:       int32(offset),

@@ -401,7 +401,7 @@ func (r *expenseRepo) GetExpense(_ context.Context, _, id uuid.UUID) (*expense.E
 	}
 	return nil, expense.ErrExpenseNotFound
 }
-func (r *expenseRepo) ListExpenses(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]expense.Expense, error) {
+func (r *expenseRepo) ListExpenses(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]expense.Expense, error) {
 	return nil, nil
 }
 func (r *expenseRepo) UpdateExpense(_ context.Context, e *expense.Expense) error {

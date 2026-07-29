@@ -298,7 +298,8 @@ func (h *Handler) ListExpenses(ctx context.Context, req *expensev1.ListExpensesR
 		}
 	}
 
-	expenses, err := h.svc.ListExpenses(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0)
+	// TODO(#165 task 3): wire req.GetSubmittedByMe() to the caller's own user ID.
+	expenses, err := h.svc.ListExpenses(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0, uuid.Nil)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
