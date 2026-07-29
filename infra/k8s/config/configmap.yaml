@@ -76,12 +76,11 @@ data:
   VAULT_KV_MOUNT: secret
 
   # ── IAM service address (called by all other services) ───────────────────
-  IAM_ADDR: iam.thittam.svc.cluster.local:8086
-  # pkg/iamclient/dial.go reads IAM_SERVICE_ADDR (not IAM_ADDR above) to dial
-  # IAM for permission checks (RequirePermission in pkg/interceptor). Without
-  # this key, DialFromEnv finds no address, permission checks run with a nil
-  # checker, and every authz'd write in project/budget/expense/inventory
-  # fails closed with codes.Internal (#138 I1).
+  # pkg/iamclient/dial.go reads IAM_SERVICE_ADDR to dial IAM for permission
+  # checks (RequirePermission in pkg/interceptor). Without this key, DialFromEnv
+  # finds no address, permission checks run with a nil checker, and every
+  # authz'd write in project/budget/expense/inventory fails closed with
+  # codes.Internal (#138 I1).
   IAM_SERVICE_ADDR: iam.thittam.svc.cluster.local:8086
 
   # ── Service-to-service gRPC addresses ───────────────────────────────────
