@@ -134,11 +134,12 @@ func (p *Postgres) GetExpense(ctx context.Context, tenantID, id uuid.UUID) (*exp
 
 func (p *Postgres) ListExpenses(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int) ([]expense.Expense, error) {
 	rows, err := p.q.ListExpenses(ctx, ListExpensesParams{
-		TenantID: tenantID,
-		Column2:  productionID,
-		Column3:  status,
-		Limit:    int32(limit),
-		Offset:   int32(offset),
+		TenantID:     tenantID,
+		ProductionID: nullableUUID(productionID),
+		SubmittedBy:  pgtype.UUID{}, // NULL until Task 2 threads the arg
+		Status:       status,
+		Limit:        int32(limit),
+		Offset:       int32(offset),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("expense: list expenses: %w", err)
@@ -374,6 +375,14 @@ func pgUUIDFromPtr(id *uuid.UUID) pgtype.UUID {
 		return pgtype.UUID{}
 	}
 	return pgtype.UUID{Bytes: *id, Valid: true}
+}
+
+// nullableUUID maps the zero UUID to SQL NULL (an "omit this filter" sentinel).
+func nullableUUID(id uuid.UUID) pgtype.UUID {
+	if id == uuid.Nil {
+		return pgtype.UUID{}
+	}
+	return pgtype.UUID{Bytes: id, Valid: true}
 }
 
 // pgTextFromString converts a Go string to pgtype.Text (NULL when empty).

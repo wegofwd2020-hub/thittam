@@ -272,26 +272,29 @@ const listExpenses = `-- name: ListExpenses :many
 SELECT id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, status, submitted_by, approved_by, submitted_at, approved_at, created_at, rejection_reason, rejected_at, rejected_by FROM expenses
 WHERE tenant_id = $1
   AND ($2::uuid IS NULL OR production_id = $2)
-  AND ($3 = '' OR status = $3)
+  AND ($3::uuid  IS NULL OR submitted_by  = $3)
+  AND ($4 = '' OR status = $4)
 ORDER BY created_at DESC
-LIMIT $4 OFFSET $5
+LIMIT $6 OFFSET $5
 `
 
 type ListExpensesParams struct {
-	TenantID uuid.UUID   `json:"tenant_id"`
-	Column2  uuid.UUID   `json:"column_2"`
-	Column3  interface{} `json:"column_3"`
-	Limit    int32       `json:"limit"`
-	Offset   int32       `json:"offset"`
+	TenantID     uuid.UUID   `json:"tenant_id"`
+	ProductionID pgtype.UUID `json:"production_id"`
+	SubmittedBy  pgtype.UUID `json:"submitted_by"`
+	Status       interface{} `json:"status"`
+	Offset       int32       `json:"offset"`
+	Limit        int32       `json:"limit"`
 }
 
 func (q *Queries) ListExpenses(ctx context.Context, arg ListExpensesParams) ([]Expense, error) {
 	rows, err := q.db.Query(ctx, listExpenses,
 		arg.TenantID,
-		arg.Column2,
-		arg.Column3,
-		arg.Limit,
+		arg.ProductionID,
+		arg.SubmittedBy,
+		arg.Status,
 		arg.Offset,
+		arg.Limit,
 	)
 	if err != nil {
 		return nil, err

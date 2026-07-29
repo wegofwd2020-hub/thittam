@@ -34,11 +34,12 @@ SELECT * FROM expenses WHERE id = $1 AND tenant_id = $2;
 
 -- name: ListExpenses :many
 SELECT * FROM expenses
-WHERE tenant_id = $1
-  AND ($2::uuid IS NULL OR production_id = $2)
-  AND ($3 = '' OR status = $3)
+WHERE tenant_id = sqlc.arg('tenant_id')
+  AND (sqlc.narg('production_id')::uuid IS NULL OR production_id = sqlc.narg('production_id'))
+  AND (sqlc.narg('submitted_by')::uuid  IS NULL OR submitted_by  = sqlc.narg('submitted_by'))
+  AND (sqlc.arg('status') = '' OR status = sqlc.arg('status'))
 ORDER BY created_at DESC
-LIMIT $4 OFFSET $5;
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: UpdateExpenseStatus :one
 UPDATE expenses

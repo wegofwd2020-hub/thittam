@@ -153,7 +153,15 @@ message SubmitExpenseRequest {
 }
 
 message GetExpenseRequest { string id = 1; }
-message ListExpensesRequest { string production_id = 1; string status = 2; int32 limit = 3; string after = 4; }
+message ListExpensesRequest {
+  string production_id = 1;
+  string status = 2;
+  int32 limit = 3;
+  string after = 4;
+  // When true, scoped to the caller's own submissions (submitted_by = verified token
+  // subject); requires no expense:read. False/absent = expense:read + tenant-wide (#165).
+  bool submitted_by_me = 5;
+}
 message ListExpensesResponse { repeated Expense expenses = 1; }
 message ApproveExpenseRequest { string expense_id = 1; }
 message RejectExpenseRequest { string expense_id = 1; string reason = 2; }
