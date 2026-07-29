@@ -10,29 +10,35 @@ import (
 // Metrics holds all Prometheus metric collectors for a service.
 type Metrics struct {
 	// gRPC request metrics
-	RequestDuration  *prometheus.HistogramVec
-	RequestCounter   *prometheus.CounterVec
-	ActiveRequests   prometheus.Gauge
+	RequestDuration *prometheus.HistogramVec
+	RequestCounter  *prometheus.CounterVec
+	ActiveRequests  prometheus.Gauge
 
 	// Tenant-scoped request counter (for usage billing)
-	TenantRequests   *prometheus.CounterVec
+	TenantRequests *prometheus.CounterVec
 
 	// Cache metrics
-	CacheOperations  *prometheus.CounterVec
+	CacheOperations *prometheus.CounterVec
 
 	// DB connection pool
-	DBActiveConns    prometheus.Gauge
-	DBIdleConns      prometheus.Gauge
+	DBActiveConns prometheus.Gauge
+	DBIdleConns   prometheus.Gauge
 
 	// Redis connection
-	RedisConnected   prometheus.Gauge
+	RedisConnected prometheus.Gauge
 }
 
-// NewMetrics creates all metric collectors for a service, registered with
-// the default Prometheus registry.
-func NewMetrics(serviceName string) *Metrics {
+// NewMetrics creates all metric collectors for a service, registered with reg.
+// A nil reg means the global prometheus.DefaultRegisterer (production default);
+// tests pass a fresh prometheus.NewRegistry() so repeated construction with the
+// same service name does not panic on duplicate registration.
+func NewMetrics(serviceName string, reg prometheus.Registerer) *Metrics {
+	if reg == nil {
+		reg = prometheus.DefaultRegisterer
+	}
+	f := promauto.With(reg)
 	return &Metrics{
-		RequestDuration: promauto.NewHistogramVec(
+		RequestDuration: f.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Namespace: "thittam",
 				Subsystem: serviceName,
@@ -43,7 +49,7 @@ func NewMetrics(serviceName string) *Metrics {
 			[]string{"method", "grpc_code"},
 		),
 
-		RequestCounter: promauto.NewCounterVec(
+		RequestCounter: f.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: "thittam",
 				Subsystem: serviceName,
@@ -53,7 +59,7 @@ func NewMetrics(serviceName string) *Metrics {
 			[]string{"method", "grpc_code"},
 		),
 
-		ActiveRequests: promauto.NewGauge(
+		ActiveRequests: f.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace: "thittam",
 				Subsystem: serviceName,
@@ -62,7 +68,7 @@ func NewMetrics(serviceName string) *Metrics {
 			},
 		),
 
-		TenantRequests: promauto.NewCounterVec(
+		TenantRequests: f.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: "thittam",
 				Subsystem: serviceName,
@@ -72,7 +78,7 @@ func NewMetrics(serviceName string) *Metrics {
 			[]string{"tenant_id"},
 		),
 
-		CacheOperations: promauto.NewCounterVec(
+		CacheOperations: f.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: "thittam",
 				Subsystem: serviceName,
@@ -82,7 +88,7 @@ func NewMetrics(serviceName string) *Metrics {
 			[]string{"tier", "result"}, // tier: l1/l2, result: hit/miss
 		),
 
-		DBActiveConns: promauto.NewGauge(
+		DBActiveConns: f.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace: "thittam",
 				Subsystem: serviceName,
@@ -91,7 +97,7 @@ func NewMetrics(serviceName string) *Metrics {
 			},
 		),
 
-		DBIdleConns: promauto.NewGauge(
+		DBIdleConns: f.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace: "thittam",
 				Subsystem: serviceName,
@@ -100,7 +106,7 @@ func NewMetrics(serviceName string) *Metrics {
 			},
 		),
 
-		RedisConnected: promauto.NewGauge(
+		RedisConnected: f.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace: "thittam",
 				Subsystem: serviceName,

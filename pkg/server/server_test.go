@@ -3,6 +3,7 @@ package server
 import (
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,4 +29,18 @@ func TestNew_ReflectionOnViaEnv(t *testing.T) {
 	s := New(Config{Name: "t-reflection-on", Port: 0, MetricsPort: 0}, nil)
 	_, ok := s.gs.GetServiceInfo()["grpc.reflection.v1.ServerReflection"]
 	assert.True(t, ok)
+}
+
+func TestNew_InjectedRegistry_NoDuplicatePanic(t *testing.T) {
+	// Two servers with the SAME Name but distinct registries must both
+	// construct without the global-registry duplicate-registration panic.
+	reg1 := prometheus.NewRegistry()
+	reg2 := prometheus.NewRegistry()
+	_ = New(Config{Name: "dup-svc", Registry: reg1}, nil)
+	_ = New(Config{Name: "dup-svc", Registry: reg2}, nil)
+
+	// The injected registry actually received this server's collectors.
+	mfs, err := reg1.Gather()
+	require.NoError(t, err)
+	assert.NotEmpty(t, mfs, "expected collectors registered on the injected registry")
 }
