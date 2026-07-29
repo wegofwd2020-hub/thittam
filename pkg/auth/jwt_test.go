@@ -293,6 +293,27 @@ func TestJWTIssuer_Validate_TamperedToken(t *testing.T) {
 	assert.ErrorIs(t, err, ErrTokenInvalid)
 }
 
+func TestJWTIssuer_Validate_MissingIat_NoPanic(t *testing.T) {
+	issuer, _ := testIssuer(t)
+
+	// A validly-signed token that omits iat (only exp is parser-required).
+	claims := &jwtClaims{
+		RegisteredClaims: jwtlib.RegisteredClaims{
+			Subject:   fixtureUserID.String(),
+			ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(time.Hour)),
+			// IssuedAt deliberately omitted.
+		},
+		TenantID: fixtureTenantID.String(),
+	}
+	tokenStr, err := jwtlib.NewWithClaims(jwtlib.SigningMethodRS256, claims).SignedString(issuer.privateKey)
+	require.NoError(t, err)
+
+	got, err := issuer.Validate(context.Background(), tokenStr)
+	require.NoError(t, err)
+	assert.True(t, got.IssuedAt.IsZero(), "missing iat must map to zero time, not panic")
+	assert.False(t, got.ExpiresAt.IsZero())
+}
+
 // --- Refresh ---
 
 func TestJWTIssuer_Refresh_IssuasNewPair(t *testing.T) {
