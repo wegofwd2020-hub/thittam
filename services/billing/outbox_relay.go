@@ -34,7 +34,17 @@ const (
 	relaySentTTL     = 7 * 24 * time.Hour
 
 	maxOutboxAttempts = 5 // dead-letter after this many failed publishes — but only
-	// when a batch-mate succeeded; see processBatch.
+	// when the broker is demonstrably healthy; see processBatch.
+
+	// brokerHealthyWindow bounds how recently a publish must have succeeded for the
+	// relay to treat the broker as healthy and dead-letter a maxed poison row.
+	// Must exceed maxOutboxAttempts*relayInterval (75s) so a fresh poison row can
+	// reach maxOutboxAttempts while the last pre-saturation success is still in
+	// window. Trade-off: during a genuine NATS outage lasting between 75s and this
+	// window, a row that only now reaches maxOutboxAttempts is dead-lettered rather
+	// than retried — but such a row is replayable via outbox-admin, and a poison
+	// row's earlier failures already occurred while the broker was healthy (#137).
+	brokerHealthyWindow = 5 * time.Minute
 )
 
 var (
@@ -73,10 +83,21 @@ type Relay struct {
 	repo outboxRepo
 	pub  outboxPublisher
 	log  *slog.Logger
+
+	// now is a clock seam for tests; defaults to time.Now.
+	now func() time.Time
+	// lastPublishSuccess is the wall-clock of the most recent successful NATS
+	// publish — the out-of-batch broker-health signal. A maxed-attempts row is
+	// dead-lettered only when the broker is demonstrably healthy (a publish
+	// succeeded within brokerHealthyWindow), distinguishing a poison payload from a
+	// NATS outage in which nothing publishes (#137). Zero value at startup = "no
+	// recent success" = do not dead-letter yet (conservative). Written and read only
+	// by Run's single goroutine, so no mutex is needed.
+	lastPublishSuccess time.Time
 }
 
 func NewRelay(repo outboxRepo, pub outboxPublisher) *Relay {
-	return &Relay{repo: repo, pub: pub, log: slog.Default().With("component", "outbox-relay")}
+	return &Relay{repo: repo, pub: pub, log: slog.Default().With("component", "outbox-relay"), now: time.Now}
 }
 
 // Run ticks until ctx is cancelled.
@@ -137,15 +158,19 @@ func (r *Relay) processBatch(ctx context.Context, limit int) (int, error) {
 		}
 		outboxPublished.Inc()
 		published++
+		r.lastPublishSuccess = r.now()
 	}
 
-	// A batch in which nothing published is an outage (NATS down), not a poison
-	// payload. Dead-lettering then would park the entire backlog — and every
-	// parked suspension is a tenant whose retention clock never starts.
-	canDeadLetter := published > 0
+	// A batch in which nothing published could be an outage (NATS down) OR the
+	// oldest rows all being poison. Distinguish them by out-of-batch broker health:
+	// if a publish succeeded within brokerHealthyWindow the broker is up and these
+	// failures are the rows' fault → dead-letter; otherwise assume an outage and
+	// retry — never park the whole backlog during a real NATS outage. The in-batch
+	// published>0 is kept as the immediate case (a sibling published this tick). (#137)
+	brokerHealthy := published > 0 || r.now().Sub(r.lastPublishSuccess) < brokerHealthyWindow
 
 	for _, f := range failed {
-		if canDeadLetter && f.event.Attempts >= maxOutboxAttempts {
+		if brokerHealthy && f.event.Attempts >= maxOutboxAttempts {
 			if merr := r.repo.MoveOutboxToDead(ctx, f.event.ID, f.err.Error()); merr != nil {
 				r.log.Error("move outbox to dead", "id", f.event.ID, "error", merr)
 				continue

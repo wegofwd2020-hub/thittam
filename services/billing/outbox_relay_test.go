@@ -137,12 +137,62 @@ func TestRelay_TotalBatchFailure_NeverDeadLetters(t *testing.T) {
 	}
 	pub := &fakeOutboxPublisher{err: fmt.Errorf("nats down")}
 	r := NewRelay(repo, pub)
+	// Outage semantics: nothing published this batch AND no publish succeeded within
+	// the broker-health window — the relay must retry, never park (#137).
+	fixed := time.Now()
+	r.now = func() time.Time { return fixed }
+	r.lastPublishSuccess = fixed.Add(-10 * time.Minute)
 
 	n, err := r.processBatch(context.Background(), 10)
 	require.NoError(t, err)
 	assert.Zero(t, n)
 	assert.False(t, moved, "a NATS outage must never park the backlog")
 	assert.ElementsMatch(t, []uuid.UUID{stale.ID, other.ID}, recorded)
+}
+
+// Saturation: a batch of ONLY maxed-attempts poison rows (published==0), but the
+// broker published successfully within the window — the rows are poison, not an
+// outage, so dead-letter them to unblock healthy events queued behind them (#137).
+func TestRelay_Saturation_DeadLettersWhenBrokerRecentlyHealthy(t *testing.T) {
+	t.Parallel()
+	p1 := &OutboxEvent{ID: uuid.New(), Subject: "s", TenantID: uuid.New(), Payload: []byte(`{}`), Attempts: maxOutboxAttempts}
+	p2 := &OutboxEvent{ID: uuid.New(), Subject: "s", TenantID: uuid.New(), Payload: []byte(`{}`), Attempts: maxOutboxAttempts}
+	moved := map[uuid.UUID]bool{}
+	recorded := false
+	repo := &mockRepo{
+		claimUnsentOutboxFn:   func(_ context.Context, _ int) ([]*OutboxEvent, error) { return []*OutboxEvent{p1, p2}, nil },
+		moveOutboxToDeadFn:    func(_ context.Context, id uuid.UUID, _ string) error { moved[id] = true; return nil },
+		recordOutboxFailureFn: func(_ context.Context, _ uuid.UUID, _ string) error { recorded = true; return nil },
+	}
+	pub := &fakeOutboxPublisher{failFor: map[uuid.UUID]error{p1.TenantID: fmt.Errorf("poison"), p2.TenantID: fmt.Errorf("poison")}}
+	r := NewRelay(repo, pub)
+	fixed := time.Now()
+	r.now = func() time.Time { return fixed }
+	r.lastPublishSuccess = fixed.Add(-1 * time.Minute) // broker healthy recently
+
+	n, err := r.processBatch(context.Background(), 10)
+	require.NoError(t, err)
+	assert.Zero(t, n)
+	assert.True(t, moved[p1.ID] && moved[p2.ID], "recently-healthy broker => poison rows dead-lettered")
+	assert.False(t, recorded, "dead-lettered, not merely recorded")
+}
+
+// A successful publish advances lastPublishSuccess to now — the signal the guard reads.
+func TestRelay_PublishSuccess_UpdatesLastPublishSuccess(t *testing.T) {
+	t.Parallel()
+	healthy := &OutboxEvent{ID: uuid.New(), Subject: "s", TenantID: uuid.New(), Payload: []byte(`{}`), Attempts: 1}
+	repo := &mockRepo{
+		claimUnsentOutboxFn: func(_ context.Context, _ int) ([]*OutboxEvent, error) { return []*OutboxEvent{healthy}, nil },
+		markOutboxSentFn:    func(_ context.Context, _ uuid.UUID) error { return nil },
+	}
+	r := NewRelay(repo, &fakeOutboxPublisher{})
+	fixed := time.Now()
+	r.now = func() time.Time { return fixed }
+	r.lastPublishSuccess = fixed.Add(-1 * time.Hour)
+
+	_, err := r.processBatch(context.Background(), 10)
+	require.NoError(t, err)
+	assert.Equal(t, fixed, r.lastPublishSuccess, "a successful publish refreshes the broker-health signal")
 }
 
 // Below the cap, a failure is recorded and retried, even with a healthy sibling.
@@ -177,6 +227,12 @@ func TestRelay_MoveToDeadError_TickContinues(t *testing.T) {
 		claimUnsentOutboxFn: func(_ context.Context, _ int) ([]*OutboxEvent, error) { return []*OutboxEvent{poison, healthy}, nil },
 		markOutboxSentFn:    func(_ context.Context, _ uuid.UUID) error { return nil },
 		moveOutboxToDeadFn:  func(_ context.Context, _ uuid.UUID, _ string) error { return fmt.Errorf("db down") },
+		// Pin that a MoveOutboxToDead error is NOT re-recorded as a plain failure —
+		// the poison row must not be both attempted-dead and RecordOutboxFailure'd.
+		recordOutboxFailureFn: func(_ context.Context, _ uuid.UUID, _ string) error {
+			t.Fatal("a failed MoveOutboxToDead must not fall through to RecordOutboxFailure")
+			return nil
+		},
 	}
 	pub := &fakeOutboxPublisher{failFor: map[uuid.UUID]error{poison.TenantID: fmt.Errorf("malformed")}}
 	r := NewRelay(repo, pub)
