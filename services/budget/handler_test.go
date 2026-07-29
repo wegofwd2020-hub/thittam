@@ -46,7 +46,7 @@ func callerCtx() context.Context {
 }
 
 func newHandler() *Handler {
-	return NewHandler(NewService(&mockRepo{})).WithPermissionChecker(allowAllPerm{})
+	return NewHandler(NewService(&mockRepo{}), allowAllPerm{})
 }
 
 // --- CreateBudget ---
@@ -97,7 +97,7 @@ func TestHandler_CreateBudget_DefaultCurrency(t *testing.T) {
 		getBudgetFn: func(_ context.Context, tid, id uuid.UUID) (*Budget, error) {
 			return &Budget{ID: id, TenantID: tid, Status: "draft", Currency: "INR"}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.CreateBudget(ctxWithTenant(tenantID), &budgetv1.CreateBudgetRequest{
 		ProductionId: uuid.New().String(),
@@ -118,7 +118,7 @@ func TestHandler_GetBudget_Success(t *testing.T) {
 		getBudgetFn: func(_ context.Context, tid, id uuid.UUID) (*Budget, error) {
 			return &Budget{ID: id, TenantID: tid, Label: "Test", Status: "draft"}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.GetBudget(ctxWithTenant(tenantID), &budgetv1.GetBudgetRequest{Id: budgetID.String()})
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestHandler_GetBudget_NotFound(t *testing.T) {
 		getBudgetFn: func(_ context.Context, _, _ uuid.UUID) (*Budget, error) {
 			return nil, ErrBudgetNotFound
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 	_, err := h.GetBudget(ctxWithTenant(uuid.New()), &budgetv1.GetBudgetRequest{Id: uuid.New().String()})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
@@ -156,7 +156,7 @@ func TestHandler_GetBudget_Denied(t *testing.T) {
 			t.Fatal("gate must fire before the repository is read")
 			return nil, nil
 		},
-	})).WithPermissionChecker(denyPerm{})
+	}), denyPerm{})
 
 	_, err := h.GetBudget(ctxWithTenant(tenantID), &budgetv1.GetBudgetRequest{Id: uuid.New().String()})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -171,7 +171,7 @@ func TestHandler_ListBudgets_Success(t *testing.T) {
 		listBudgetsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]Budget, error) {
 			return []Budget{{ID: uuid.New(), TenantID: tenantID, Status: "draft"}}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.ListBudgets(ctxWithTenant(tenantID), &budgetv1.ListBudgetsRequest{})
 	require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestHandler_ListBudgets_Denied(t *testing.T) {
 			t.Fatal("gate must fire before the repository is read")
 			return nil, nil
 		},
-	})).WithPermissionChecker(denyPerm{})
+	}), denyPerm{})
 
 	_, err := h.ListBudgets(ctxWithTenant(tenantID), &budgetv1.ListBudgetsRequest{})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -220,7 +220,7 @@ func TestHandler_SubmitBudget_Success(t *testing.T) {
 			}
 			return &Budget{ID: id, TenantID: tid, Status: status}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.SubmitBudget(ctxWithTenant(tenantID), &budgetv1.SubmitBudgetRequest{Id: budgetID.String()})
 	require.NoError(t, err)
@@ -255,7 +255,7 @@ func TestHandler_ApproveBudget_Success(t *testing.T) {
 			}
 			return &Budget{ID: id, TenantID: tid, Status: status}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.ApproveBudget(ctxWithTenant(tenantID), &budgetv1.ApproveBudgetRequest{Id: budgetID.String()})
 	require.NoError(t, err)
@@ -364,7 +364,7 @@ func TestHandler_GetLineItem_Success(t *testing.T) {
 		getLineItemFn: func(_ context.Context, tenantID, id uuid.UUID) (*BudgetLineItem, error) {
 			return &BudgetLineItem{ID: id, TenantID: tenantID, CategoryID: "above_the_line"}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.GetLineItem(ctxWithTenant(uuid.New()), &budgetv1.GetLineItemRequest{Id: itemID.String()})
 	require.NoError(t, err)
@@ -389,7 +389,7 @@ func TestHandler_GetLineItem_NotFound(t *testing.T) {
 		getLineItemFn: func(_ context.Context, _, _ uuid.UUID) (*BudgetLineItem, error) {
 			return nil, ErrLineItemNotFound
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 	_, err := h.GetLineItem(ctxWithTenant(uuid.New()), &budgetv1.GetLineItemRequest{Id: uuid.New().String()})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
@@ -401,7 +401,7 @@ func TestHandler_GetLineItem_Denied(t *testing.T) {
 			t.Fatal("gate must fire before the repository is read")
 			return nil, nil
 		},
-	})).WithPermissionChecker(denyPerm{})
+	}), denyPerm{})
 
 	_, err := h.GetLineItem(ctxWithTenant(uuid.New()), &budgetv1.GetLineItemRequest{Id: uuid.New().String()})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -416,7 +416,7 @@ func TestHandler_ListLineItems_Success(t *testing.T) {
 		listLineItemsFn: func(_ context.Context, _, _ uuid.UUID, _, _ int) ([]BudgetLineItem, error) {
 			return []BudgetLineItem{{ID: uuid.New(), CategoryID: "above_the_line"}}, nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.ListLineItems(ctxWithTenant(uuid.New()), &budgetv1.ListLineItemsRequest{BudgetId: budgetID.String()})
 	require.NoError(t, err)
@@ -442,7 +442,7 @@ func TestHandler_ListLineItems_Denied(t *testing.T) {
 			t.Fatal("gate must fire before the repository is read")
 			return nil, nil
 		},
-	})).WithPermissionChecker(denyPerm{})
+	}), denyPerm{})
 
 	_, err := h.ListLineItems(ctxWithTenant(uuid.New()), &budgetv1.ListLineItemsRequest{BudgetId: uuid.New().String()})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -496,7 +496,7 @@ func TestHandler_CheckLineAvailability_Success(t *testing.T) {
 		checkLineAvailabilityFn: func(_ context.Context, _, _ uuid.UUID) (decimal.Decimal, error) {
 			return decimal.NewFromInt(1000000), nil
 		},
-	})).WithPermissionChecker(allowAllPerm{})
+	}), allowAllPerm{})
 
 	resp, err := h.CheckLineAvailability(ctxWithTenant(uuid.New()), &budgetv1.CheckLineAvailabilityRequest{
 		LineItemId: uuid.New().String(),
@@ -524,7 +524,7 @@ func TestHandler_CheckLineAvailability_Denied(t *testing.T) {
 			t.Fatal("gate must fire before the repository is read")
 			return decimal.Decimal{}, nil
 		},
-	})).WithPermissionChecker(denyPerm{})
+	}), denyPerm{})
 
 	_, err := h.CheckLineAvailability(ctxWithTenant(uuid.New()), &budgetv1.CheckLineAvailabilityRequest{
 		LineItemId: uuid.New().String(),
@@ -565,7 +565,7 @@ func TestHandler_GetLineItem_PassesCallerTenantToRepo(t *testing.T) {
 	t.Parallel()
 	callerTenant := uuid.New()
 	repo := &lineItemRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	_, err := h.GetLineItem(ctxWithTenant(callerTenant), &budgetv1.GetLineItemRequest{
 		Id: uuid.New().String(),
@@ -580,7 +580,7 @@ func TestHandler_ListLineItems_PassesCallerTenantToRepo(t *testing.T) {
 	t.Parallel()
 	callerTenant := uuid.New()
 	repo := &lineItemRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	_, err := h.ListLineItems(ctxWithTenant(callerTenant), &budgetv1.ListLineItemsRequest{
 		BudgetId: uuid.New().String(),
@@ -595,7 +595,7 @@ func TestHandler_UpdateLineItemActuals_PassesCallerTenantToRepo(t *testing.T) {
 	t.Parallel()
 	callerTenant := uuid.New()
 	repo := &lineItemRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	_, err := h.UpdateLineItemActuals(ctxWithTenant(callerTenant), &budgetv1.UpdateLineItemActualsRequest{
 		Id:              uuid.New().String(),
@@ -611,7 +611,7 @@ func TestHandler_UpdateLineItemActuals_PassesCallerTenantToRepo(t *testing.T) {
 func TestHandler_UpdateLineItemActuals_NoTenantDoesNotWrite(t *testing.T) {
 	t.Parallel()
 	repo := &lineItemRecordingRepo{}
-	h := NewHandler(NewService(repo)).WithPermissionChecker(allowAllPerm{})
+	h := NewHandler(NewService(repo), allowAllPerm{})
 
 	// callerCtx() carries a caller but NO tenant.
 	_, err := h.UpdateLineItemActuals(callerCtx(), &budgetv1.UpdateLineItemActualsRequest{
@@ -651,7 +651,7 @@ func TestHandler_GetBudgetTemplates(t *testing.T) {
 // the nil-checker guard around RequirePermission and nothing would catch it.
 func TestCreateBudget_NoPermissionChecker_Denies(t *testing.T) {
 	t.Parallel()
-	h := NewHandler(NewService(&mockRepo{})) // deliberately no WithPermissionChecker
+	h := NewHandler(NewService(&mockRepo{}), nil) // deliberately nil: no permission checker wired
 
 	_, err := h.CreateBudget(ctxWithTenant(uuid.New()), &budgetv1.CreateBudgetRequest{
 		ProductionId: uuid.New().String(),
