@@ -56,14 +56,14 @@ func main() {
 		log.Fatalf("inventory-management: startup: dial IAM: %v", err)
 	}
 	defer func() { _ = closeIAM() }()
+	if iamPerm == nil {
+		log.Fatalf("inventory-management: startup: %s is not set; inventory-management cannot authorize without a permission checker", iamclient.EnvAddr)
+	}
 
 	// --- Repository and service ---
 	repo := inventorydb.NewPostgres(pool)
 	svc := inventory.NewService(repo)
-	handler := inventory.NewHandler(svc)
-	if iamPerm != nil {
-		handler = handler.WithPermissionChecker(iamPerm)
-	}
+	handler := inventory.NewHandler(svc, iamPerm)
 
 	// --- gRPC server ---
 	verifier, err := auth.VerifierFromEnv(ctx)
