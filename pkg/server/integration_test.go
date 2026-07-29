@@ -82,6 +82,15 @@ func keyAndVerifier(t *testing.T) (*rsa.PrivateKey, *auth.Verifier) {
 	return key, v
 }
 
+// callCtx returns a short-deadline context for a bufconn RPC so a hung pipe
+// fails the test fast instead of blocking to the test-binary timeout.
+func callCtx(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
 func bearer(t *testing.T, key *rsa.PrivateKey) context.Context {
 	t.Helper()
 	claims := jwt.MapClaims{
@@ -92,14 +101,14 @@ func bearer(t *testing.T, key *rsa.PrivateKey) context.Context {
 	}
 	tok, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(key)
 	require.NoError(t, err)
-	return metadata.NewOutgoingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+tok))
+	return metadata.NewOutgoingContext(callCtx(t), metadata.Pairs("authorization", "Bearer "+tok))
 }
 
 func TestChain_PublicMethodReachableWithoutToken(t *testing.T) {
 	_, v := keyAndVerifier(t)
 	client := startServer(t, v)
 
-	_, err := client.Login(context.Background(), &iamv1.LoginRequest{Email: "a@b.c", Password: "x"})
+	_, err := client.Login(callCtx(t), &iamv1.LoginRequest{Email: "a@b.c", Password: "x"})
 	require.NoError(t, err, "Login is on the allowlist")
 }
 
@@ -107,7 +116,7 @@ func TestChain_PrivateMethodRejectsTokenlessCall(t *testing.T) {
 	_, v := keyAndVerifier(t)
 	client := startServer(t, v)
 
-	_, err := client.ListRoles(context.Background(), &iamv1.ListRolesRequest{})
+	_, err := client.ListRoles(callCtx(t), &iamv1.ListRolesRequest{})
 	require.Error(t, err)
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
@@ -118,7 +127,7 @@ func TestChain_ForgedHeadersAloneAreRejected(t *testing.T) {
 	_, v := keyAndVerifier(t)
 	client := startServer(t, v)
 
-	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs(
+	ctx := metadata.NewOutgoingContext(callCtx(t), metadata.Pairs(
 		"x-caller-id", uuid.New().String(),
 		"x-caller-role", interceptor.RolePlatformAdmin,
 		"x-tenant-id", uuid.New().String(),
@@ -141,7 +150,7 @@ func TestChain_ValidTokenReachesHandlerWithVerifiedIdentity(t *testing.T) {
 func TestChain_CheckPermissionRejectsTokenlessCall(t *testing.T) {
 	_, v := keyAndVerifier(t)
 	client := startServer(t, v)
-	_, err := client.CheckPermission(context.Background(), &iamv1.CheckPermissionRequest{
+	_, err := client.CheckPermission(callCtx(t), &iamv1.CheckPermissionRequest{
 		UserId: uuid.New().String(), Permission: "budget:read",
 	})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err),
