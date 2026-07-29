@@ -344,6 +344,14 @@ func (j *JWTIssuer) Validate(ctx context.Context, accessToken string) (*Claims, 
 		return nil, ErrTokenInvalid
 	}
 
+	var issuedAt, expiresAt time.Time
+	if c.IssuedAt != nil {
+		issuedAt = c.IssuedAt.Time
+	}
+	if c.ExpiresAt != nil {
+		expiresAt = c.ExpiresAt.Time
+	}
+
 	return &Claims{
 		Subject:     userID,
 		TenantID:    tenantID,
@@ -351,8 +359,8 @@ func (j *JWTIssuer) Validate(ctx context.Context, accessToken string) (*Claims, 
 		Roles:       c.Roles,
 		Permissions: c.Permissions,
 		AuthMethod:  c.AuthMethod,
-		IssuedAt:    c.IssuedAt.Time,
-		ExpiresAt:   c.ExpiresAt.Time,
+		IssuedAt:    issuedAt,
+		ExpiresAt:   expiresAt,
 	}, nil
 }
 

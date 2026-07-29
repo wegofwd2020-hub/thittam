@@ -63,8 +63,8 @@ func newTestMetrics(name string) *Metrics {
 			},
 			[]string{"tier", "result"},
 		),
-		DBActiveConns: prometheus.NewGauge(prometheus.GaugeOpts{Name: name + "_db_active"}),
-		DBIdleConns:   prometheus.NewGauge(prometheus.GaugeOpts{Name: name + "_db_idle"}),
+		DBActiveConns:  prometheus.NewGauge(prometheus.GaugeOpts{Name: name + "_db_active"}),
+		DBIdleConns:    prometheus.NewGauge(prometheus.GaugeOpts{Name: name + "_db_idle"}),
 		RedisConnected: prometheus.NewGauge(prometheus.GaugeOpts{Name: name + "_redis"}),
 	}
 }
@@ -167,7 +167,7 @@ func TestCacheMetrics(t *testing.T) {
 func TestNewMetrics_ReturnsPopulatedStruct(t *testing.T) {
 	// Not parallel — promauto registers with the global Prometheus registry.
 	// Use a unique subsystem name to avoid duplicate registration panics.
-	m := NewMetrics("newmetrics_cover_test")
+	m := NewMetrics("newmetrics_cover_test", nil)
 
 	assert.NotNil(t, m.RequestDuration)
 	assert.NotNil(t, m.RequestCounter)

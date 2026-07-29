@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/wegofwd2020/thittam/pkg/observability"
 	"github.com/wegofwd2020/thittam/pkg/vertical"
 	"google.golang.org/grpc"
@@ -25,7 +26,7 @@ import (
 
 // Config holds the server configuration.
 type Config struct {
-	Name        string           // service name (e.g., "project-management")
+	Name        string // service name (e.g., "project-management")
 	Port        int
 	MetricsPort int              // health/metrics HTTP port (default: 9090)
 	Loader      *vertical.Loader // vertical config loader (nil = skip vertical interceptor)
@@ -40,6 +41,12 @@ type Config struct {
 	// Reflection lets any client enumerate every RPC and message; it is a
 	// local-development convenience. Set from GRPC_REFLECTION in dev-start.sh.
 	EnableReflection bool
+
+	// Registry receives this server's Prometheus collectors. Nil means the
+	// global default registry (production default). Inject a fresh
+	// prometheus.NewRegistry() in tests to build the server more than once in
+	// one process without a duplicate-registration panic.
+	Registry prometheus.Registerer
 }
 
 // Server wraps a gRPC server with interceptors and lifecycle management.
@@ -59,8 +66,12 @@ type Logger interface {
 
 type defaultLogger struct{ name string }
 
-func (l defaultLogger) Info(msg string, kv ...interface{})  { log.Printf("[INFO] %s: %s %v", l.name, msg, kv) }
-func (l defaultLogger) Error(msg string, kv ...interface{}) { log.Printf("[ERROR] %s: %s %v", l.name, msg, kv) }
+func (l defaultLogger) Info(msg string, kv ...interface{}) {
+	log.Printf("[INFO] %s: %s %v", l.name, msg, kv)
+}
+func (l defaultLogger) Error(msg string, kv ...interface{}) {
+	log.Printf("[ERROR] %s: %s %v", l.name, msg, kv)
+}
 
 // New creates a gRPC server with the standard interceptor chain.
 // Interceptor order (outermost first): recovery → metrics → vertical → handler.
@@ -76,7 +87,7 @@ func New(cfg Config, logger Logger) *Server {
 	}
 
 	// Create metrics collectors
-	metrics := observability.NewMetrics(sanitizeName(cfg.Name))
+	metrics := observability.NewMetrics(sanitizeName(cfg.Name), cfg.Registry)
 
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		recoveryUnaryInterceptor(logger),

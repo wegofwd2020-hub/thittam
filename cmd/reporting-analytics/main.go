@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	nats "github.com/nats-io/nats.go"
 	"github.com/jackc/pgx/v5/pgxpool"
+	nats "github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 
@@ -250,4 +250,3 @@ func requireenv(key string) string {
 	}
 	return v
 }
-
