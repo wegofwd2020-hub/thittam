@@ -377,19 +377,75 @@ func TestHandler_GetExpense_InvalidID(t *testing.T) {
 
 func TestHandler_GetExpense_Denied(t *testing.T) {
 	t.Parallel()
+	tenantID := uuid.New()
+	// The perm gate now runs AFTER the fetch (owner-first), so the repo must be
+	// reached and return an expense submitted by someone other than the caller
+	// for the deny path to be exercised.
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID}
 	h := NewHandler(NewService(&mockRepo{
-		getExpenseFn: func(_ context.Context, _, _ uuid.UUID) (*Expense, error) {
-			t.Fatal("repository reached: GetExpense must deny before querying")
-			return nil, nil
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, SubmittedBy: uuid.New()}, nil
 		},
 	})).WithPermissionChecker(denyPerm{})
 
-	_, err := h.GetExpense(ctxWithTenant(uuid.New()), &expensev1.GetExpenseRequest{
+	_, err := h.GetExpense(ctxWithCaller(caller), &expensev1.GetExpenseRequest{
 		Id: uuid.New().String(),
 	})
 
 	require.Error(t, err)
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_GetExpense_OwnerReadsOwn(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	expID := uuid.New()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID}
+	h := NewHandler(NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, SubmittedBy: caller.UserID}, nil
+		},
+	})).WithPermissionChecker(denyPerm{}) // no expense:read — ownership alone must authorize
+
+	resp, err := h.GetExpense(ctxWithCaller(caller), &expensev1.GetExpenseRequest{Id: expID.String()})
+	require.NoError(t, err)
+	assert.Equal(t, expID.String(), resp.GetId())
+}
+
+func TestHandler_GetExpense_NonOwnerDenied(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID}
+	h := NewHandler(NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, SubmittedBy: uuid.New()}, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.GetExpense(ctxWithCaller(caller), &expensev1.GetExpenseRequest{Id: uuid.New().String()})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_GetExpense_NonOwnerWithRead(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	expID := uuid.New()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID}
+	h := NewHandler(NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, SubmittedBy: uuid.New()}, nil
+		},
+	})).WithPermissionChecker(allowAllPerm{})
+
+	resp, err := h.GetExpense(ctxWithCaller(caller), &expensev1.GetExpenseRequest{Id: expID.String()})
+	require.NoError(t, err)
+	assert.Equal(t, expID.String(), resp.GetId())
+}
+
+func TestHandler_GetExpense_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().GetExpense(ctxTenantNoCaller(uuid.New()), &expensev1.GetExpenseRequest{Id: uuid.New().String()})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
 // --- ListExpenses ---
@@ -423,10 +479,47 @@ func TestHandler_ListExpenses_Denied(t *testing.T) {
 		},
 	})).WithPermissionChecker(denyPerm{})
 
-	_, err := h.ListExpenses(ctxWithTenant(uuid.New()), &expensev1.ListExpensesRequest{})
+	_, err := h.ListExpenses(ctxWithTenant(uuid.New()), &expensev1.ListExpensesRequest{SubmittedByMe: false})
 
 	require.Error(t, err)
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListExpenses_SubmittedByMe_SelfScope(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: tenantID}
+	repo := &mockRepo{
+		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]Expense, error) {
+			return []Expense{{ID: uuid.New(), TenantID: tenantID}}, nil
+		},
+	}
+	// denyPerm proves self-scope needs no expense:read.
+	h := NewHandler(NewService(repo)).WithPermissionChecker(denyPerm{})
+
+	resp, err := h.ListExpenses(ctxWithCaller(caller), &expensev1.ListExpensesRequest{SubmittedByMe: true})
+	require.NoError(t, err)
+	assert.Len(t, resp.GetExpenses(), 1)
+	assert.Equal(t, caller.UserID, repo.lastListExpensesSubmittedBy)
+}
+
+func TestHandler_ListExpenses_TenantWide_RequiresRead(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		listExpensesFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]Expense, error) {
+			t.Fatal("repository reached: tenant-wide list must deny before querying")
+			return nil, nil
+		},
+	})).WithPermissionChecker(denyPerm{})
+
+	_, err := h.ListExpenses(ctxWithTenant(uuid.New()), &expensev1.ListExpensesRequest{SubmittedByMe: false})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListExpenses_SubmittedByMe_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ListExpenses(ctxTenantNoCaller(uuid.New()), &expensev1.ListExpensesRequest{SubmittedByMe: true})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
 // --- ApproveExpense ---

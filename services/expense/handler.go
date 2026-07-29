@@ -257,14 +257,20 @@ func (h *Handler) SubmitExpense(ctx context.Context, req *expensev1.SubmitExpens
 	return expenseToProto(out), nil
 }
 
+// GetExpense is owner-first: a caller who submitted the expense may read it
+// without expense:read (self-scope IS the authz for their own submissions).
+// A caller who does not own it still needs expense:read. Because ownership
+// can only be known once the record is fetched, the permission gate runs
+// AFTER h.svc.GetExpense, not before — this is intentional.
 func (h *Handler) GetExpense(ctx context.Context, req *expensev1.GetExpenseRequest) (*expensev1.Expense, error) {
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
-		return nil, err
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
 	}
 
 	id, err := uuid.Parse(req.GetId())
@@ -276,17 +282,39 @@ func (h *Handler) GetExpense(ctx context.Context, req *expensev1.GetExpenseReque
 	if err != nil {
 		return nil, grpcErr(err)
 	}
+
+	if e.SubmittedBy != caller.UserID {
+		if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+			return nil, err
+		}
+	}
+
 	return expenseToProto(e), nil
 }
 
+// ListExpenses branches on submitted_by_me: when true, self-scope IS the
+// authz (a caller can only ever ask for their own submissions, so no
+// expense:read is required) and the results are filtered to the verified
+// caller's own submissions via ActorFromRequest. When false/absent, the
+// tenant-wide expense:read gate applies as before.
 func (h *Handler) ListExpenses(ctx context.Context, req *expensev1.ListExpensesRequest) (*expensev1.ListExpensesResponse, error) {
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
-		return nil, err
+	var submittedBy uuid.UUID
+	if req.GetSubmittedByMe() {
+		caller, err := interceptor.ActorFromRequest(ctx, "")
+		if err != nil {
+			return nil, err
+		}
+		submittedBy = caller
+	} else {
+		if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+			return nil, err
+		}
+		submittedBy = uuid.Nil
 	}
 
 	var productionID uuid.UUID
@@ -298,8 +326,7 @@ func (h *Handler) ListExpenses(ctx context.Context, req *expensev1.ListExpensesR
 		}
 	}
 
-	// TODO(#165 task 3): wire req.GetSubmittedByMe() to the caller's own user ID.
-	expenses, err := h.svc.ListExpenses(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0, uuid.Nil)
+	expenses, err := h.svc.ListExpenses(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0, submittedBy)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
