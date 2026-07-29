@@ -49,6 +49,13 @@ func ctxTenantNoCaller(tenantID uuid.UUID) context.Context {
 	return tenant.WithID(ctxWithVertical(), tenantID)
 }
 
+// ctxCallerNoTenant carries vertical config + a caller identity but NO tenant,
+// so a handler passes RequirePermission (allowAllPerm) and reaches the tenant
+// lookup — exercising the tenant-missing branch the _NoTenant tests claim.
+func ctxCallerNoTenant() context.Context {
+	return interceptor.WithCaller(ctxWithVertical(), interceptor.CallerInfo{UserID: uuid.New()})
+}
+
 func newHandler() *Handler {
 	return NewHandler(NewService(&mockRepo{}), allowAllPerm{})
 }
@@ -295,11 +302,13 @@ func TestHandler_SubmitExpense_Success(t *testing.T) {
 
 func TestHandler_SubmitExpense_NoTenant(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().SubmitExpense(ctxWithVertical(), &expensev1.SubmitExpenseRequest{
+	_, err := newHandler().SubmitExpense(ctxCallerNoTenant(), &expensev1.SubmitExpenseRequest{
 		ProductionId: uuid.New().String(),
 		Amount:       "100.00",
 	})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "tenant",
+		"must fail on the tenant-missing branch, not the caller branch")
 }
 
 func TestHandler_SubmitExpense_NoCaller(t *testing.T) {
@@ -660,12 +669,14 @@ func TestHandler_CreatePettyCashAdvance_Success(t *testing.T) {
 
 func TestHandler_CreatePettyCashAdvance_NoTenant(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().CreatePettyCashAdvance(ctxWithVertical(), &expensev1.CreatePettyCashAdvanceRequest{
+	_, err := newHandler().CreatePettyCashAdvance(ctxCallerNoTenant(), &expensev1.CreatePettyCashAdvanceRequest{
 		ProductionId: uuid.New().String(),
 		IssuedTo:     uuid.New().String(),
 		Amount:       "100.00",
 	})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "tenant",
+		"must fail on the tenant-missing branch, not the caller branch")
 }
 
 func TestHandler_CreatePettyCashAdvance_InvalidProductionID(t *testing.T) {
