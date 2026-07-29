@@ -129,11 +129,11 @@ func (s *Service) GetExpense(ctx context.Context, tenantID, id uuid.UUID) (*Expe
 }
 
 // ListExpenses lists expenses for a production.
-func (s *Service) ListExpenses(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int) ([]Expense, error) {
+func (s *Service) ListExpenses(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int, submittedBy uuid.UUID) ([]Expense, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	return s.repo.ListExpenses(ctx, tenantID, productionID, status, limit, offset)
+	return s.repo.ListExpenses(ctx, tenantID, productionID, status, limit, offset, submittedBy)
 }
 
 // CreatePurchaseOrder creates a new purchase order.
