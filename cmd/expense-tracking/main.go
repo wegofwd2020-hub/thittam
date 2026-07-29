@@ -77,14 +77,14 @@ func main() {
 		log.Fatalf("expense-tracking: startup: dial IAM: %v", err)
 	}
 	defer func() { _ = closeIAM() }()
+	if iamPerm == nil {
+		log.Fatalf("expense-tracking: startup: %s is not set; expense-tracking cannot authorize without a permission checker", iamclient.EnvAddr)
+	}
 
 	// --- Repository and service ---
 	repo := expensedb.NewPostgres(pool)
 	svc := expense.NewService(repo, &expensePublisher{pub: pub})
-	handler := expense.NewHandler(svc)
-	if iamPerm != nil {
-		handler = handler.WithPermissionChecker(iamPerm)
-	}
+	handler := expense.NewHandler(svc, iamPerm)
 
 	// --- gRPC server ---
 	verifier, err := auth.VerifierFromEnv(ctx)
