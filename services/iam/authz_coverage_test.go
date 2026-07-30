@@ -25,7 +25,8 @@ var foundingPermissions = map[string]bool{
 	"production:read": true, "production:write": true,
 	"report:read": true, "resource:manage": true,
 	"ledger:read": true, "ledger:write": true, "ledger:post": true, "ledger:admin": true,
-	// If the first run flags user:manage as gated-non-backfilled, add it here (founding).
+	// Note: iam gates user:manage via requireUserManage (direct svc.CheckPermission), not
+	// interceptor.RequirePermission, so it is not in the gated set G and needs no entry here.
 }
 
 func repoRoot(t *testing.T) string {
@@ -120,6 +121,13 @@ func backfilledPermissions(t *testing.T, dir string) map[string]bool {
 	return b
 }
 
+// gatedPermissions returns the set of permission strings gated via
+// interceptor.RequirePermission(ctx, checker, X) calls (X a string literal or a
+// resolvable same-package const) across the given services tree. By design this
+// does NOT capture gates done another way — e.g. iam's requireUserManage, which
+// calls svc.CheckPermission directly instead of going through the interceptor
+// because iam cannot dial itself for a PermissionChecker. Such gates are out of
+// scope for this extractor and this test.
 func gatedPermissions(t *testing.T, servicesDir string) map[string]bool {
 	t.Helper()
 	fset := token.NewFileSet()

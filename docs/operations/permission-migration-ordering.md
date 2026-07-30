@@ -15,10 +15,13 @@ migration-first is harmless (the permission simply exists before anything checks
 
 ## What the automated checks do and do not cover
 
-- `services/iam/authz_coverage_test.go` (rides `go test ./...`) guarantees that for every gated
-  permission a grant EXISTS — it is in `systemRoles`, and every non-founding one has a backfill
-  migration. It does NOT guarantee the migration has RUN in a given environment. Ordering is still the
-  operator's responsibility.
+- `services/iam/authz_coverage_test.go` (rides `go test ./...`) guarantees that for every permission
+  gated via `interceptor.RequirePermission` a grant EXISTS — it is in `systemRoles`, and every
+  non-founding one has a backfill migration. It does NOT guarantee the migration has RUN in a given
+  environment. Ordering is still the operator's responsibility. It also does NOT cover authorization
+  done another way: iam self-gates several RPCs (see `requireUserManage` in `services/iam/handler.go`)
+  by calling `svc.CheckPermission` directly, because iam cannot dial itself for a `PermissionChecker` —
+  those gates, and the `user:manage` permission behind them, are invisible to this test's extractor.
 - CI `Migration Validate (up + down)` runs against a fresh EMPTY database, so a data migration like
   `020_seed_read_permissions` executes against zero rows. It validates SQL syntax and that `down` does
   not error — NOT that the grant reaches any real tenant's roles. Semantic coverage lives in the slice
