@@ -30,14 +30,19 @@ or DB change. A short ops note covers the operational half the test cannot: depl
   `DATABASE_URL` from Secret key `runtime_url` (thittam_app, least-privilege, #122), while migrations
   need the owner `url` key — a DSN mismatch. Option 3 (boot assertion) needs a new IAM "permission
   exists" RPC + a per-service permission manifest that does not exist. All deferred as non-goals.
-- **Gates:** `interceptor.RequirePermission(ctx, checker, "perm")` (`pkg/interceptor/permission.go:62`)
-  is called with a string literal per RPC, scattered across `services/*/handler.go`. The full current
-  set of gated permissions (20), by whole-tree scan of `services/`:
-  `billing:manage, billing:read, budget:approve, budget:read, budget:write, document:delete,
-  document:read, document:write, expense:approve, expense:read, expense:submit, inventory:checkout,
-  inventory:read, inventory:write, notifications:manage, notifications:read, production:read,
-  production:write, report:read, resource:manage`. No `RequireRole(...)` call gates on a permission
-  string (RequireRole takes a role constant), so `RequirePermission` literals are the complete gate set.
+- **Gates:** `interceptor.RequirePermission(ctx, checker, perm)` (`pkg/interceptor/permission.go:62`),
+  one call per gated RPC, scattered across `services/*/handler.go`. The third argument is USUALLY a
+  string literal (`"expense:read"`), but the **ledger service passes package-local string consts**
+  (`services/ledger/handler.go:26-29`: `permLedgerRead="ledger:read"`, `permLedgerWrite="ledger:write"`,
+  `permLedgerPost="ledger:post"`, `permLedgerAdmin="ledger:admin"`) at 12 call sites. So the extraction
+  MUST resolve same-package string consts, not treat them as unverifiable. Full current gated set (24):
+  the 20 literals `billing:manage, billing:read, budget:approve, budget:read, budget:write,
+  document:delete, document:read, document:write, expense:approve, expense:read, expense:submit,
+  inventory:checkout, inventory:read, inventory:write, notifications:manage, notifications:read,
+  production:read, production:write, report:read, resource:manage` PLUS the 4 ledger consts
+  `ledger:read, ledger:write, ledger:post, ledger:admin`. (`iam` may additionally gate `user:manage` via
+  the `permUserManage` const — the test resolves it the same way; finalize the exact set from the first
+  run.) No `RequireRole(...)` call gates on a permission string (RequireRole takes a role constant).
 - **`systemRoles`** (`services/iam/service.go:66`, unexported `var systemRoles []struct{…; Permissions
   []string}`) is the per-tenant role seed applied at `CreateTenant` (`service.go:827` loops it). A
   permission must be here or **new** tenants never receive it.
@@ -47,11 +52,14 @@ or DB change. A short ops note covers the operational half the test cannot: depl
   `billing:manage, billing:read, document:delete, document:read, document:write, expense:read,
   inventory:read, notifications:manage, notifications:read`. `roles.permissions` is a `TEXT[]` column
   (`migrations/iam/007_create_roles.up.sql`); no join table.
-- **Founding permissions = gated − backfilled (11):** `budget:approve, budget:read, budget:write,
+- **Founding permissions = gated − backfilled (15):** `budget:approve, budget:read, budget:write,
   expense:approve, expense:submit, inventory:checkout, inventory:write, production:read,
-  production:write, report:read, resource:manage`. These predate the backfill era — they entered
-  `systemRoles` before the tenants that would need a backfill existed, so they legitimately have no
-  backfill migration.
+  production:write, report:read, resource:manage, ledger:read, ledger:write, ledger:post,
+  ledger:admin` (+ `user:manage` if `iam` gates it via RequirePermission). These predate the backfill
+  era — they entered `systemRoles` before the tenants that would need a backfill existed, so they
+  legitimately have no backfill migration. The implementer finalizes this list empirically from the
+  first test run (every gated-non-backfilled permission is either genuinely founding → allowlist, or a
+  real missing-backfill bug → fix).
 - **`Migration Validate` CI** (`ci.yml:152`) runs `migrate up`/`down -all` against a **fresh empty**
   `postgres:16` with no tenant seeding, so a data migration like `020` runs its `UPDATE roles … WHERE
   is_system` against zero rows — syntax + down-doesn't-error only, never a grant-matrix check.
@@ -66,11 +74,17 @@ seed). It scans sibling packages' source and the migration SQL from disk. Repo r
 
 Sets it computes:
 - **S (seeded):** every permission string in `systemRoles[].Permissions` (direct, in-package).
-- **G (gated):** walk `<root>/services/`, `go/parser`-parse every non-`_test.go` `.go` file, find every
-  call to `interceptor.RequirePermission` (selector `RequirePermission`), take the **third argument**.
-  A `*ast.BasicLit` string → add its value to G. A **non-literal** third argument (identifier, concat)
-  → **fail the test** naming the file/line ("permission arg is not a string literal — the coverage test
-  cannot verify it; use a literal or extend the test"). This keeps the gate set statically knowable.
+- **G (gated):** walk `<root>/services/`, `go/parser`-parse every non-`_test.go` `.go` file, grouped by
+  directory (package). First, per package, collect a `constName → value` map from every
+  `const name = "…"` string declaration in that package's files. Then find every call whose function is
+  the selector `…RequirePermission` and take the **third argument**: a `*ast.BasicLit` STRING → its
+  unquoted value; an `*ast.Ident` that resolves in the same package's const map → that value (this is how
+  the 12 ledger gates on `permLedger*` and any `permUserManage` gate are captured). An argument that is
+  neither a string literal nor a resolvable same-package string const (a cross-package selector, a
+  concatenation, a computed value) → **fail the test** naming file/line: *"RequirePermission permission
+  arg is neither a string literal nor a resolvable same-package const — the coverage test cannot verify
+  it; use a literal/const or extend the resolver."* This keeps the gate set statically knowable while
+  supporting the existing const-based gates.
 - **B (backfilled):** read every `<root>/migrations/iam/*.up.sql`, regex
   `array_append\(permissions,\s*'([^']+)'\)` → capture group into B.
 - **F (founding):** a hardcoded, documented allowlist var = the 11 founding permissions above, with a
@@ -107,8 +121,9 @@ syntax-only (empty DB), not semantic grant coverage. Link the test and `migratio
 
 ## Testing
 
-- The coverage test IS the test — it must pass against the current tree on first run. Expect: G = the 20
-  listed, S ⊇ G, B = the 9 listed, F = the 11 listed, so `G⊆S`, `(G\F)⊆B`, `B⊆S`, `F⊆G` all hold.
+- The coverage test IS the test — it must pass against the current tree on first run. Expect: G = the 24
+  listed (incl. the 4 ledger consts; + `user:manage` if iam gates it), S ⊇ G, B = the 9 listed, F = the
+  15 founding, so `G⊆S`, `(G\F)⊆B`, `B⊆S`, `F⊆G` all hold.
   **If the first run fails, that is a real finding**, not a test bug: either a gate is missing from
   `systemRoles`/backfill (fix the seed/migration), or the founding allowlist is wrong (reclassify).
   Resolve by correcting the code under test or the allowlist — never by loosening an assertion to hide a
