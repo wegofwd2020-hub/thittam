@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-07-29T05:27:21+00:00",
+  "generated": "2026-07-30T05:13:53+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -823,14 +823,14 @@
     {
       "id": "#137",
       "name": "billing: outbox guard defeated at batch saturation; DLQ follow-ups",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 4
     },
     {
       "id": "#138",
       "name": "security(iam): services trust unverified x-caller-* headers \u2014 verify JWT in-process, fail closed",
       "status": "done",
-      "commits": 17
+      "commits": 19
     },
     {
       "id": "#139",
@@ -847,8 +847,8 @@
     {
       "id": "#141",
       "name": "chore: follow-ups banked during #138 (fail-closed auth)",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 7
     },
     {
       "id": "#142",
@@ -991,8 +991,8 @@
     {
       "id": "#165",
       "name": "fix(expense): members cannot read back their own submitted expenses",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 6
     },
     {
       "id": "#166",
@@ -1003,8 +1003,8 @@
     {
       "id": "#167",
       "name": "chore: project/budget/expense/inventory start without a permission checker; dial.go log line is false",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 6
     },
     {
       "id": "#168",
@@ -1261,7 +1261,7 @@
     {
       "id": "#210",
       "name": "chore: sweep all services' grpcErr/grpcError for sentinels defaulting to codes.Internal",
-      "status": "pending",
+      "status": "done",
       "commits": 0
     },
     {
@@ -1275,6 +1275,36 @@
       "name": "Vulnerabilities detected in dependencies (2026-07-28)",
       "status": "pending",
       "commits": 0
+    },
+    {
+      "id": "#213",
+      "name": "feat(expense): self-scoped reads so submitters can read their own expenses (#165)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#214",
+      "name": "fix(infra): bump grpc/x-net/x-crypto/klauspost for GO-2026 CVEs",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#215",
+      "name": "fix: require IAM permission checker at startup for project/budget/expense/inventory (#167)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#216",
+      "name": "fix(billing): dead-letter poison on broker health, not in-batch publish; delete unfirable alerts (#137)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#217",
+      "name": "chore: discharge six banked #138 follow-ups (#141)",
+      "status": "done",
+      "commits": 1
     }
   ]
 }
