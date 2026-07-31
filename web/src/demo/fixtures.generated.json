@@ -1,16 +1,16 @@
 {
   "_meta": {
-    "capturedAt": "2026-07-31T23:23:55Z",
+    "capturedAt": "2026-07-31T23:28:20Z",
     "tenant": "xyz-cba",
     "demoEmail": "rajesh.kumar@xyzcba.com"
   },
   "responses": {
     "POST /api/v1/auth/login": {
-      "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMTAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJleHAiOjE3ODU1NDExMzIsImlhdCI6MTc4NTU0MDIzMiwidGlkIjoiZDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAxIiwiZW1haWwiOiJyYWplc2gua3VtYXJAeHl6Y2JhLmNvbSIsInJvbGVzIjpbInN1cGVyX2FkbWluIl0sInBlcm1zIjpbInByb2R1Y3Rpb246cmVhZCIsImJ1ZGdldDp3cml0ZSIsImJ1ZGdldDphcHByb3ZlIiwiZXhwZW5zZTpzdWJtaXQiLCJleHBlbnNlOmFwcHJvdmUiLCJyZXBvcnQ6cmVhZCIsInVzZXI6bWFuYWdlIiwicHJvZHVjdGlvbjp3cml0ZSIsImJ1ZGdldDpyZWFkIiwiaW52ZW50b3J5OmNoZWNrb3V0Il0sImF1dGhfbWV0aG9kIjoibG9jYWwifQ.Zm_bHbfyKgeFY5nAyRDbgFlpKf677BZA1NiIoouqH32FDY_NAOiLwWZMQC45q6k1A-qBVEvtanqphslca7xhr2HoRYVYpIxS8-LkFAnYkFr0z3z-FAx6eE9AWg1jnoqORRvL6J89wOgyGJNtvhU0a9zeCOWNKaWl4UM8FxKTM3u8Xz03LnMUHCvlFq134aOVOftTKLK6VeuNBhD3Am8izaKD4YJ0B47L7-Y6q2JS-aBEIbeYb_72fNSVWoeisGEMemEbsnthU12umWFv1rpQy5Nic_4EyPlGHLfOShq-Dfn13XLOAALVUGms4Ln8stNoMMOVEM-qyvkYvWJYTKDmaw",
-      "refresh_token": "db5b403fcfb7ef3e5ca925d6b733a349a6d3f9b5626d348eae5415d4558182a9",
+      "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMTAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJleHAiOjE3ODU1NDEzOTYsImlhdCI6MTc4NTU0MDQ5NiwidGlkIjoiZDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAxIiwiZW1haWwiOiJyYWplc2gua3VtYXJAeHl6Y2JhLmNvbSIsInJvbGVzIjpbInN1cGVyX2FkbWluIl0sInBlcm1zIjpbInVzZXI6bWFuYWdlIiwicHJvZHVjdGlvbjpyZWFkIiwiYnVkZ2V0OnJlYWQiLCJidWRnZXQ6d3JpdGUiLCJidWRnZXQ6YXBwcm92ZSIsInJlcG9ydDpyZWFkIiwicHJvZHVjdGlvbjp3cml0ZSIsImV4cGVuc2U6c3VibWl0IiwiZXhwZW5zZTphcHByb3ZlIiwiaW52ZW50b3J5OmNoZWNrb3V0Il0sImF1dGhfbWV0aG9kIjoibG9jYWwifQ.Bk1Bke_A_BuG8saruilSkl15g-t1dSBwOBt5EHr07FPcja-ObQ9p9AKdIq1jnHUiAVSWcs-JCgXexgA-wyQ5rtTxVmwBBSuO6xt1b5XxUq6hA7PDyyUjV0RoiDSGKEDN05qeu5MEozwDf0bqZpgBPj-n7eZsPzHXrVrs8cUiAdHiAk9_ueJlGg8XHwvzv9hvFK_d7hRpx1m5QY360PSjC890sUmEHmtLqfg6URArgK2tqSEeUutLylToX9BHtFxIxs4yZxCHNvlIsGqshGaD_YH-UpAqzFPvDezB_YJNk_9votT3A56WgBy5p8qgPw6I9HUc2lcjvxLBKrbiGcpjDQ",
+      "refresh_token": "2b6799e1226f3c344cdb89af6129ef7b26d88eb3f9f79b7280a8e54fa5329704",
       "token_type": "Bearer",
       "expires_in": 900,
-      "expires_at": "2026-07-31T23:38:52.174249924Z"
+      "expires_at": "2026-07-31T23:43:16.427048257Z"
     },
     "GET /api/v1/config/entity-labels": {
       "project": "Production",
@@ -716,7 +716,162 @@
       "updated_at": "2026-04-14T15:02:49.043287Z"
     },
     "GET /api/v1/budgets/d3000000-0000-0000-0000-000000000002/line-items": {
-      "line_items": []
+      "line_items": [
+        {
+          "id": "d4000000-0000-0000-0000-000000000401",
+          "budget_id": "d3000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "above_the_line",
+          "description": "Director",
+          "account_code": "5100",
+          "budgeted_amount": "12000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:28:10.357931Z",
+          "updated_at": "2026-07-31T23:28:10.357931Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000402",
+          "budget_id": "d3000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "above_the_line",
+          "description": "Lead Cast — ensemble",
+          "account_code": "5100",
+          "budgeted_amount": "28000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:28:10.357931Z",
+          "updated_at": "2026-07-31T23:28:10.357931Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000403",
+          "budget_id": "d3000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "above_the_line",
+          "description": "Screenwriter",
+          "account_code": "5100",
+          "budgeted_amount": "2500000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:28:10.357931Z",
+          "updated_at": "2026-07-31T23:28:10.357931Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000404",
+          "budget_id": "d3000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Principal Photography Unit",
+          "account_code": "5200",
+          "budgeted_amount": "22000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:28:10.357931Z",
+          "updated_at": "2026-07-31T23:28:10.357931Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000405",
+          "budget_id": "d3000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Camera & Lighting Equipment",
+          "account_code": "5200",
+          "budgeted_amount": "6500000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:28:10.357931Z",
+          "updated_at": "2026-07-31T23:28:10.357931Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000406",
+          "budget_id": "d3000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Locations & Permits",
+          "account_code": "5200",
+          "budgeted_amount": "4000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:28:10.357931Z",
+          "updated_at": "2026-07-31T23:28:10.357931Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000407",
+          "budget_id": "d3000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Art Department & Sets",
+          "account_code": "5200",
+          "budgeted_amount": "8000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:28:10.357931Z",
+          "updated_at": "2026-07-31T23:28:10.357931Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000408",
+          "budget_id": "d3000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "post_production",
+          "description": "VFX — 340 shots",
+          "account_code": "5300",
+          "budgeted_amount": "24000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:28:10.357931Z",
+          "updated_at": "2026-07-31T23:28:10.357931Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000409",
+          "budget_id": "d3000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "post_production",
+          "description": "Editorial & Conform",
+          "account_code": "5300",
+          "budgeted_amount": "4500000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:28:10.357931Z",
+          "updated_at": "2026-07-31T23:28:10.357931Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000410",
+          "budget_id": "d3000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "post_production",
+          "description": "Sound Design & Final Mix",
+          "account_code": "5300",
+          "budgeted_amount": "5000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:28:10.357931Z",
+          "updated_at": "2026-07-31T23:28:10.357931Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000411",
+          "budget_id": "d3000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "post_production",
+          "description": "Music & Score",
+          "account_code": "5300",
+          "budgeted_amount": "3500000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:28:10.357931Z",
+          "updated_at": "2026-07-31T23:28:10.357931Z"
+        }
+      ]
     },
     "GET /api/v1/budgets/d3000000-0000-0000-0000-000000000003": {
       "id": "d3000000-0000-0000-0000-000000000003",
@@ -735,7 +890,106 @@
       "updated_at": "2026-04-14T15:02:49.054429Z"
     },
     "GET /api/v1/budgets/d3000000-0000-0000-0000-000000000003/line-items": {
-      "line_items": []
+      "line_items": [
+        {
+          "id": "d4000000-0000-0000-0000-000000000301",
+          "budget_id": "d3000000-0000-0000-0000-000000000003",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "above_the_line",
+          "description": "Director — allowance, unattached",
+          "account_code": "5100",
+          "budgeted_amount": "5000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:27:13.861036Z",
+          "updated_at": "2026-07-31T23:27:13.861036Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000302",
+          "budget_id": "d3000000-0000-0000-0000-000000000003",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "above_the_line",
+          "description": "Story & Screenplay",
+          "account_code": "5100",
+          "budgeted_amount": "3500000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:27:13.861036Z",
+          "updated_at": "2026-07-31T23:27:13.861036Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000303",
+          "budget_id": "d3000000-0000-0000-0000-000000000003",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Animation Production — outsourced",
+          "account_code": "5200",
+          "budgeted_amount": "18000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:27:13.861036Z",
+          "updated_at": "2026-07-31T23:27:13.861036Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000304",
+          "budget_id": "d3000000-0000-0000-0000-000000000003",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Character & Environment Design",
+          "account_code": "5200",
+          "budgeted_amount": "4000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:27:13.861036Z",
+          "updated_at": "2026-07-31T23:27:13.861036Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000305",
+          "budget_id": "d3000000-0000-0000-0000-000000000003",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Voice Cast",
+          "account_code": "5200",
+          "budgeted_amount": "3000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:27:13.861036Z",
+          "updated_at": "2026-07-31T23:27:13.861036Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000306",
+          "budget_id": "d3000000-0000-0000-0000-000000000003",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "post_production",
+          "description": "Editorial & Compositing",
+          "account_code": "5300",
+          "budgeted_amount": "3500000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:27:13.861036Z",
+          "updated_at": "2026-07-31T23:27:13.861036Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000307",
+          "budget_id": "d3000000-0000-0000-0000-000000000003",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "post_production",
+          "description": "Sound & Music",
+          "account_code": "5300",
+          "budgeted_amount": "3000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-07-31T23:27:13.861036Z",
+          "updated_at": "2026-07-31T23:27:13.861036Z"
+        }
+      ]
     }
   }
 }
