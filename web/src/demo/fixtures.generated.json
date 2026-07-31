@@ -1,8 +1,741 @@
 {
   "_meta": {
-    "capturedAt": "1970-01-01T00:00:00Z",
+    "capturedAt": "2026-07-31T23:23:55Z",
     "tenant": "xyz-cba",
     "demoEmail": "rajesh.kumar@xyzcba.com"
   },
-  "responses": {}
+  "responses": {
+    "POST /api/v1/auth/login": {
+      "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMTAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJleHAiOjE3ODU1NDExMzIsImlhdCI6MTc4NTU0MDIzMiwidGlkIjoiZDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAxIiwiZW1haWwiOiJyYWplc2gua3VtYXJAeHl6Y2JhLmNvbSIsInJvbGVzIjpbInN1cGVyX2FkbWluIl0sInBlcm1zIjpbInByb2R1Y3Rpb246cmVhZCIsImJ1ZGdldDp3cml0ZSIsImJ1ZGdldDphcHByb3ZlIiwiZXhwZW5zZTpzdWJtaXQiLCJleHBlbnNlOmFwcHJvdmUiLCJyZXBvcnQ6cmVhZCIsInVzZXI6bWFuYWdlIiwicHJvZHVjdGlvbjp3cml0ZSIsImJ1ZGdldDpyZWFkIiwiaW52ZW50b3J5OmNoZWNrb3V0Il0sImF1dGhfbWV0aG9kIjoibG9jYWwifQ.Zm_bHbfyKgeFY5nAyRDbgFlpKf677BZA1NiIoouqH32FDY_NAOiLwWZMQC45q6k1A-qBVEvtanqphslca7xhr2HoRYVYpIxS8-LkFAnYkFr0z3z-FAx6eE9AWg1jnoqORRvL6J89wOgyGJNtvhU0a9zeCOWNKaWl4UM8FxKTM3u8Xz03LnMUHCvlFq134aOVOftTKLK6VeuNBhD3Am8izaKD4YJ0B47L7-Y6q2JS-aBEIbeYb_72fNSVWoeisGEMemEbsnthU12umWFv1rpQy5Nic_4EyPlGHLfOShq-Dfn13XLOAALVUGms4Ln8stNoMMOVEM-qyvkYvWJYTKDmaw",
+      "refresh_token": "db5b403fcfb7ef3e5ca925d6b733a349a6d3f9b5626d348eae5415d4558182a9",
+      "token_type": "Bearer",
+      "expires_in": 900,
+      "expires_at": "2026-07-31T23:38:52.174249924Z"
+    },
+    "GET /api/v1/config/entity-labels": {
+      "project": "Production",
+      "project_plural": "Productions",
+      "phase": "Phase",
+      "phase_plural": "Phases",
+      "team_member": "Crew Member",
+      "team_member_plural": "Crew Members",
+      "rate_label": "Day Rate",
+      "rate_unit": "day"
+    },
+    "GET /api/v1/config/phase-types": {
+      "phase_types": [
+        {
+          "id": "development",
+          "label": "Development",
+          "order": 1,
+          "is_billable": false,
+          "allowed_transitions": [
+            "pre_production"
+          ]
+        },
+        {
+          "id": "pre_production",
+          "label": "Pre-Production",
+          "order": 2,
+          "is_billable": false,
+          "allowed_transitions": [
+            "production"
+          ]
+        },
+        {
+          "id": "production",
+          "label": "Production",
+          "order": 3,
+          "is_billable": true,
+          "allowed_transitions": [
+            "post_production"
+          ]
+        },
+        {
+          "id": "post_production",
+          "label": "Post-Production",
+          "order": 4,
+          "is_billable": true,
+          "allowed_transitions": [
+            "released"
+          ]
+        },
+        {
+          "id": "released",
+          "label": "Released",
+          "order": 5,
+          "is_billable": false,
+          "allowed_transitions": []
+        }
+      ]
+    },
+    "GET /api/v1/productions": {
+      "productions": [
+        {
+          "id": "d2000000-0000-0000-0000-000000000003",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "title": "Project Starfall",
+          "slug": "project-starfall",
+          "description": "An animated feature film targeting family audiences. A young girl discovers she can communicate with stars. India's first large-scale animated theatrical release by XYZ_CBA.",
+          "genre": "",
+          "language": "en",
+          "status": "development",
+          "start_date": "",
+          "end_date": "",
+          "created_by": "d1000000-0000-0000-0000-000000000001",
+          "created_at": "2026-01-10T10:00:00Z",
+          "updated_at": "2026-04-14T15:02:48.917189Z"
+        },
+        {
+          "id": "d2000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "title": "The Last Horizon",
+          "slug": "the-last-horizon",
+          "description": "A sci-fi thriller set in 2087 where a research team discovers a signal from beyond the observable universe. Filming across Mumbai, Goa, and Ladakh.",
+          "genre": "",
+          "language": "en",
+          "status": "production",
+          "start_date": "",
+          "end_date": "",
+          "created_by": "d1000000-0000-0000-0000-000000000002",
+          "created_at": "2025-09-15T10:00:00Z",
+          "updated_at": "2026-04-14T15:02:48.917189Z"
+        },
+        {
+          "id": "d2000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "title": "Midnight Express Reboot",
+          "slug": "midnight-express-reboot",
+          "description": "A modern reimagining of the classic action drama. Set in contemporary Mumbai underworld. Featuring an ensemble cast.",
+          "genre": "",
+          "language": "en",
+          "status": "post_production",
+          "start_date": "",
+          "end_date": "",
+          "created_by": "d1000000-0000-0000-0000-000000000002",
+          "created_at": "2025-03-01T10:00:00Z",
+          "updated_at": "2026-04-14T15:02:48.917189Z"
+        }
+      ]
+    },
+    "GET /api/v1/productions/d2000000-0000-0000-0000-000000000003": {
+      "id": "d2000000-0000-0000-0000-000000000003",
+      "tenant_id": "d0000000-0000-0000-0000-000000000001",
+      "title": "Project Starfall",
+      "slug": "project-starfall",
+      "description": "An animated feature film targeting family audiences. A young girl discovers she can communicate with stars. India's first large-scale animated theatrical release by XYZ_CBA.",
+      "genre": "",
+      "language": "en",
+      "status": "development",
+      "start_date": "",
+      "end_date": "",
+      "created_by": "d1000000-0000-0000-0000-000000000001",
+      "created_at": "2026-01-10T10:00:00Z",
+      "updated_at": "2026-04-14T15:02:48.917189Z"
+    },
+    "GET /api/v1/productions/d2000000-0000-0000-0000-000000000003/phases": {
+      "phases": [
+        {
+          "id": "d8000000-0000-0000-0000-000000000301",
+          "production_id": "d2000000-0000-0000-0000-000000000003",
+          "phase_type": "development",
+          "status": "active",
+          "start_date": "2026-01-10",
+          "end_date": "2026-10-30"
+        },
+        {
+          "id": "d8000000-0000-0000-0000-000000000302",
+          "production_id": "d2000000-0000-0000-0000-000000000003",
+          "phase_type": "pre_production",
+          "status": "pending",
+          "start_date": "",
+          "end_date": ""
+        },
+        {
+          "id": "d8000000-0000-0000-0000-000000000303",
+          "production_id": "d2000000-0000-0000-0000-000000000003",
+          "phase_type": "production",
+          "status": "pending",
+          "start_date": "",
+          "end_date": ""
+        },
+        {
+          "id": "d8000000-0000-0000-0000-000000000304",
+          "production_id": "d2000000-0000-0000-0000-000000000003",
+          "phase_type": "post_production",
+          "status": "pending",
+          "start_date": "",
+          "end_date": ""
+        },
+        {
+          "id": "d8000000-0000-0000-0000-000000000305",
+          "production_id": "d2000000-0000-0000-0000-000000000003",
+          "phase_type": "released",
+          "status": "pending",
+          "start_date": "",
+          "end_date": ""
+        }
+      ]
+    },
+    "GET /api/v1/productions/d2000000-0000-0000-0000-000000000003/crew": {
+      "members": [
+        {
+          "id": "d9000000-0000-0000-0000-000000000302",
+          "production_id": "d2000000-0000-0000-0000-000000000003",
+          "user_id": "d1000000-0000-0000-0000-000000000008",
+          "name": "Ananya Das",
+          "role": "Development Executive",
+          "department": "Development",
+          "day_rate": "10000.00",
+          "currency": "INR"
+        },
+        {
+          "id": "d9000000-0000-0000-0000-000000000303",
+          "production_id": "d2000000-0000-0000-0000-000000000003",
+          "user_id": "d1000000-0000-0000-0000-000000000006",
+          "name": "Deepa Menon",
+          "role": "Storyboard Coordinator",
+          "department": "Art",
+          "day_rate": "8000.00",
+          "currency": "INR"
+        },
+        {
+          "id": "d9000000-0000-0000-0000-000000000301",
+          "production_id": "d2000000-0000-0000-0000-000000000003",
+          "user_id": "d1000000-0000-0000-0000-000000000001",
+          "name": "Rajesh Kumar",
+          "role": "Executive Producer",
+          "department": "Production",
+          "day_rate": "25000.00",
+          "currency": "INR"
+        }
+      ]
+    },
+    "GET /api/v1/productions/d2000000-0000-0000-0000-000000000001": {
+      "id": "d2000000-0000-0000-0000-000000000001",
+      "tenant_id": "d0000000-0000-0000-0000-000000000001",
+      "title": "The Last Horizon",
+      "slug": "the-last-horizon",
+      "description": "A sci-fi thriller set in 2087 where a research team discovers a signal from beyond the observable universe. Filming across Mumbai, Goa, and Ladakh.",
+      "genre": "",
+      "language": "en",
+      "status": "production",
+      "start_date": "",
+      "end_date": "",
+      "created_by": "d1000000-0000-0000-0000-000000000002",
+      "created_at": "2025-09-15T10:00:00Z",
+      "updated_at": "2026-04-14T15:02:48.917189Z"
+    },
+    "GET /api/v1/productions/d2000000-0000-0000-0000-000000000001/phases": {
+      "phases": [
+        {
+          "id": "d8000000-0000-0000-0000-000000000101",
+          "production_id": "d2000000-0000-0000-0000-000000000001",
+          "phase_type": "development",
+          "status": "completed",
+          "start_date": "2025-09-15",
+          "end_date": "2025-12-20"
+        },
+        {
+          "id": "d8000000-0000-0000-0000-000000000102",
+          "production_id": "d2000000-0000-0000-0000-000000000001",
+          "phase_type": "pre_production",
+          "status": "completed",
+          "start_date": "2026-01-05",
+          "end_date": "2026-06-25"
+        },
+        {
+          "id": "d8000000-0000-0000-0000-000000000103",
+          "production_id": "d2000000-0000-0000-0000-000000000001",
+          "phase_type": "production",
+          "status": "active",
+          "start_date": "2026-06-30",
+          "end_date": "2026-08-23"
+        },
+        {
+          "id": "d8000000-0000-0000-0000-000000000104",
+          "production_id": "d2000000-0000-0000-0000-000000000001",
+          "phase_type": "post_production",
+          "status": "pending",
+          "start_date": "2026-08-24",
+          "end_date": "2026-11-30"
+        },
+        {
+          "id": "d8000000-0000-0000-0000-000000000105",
+          "production_id": "d2000000-0000-0000-0000-000000000001",
+          "phase_type": "released",
+          "status": "pending",
+          "start_date": "",
+          "end_date": ""
+        }
+      ]
+    },
+    "GET /api/v1/productions/d2000000-0000-0000-0000-000000000001/crew": {
+      "members": [
+        {
+          "id": "d9000000-0000-0000-0000-000000000102",
+          "production_id": "d2000000-0000-0000-0000-000000000001",
+          "user_id": "d1000000-0000-0000-0000-000000000003",
+          "name": "Arun Nair",
+          "role": "Line Producer",
+          "department": "Production",
+          "day_rate": "18000.00",
+          "currency": "INR"
+        },
+        {
+          "id": "d9000000-0000-0000-0000-000000000104",
+          "production_id": "d2000000-0000-0000-0000-000000000001",
+          "user_id": "",
+          "name": "Kabir Raut",
+          "role": "Director",
+          "department": "Direction",
+          "day_rate": "75000.00",
+          "currency": "INR"
+        },
+        {
+          "id": "d9000000-0000-0000-0000-000000000103",
+          "production_id": "d2000000-0000-0000-0000-000000000001",
+          "user_id": "d1000000-0000-0000-0000-000000000004",
+          "name": "Meena Iyer",
+          "role": "Production Manager",
+          "department": "Production",
+          "day_rate": "12000.00",
+          "currency": "INR"
+        },
+        {
+          "id": "d9000000-0000-0000-0000-000000000105",
+          "production_id": "d2000000-0000-0000-0000-000000000001",
+          "user_id": "",
+          "name": "Nandita Rao",
+          "role": "Director of Photography",
+          "department": "Camera",
+          "day_rate": "60000.00",
+          "currency": "INR"
+        },
+        {
+          "id": "d9000000-0000-0000-0000-000000000101",
+          "production_id": "d2000000-0000-0000-0000-000000000001",
+          "user_id": "d1000000-0000-0000-0000-000000000002",
+          "name": "Priya Sharma",
+          "role": "Executive Producer",
+          "department": "Production",
+          "day_rate": "25000.00",
+          "currency": "INR"
+        },
+        {
+          "id": "d9000000-0000-0000-0000-000000000106",
+          "production_id": "d2000000-0000-0000-0000-000000000001",
+          "user_id": "",
+          "name": "Suresh Pillai",
+          "role": "Gaffer",
+          "department": "Lighting",
+          "day_rate": "9000.00",
+          "currency": "INR"
+        }
+      ]
+    },
+    "GET /api/v1/productions/d2000000-0000-0000-0000-000000000002": {
+      "id": "d2000000-0000-0000-0000-000000000002",
+      "tenant_id": "d0000000-0000-0000-0000-000000000001",
+      "title": "Midnight Express Reboot",
+      "slug": "midnight-express-reboot",
+      "description": "A modern reimagining of the classic action drama. Set in contemporary Mumbai underworld. Featuring an ensemble cast.",
+      "genre": "",
+      "language": "en",
+      "status": "post_production",
+      "start_date": "",
+      "end_date": "",
+      "created_by": "d1000000-0000-0000-0000-000000000002",
+      "created_at": "2025-03-01T10:00:00Z",
+      "updated_at": "2026-04-14T15:02:48.917189Z"
+    },
+    "GET /api/v1/productions/d2000000-0000-0000-0000-000000000002/phases": {
+      "phases": [
+        {
+          "id": "d8000000-0000-0000-0000-000000000201",
+          "production_id": "d2000000-0000-0000-0000-000000000002",
+          "phase_type": "development",
+          "status": "completed",
+          "start_date": "2025-03-01",
+          "end_date": "2025-05-30"
+        },
+        {
+          "id": "d8000000-0000-0000-0000-000000000202",
+          "production_id": "d2000000-0000-0000-0000-000000000002",
+          "phase_type": "pre_production",
+          "status": "completed",
+          "start_date": "2025-06-02",
+          "end_date": "2025-08-29"
+        },
+        {
+          "id": "d8000000-0000-0000-0000-000000000203",
+          "production_id": "d2000000-0000-0000-0000-000000000002",
+          "phase_type": "production",
+          "status": "completed",
+          "start_date": "2025-09-08",
+          "end_date": "2026-01-16"
+        },
+        {
+          "id": "d8000000-0000-0000-0000-000000000204",
+          "production_id": "d2000000-0000-0000-0000-000000000002",
+          "phase_type": "post_production",
+          "status": "active",
+          "start_date": "2026-01-19",
+          "end_date": "2026-09-30"
+        },
+        {
+          "id": "d8000000-0000-0000-0000-000000000205",
+          "production_id": "d2000000-0000-0000-0000-000000000002",
+          "phase_type": "released",
+          "status": "pending",
+          "start_date": "",
+          "end_date": ""
+        }
+      ]
+    },
+    "GET /api/v1/productions/d2000000-0000-0000-0000-000000000002/crew": {
+      "members": [
+        {
+          "id": "d9000000-0000-0000-0000-000000000203",
+          "production_id": "d2000000-0000-0000-0000-000000000002",
+          "user_id": "",
+          "name": "Farah Qureshi",
+          "role": "Editor",
+          "department": "Post-Production",
+          "day_rate": "40000.00",
+          "currency": "INR"
+        },
+        {
+          "id": "d9000000-0000-0000-0000-000000000202",
+          "production_id": "d2000000-0000-0000-0000-000000000002",
+          "user_id": "d1000000-0000-0000-0000-000000000007",
+          "name": "Karthik Rajan",
+          "role": "VFX Producer",
+          "department": "VFX",
+          "day_rate": "20000.00",
+          "currency": "INR"
+        },
+        {
+          "id": "d9000000-0000-0000-0000-000000000204",
+          "production_id": "d2000000-0000-0000-0000-000000000002",
+          "user_id": "",
+          "name": "Rohan Bhatt",
+          "role": "Sound Designer",
+          "department": "Sound",
+          "day_rate": "35000.00",
+          "currency": "INR"
+        },
+        {
+          "id": "d9000000-0000-0000-0000-000000000201",
+          "production_id": "d2000000-0000-0000-0000-000000000002",
+          "user_id": "d1000000-0000-0000-0000-000000000005",
+          "name": "Vikram Reddy",
+          "role": "Post Supervisor",
+          "department": "Post-Production",
+          "day_rate": "15000.00",
+          "currency": "INR"
+        }
+      ]
+    },
+    "GET /api/v1/budgets?production_id=d2000000-0000-0000-0000-000000000003": {
+      "budgets": [
+        {
+          "id": "d3000000-0000-0000-0000-000000000003",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "production_id": "d2000000-0000-0000-0000-000000000003",
+          "label": "V1 — Initial Estimate",
+          "status": "draft",
+          "currency": "INR",
+          "total_amount": "40000000.00",
+          "submitted_by": "",
+          "approved_by": "",
+          "submitted_at": null,
+          "approved_at": null,
+          "created_by": "d1000000-0000-0000-0000-000000000001",
+          "created_at": "2026-04-14T15:02:49.054429Z",
+          "updated_at": "2026-04-14T15:02:49.054429Z"
+        }
+      ]
+    },
+    "GET /api/v1/budgets?production_id=d2000000-0000-0000-0000-000000000001": {
+      "budgets": [
+        {
+          "id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "production_id": "d2000000-0000-0000-0000-000000000001",
+          "label": "V1 — Original Budget",
+          "status": "approved",
+          "currency": "INR",
+          "total_amount": "85000000.00",
+          "submitted_by": "",
+          "approved_by": "d1000000-0000-0000-0000-000000000002",
+          "submitted_at": null,
+          "approved_at": "2025-10-01T14:00:00Z",
+          "created_by": "d1000000-0000-0000-0000-000000000003",
+          "created_at": "2026-04-14T15:02:48.992217Z",
+          "updated_at": "2026-04-14T15:02:48.992217Z"
+        }
+      ]
+    },
+    "GET /api/v1/budgets?production_id=d2000000-0000-0000-0000-000000000002": {
+      "budgets": [
+        {
+          "id": "d3000000-0000-0000-0000-000000000002",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "production_id": "d2000000-0000-0000-0000-000000000002",
+          "label": "V2 — Post VFX Overrun Revision",
+          "status": "draft",
+          "currency": "INR",
+          "total_amount": "120000000.00",
+          "submitted_by": "",
+          "approved_by": "",
+          "submitted_at": null,
+          "approved_at": null,
+          "created_by": "d1000000-0000-0000-0000-000000000003",
+          "created_at": "2026-04-14T15:02:49.043287Z",
+          "updated_at": "2026-04-14T15:02:49.043287Z"
+        }
+      ]
+    },
+    "GET /api/v1/budgets/d3000000-0000-0000-0000-000000000001": {
+      "id": "d3000000-0000-0000-0000-000000000001",
+      "tenant_id": "d0000000-0000-0000-0000-000000000001",
+      "production_id": "d2000000-0000-0000-0000-000000000001",
+      "label": "V1 — Original Budget",
+      "status": "approved",
+      "currency": "INR",
+      "total_amount": "85000000.00",
+      "submitted_by": "",
+      "approved_by": "d1000000-0000-0000-0000-000000000002",
+      "submitted_at": null,
+      "approved_at": "2025-10-01T14:00:00Z",
+      "created_by": "d1000000-0000-0000-0000-000000000003",
+      "created_at": "2026-04-14T15:02:48.992217Z",
+      "updated_at": "2026-04-14T15:02:48.992217Z"
+    },
+    "GET /api/v1/budgets/d3000000-0000-0000-0000-000000000001/line-items": {
+      "line_items": [
+        {
+          "id": "d4000000-0000-0000-0000-000000000001",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "above_the_line",
+          "description": "Director — Sanjay Verma",
+          "account_code": "5100",
+          "budgeted_amount": "15000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.010034Z",
+          "updated_at": "2026-04-14T15:02:49.010034Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000002",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "above_the_line",
+          "description": "Lead Actor — Aarav Kapoor",
+          "account_code": "5100",
+          "budgeted_amount": "20000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.010034Z",
+          "updated_at": "2026-04-14T15:02:49.010034Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000003",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "above_the_line",
+          "description": "Lead Actress — Nisha Reddy",
+          "account_code": "5100",
+          "budgeted_amount": "12000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.010034Z",
+          "updated_at": "2026-04-14T15:02:49.010034Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000004",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "above_the_line",
+          "description": "Screenwriter",
+          "account_code": "5100",
+          "budgeted_amount": "3000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.010034Z",
+          "updated_at": "2026-04-14T15:02:49.010034Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000005",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Cinematographer — Deepa Menon",
+          "account_code": "5200",
+          "budgeted_amount": "5000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.021095Z",
+          "updated_at": "2026-04-14T15:02:49.021095Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000006",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Art Director — Karthik Rajan",
+          "account_code": "5200",
+          "budgeted_amount": "3500000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.021095Z",
+          "updated_at": "2026-04-14T15:02:49.021095Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000007",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Camera & Lighting Equipment",
+          "account_code": "5200",
+          "budgeted_amount": "4500000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.021095Z",
+          "updated_at": "2026-04-14T15:02:49.021095Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000008",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Location Rentals (Mumbai, Goa, Ladakh)",
+          "account_code": "5200",
+          "budgeted_amount": "6000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.021095Z",
+          "updated_at": "2026-04-14T15:02:49.021095Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000009",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Crew (55 shoot days × 40 crew)",
+          "account_code": "5200",
+          "budgeted_amount": "8000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.021095Z",
+          "updated_at": "2026-04-14T15:02:49.021095Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000010",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "below_the_line",
+          "description": "Transport & Logistics",
+          "account_code": "5200",
+          "budgeted_amount": "2000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.021095Z",
+          "updated_at": "2026-04-14T15:02:49.021095Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000011",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "post_production",
+          "description": "VFX (120 shots)",
+          "account_code": "5300",
+          "budgeted_amount": "4000000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.032182Z",
+          "updated_at": "2026-04-14T15:02:49.032182Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000012",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "post_production",
+          "description": "Sound Design — Ananya Das",
+          "account_code": "5300",
+          "budgeted_amount": "1500000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.032182Z",
+          "updated_at": "2026-04-14T15:02:49.032182Z"
+        },
+        {
+          "id": "d4000000-0000-0000-0000-000000000013",
+          "budget_id": "d3000000-0000-0000-0000-000000000001",
+          "tenant_id": "d0000000-0000-0000-0000-000000000001",
+          "category_id": "post_production",
+          "description": "Music & Score",
+          "account_code": "5300",
+          "budgeted_amount": "500000.00",
+          "actual_amount": "0.00",
+          "committed_amount": "0.00",
+          "is_locked": false,
+          "created_at": "2026-04-14T15:02:49.032182Z",
+          "updated_at": "2026-04-14T15:02:49.032182Z"
+        }
+      ]
+    },
+    "GET /api/v1/budgets/d3000000-0000-0000-0000-000000000002": {
+      "id": "d3000000-0000-0000-0000-000000000002",
+      "tenant_id": "d0000000-0000-0000-0000-000000000001",
+      "production_id": "d2000000-0000-0000-0000-000000000002",
+      "label": "V2 — Post VFX Overrun Revision",
+      "status": "draft",
+      "currency": "INR",
+      "total_amount": "120000000.00",
+      "submitted_by": "",
+      "approved_by": "",
+      "submitted_at": null,
+      "approved_at": null,
+      "created_by": "d1000000-0000-0000-0000-000000000003",
+      "created_at": "2026-04-14T15:02:49.043287Z",
+      "updated_at": "2026-04-14T15:02:49.043287Z"
+    },
+    "GET /api/v1/budgets/d3000000-0000-0000-0000-000000000002/line-items": {
+      "line_items": []
+    },
+    "GET /api/v1/budgets/d3000000-0000-0000-0000-000000000003": {
+      "id": "d3000000-0000-0000-0000-000000000003",
+      "tenant_id": "d0000000-0000-0000-0000-000000000001",
+      "production_id": "d2000000-0000-0000-0000-000000000003",
+      "label": "V1 — Initial Estimate",
+      "status": "draft",
+      "currency": "INR",
+      "total_amount": "40000000.00",
+      "submitted_by": "",
+      "approved_by": "",
+      "submitted_at": null,
+      "approved_at": null,
+      "created_by": "d1000000-0000-0000-0000-000000000001",
+      "created_at": "2026-04-14T15:02:49.054429Z",
+      "updated_at": "2026-04-14T15:02:49.054429Z"
+    },
+    "GET /api/v1/budgets/d3000000-0000-0000-0000-000000000003/line-items": {
+      "line_items": []
+    }
+  }
 }
