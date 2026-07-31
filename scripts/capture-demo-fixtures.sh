@@ -63,7 +63,22 @@ TOKEN=$(jq -r '.value.access_token' < <(tail -1 "$work/pairs.jsonl"))
 echo "==> config"
 record "GET /api/v1/config/entity-labels" "$PROJECT" "/api/v1/config/entity-labels"
 record "GET /api/v1/config/phase-types"   "$PROJECT" "/api/v1/config/phase-types"
-record "GET /api/v1/config/budget-categories" "$BUDGET" "/api/v1/config/budget-categories"
+
+# /api/v1/config/budget-categories is deliberately NOT captured. The budget
+# service implements GetBudgetCategories, but the RPC carries no
+# google.api.http annotation (proto/thittam/budget/v1/budget.proto:40), so it
+# never reaches grpc-gateway — the route returns 404 against a live stack, and
+# this script aborts the whole run on any non-2xx. The same is true of
+# budget-templates.
+#
+# Nothing in the demo slice needs it: web/src/lib/api/budgets.ts exports
+# getBudgetCategories() and use-budgets.ts:232 wraps it as useBudgetCategories(),
+# but no page in the five-page slice calls that hook. The real app absorbs the
+# failure silently, which is why reading the client code made the endpoint look
+# in scope.
+#
+# Do not re-add this line without first adding the http annotation and
+# regenerating the gateway.
 
 echo "==> productions"
 record "GET /api/v1/productions" "$PROJECT" "/api/v1/productions"
