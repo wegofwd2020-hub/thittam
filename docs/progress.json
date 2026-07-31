@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-07-30T05:13:53+00:00",
+  "generated": "2026-07-31T05:41:11+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -739,8 +739,8 @@
     {
       "id": "#123",
       "name": "ops(db): provision thittam_app password + repoint prod Secret",
-      "status": "pending",
-      "commits": 0
+      "status": "in-progress",
+      "commits": 4
     },
     {
       "id": "#124",
@@ -997,8 +997,8 @@
     {
       "id": "#166",
       "name": "infra: nothing enforces migration-before-deploy ordering for permission migrations",
-      "status": "pending",
-      "commits": 0
+      "status": "done",
+      "commits": 6
     },
     {
       "id": "#167",
@@ -1273,7 +1273,7 @@
     {
       "id": "#212",
       "name": "Vulnerabilities detected in dependencies (2026-07-28)",
-      "status": "pending",
+      "status": "done",
       "commits": 0
     },
     {
@@ -1305,6 +1305,24 @@
       "name": "chore: discharge six banked #138 follow-ups (#141)",
       "status": "done",
       "commits": 1
+    },
+    {
+      "id": "#218",
+      "name": "chore(db): repo-side support for thittam_app prod cutover (#123)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#219",
+      "name": "test(iam): permission-gate coverage test + deploy-ordering note (#166)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#220",
+      "name": "security(expense): self-scoped reads for purchase-orders + petty-cash (mirror #165)",
+      "status": "pending",
+      "commits": 0
     }
   ]
 }
