@@ -49,7 +49,7 @@ record() {
     exit 1
   fi
 
-  jq -c --arg k "$key" '{key: $k, value: .}' "$out" >> "$work/pairs.jsonl"
+  jq -c --arg k "$key" '{key: $k, value: .}' < "$out" >> "$work/pairs.jsonl"
   echo "  ok  $key"
 }
 
@@ -83,7 +83,7 @@ record "GET /api/v1/config/phase-types"   "$PROJECT" "/api/v1/config/phase-types
 echo "==> productions"
 record "GET /api/v1/productions" "$PROJECT" "/api/v1/productions"
 prod_ids=$(jq -r 'select(.key == "GET /api/v1/productions")
-  | .value.productions[]?.id' "$work/pairs.jsonl")
+  | .value.productions[]?.id' < "$work/pairs.jsonl")
 [[ -n "$prod_ids" ]] || { echo "FATAL: productions list is empty — is the seed loaded?"; exit 1; }
 
 for id in $prod_ids; do
@@ -100,7 +100,7 @@ for pid in $prod_ids; do
   record "GET /api/v1/budgets?production_id=$pid" "$BUDGET" "/api/v1/budgets?production_id=$pid"
 done
 budget_ids=$(jq -r 'select(.key | startswith("GET /api/v1/budgets?production_id="))
-  | .value.budgets[]?.id' "$work/pairs.jsonl" | sort -u)
+  | .value.budgets[]?.id' < "$work/pairs.jsonl" | sort -u)
 [[ -n "$budget_ids" ]] || { echo "FATAL: no budgets across any production — is the seed loaded?"; exit 1; }
 
 for id in $budget_ids; do
@@ -118,12 +118,12 @@ jq -s --arg email "$EMAIL" '
     },
     responses: (map({(.key): .value}) | add)
   }
-' "$work/pairs.jsonl" > "$OUT"
+' < "$work/pairs.jsonl" > "$OUT"
 
 echo
-echo "Captured $(jq '.responses | length' "$OUT") responses."
+echo "Captured $(jq '.responses | length' < "$OUT") responses."
 echo "REVIEW BEFORE COMMITTING — an endpoint can return 200 with an empty list."
 jq -r '.responses | to_entries[]
   | "\(.key)\t\(.value | if type == "object" then
       (to_entries | map(select(.value | type == "array"))
-        | map("\(.key)=\(.value | length)") | join(",")) else "" end)"' "$OUT"
+        | map("\(.key)=\(.value | length)") | join(",")) else "" end)"' < "$OUT"
