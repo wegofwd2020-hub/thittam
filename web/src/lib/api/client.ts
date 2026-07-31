@@ -1,4 +1,5 @@
 import { env } from "@/env";
+import { demoRespond } from "@/demo/transport";
 import type { ApiErrorBody } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -108,6 +109,13 @@ class ApiClient {
     path: string,
     body?: unknown,
   ): Promise<T> {
+    // Demo builds never touch the network. This must come before any URL is
+    // resolved: env.ts falls back to window.location.hostname, which would
+    // otherwise produce requests to mambakkam.net:9086 that hang.
+    if (env.demoMode) {
+      return demoRespond<T>(method, path);
+    }
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Accept: "application/json",

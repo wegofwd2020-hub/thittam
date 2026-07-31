@@ -1,4 +1,5 @@
 import { env } from "@/env";
+import { demoRespond } from "@/demo/transport";
 import type { TokenPair } from "./types";
 import { ApiError } from "./client";
 import type { ApiErrorBody } from "./types";
@@ -7,6 +8,13 @@ async function authRequest<T>(
   path: string,
   body: unknown,
 ): Promise<T> {
+  // This module does not go through ApiClient — it has its own fetch — so it
+  // needs the demo branch of its own. Without it, login still hits the network
+  // in a demo build and the whole thing stalls on the first request.
+  if (env.demoMode) {
+    return demoRespond<T>("POST", path);
+  }
+
   const res = await fetch(`${env.platformApiUrl}${path}`, {
     method: "POST",
     headers: {
