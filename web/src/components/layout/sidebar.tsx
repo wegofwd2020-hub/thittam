@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isDemo } from "@/demo/flag";
+import { isRouteInDemo } from "@/demo/nav";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -87,7 +89,9 @@ function useSidebarMenu(): MenuSection[] {
         {
           key: "projects",
           label: entityLabels.projectPlural,
-          href: "/projects",
+          // /projects has no route directory and no rewrite — this link 404'd.
+          // The route has always been /productions.
+          href: "/productions",
           iconName: sidebarIcons.productions ?? "FolderKanban",
           fallbackIcon: FolderKanban,
         },
@@ -243,7 +247,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Menu */}
       <nav className="flex-1 overflow-y-auto px-2 py-3">
         {menu.map((section) => {
-          const visibleItems = section.items.filter(canSee);
+          // A demo build only exports three routes; linking to the rest would
+          // be offering 404s. The existing empty-section check below then
+          // collapses whole groups with no further work.
+          const visibleItems = section.items
+            .filter(canSee)
+            .filter((item) => !isDemo() || isRouteInDemo(item.href));
           if (visibleItems.length === 0) return null;
 
           return (
