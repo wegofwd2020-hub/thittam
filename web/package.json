@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "build:demo": "NEXT_PUBLIC_DEMO=1 NEXT_PUBLIC_IAM_URL=http://demo.invalid NEXT_PUBLIC_PROJECT_URL=http://demo.invalid NEXT_PUBLIC_BUDGET_URL=http://demo.invalid NEXT_PUBLIC_PLATFORM_API_URL=http://demo.invalid next build"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

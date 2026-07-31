@@ -60,6 +60,11 @@ record "POST /api/v1/auth/login" "$IAM" "/api/v1/auth/login" "$login_body"
 TOKEN=$(jq -r '.value.access_token' < <(tail -1 "$work/pairs.jsonl"))
 [[ "$TOKEN" != "null" && -n "$TOKEN" ]] || { echo "FATAL: no access_token"; exit 1; }
 
+# The auth context calls this on mount, on every page including /login. Without
+# it the demo renders its "not part of the demo" notice on the login screen,
+# before the visitor has done anything.
+record "GET /api/v1/auth/me" "$IAM" "/api/v1/auth/me"
+
 echo "==> config"
 record "GET /api/v1/config/entity-labels" "$PROJECT" "/api/v1/config/entity-labels"
 record "GET /api/v1/config/phase-types"   "$PROJECT" "/api/v1/config/phase-types"
