@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-08-14T04:12:47+00:00",
+  "generated": "2026-08-15T02:56:24+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -1327,6 +1327,12 @@
     {
       "id": "#221",
       "name": "\ud83d\udea8 Potential secret detected in git history (2026-08-01)",
+      "status": "pending",
+      "commits": 0
+    },
+    {
+      "id": "#222",
+      "name": "Vulnerabilities detected in dependencies (2026-08-14)",
       "status": "pending",
       "commits": 0
     }
