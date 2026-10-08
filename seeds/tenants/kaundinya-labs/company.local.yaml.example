@@ -1,0 +1,9 @@
+# Copy to company.local.yaml (git-ignored) and fill in. Deep-merged on top of
+# company.yaml, so only the private fields belong here.
+address:
+  line1: REPLACE_ME          # street address registered with LARA
+  line2: null
+  city: REPLACE_ME
+  postal_code: "REPLACE_ME"  # keep quotes so a ZIP like 01234 stays a string
+admin:
+  email: REPLACE_ME          # login email for the Owner account
