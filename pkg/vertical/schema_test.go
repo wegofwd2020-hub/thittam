@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -196,7 +197,7 @@ func TestValidate_InvalidTaxTreatment_InlineYAML(t *testing.T) {
 	t.Parallel()
 
 	yaml := minimalValidYAML(t, func(y *minimalVertical) {
-		y.TaxTreatment = "exempt" // not in {input_gst, tds_applicable, none}
+		y.TaxTreatment = "exempt" // not in validTaxTreatments
 	})
 
 	errs, err := Validate([]byte(yaml))
@@ -216,7 +217,11 @@ func TestValidate_InvalidTaxTreatment_InlineYAML(t *testing.T) {
 func TestValidate_ValidTaxTreatments_AllAccepted(t *testing.T) {
 	t.Parallel()
 
-	for _, treatment := range []string{"input_gst", "tds_applicable", "none"} {
+	for _, treatment := range []string{
+		"input_gst", "tds_applicable",
+		"us_1099_nec", "us_sales_tax_paid", "us_use_tax", "us_meals_50pct",
+		"none",
+	} {
 		treatment := treatment
 		t.Run(treatment, func(t *testing.T) {
 			t.Parallel()
@@ -234,6 +239,88 @@ func TestValidate_ValidTaxTreatments_AllAccepted(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestValidate_InvalidTaxTreatment_MessageListsUSValues guards the error
+// message so operators authoring a US vertical see the US options.
+func TestValidate_InvalidTaxTreatment_MessageListsUSValues(t *testing.T) {
+	t.Parallel()
+
+	yaml := minimalValidYAML(t, func(y *minimalVertical) {
+		y.TaxTreatment = "vat_standard"
+	})
+
+	errs, err := Validate([]byte(yaml))
+	require.NoError(t, err)
+
+	var msg string
+	for _, e := range errs {
+		if strings.Contains(e.Field, "tax_treatment") {
+			msg = e.Message
+		}
+	}
+	require.NotEmpty(t, msg, "expected tax_treatment validation error")
+	for _, want := range []string{"us_1099_nec", "us_sales_tax_paid", "us_use_tax", "us_meals_50pct", "input_gst", "none"} {
+		assert.Contains(t, msg, want)
+	}
+}
+
+func TestIsValidTaxTreatment(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]bool{
+		"input_gst":         true,
+		"tds_applicable":    true,
+		"us_1099_nec":       true,
+		"us_sales_tax_paid": true,
+		"us_use_tax":        true,
+		"us_meals_50pct":    true,
+		"none":              true,
+		"":                  false,
+		"US_1099_NEC":       false, // case-sensitive
+		"exempt":            false,
+	}
+	for in, want := range cases {
+		assert.Equal(t, want, IsValidTaxTreatment(in), "IsValidTaxTreatment(%q)", in)
+	}
+}
+
+// TestSchemaJSON_TaxTreatmentEnumMatchesValidator keeps schema.json (used by
+// editors via yaml-language-server) in lockstep with the Go validator.
+func TestSchemaJSON_TaxTreatmentEnumMatchesValidator(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile("schema.json")
+	require.NoError(t, err)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+
+	var found []string
+	var walk func(v any)
+	walk = func(v any) {
+		switch n := v.(type) {
+		case map[string]any:
+			if tt, ok := n["tax_treatment"].(map[string]any); ok {
+				if enum, ok := tt["enum"].([]any); ok {
+					for _, e := range enum {
+						found = append(found, e.(string))
+					}
+				}
+			}
+			for _, c := range n {
+				walk(c)
+			}
+		case []any:
+			for _, c := range n {
+				walk(c)
+			}
+		}
+	}
+	walk(doc)
+
+	require.NotEmpty(t, found, "tax_treatment enum not found in schema.json")
+	sort.Strings(found)
+	assert.Equal(t, ValidTaxTreatmentList(), strings.Join(found, ", "))
 }
 
 // ── 4. Duplicate phase labels ────────────────────────────────────────────────

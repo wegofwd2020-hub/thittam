@@ -165,8 +165,8 @@
               "label": { "type": "string", "minLength": 1 },
               "tax_treatment": {
                 "type": "string",
-                "enum": ["input_gst", "tds_applicable", "none"],
-                "description": "GST/TDS treatment for expenses in this category."
+                "enum": ["input_gst", "tds_applicable", "us_1099_nec", "us_sales_tax_paid", "us_use_tax", "us_meals_50pct", "none"],
+                "description": "Tax treatment for expenses in this category: India GST/TDS, US 1099/sales/use/meals, or none."
               },
               "default_account_code": {
                 "type": "string",

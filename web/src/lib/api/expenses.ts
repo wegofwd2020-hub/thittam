@@ -57,7 +57,7 @@ export interface PettyCashAdvance {
 export interface ExpenseCategory {
   id: string;
   label: string;
-  tax_treatment: string; // input_gst | tds_applicable | none
+  tax_treatment: string; // see validTaxTreatments in pkg/vertical/validator.go
   default_account_code: string;
   requires_po: boolean;
 }

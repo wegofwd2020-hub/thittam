@@ -2,6 +2,8 @@ package vertical
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -227,7 +229,7 @@ func Validate(yamlData []byte) ([]ValidationError, error) {
 		if cat.TaxTreatment != "" && !validTaxTreatments[cat.TaxTreatment] {
 			errs = append(errs, ValidationError{
 				fmt.Sprintf("vertical.expense_categories[%d].tax_treatment", i),
-				fmt.Sprintf("invalid value %q: must be one of input_gst, tds_applicable, none", cat.TaxTreatment),
+				fmt.Sprintf("invalid value %q: must be one of %s", cat.TaxTreatment, ValidTaxTreatmentList()),
 			})
 		}
 	}
@@ -302,10 +304,49 @@ var validRateUnits = map[string]bool{
 }
 
 // validTaxTreatments is the closed set of allowed tax_treatment values.
+//
+// India (GST/TDS):
+//   - input_gst          — input GST is claimable on the expense
+//   - tds_applicable     — tax deducted at source on payment
+//
+// United States (federal + state sales/use tax):
+//   - us_1099_nec        — payment to a non-employee contractor; reportable
+//     on Form 1099-NEC once the calendar-year threshold is met
+//   - us_sales_tax_paid  — state sales tax was charged by the vendor and is
+//     capitalised into the expense (no input credit in the US)
+//   - us_use_tax         — vendor did not charge sales tax; buyer must
+//     self-assess and remit state use tax
+//   - us_meals_50pct     — business meals; only 50% deductible federally
+//
+// Jurisdiction-neutral:
+//   - none               — no special tax handling
+//
+// Keep in sync with the tax_treatment enum in schema.json and the
+// TaxTreatmentBadge component in web/.
 var validTaxTreatments = map[string]bool{
-	"input_gst":      true,
-	"tds_applicable": true,
-	"none":           true,
+	"input_gst":         true,
+	"tds_applicable":    true,
+	"us_1099_nec":       true,
+	"us_sales_tax_paid": true,
+	"us_use_tax":        true,
+	"us_meals_50pct":    true,
+	"none":              true,
+}
+
+// ValidTaxTreatmentList returns the allowed tax_treatment values as a
+// sorted, comma-separated string for use in validation messages.
+func ValidTaxTreatmentList() string {
+	vals := make([]string, 0, len(validTaxTreatments))
+	for v := range validTaxTreatments {
+		vals = append(vals, v)
+	}
+	sort.Strings(vals)
+	return strings.Join(vals, ", ")
+}
+
+// IsValidTaxTreatment reports whether v is an allowed tax_treatment value.
+func IsValidTaxTreatment(v string) bool {
+	return validTaxTreatments[v]
 }
 
 func validateEntityLabels(el EntityLabelsYAML) []ValidationError {

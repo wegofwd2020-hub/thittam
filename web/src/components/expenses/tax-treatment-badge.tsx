@@ -5,7 +5,7 @@
 // ---------------------------------------------------------------------------
 
 interface TaxTreatmentBadgeProps {
-  treatment: string; // input_gst | tds_applicable | none
+  treatment: string; // see validTaxTreatments in pkg/vertical/validator.go
 }
 
 const TREATMENTS: Record<
@@ -21,6 +21,26 @@ const TREATMENTS: Record<
     label: "TDS",
     bg: "rgb(254 243 199)", // amber-100
     text: "rgb(146 64 14)", // amber-800
+  },
+  us_1099_nec: {
+    label: "1099-NEC",
+    bg: "rgb(237 233 254)", // violet-100
+    text: "rgb(91 33 182)", // violet-800
+  },
+  us_sales_tax_paid: {
+    label: "Sales Tax",
+    bg: "rgb(220 252 231)", // green-100
+    text: "rgb(22 101 52)", // green-800
+  },
+  us_use_tax: {
+    label: "Use Tax",
+    bg: "rgb(255 237 213)", // orange-100
+    text: "rgb(154 52 18)", // orange-800
+  },
+  us_meals_50pct: {
+    label: "Meals 50%",
+    bg: "rgb(252 231 243)", // pink-100
+    text: "rgb(157 23 77)", // pink-800
   },
   none: {
     label: "No Tax",
