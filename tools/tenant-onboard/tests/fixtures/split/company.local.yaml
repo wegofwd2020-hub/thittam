@@ -1,0 +1,7 @@
+# Mock private override (in real use this file is git-ignored).
+address:
+  line1: 7 Private Lane
+  city: Hiddenville
+  postal_code: "48000-1234"
+admin:
+  email: mock.owner@example.test

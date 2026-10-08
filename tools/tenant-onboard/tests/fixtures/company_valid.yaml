@@ -1,0 +1,34 @@
+# Mock company for unit tests — every value is fictitious.
+tenant:
+  id: 0f6b1c2e-1111-4a5b-9c3d-000000000001
+  name: "  O'Brien   Mock Studio LLC  "   # quote + extra spaces exercise escaping/collapse
+  slug: obrien-mock-studio
+  plan: starter
+  vertical: test-studio
+  primary_currency: USD
+
+address:
+  line1: 100 Example Ave
+  line2: Suite 2
+  city: Testville
+  postal_code: "49999"
+  country: US
+
+admin:
+  id: 0f6b1c2e-2222-4a5b-9c3d-000000000002
+  email: Owner@Example.COM
+  display_name: Pat O'Brien
+
+books:
+  opening_date: 2026-10-20
+  fiscal_year_end_month: 12
+
+products:
+  - slug: widget-app
+    title: Widget App
+    description: Mock product in build.
+    stage: build
+    start_date: 2026-10-20
+  - slug: gadget-api
+    title: Gadget API
+    stage: discovery
