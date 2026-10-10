@@ -73,7 +73,7 @@ adaptation, and the runbook for adding new tenants — is documented in
 
 ### Prerequisites
 
-- Go 1.22+ (CI pins `1.25.9`)
+- Go 1.22+ (CI pins `1.26.9`)
 - Node.js 20+ (for the `web/` frontend)
 - PostgreSQL 16 on `localhost:5433`, or Docker (`make infra-up-full`)
 - Docker + docker-compose (for Redis, NATS, MinIO)
