@@ -76,7 +76,7 @@ type TemplateLineItem struct {
 type ExpenseCategory struct {
 	ID                 string `json:"id"`
 	Label              string `json:"label"`
-	TaxTreatment       string `json:"tax_treatment"` // "input_gst" | "tds_applicable" | "none"
+	TaxTreatment       string `json:"tax_treatment"` // see validTaxTreatments in validator.go
 	DefaultAccountCode string `json:"default_account_code"`
 	RequiresPO         bool   `json:"requires_po"`
 }
