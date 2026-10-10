@@ -39,4 +39,6 @@ SELECT
   FROM roles r
  WHERE r.tenant_id = '<TENANT_UUID>'
    AND r.name      = 'super_admin'
-ON CONFLICT (user_id, role_id) DO NOTHING;
+-- Conflict target must match the user_roles_unique expression index
+-- (iam migration 012); a bare (user_id, role_id) target errors at runtime.
+ON CONFLICT (user_id, role_id, COALESCE(project_id, '00000000-0000-0000-0000-000000000000'::uuid)) DO NOTHING;
