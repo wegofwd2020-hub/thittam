@@ -1,0 +1,19 @@
+[project]
+name = "tenant-onboard"
+version = "0.1.0"
+description = "Generate Thittam tenant seed SQL and vertical migrations"
+requires-python = ">=3.10"
+dependencies = ["PyYAML>=6.0"]
+
+[project.optional-dependencies]
+hash = ["bcrypt>=4.0"]
+test = ["pytest>=8", "pytest-cov>=5", "bcrypt>=4.0"]
+
+[tool.setuptools]
+packages = ["tenant_onboard"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: needs a disposable PostgreSQL via THITTAM_TEST_DSN (skipped otherwise)",
+]

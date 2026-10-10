@@ -1,0 +1,61 @@
+# Kaundinya Labs LLC — Thittam tenant definition (real tenant, not a demo).
+#
+# Management books for the studio; the CPA files the return. Single-member
+# Michigan LLC, default tax classification (disregarded entity → Schedule C).
+#
+# This repository is public. Private details (street address, login email)
+# are REPLACE_ME here and supplied by company.local.yaml in this directory,
+# which is git-ignored. Copy company.local.yaml.example to start.
+#
+# Generate + load:   see seeds/tenants/README.md
+#   make tenant-validate TENANT=kaundinya-labs
+#   ADMIN_PASSWORD_HASH='<bcrypt>' make seed-tenant TENANT=kaundinya-labs
+
+tenant:
+  id: 960b876f-a3f4-4e73-9cb7-33a77870df50
+  name: Kaundinya Labs LLC
+  slug: kaundinya-labs
+  plan: professional
+  vertical: software-development-us
+  primary_currency: USD
+
+address:
+  line1: REPLACE_ME
+  line2: null
+  city: REPLACE_ME
+  postal_code: REPLACE_ME
+  country: US
+
+admin:
+  id: dd5e77aa-ef1c-4aa7-8919-709dd2dd6b21
+  email: REPLACE_ME
+  display_name: Sivakumar Mambakkam
+
+books:
+  # LLC legal effective date (Vijayadashami). Calendar fiscal year.
+  opening_date: 2026-10-20
+  fiscal_year_end_month: 12
+
+# One "product" (productions row) per product line, plus a cost centre for
+# company-wide overhead so shared costs never get smeared across products.
+products:
+  - slug: mentible
+    title: Mentible
+    description: LLM client for adult self-learners (formerly StudyBuddy_SelfLearner).
+    stage: build
+    start_date: 2026-10-20
+  - slug: kathai-chithiram
+    title: Kathai Chithiram
+    description: Parent-story-to-animation for children with autism and developmental needs.
+    stage: build
+    start_date: 2026-10-20
+  - slug: studybuddy-ondemand
+    title: StudyBuddy OnDemand
+    description: Adaptive STEM tutoring SaaS.
+    stage: build
+    start_date: 2026-10-20
+  - slug: company-overhead
+    title: Company Overhead
+    description: Shared costs not attributable to one product — CPA, legal, state fees, email, office.
+    stage: maintenance
+    start_date: 2026-10-20

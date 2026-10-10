@@ -4,6 +4,8 @@
         db-init db-drop db-reset db-bootstrap \
         db-test-bootstrap db-test-reset db-grant-app-role \
         migrate-all migrate-down migrate-tenant migrate-all-tenants seed seed-construction \
+        tenant-validate tenant-generate seed-tenant \
+        vertical-migrations check-vertical-migrations test-tenant-onboard \
         dev-start dev-start-fresh dev-stop \
         run-all run-web \
         test test-race test-cover test-integration test-e2e test-e2e-install \
@@ -54,6 +56,9 @@ help:
 	@echo "    make migrate-tenant id=<uuid>  Migrate a single tenant schema"
 	@echo "    make migrate-all-tenants       Parallel migration runner for all tenants"
 	@echo "    make seed                      Load XYZ_CBA demo seed data"
+	@echo "    make tenant-validate TENANT=<slug>   Check seeds/tenants/<slug>/company.yaml"
+	@echo "    ADMIN_PASSWORD_HASH='<bcrypt>' make seed-tenant TENANT=<slug>"
+	@echo "                                   Generate + load a real tenant (idempotent)"
 	@echo ""
 	@echo "  Run:"
 	@echo "    make dev-start         Start infra + services. Verifies DB head; never mutates DB."
@@ -69,6 +74,8 @@ help:
 	@echo "    make test-cover          Coverage report (opens in browser)"
 	@echo "    make coverage-check      Enforce per-package coverage thresholds (CI parity)"
 	@echo "    make validate-verticals  Validate all vertical YAML configs"
+	@echo "    make check-vertical-migrations  Fail if generated vertical migrations drift from YAML"
+	@echo "    make test-tenant-onboard  pytest for tools/tenant-onboard"
 	@echo "    make lint                golangci-lint"
 	@echo ""
 	@echo "  Local dev keys (gitignored — never committed):"
@@ -209,6 +216,54 @@ seed-construction:
 		psql "$(DB_URL)" -f "$$f" || exit 1; \
 	done
 	@echo "==> Seed complete."
+
+# ── Real tenants (tools/tenant-onboard) ──────────────────────────────────────
+# seeds/tenants/<slug>/company.yaml (+ git-ignored company.local.yaml) is the
+# source of truth; SQL is generated into build/seeds/<slug>/ and never committed.
+# The admin bcrypt hash is read from the ADMIN_PASSWORD_HASH environment
+# variable (prefix the command with it) so the `$` characters in a bcrypt hash
+# are not mangled by make. Generate one with:
+#   PYTHONPATH=tools/tenant-onboard python3 -m tenant_onboard hash-password
+ONBOARD := PYTHONPATH=tools/tenant-onboard python3 -m tenant_onboard
+TENANT_DIR = seeds/tenants/$(TENANT)
+
+tenant-validate:
+	@test -n "$(TENANT)" || (echo "usage: make tenant-validate TENANT=<slug>" && exit 1)
+	$(ONBOARD) validate --config $(TENANT_DIR)/company.yaml
+
+tenant-generate:
+	@test -n "$(TENANT)" || (echo "usage: make tenant-generate TENANT=<slug>" && exit 1)
+	$(ONBOARD) tenant --config $(TENANT_DIR)/company.yaml --out build/seeds/$(TENANT)
+
+seed-tenant: tenant-generate
+	@test -n "$$ADMIN_PASSWORD_HASH" || (echo "ERROR: run as  ADMIN_PASSWORD_HASH='<bcrypt>' make seed-tenant TENANT=$(TENANT)" && exit 1)
+	@echo "==> Loading tenant $(TENANT)..."
+	@for f in build/seeds/$(TENANT)/*.sql; do \
+		echo "  Loading $$f"; \
+		psql "$(DB_URL)" -q -v ON_ERROR_STOP=1 -v admin_password_hash="$$ADMIN_PASSWORD_HASH" -f "$$f" || exit 1; \
+	done
+	@echo "==> Tenant $(TENANT) loaded."
+
+# Generated vertical migrations: vertical YAML -> migrations/shared/NNN_*.sql
+VERTICAL_MIGRATIONS := \
+	software-development-us:007_seed_software_development_us_vertical
+
+vertical-migrations:
+	@for pair in $(VERTICAL_MIGRATIONS); do \
+		v=$${pair%%:*}; m=$${pair#*:}; \
+		$(ONBOARD) vertical-migration --vertical pkg/vertical/configs/$$v.yaml \
+			--up migrations/shared/$$m.up.sql --down migrations/shared/$$m.down.sql || exit 1; \
+	done
+
+check-vertical-migrations:
+	@for pair in $(VERTICAL_MIGRATIONS); do \
+		v=$${pair%%:*}; m=$${pair#*:}; \
+		$(ONBOARD) check-vertical-migration --vertical pkg/vertical/configs/$$v.yaml \
+			--up migrations/shared/$$m.up.sql --down migrations/shared/$$m.down.sql || exit 1; \
+	done
+
+test-tenant-onboard:
+	cd tools/tenant-onboard && python3 -m pytest -q
 
 # ── Dev stack shortcuts ───────────────────────────────────────────────────────
 

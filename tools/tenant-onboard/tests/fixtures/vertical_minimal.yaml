@@ -1,0 +1,55 @@
+# Mock vertical for unit tests. Not a real vertical — only the sections the
+# generator reads, plus one extra key to prove pass-through into config.
+vertical:
+  id: test-studio
+  name: Test Studio
+  version: 0.0.1
+  description: >
+    Mock vertical used by the tenant_onboard test-suite.
+    Folded onto one line in the migration.
+
+  phase_types:
+    - id: discovery
+      label: Discovery
+      order: 1
+      allowed_transitions: [build]
+    - id: build
+      label: Build
+      order: 2
+      allowed_transitions: [launched]
+    - id: launched
+      label: Launched
+      order: 3
+      allowed_transitions: []
+
+  expense_categories:
+    - id: contractor_invoice
+      label: Contractor Invoice
+      tax_treatment: us_1099_nec
+      default_account_code: "6100"
+
+  default_chart_of_accounts:
+    - code: "1000"
+      name: Cash & Bank
+      account_type: asset
+      parent_code: null
+    - code: "1010"
+      name: Checking — "Main"
+      account_type: asset
+      parent_code: "1000"
+    - code: "3000"
+      name: Owner's Capital
+      account_type: equity
+      parent_code: null
+    - code: "4000"
+      name: Revenue
+      account_type: revenue
+      parent_code: null
+    - code: "6000"
+      name: Operating Expenses
+      account_type: expense
+      parent_code: null
+    - code: "6100"
+      name: Contract Labor
+      account_type: expense
+      parent_code: "6000"

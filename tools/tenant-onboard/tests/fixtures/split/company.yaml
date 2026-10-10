@@ -1,0 +1,29 @@
+# Mock "committed" company config: private fields left as REPLACE_ME and
+# supplied by company.local.yaml in the same directory.
+tenant:
+  id: 0f6b1c2e-3333-4a5b-9c3d-000000000003
+  name: Split Mock LLC
+  slug: split-mock
+  plan: professional
+  vertical: test-studio
+  primary_currency: USD
+
+address:
+  line1: REPLACE_ME
+  line2: null
+  city: REPLACE_ME
+  postal_code: REPLACE_ME
+  country: US
+
+admin:
+  id: 0f6b1c2e-4444-4a5b-9c3d-000000000004
+  email: REPLACE_ME
+  display_name: Mock Owner
+
+books:
+  opening_date: 2026-10-20
+
+products:
+  - slug: only-product
+    title: Only Product
+    stage: launched

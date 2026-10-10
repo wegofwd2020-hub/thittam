@@ -53,3 +53,9 @@ generated-docs/
 # python bytecode from the progress generator/tests
 __pycache__/
 *.pyc
+
+# Real-tenant private overrides and generated seed SQL (tools/tenant-onboard)
+seeds/tenants/*/company.local.yaml
+/build/
+__pycache__/
+.pytest_cache/
