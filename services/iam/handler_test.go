@@ -127,7 +127,7 @@ func TestHandler_CreateUser_Success(t *testing.T) {
 	tid := uuid.New()
 	h := newHandlerWithRepo(&mockRepo{getUserPermissionsFn: grantUserManage()})
 	resp, err := h.CreateUser(memberCtx(tid), &iamv1.CreateUserRequest{
-		TenantId:    tid.String(),
+		TenantId:    tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		Email:       "new@example.com",
 		DisplayName: "New User",
 		Password:    "pass123",
@@ -139,7 +139,7 @@ func TestHandler_CreateUser_Success(t *testing.T) {
 func TestHandler_CreateUser_InvalidTenantID(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().CreateUser(memberCtx(uuid.New()), &iamv1.CreateUserRequest{
-		TenantId: "bad",
+		TenantId: "bad", //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		Email:    "user@example.com",
 		Password: "pass",
 	})
@@ -162,7 +162,7 @@ func TestHandler_CreateUser_RequiresUserManage(t *testing.T) {
 	})
 
 	_, err := h.CreateUser(memberCtx(tid), &iamv1.CreateUserRequest{
-		TenantId:    tid.String(),
+		TenantId:    tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		Email:       "new@example.com",
 		DisplayName: "New User",
 		Password:    "correct-horse-battery-staple",
@@ -185,7 +185,7 @@ func TestHandler_GetUser_Success(t *testing.T) {
 	}))
 
 	resp, err := h.GetUser(memberCtx(tenantID), &iamv1.GetUserRequest{
-		TenantId: tenantID.String(),
+		TenantId: tenantID.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		Id:       userID.String(),
 	})
 	require.NoError(t, err)
@@ -194,14 +194,14 @@ func TestHandler_GetUser_Success(t *testing.T) {
 
 func TestHandler_GetUser_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().GetUser(memberCtx(uuid.New()), &iamv1.GetUserRequest{TenantId: "bad", Id: uuid.New().String()})
+	_, err := newHandler().GetUser(memberCtx(uuid.New()), &iamv1.GetUserRequest{TenantId: "bad", Id: uuid.New().String()}) //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestHandler_GetUser_InvalidID(t *testing.T) {
 	t.Parallel()
 	tid := uuid.New()
-	_, err := newHandler().GetUser(memberCtx(tid), &iamv1.GetUserRequest{TenantId: tid.String(), Id: "bad"})
+	_, err := newHandler().GetUser(memberCtx(tid), &iamv1.GetUserRequest{TenantId: tid.String(), Id: "bad"}) //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -216,14 +216,14 @@ func TestHandler_ListUsers_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.ListUsers(memberCtx(tenantID), &iamv1.ListUsersRequest{TenantId: tenantID.String()})
+	resp, err := h.ListUsers(memberCtx(tenantID), &iamv1.ListUsersRequest{TenantId: tenantID.String()}) //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	require.NoError(t, err)
 	assert.Len(t, resp.GetUsers(), 1)
 }
 
 func TestHandler_ListUsers_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListUsers(memberCtx(uuid.New()), &iamv1.ListUsersRequest{TenantId: "bad"})
+	_, err := newHandler().ListUsers(memberCtx(uuid.New()), &iamv1.ListUsersRequest{TenantId: "bad"}) //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -245,10 +245,10 @@ func TestHandler_UpdateUser_Success(t *testing.T) {
 	// The request carries a deactivating status; UpdateUser must IGNORE it — status
 	// transitions go only through the platform_admin-gated Activate/DeactivateUser (#162).
 	resp, err := h.UpdateUser(memberCtx(tenantID), &iamv1.UpdateUserRequest{
-		TenantId:    tenantID.String(),
+		TenantId:    tenantID.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		Id:          userID.String(),
 		DisplayName: "Updated",
-		Status:      "deactivated",
+		Status:      "deactivated", //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	require.NoError(t, err)
 	assert.Equal(t, userID.String(), resp.GetId())
@@ -259,7 +259,7 @@ func TestHandler_UpdateUser_Success(t *testing.T) {
 
 func TestHandler_UpdateUser_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().UpdateUser(memberCtx(uuid.New()), &iamv1.UpdateUserRequest{TenantId: "bad", Id: uuid.New().String()})
+	_, err := newHandler().UpdateUser(memberCtx(uuid.New()), &iamv1.UpdateUserRequest{TenantId: "bad", Id: uuid.New().String()}) //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -267,7 +267,7 @@ func TestHandler_UpdateUser_InvalidID(t *testing.T) {
 	t.Parallel()
 	tid := uuid.New()
 	h := newHandlerWithRepo(&mockRepo{getUserPermissionsFn: grantUserManage()})
-	_, err := h.UpdateUser(memberCtx(tid), &iamv1.UpdateUserRequest{TenantId: tid.String(), Id: "bad"})
+	_, err := h.UpdateUser(memberCtx(tid), &iamv1.UpdateUserRequest{TenantId: tid.String(), Id: "bad"}) //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -285,7 +285,7 @@ func TestHandler_UpdateUser_RequiresUserManage(t *testing.T) {
 	})
 
 	_, err := h.UpdateUser(memberCtx(tid), &iamv1.UpdateUserRequest{
-		TenantId:    tid.String(),
+		TenantId:    tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		Id:          uuid.New().String(),
 		DisplayName: "Renamed",
 	})
@@ -377,7 +377,7 @@ func TestHandler_ChangePassword_Success(t *testing.T) {
 	}))
 
 	resp, err := h.ChangePassword(memberCtxAs(tenantID, userID), &iamv1.ChangePasswordRequest{
-		UserId:      userID.String(),
+		UserId:      userID.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		OldPassword: "old",
 		NewPassword: "newpass",
 	})
@@ -388,7 +388,7 @@ func TestHandler_ChangePassword_Success(t *testing.T) {
 func TestHandler_ChangePassword_InvalidUserID(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().ChangePassword(memberCtx(uuid.New()), &iamv1.ChangePasswordRequest{
-		UserId: "bad", OldPassword: "old", NewPassword: "new",
+		UserId: "bad", OldPassword: "old", NewPassword: "new", //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -417,7 +417,7 @@ func TestHandler_ChangePassword_ForgedSubjectDenied(t *testing.T) {
 	}))
 
 	_, err := h.ChangePassword(memberCtxAs(tenantID, callerID), &iamv1.ChangePasswordRequest{
-		UserId:      victimID.String(),
+		UserId:      victimID.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		OldPassword: "old",
 		NewPassword: "newpass",
 	})
@@ -474,7 +474,7 @@ func TestHandler_ChangePassword_NoCallerUnauthenticated(t *testing.T) {
 	}))
 
 	_, err := h.ChangePassword(context.Background(), &iamv1.ChangePasswordRequest{
-		UserId:      uuid.New().String(),
+		UserId:      uuid.New().String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		OldPassword: "old",
 		NewPassword: "newpass",
 	})
@@ -494,7 +494,7 @@ func TestHandler_AssignRole_MemberDenied(t *testing.T) {
 		},
 	})
 	_, err := h.AssignRole(memberCtx(tid), &iamv1.AssignRoleRequest{
-		TenantId: tid.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(),
+		TenantId: tid.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -505,7 +505,7 @@ func TestHandler_AssignRole_WithUserManage_Succeeds(t *testing.T) {
 	tid := uuid.New()
 	h := newHandlerWithRepo(&mockRepo{getUserPermissionsFn: grantUserManage()})
 	resp, err := h.AssignRole(memberCtx(tid), &iamv1.AssignRoleRequest{
-		TenantId:   tid.String(),
+		TenantId:   tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		UserId:     uuid.New().String(),
 		RoleId:     uuid.New().String(),
 		AssignedBy: uuid.New().String(),
@@ -519,7 +519,7 @@ func TestHandler_AssignRole_NoCaller_Unauthenticated(t *testing.T) {
 	t.Parallel()
 	tid := uuid.New()
 	_, err := newHandler().AssignRole(context.Background(), &iamv1.AssignRoleRequest{
-		TenantId: tid.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(),
+		TenantId: tid.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
@@ -539,7 +539,7 @@ func TestHandler_AssignRole_PermissionLookupFails_Internal(t *testing.T) {
 		},
 	})
 	_, err := h.AssignRole(memberCtx(tid), &iamv1.AssignRoleRequest{
-		TenantId: tid.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(),
+		TenantId: tid.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.Internal, status.Code(err))
@@ -548,7 +548,7 @@ func TestHandler_AssignRole_PermissionLookupFails_Internal(t *testing.T) {
 func TestHandler_AssignRole_InvalidTenantID(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().AssignRole(memberCtx(uuid.New()), &iamv1.AssignRoleRequest{
-		TenantId: "bad", UserId: uuid.New().String(), RoleId: uuid.New().String(), AssignedBy: uuid.New().String(),
+		TenantId: "bad", UserId: uuid.New().String(), RoleId: uuid.New().String(), AssignedBy: uuid.New().String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -557,7 +557,7 @@ func TestHandler_AssignRole_InvalidUserID(t *testing.T) {
 	t.Parallel()
 	tid := uuid.New()
 	_, err := newHandler().AssignRole(memberCtx(tid), &iamv1.AssignRoleRequest{
-		TenantId: tid.String(), UserId: "bad", RoleId: uuid.New().String(), AssignedBy: uuid.New().String(),
+		TenantId: tid.String(), UserId: "bad", RoleId: uuid.New().String(), AssignedBy: uuid.New().String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -624,14 +624,14 @@ func TestHandler_ListRoles_Success(t *testing.T) {
 		},
 	}))
 
-	resp, err := h.ListRoles(memberCtx(tenantID), &iamv1.ListRolesRequest{TenantId: tenantID.String()})
+	resp, err := h.ListRoles(memberCtx(tenantID), &iamv1.ListRolesRequest{TenantId: tenantID.String()}) //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	require.NoError(t, err)
 	assert.Len(t, resp.GetRoles(), 1)
 }
 
 func TestHandler_ListRoles_InvalidTenantID(t *testing.T) {
 	t.Parallel()
-	_, err := newHandler().ListRoles(memberCtx(uuid.New()), &iamv1.ListRolesRequest{TenantId: "bad"})
+	_, err := newHandler().ListRoles(memberCtx(uuid.New()), &iamv1.ListRolesRequest{TenantId: "bad"}) //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -733,7 +733,7 @@ func TestHandler_AssignProjectRole_Success(t *testing.T) {
 
 	tid := uuid.New()
 	resp, err := h.AssignProjectRole(memberCtx(tid), &iamv1.AssignProjectRoleRequest{
-		TenantId:   tid.String(),
+		TenantId:   tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		UserId:     uuid.New().String(),
 		RoleId:     uuid.New().String(),
 		ProjectId:  uuid.New().String(),
@@ -754,7 +754,7 @@ func TestHandler_AssignProjectRole_MemberDenied(t *testing.T) {
 		},
 	})
 	_, err := h.AssignProjectRole(memberCtx(tid), &iamv1.AssignProjectRoleRequest{
-		TenantId: tid.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(), ProjectId: uuid.New().String(),
+		TenantId: tid.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(), ProjectId: uuid.New().String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -774,7 +774,7 @@ func TestHandler_AssignProjectRole_RejectsTenantWideRole(t *testing.T) {
 
 	tid := uuid.New()
 	_, err := h.AssignProjectRole(memberCtx(tid), &iamv1.AssignProjectRoleRequest{
-		TenantId:   tid.String(),
+		TenantId:   tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		UserId:     uuid.New().String(),
 		RoleId:     uuid.New().String(),
 		ProjectId:  uuid.New().String(),
@@ -804,7 +804,7 @@ func TestHandler_AssignProjectRole_InvalidArgs(t *testing.T) {
 			t.Parallel()
 			tid := uuid.New()
 			req := &iamv1.AssignProjectRoleRequest{
-				TenantId:   tid.String(),
+				TenantId:   tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 				UserId:     uuid.New().String(),
 				RoleId:     uuid.New().String(),
 				ProjectId:  uuid.New().String(),
@@ -853,7 +853,7 @@ func TestHandler_SetTenantAddress_Success(t *testing.T) {
 	}))
 
 	resp, err := h.SetTenantAddress(memberCtx(tenantID), &iamv1.SetTenantAddressRequest{
-		TenantId:    tenantID.String(),
+		TenantId:    tenantID.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		CountryCode: "IN",
 		City:        "Chennai",
 	})
@@ -865,7 +865,7 @@ func TestHandler_SetTenantAddress_Success(t *testing.T) {
 func TestHandler_SetTenantAddress_InvalidTenantID(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().SetTenantAddress(memberCtx(uuid.New()), &iamv1.SetTenantAddressRequest{
-		TenantId:    "not-a-uuid",
+		TenantId:    "not-a-uuid", //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		CountryCode: "IN",
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -881,7 +881,7 @@ func TestHandler_SetTenantAddress_MissingCountry(t *testing.T) {
 	h := newHandlerWithRepo(&mockRepo{getUserPermissionsFn: grantUserManage()})
 	tid := uuid.New()
 	_, err := h.SetTenantAddress(memberCtx(tid), &iamv1.SetTenantAddressRequest{
-		TenantId: tid.String(),
+		TenantId: tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	require.Error(t, err)
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -902,7 +902,7 @@ func TestHandler_SetTenantAddress_RequiresUserManage(t *testing.T) {
 	})
 
 	_, err := h.SetTenantAddress(memberCtx(tid), &iamv1.SetTenantAddressRequest{
-		TenantId:     tid.String(),
+		TenantId:     tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		AddressLine1: "1 Main St",
 		City:         "Chennai",
 		CountryCode:  "IN",
@@ -1374,7 +1374,7 @@ func TestHandler_InviteUser_Success(t *testing.T) {
 	tid := uuid.New()
 	h := newHandlerWithRepo(&mockRepo{getUserPermissionsFn: grantUserManage()})
 	resp, err := h.InviteUser(memberCtx(tid), &iamv1.InviteUserRequest{
-		TenantId:  tid.String(),
+		TenantId:  tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		Email:     "invite@example.com",
 		InvitedBy: uuid.New().String(),
 	})
@@ -1393,7 +1393,7 @@ func TestHandler_InviteUser_MemberDenied(t *testing.T) {
 		},
 	})
 	_, err := h.InviteUser(memberCtx(tid), &iamv1.InviteUserRequest{
-		TenantId: tid.String(), Email: "invite@example.com",
+		TenantId: tid.String(), Email: "invite@example.com", //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -1402,7 +1402,7 @@ func TestHandler_InviteUser_MemberDenied(t *testing.T) {
 func TestHandler_InviteUser_InvalidTenantID(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().InviteUser(memberCtx(uuid.New()), &iamv1.InviteUserRequest{
-		TenantId: "bad", Email: "e@e.com", InvitedBy: uuid.New().String(),
+		TenantId: "bad", Email: "e@e.com", InvitedBy: uuid.New().String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -1418,7 +1418,7 @@ func TestHandler_InviteUser_InvalidRoleID(t *testing.T) {
 	t.Parallel()
 	tid := uuid.New()
 	_, err := newHandler().InviteUser(memberCtx(tid), &iamv1.InviteUserRequest{
-		TenantId: tid.String(), Email: "e@e.com", InvitedBy: uuid.New().String(), RoleId: "bad",
+		TenantId: tid.String(), Email: "e@e.com", InvitedBy: uuid.New().String(), RoleId: "bad", //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -1589,7 +1589,7 @@ func TestCreateUser_CrossTenant_Denied(t *testing.T) {
 		},
 	})
 	_, err := h.CreateUser(memberCtx(caller), &iamv1.CreateUserRequest{
-		TenantId: victim.String(), Email: "a@b.c", Password: "x",
+		TenantId: victim.String(), Email: "a@b.c", Password: "x", //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -1607,7 +1607,7 @@ func TestAssignRole_CrossTenant_Denied(t *testing.T) {
 		},
 	})
 	_, err := h.AssignRole(memberCtx(caller), &iamv1.AssignRoleRequest{
-		TenantId: victim.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(),
+		TenantId: victim.String(), UserId: uuid.New().String(), RoleId: uuid.New().String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -1631,7 +1631,7 @@ func TestAssignRole_AssignedByIsTheCaller(t *testing.T) {
 	})
 
 	_, err := h.AssignRole(ctx, &iamv1.AssignRoleRequest{
-		TenantId:   tid.String(),
+		TenantId:   tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		UserId:     uuid.New().String(),
 		RoleId:     uuid.New().String(),
 		AssignedBy: uuid.New().String(), // a lie the handler must ignore
@@ -1666,7 +1666,7 @@ func TestAssignProjectRole_AssignedByIsTheCaller(t *testing.T) {
 	})
 
 	_, err := h.AssignProjectRole(ctx, &iamv1.AssignProjectRoleRequest{
-		TenantId:   tid.String(),
+		TenantId:   tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		UserId:     uuid.New().String(),
 		RoleId:     uuid.New().String(),
 		ProjectId:  projectID.String(),
@@ -1699,7 +1699,7 @@ func TestInviteUser_InvitedByIsTheCaller(t *testing.T) {
 	})
 
 	_, err := h.InviteUser(ctx, &iamv1.InviteUserRequest{
-		TenantId:  tid.String(),
+		TenantId:  tid.String(), //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 		Email:     "invite@example.com",
 		InvitedBy: uuid.New().String(), // a lie the handler must ignore
 	})
