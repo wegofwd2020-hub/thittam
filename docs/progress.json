@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-10-10T08:17:54+00:00",
+  "generated": "2026-10-11T08:34:56+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -1335,6 +1335,48 @@
       "name": "Vulnerabilities detected in dependencies (2026-08-14)",
       "status": "pending",
       "commits": 0
+    },
+    {
+      "id": "#223",
+      "name": "feat(expense): add US tax treatments to vertical schema",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#224",
+      "name": "feat(ledger): add software-development-us vertical",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#225",
+      "name": "feat(infra): add tenant-onboard generator and Kaundinya Labs tenant",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#226",
+      "name": "fix(iam): correct user_roles conflict target in new-tenant template",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#227",
+      "name": "fix(iam): silence SA1019 on intentional deprecated-field test cases",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#228",
+      "name": "chore(deps): bump grpc, x/crypto, x/text for known advisories",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#229",
+      "name": "chore(security): move to Go 1.26 for remaining advisories",
+      "status": "done",
+      "commits": 1
     }
   ]
 }
