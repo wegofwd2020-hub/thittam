@@ -1,9 +1,9 @@
 # Self-scoped reads for purchase-orders + petty-cash (#220) — Design
 
-**Status:** approved design, pre-plan
+**Status:** approved design, pre-plan (reviewed and grounding refreshed 2026-10-12)
 **Date:** 2026-07-30
 **Issue:** #220 (mirror of #165 for PO + petty-cash)
-**Branch:** `security/expense-self-scope-po-pettycash-220` off `main` (8ae2d53)
+**Branch:** `security/expense-self-scope-po-pettycash-220` off `main` (7661cd6; rebased from 8ae2d53)
 **Migration:** none · **Proto:** additive (2 fields) · **sqlc:** yes (2 query rewrites + regen)
 
 ## Goal
@@ -13,7 +13,11 @@ without the tenant-wide `expense:read` permission — mirroring #165's expense s
 queries are rewritten to fix the same latent `sqlc` nullable-filter trap #165 fixed (an unfiltered list
 currently returns nothing) and to wire the silently-dropped `status` filter.
 
-## Context (grounding facts, `main` @ 8ae2d53, module `github.com/wegofwd2020/thittam`)
+## Context (grounding facts, `main` @ 7661cd6, module `github.com/wegofwd2020/thittam`)
+
+Re-verified 2026-10-12 against current `main`: handler, SQL, proto, repo implementers, and the
+`purchase_orders` / `petty_cash_advances` columns (`migrations/expense/001_create_tables.up.sql`) all
+match the facts below. Line numbers are as of 7661cd6.
 
 - **#165 pattern (to mirror), `services/expense/handler.go`:**
   - `ListExpenses`: `if req.GetSubmittedByMe()` → `caller, err := interceptor.ActorFromRequest(ctx, "")`
@@ -146,6 +150,32 @@ filters. `Postgres.ListPurchaseOrders`/`ListPettyCashAdvances` pass `nullableUUI
   Codegen-Freshness green); `go build ./...`; whole-tree `go vet ./...` (catches all 4 repo
   implementers); `go test ./services/expense/... -race`; `gofmt -l` touched files; expense coverage
   ≥ 80%.
+
+### Design review notes (2026-10-12)
+
+- **Existence oracle, accepted.** Owner-first `Get*` fetches tenant-scoped first: a cross-tenant id
+  returns NotFound, a same-tenant non-owner without `expense:read` gets PermissionDenied. That reveals
+  existence only within the caller's own tenant. Same behaviour as #165's `GetExpense`; document it in
+  the PR rather than change it.
+- **Error mapping.** `Postgres.GetPettyCashAdvance` maps no-rows to `expense.ErrExpenseNotFound`, not a
+  petty-cash-specific error. Keep that; assert the same error in the cross-tenant and non-owner tests.
+- **Gate ordering.** Parse id → tenant-scoped fetch → owner check → `expense:read` fallback. A caller
+  without `expense:read` who asks for a missing id gets NotFound, which is fine.
+
+### Sibling scan (2026-10-12) — out of scope for #220
+
+Same zero-UUID nullable-filter defect as this issue, in other services. Not fixed here; file separately:
+
+- `services/budget` `ListBudgets` (`db/postgres.go:62`): binds `uuid.Nil` into `$2`, so the unfiltered
+  list returns nothing (#185 class).
+- `services/ledger` `ListJournalEntries` (`db/postgres.go:241`): nil `periodID` → `uuid.Nil` bound, same
+  defect. Ledger is senior-review territory.
+- `services/reporting` `GetExpenseFacts` / `GetBudgetFacts` pass `productionID` raw into SQL; not
+  verified in this pass.
+
+Also checked, not defects: all id-keyed expense queries carry `tenant_id`; the iam tenant-row updates
+(`SetTenantLegalHold`, `ClearTenantLegalHold`) update `tenants` by id alone, which is the tenant record
+itself. Confirm those are operator-only callers when reviewing iam.
 
 ## Non-goals
 
