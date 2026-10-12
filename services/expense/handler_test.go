@@ -1114,7 +1114,7 @@ func TestHandler_GetPurchaseOrder_CrossTenantNotFound(t *testing.T) {
 		getPOFn: func(_ context.Context, _, _ uuid.UUID) (*PurchaseOrder, error) {
 			return nil, ErrPONotFound // the repo scopes by tenant: the row is not visible
 		},
-	}), allowAllPerm{})
+	}), denyPerm{})
 
 	_, err := h.GetPurchaseOrder(ctxWithCaller(caller), &expensev1.GetPurchaseOrderRequest{Id: uuid.New().String()})
 	assert.Equal(t, codes.NotFound, status.Code(err))
@@ -1175,7 +1175,7 @@ func TestHandler_GetPettyCashAdvance_CrossTenantNotFound(t *testing.T) {
 		getPettyCashFn: func(_ context.Context, _, _ uuid.UUID) (*PettyCashAdvance, error) {
 			return nil, ErrExpenseNotFound // what Postgres.GetPettyCashAdvance returns on no-rows
 		},
-	}), allowAllPerm{})
+	}), denyPerm{})
 
 	_, err := h.GetPettyCashAdvance(ctxWithCaller(caller), &expensev1.GetPettyCashAdvanceRequest{Id: uuid.New().String()})
 	assert.Equal(t, codes.NotFound, status.Code(err))
