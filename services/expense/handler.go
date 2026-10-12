@@ -302,7 +302,8 @@ func (h *Handler) GetExpense(ctx context.Context, req *expensev1.GetExpenseReque
 		return nil, grpcErr(err)
 	}
 
-	if e.SubmittedBy != caller.UserID {
+	// A nil subject owns nothing. Without this guard, a zero SubmittedBy would match.
+	if caller.UserID == uuid.Nil || e.SubmittedBy != caller.UserID {
 		if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
 			return nil, err
 		}
