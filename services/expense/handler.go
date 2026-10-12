@@ -137,7 +137,7 @@ func (h *Handler) ListPurchaseOrders(ctx context.Context, req *expensev1.ListPur
 		}
 	}
 
-	pos, err := h.svc.ListPurchaseOrders(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0)
+	pos, err := h.svc.ListPurchaseOrders(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0, uuid.Nil)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -484,7 +484,7 @@ func (h *Handler) ListPettyCashAdvances(ctx context.Context, req *expensev1.List
 		}
 	}
 
-	advances, err := h.svc.ListPettyCashAdvances(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0)
+	advances, err := h.svc.ListPettyCashAdvances(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0, uuid.Nil)
 	if err != nil {
 		return nil, grpcErr(err)
 	}

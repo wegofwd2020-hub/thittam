@@ -189,7 +189,7 @@ func TestHandler_ListPurchaseOrders_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]PurchaseOrder, error) {
+		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PurchaseOrder, error) {
 			return []PurchaseOrder{{ID: uuid.New(), TenantID: tenantID}}, nil
 		},
 	}), allowAllPerm{})
@@ -214,7 +214,7 @@ func TestHandler_ListPurchaseOrders_InvalidProductionID(t *testing.T) {
 func TestHandler_ListPurchaseOrders_Denied(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]PurchaseOrder, error) {
+		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PurchaseOrder, error) {
 			t.Fatal("repository reached: ListPurchaseOrders must deny before querying")
 			return nil, nil
 		},
@@ -761,7 +761,7 @@ func TestHandler_ListPettyCashAdvances_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]PettyCashAdvance, error) {
+		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PettyCashAdvance, error) {
 			return []PettyCashAdvance{{ID: uuid.New(), TenantID: tenantID}}, nil
 		},
 	}), allowAllPerm{})
@@ -780,7 +780,7 @@ func TestHandler_ListPettyCashAdvances_NoTenant(t *testing.T) {
 func TestHandler_ListPettyCashAdvances_Denied(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]PettyCashAdvance, error) {
+		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PettyCashAdvance, error) {
 			t.Fatal("repository reached: ListPettyCashAdvances must deny before querying")
 			return nil, nil
 		},

@@ -11,7 +11,7 @@ type Repository interface {
 	// Purchase Orders
 	CreatePurchaseOrder(ctx context.Context, po *PurchaseOrder) error
 	GetPurchaseOrder(ctx context.Context, tenantID, id uuid.UUID) (*PurchaseOrder, error)
-	ListPurchaseOrders(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int) ([]PurchaseOrder, error)
+	ListPurchaseOrders(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int, raisedBy uuid.UUID) ([]PurchaseOrder, error)
 	UpdatePurchaseOrder(ctx context.Context, po *PurchaseOrder) error
 
 	// Expenses
@@ -24,6 +24,6 @@ type Repository interface {
 	// Petty Cash
 	CreatePettyCashAdvance(ctx context.Context, pc *PettyCashAdvance) error
 	GetPettyCashAdvance(ctx context.Context, tenantID, id uuid.UUID) (*PettyCashAdvance, error)
-	ListPettyCashAdvances(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int) ([]PettyCashAdvance, error)
+	ListPettyCashAdvances(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int, issuedTo uuid.UUID) ([]PettyCashAdvance, error)
 	UpdatePettyCashAdvance(ctx context.Context, pc *PettyCashAdvance) error
 }

@@ -153,11 +153,11 @@ func (s *Service) GetPurchaseOrder(ctx context.Context, tenantID, id uuid.UUID) 
 }
 
 // ListPurchaseOrders lists POs for a production.
-func (s *Service) ListPurchaseOrders(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int) ([]PurchaseOrder, error) {
+func (s *Service) ListPurchaseOrders(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int, raisedBy uuid.UUID) ([]PurchaseOrder, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	return s.repo.ListPurchaseOrders(ctx, tenantID, productionID, status, limit, offset)
+	return s.repo.ListPurchaseOrders(ctx, tenantID, productionID, status, limit, offset, raisedBy)
 }
 
 // CreatePettyCashAdvance creates a new petty cash advance.
@@ -174,11 +174,11 @@ func (s *Service) GetPettyCashAdvance(ctx context.Context, tenantID, id uuid.UUI
 }
 
 // ListPettyCashAdvances lists petty cash advances for a production.
-func (s *Service) ListPettyCashAdvances(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int) ([]PettyCashAdvance, error) {
+func (s *Service) ListPettyCashAdvances(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int, issuedTo uuid.UUID) ([]PettyCashAdvance, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	return s.repo.ListPettyCashAdvances(ctx, tenantID, productionID, status, limit, offset)
+	return s.repo.ListPettyCashAdvances(ctx, tenantID, productionID, status, limit, offset, issuedTo)
 }
 
 // GetExpenseCategories returns the vertical's configured expense categories.

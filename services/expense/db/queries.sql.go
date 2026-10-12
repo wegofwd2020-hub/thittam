@@ -336,24 +336,31 @@ func (q *Queries) ListExpenses(ctx context.Context, arg ListExpensesParams) ([]E
 
 const listPettyCashAdvances = `-- name: ListPettyCashAdvances :many
 SELECT id, production_id, tenant_id, issued_to, amount, purpose, status, issued_at, settled_at, unspent_amount FROM petty_cash_advances
-WHERE tenant_id = $1 AND ($2::uuid IS NULL OR production_id = $2)
+WHERE tenant_id = $1
+  AND ($2::uuid IS NULL OR production_id = $2)
+  AND ($3::uuid IS NULL OR issued_to = $3)
+  AND ($4 = '' OR status = $4)
 ORDER BY issued_at DESC
-LIMIT $3 OFFSET $4
+LIMIT $6 OFFSET $5
 `
 
 type ListPettyCashAdvancesParams struct {
-	TenantID uuid.UUID `json:"tenant_id"`
-	Column2  uuid.UUID `json:"column_2"`
-	Limit    int32     `json:"limit"`
-	Offset   int32     `json:"offset"`
+	TenantID     uuid.UUID   `json:"tenant_id"`
+	ProductionID pgtype.UUID `json:"production_id"`
+	IssuedTo     pgtype.UUID `json:"issued_to"`
+	Status       interface{} `json:"status"`
+	Offset       int32       `json:"offset"`
+	Limit        int32       `json:"limit"`
 }
 
 func (q *Queries) ListPettyCashAdvances(ctx context.Context, arg ListPettyCashAdvancesParams) ([]PettyCashAdvance, error) {
 	rows, err := q.db.Query(ctx, listPettyCashAdvances,
 		arg.TenantID,
-		arg.Column2,
-		arg.Limit,
+		arg.ProductionID,
+		arg.IssuedTo,
+		arg.Status,
 		arg.Offset,
+		arg.Limit,
 	)
 	if err != nil {
 		return nil, err
@@ -386,24 +393,31 @@ func (q *Queries) ListPettyCashAdvances(ctx context.Context, arg ListPettyCashAd
 
 const listPurchaseOrders = `-- name: ListPurchaseOrders :many
 SELECT id, production_id, tenant_id, budget_line_id, po_number, vendor_name, vendor_gstin, description, amount, currency, status, raised_by, approved_by, raised_at, approved_at, created_at FROM purchase_orders
-WHERE tenant_id = $1 AND ($2::uuid IS NULL OR production_id = $2)
+WHERE tenant_id = $1
+  AND ($2::uuid IS NULL OR production_id = $2)
+  AND ($3::uuid IS NULL OR raised_by = $3)
+  AND ($4 = '' OR status = $4)
 ORDER BY raised_at DESC
-LIMIT $3 OFFSET $4
+LIMIT $6 OFFSET $5
 `
 
 type ListPurchaseOrdersParams struct {
-	TenantID uuid.UUID `json:"tenant_id"`
-	Column2  uuid.UUID `json:"column_2"`
-	Limit    int32     `json:"limit"`
-	Offset   int32     `json:"offset"`
+	TenantID     uuid.UUID   `json:"tenant_id"`
+	ProductionID pgtype.UUID `json:"production_id"`
+	RaisedBy     pgtype.UUID `json:"raised_by"`
+	Status       interface{} `json:"status"`
+	Offset       int32       `json:"offset"`
+	Limit        int32       `json:"limit"`
 }
 
 func (q *Queries) ListPurchaseOrders(ctx context.Context, arg ListPurchaseOrdersParams) ([]PurchaseOrder, error) {
 	rows, err := q.db.Query(ctx, listPurchaseOrders,
 		arg.TenantID,
-		arg.Column2,
-		arg.Limit,
+		arg.ProductionID,
+		arg.RaisedBy,
+		arg.Status,
 		arg.Offset,
+		arg.Limit,
 	)
 	if err != nil {
 		return nil, err
