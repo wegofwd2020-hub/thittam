@@ -35,7 +35,7 @@ type mockRepo struct {
 	// so handler tests can assert the self-scope id reached the repo.
 	lastListPORaisedBy uuid.UUID
 	lastListPCIssuedTo uuid.UUID
-	updatePettyCashFn           func(ctx context.Context, pc *PettyCashAdvance) error
+	updatePettyCashFn  func(ctx context.Context, pc *PettyCashAdvance) error
 }
 
 func (m *mockRepo) CreateExpense(ctx context.Context, e *Expense) error {

@@ -1027,9 +1027,25 @@ func TestHandler_ListPurchaseOrders_TenantWide_RequiresRead(t *testing.T) {
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
-func TestHandler_ListPurchaseOrders_RaisedByMe_NoCaller(t *testing.T) {
+// pins the unauthenticated outcome; does not by itself prove the self-scope branch (see _SelfScope tests)
+func TestHandler_ListPurchaseOrders_RaisedByMe_Unauthenticated_NoCaller(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().ListPurchaseOrders(ctxTenantNoCaller(uuid.New()), &expensev1.ListPurchaseOrdersRequest{RaisedByMe: true})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestHandler_ListPurchaseOrders_RaisedByMe_NilSubjectRefused(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.Nil, TenantID: uuid.New()}
+	h := NewHandler(NewService(&mockRepo{
+		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PurchaseOrder, error) {
+			t.Fatal("repository reached: nil subject must never become an unfiltered list")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.ListPurchaseOrders(ctxWithCaller(caller), &expensev1.ListPurchaseOrdersRequest{RaisedByMe: true})
+	require.Error(t, err)
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
@@ -1060,9 +1076,25 @@ func TestHandler_ListPettyCashAdvances_TenantWide_RequiresRead(t *testing.T) {
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
-func TestHandler_ListPettyCashAdvances_IssuedToMe_NoCaller(t *testing.T) {
+// pins the unauthenticated outcome; does not by itself prove the self-scope branch (see _SelfScope tests)
+func TestHandler_ListPettyCashAdvances_IssuedToMe_Unauthenticated_NoCaller(t *testing.T) {
 	t.Parallel()
 	_, err := newHandler().ListPettyCashAdvances(ctxTenantNoCaller(uuid.New()), &expensev1.ListPettyCashAdvancesRequest{IssuedToMe: true})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestHandler_ListPettyCashAdvances_IssuedToMe_NilSubjectRefused(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.Nil, TenantID: uuid.New()}
+	h := NewHandler(NewService(&mockRepo{
+		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PettyCashAdvance, error) {
+			t.Fatal("repository reached: nil subject must never become an unfiltered list")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.ListPettyCashAdvances(ctxWithCaller(caller), &expensev1.ListPettyCashAdvancesRequest{IssuedToMe: true})
+	require.Error(t, err)
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
