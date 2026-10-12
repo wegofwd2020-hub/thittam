@@ -998,3 +998,70 @@ func TestHandler_SubmitExpense_SetsSubmittedBy(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, caller.UserID, saved.SubmittedBy)
 }
+
+// --- ListPurchaseOrders self-scope (#220) ---
+
+func TestHandler_ListPurchaseOrders_RaisedByMe_SelfScope(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: uuid.New()}
+	repo := &mockRepo{}
+	h := NewHandler(NewService(repo), denyPerm{}) // no expense:read: self-scope must not need it
+
+	resp, err := h.ListPurchaseOrders(ctxWithCaller(caller), &expensev1.ListPurchaseOrdersRequest{RaisedByMe: true})
+	require.NoError(t, err)
+	assert.Empty(t, resp.GetPurchaseOrders())
+	assert.Equal(t, caller.UserID, repo.lastListPORaisedBy, "owner filter must be the verified token subject")
+}
+
+func TestHandler_ListPurchaseOrders_TenantWide_RequiresRead(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PurchaseOrder, error) {
+			t.Fatal("repository reached: tenant-wide list must deny before querying")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.ListPurchaseOrders(ctxWithTenant(uuid.New()), &expensev1.ListPurchaseOrdersRequest{RaisedByMe: false})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListPurchaseOrders_RaisedByMe_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ListPurchaseOrders(ctxTenantNoCaller(uuid.New()), &expensev1.ListPurchaseOrdersRequest{RaisedByMe: true})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- ListPettyCashAdvances self-scope (#220) ---
+
+func TestHandler_ListPettyCashAdvances_IssuedToMe_SelfScope(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: uuid.New()}
+	repo := &mockRepo{}
+	h := NewHandler(NewService(repo), denyPerm{})
+
+	_, err := h.ListPettyCashAdvances(ctxWithCaller(caller), &expensev1.ListPettyCashAdvancesRequest{IssuedToMe: true})
+	require.NoError(t, err)
+	assert.Equal(t, caller.UserID, repo.lastListPCIssuedTo, "holder filter must be the verified token subject")
+}
+
+func TestHandler_ListPettyCashAdvances_TenantWide_RequiresRead(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PettyCashAdvance, error) {
+			t.Fatal("repository reached: tenant-wide list must deny before querying")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.ListPettyCashAdvances(ctxWithTenant(uuid.New()), &expensev1.ListPettyCashAdvancesRequest{IssuedToMe: false})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_ListPettyCashAdvances_IssuedToMe_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ListPettyCashAdvances(ctxTenantNoCaller(uuid.New()), &expensev1.ListPettyCashAdvancesRequest{IssuedToMe: true})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}

@@ -124,8 +124,20 @@ func (h *Handler) ListPurchaseOrders(ctx context.Context, req *expensev1.ListPur
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
-		return nil, err
+	// RaisedByMe branches the way ListExpenses does: self-scope IS the authz
+	// (a caller can only ask for POs they raised), so expense:read is not
+	// required. The owner id comes from the verified token, never the request.
+	var raisedBy uuid.UUID
+	if req.GetRaisedByMe() {
+		caller, err := interceptor.ActorFromRequest(ctx, "")
+		if err != nil {
+			return nil, err
+		}
+		raisedBy = caller
+	} else {
+		if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+			return nil, err
+		}
 	}
 
 	var productionID uuid.UUID
@@ -137,7 +149,7 @@ func (h *Handler) ListPurchaseOrders(ctx context.Context, req *expensev1.ListPur
 		}
 	}
 
-	pos, err := h.svc.ListPurchaseOrders(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0, uuid.Nil)
+	pos, err := h.svc.ListPurchaseOrders(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0, raisedBy)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -471,8 +483,20 @@ func (h *Handler) ListPettyCashAdvances(ctx context.Context, req *expensev1.List
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
-		return nil, err
+	// IssuedToMe branches the way ListExpenses does: self-scope IS the authz
+	// (a caller can only ask for advances issued to them), so expense:read is not
+	// required. The owner id comes from the verified token, never the request.
+	var issuedTo uuid.UUID
+	if req.GetIssuedToMe() {
+		caller, err := interceptor.ActorFromRequest(ctx, "")
+		if err != nil {
+			return nil, err
+		}
+		issuedTo = caller
+	} else {
+		if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+			return nil, err
+		}
 	}
 
 	var productionID uuid.UUID
@@ -484,7 +508,7 @@ func (h *Handler) ListPettyCashAdvances(ctx context.Context, req *expensev1.List
 		}
 	}
 
-	advances, err := h.svc.ListPettyCashAdvances(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0, uuid.Nil)
+	advances, err := h.svc.ListPettyCashAdvances(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0, issuedTo)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
