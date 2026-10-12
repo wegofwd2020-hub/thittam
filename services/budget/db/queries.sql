@@ -11,9 +11,10 @@ SELECT * FROM budgets WHERE id = $1 AND tenant_id = $2;
 
 -- name: ListBudgets :many
 SELECT * FROM budgets
-WHERE tenant_id = $1 AND ($2::uuid IS NULL OR production_id = $2)
+WHERE tenant_id = sqlc.arg('tenant_id')
+  AND (sqlc.narg('production_id')::uuid IS NULL OR production_id = sqlc.narg('production_id'))
 ORDER BY created_at DESC
-LIMIT $3 OFFSET $4;
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: UpdateBudgetStatus :one
 UPDATE budgets

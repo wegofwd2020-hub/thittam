@@ -168,24 +168,25 @@ func (q *Queries) GetLineItem(ctx context.Context, arg GetLineItemParams) (Budge
 
 const listBudgets = `-- name: ListBudgets :many
 SELECT id, production_id, tenant_id, label, status, currency, total_amount, submitted_by, approved_by, submitted_at, approved_at, created_by, created_at, updated_at FROM budgets
-WHERE tenant_id = $1 AND ($2::uuid IS NULL OR production_id = $2)
+WHERE tenant_id = $1
+  AND ($2::uuid IS NULL OR production_id = $2)
 ORDER BY created_at DESC
-LIMIT $3 OFFSET $4
+LIMIT $4 OFFSET $3
 `
 
 type ListBudgetsParams struct {
-	TenantID uuid.UUID `json:"tenant_id"`
-	Column2  uuid.UUID `json:"column_2"`
-	Limit    int32     `json:"limit"`
-	Offset   int32     `json:"offset"`
+	TenantID     uuid.UUID   `json:"tenant_id"`
+	ProductionID pgtype.UUID `json:"production_id"`
+	Offset       int32       `json:"offset"`
+	Limit        int32       `json:"limit"`
 }
 
 func (q *Queries) ListBudgets(ctx context.Context, arg ListBudgetsParams) ([]Budget, error) {
 	rows, err := q.db.Query(ctx, listBudgets,
 		arg.TenantID,
-		arg.Column2,
-		arg.Limit,
+		arg.ProductionID,
 		arg.Offset,
+		arg.Limit,
 	)
 	if err != nil {
 		return nil, err
