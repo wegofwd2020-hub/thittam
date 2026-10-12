@@ -58,10 +58,10 @@ func (p *Postgres) GetBudget(ctx context.Context, tenantID, id uuid.UUID) (*budg
 
 func (p *Postgres) ListBudgets(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int) ([]budget.Budget, error) {
 	rows, err := p.q.ListBudgets(ctx, ListBudgetsParams{
-		TenantID: tenantID,
-		Column2:  productionID,
-		Limit:    int32(limit),
-		Offset:   int32(offset),
+		TenantID:     tenantID,
+		ProductionID: nullableUUID(productionID),
+		Limit:        int32(limit),
+		Offset:       int32(offset),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("budget: list budgets: %w", err)
@@ -256,4 +256,12 @@ func decimalFromPgNumeric(n pgtype.Numeric) decimal.Decimal {
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// nullableUUID maps the zero UUID to SQL NULL (an "omit this filter" sentinel).
+func nullableUUID(id uuid.UUID) pgtype.UUID {
+	if id == uuid.Nil {
+		return pgtype.UUID{}
+	}
+	return pgtype.UUID{Bytes: id, Valid: true}
 }

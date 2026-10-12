@@ -1212,3 +1212,19 @@ func TestHandler_GetPettyCashAdvance_CrossTenantNotFound(t *testing.T) {
 	_, err := h.GetPettyCashAdvance(ctxWithCaller(caller), &expensev1.GetPettyCashAdvanceRequest{Id: uuid.New().String()})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
+
+// A nil caller subject must never own an expense, even when SubmittedBy is also zero.
+// Without the guard, the owner check passes (Nil == Nil) and the record is returned.
+func TestHandler_GetExpense_NilSubjectNeverOwns(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.Nil, TenantID: uuid.New()}
+	h := NewHandler(NewService(&mockRepo{
+		getExpenseFn: func(_ context.Context, tid, id uuid.UUID) (*Expense, error) {
+			return &Expense{ID: id, TenantID: tid, SubmittedBy: uuid.Nil}, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.GetExpense(ctxWithCaller(caller), &expensev1.GetExpenseRequest{Id: uuid.New().String()})
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
