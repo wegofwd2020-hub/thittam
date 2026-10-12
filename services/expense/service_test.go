@@ -26,12 +26,16 @@ type mockRepo struct {
 	rejectExpenseFn             func(ctx context.Context, tenantID, expenseID, rejecterID uuid.UUID, reason string) error
 	createPOFn                  func(ctx context.Context, po *PurchaseOrder) error
 	getPOFn                     func(ctx context.Context, tenantID, id uuid.UUID) (*PurchaseOrder, error)
-	listPOsFn                   func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PurchaseOrder, error)
+	listPOsFn                   func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int, raisedBy uuid.UUID) ([]PurchaseOrder, error)
 	updatePOFn                  func(ctx context.Context, po *PurchaseOrder) error
 	createPettyCashFn           func(ctx context.Context, pc *PettyCashAdvance) error
 	getPettyCashFn              func(ctx context.Context, tenantID, id uuid.UUID) (*PettyCashAdvance, error)
-	listPettyCashFn             func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PettyCashAdvance, error)
-	updatePettyCashFn           func(ctx context.Context, pc *PettyCashAdvance) error
+	listPettyCashFn             func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int, issuedTo uuid.UUID) ([]PettyCashAdvance, error)
+	// lastListPORaisedBy / lastListPCIssuedTo record the last-call owner filter
+	// so handler tests can assert the self-scope id reached the repo.
+	lastListPORaisedBy uuid.UUID
+	lastListPCIssuedTo uuid.UUID
+	updatePettyCashFn  func(ctx context.Context, pc *PettyCashAdvance) error
 }
 
 func (m *mockRepo) CreateExpense(ctx context.Context, e *Expense) error {
@@ -77,9 +81,10 @@ func (m *mockRepo) GetPurchaseOrder(ctx context.Context, tenantID, id uuid.UUID)
 	}
 	return &PurchaseOrder{ID: id, TenantID: tenantID}, nil
 }
-func (m *mockRepo) ListPurchaseOrders(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PurchaseOrder, error) {
+func (m *mockRepo) ListPurchaseOrders(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int, raisedBy uuid.UUID) ([]PurchaseOrder, error) {
+	m.lastListPORaisedBy = raisedBy
 	if m.listPOsFn != nil {
-		return m.listPOsFn(ctx, tenantID, prodID, status, limit, offset)
+		return m.listPOsFn(ctx, tenantID, prodID, status, limit, offset, raisedBy)
 	}
 	return nil, nil
 }
@@ -101,9 +106,10 @@ func (m *mockRepo) GetPettyCashAdvance(ctx context.Context, tenantID, id uuid.UU
 	}
 	return &PettyCashAdvance{ID: id, TenantID: tenantID}, nil
 }
-func (m *mockRepo) ListPettyCashAdvances(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int) ([]PettyCashAdvance, error) {
+func (m *mockRepo) ListPettyCashAdvances(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int, issuedTo uuid.UUID) ([]PettyCashAdvance, error) {
+	m.lastListPCIssuedTo = issuedTo
 	if m.listPettyCashFn != nil {
-		return m.listPettyCashFn(ctx, tenantID, prodID, status, limit, offset)
+		return m.listPettyCashFn(ctx, tenantID, prodID, status, limit, offset, issuedTo)
 	}
 	return nil, nil
 }
@@ -430,13 +436,13 @@ func TestListPurchaseOrders_DefaultLimit(t *testing.T) {
 	t.Parallel()
 	var capturedLimit int
 	svc := NewService(&mockRepo{
-		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, limit, _ int) ([]PurchaseOrder, error) {
+		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, limit, _ int, _ uuid.UUID) ([]PurchaseOrder, error) {
 			capturedLimit = limit
 			return nil, nil
 		},
 	})
 
-	_, err := svc.ListPurchaseOrders(context.Background(), uuid.New(), uuid.New(), "", 0, 0)
+	_, err := svc.ListPurchaseOrders(context.Background(), uuid.New(), uuid.New(), "", 0, 0, uuid.Nil)
 	require.NoError(t, err)
 	assert.Equal(t, 20, capturedLimit)
 }

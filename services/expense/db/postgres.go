@@ -60,14 +60,16 @@ func (p *Postgres) GetPurchaseOrder(ctx context.Context, tenantID, id uuid.UUID)
 	return purchaseOrderFromDB(row), nil
 }
 
-// ListPurchaseOrders lists POs for a tenant/production. The status parameter is
-// not filterable in the current SQL query and is silently ignored.
-func (p *Postgres) ListPurchaseOrders(ctx context.Context, tenantID, productionID uuid.UUID, _ string, limit, offset int) ([]expense.PurchaseOrder, error) {
+// ListPurchaseOrders lists POs for a tenant. Zero-UUID productionID / raisedBy
+// and empty status mean "do not filter".
+func (p *Postgres) ListPurchaseOrders(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int, raisedBy uuid.UUID) ([]expense.PurchaseOrder, error) {
 	rows, err := p.q.ListPurchaseOrders(ctx, ListPurchaseOrdersParams{
-		TenantID: tenantID,
-		Column2:  productionID,
-		Limit:    int32(limit),
-		Offset:   int32(offset),
+		TenantID:     tenantID,
+		ProductionID: nullableUUID(productionID),
+		RaisedBy:     nullableUUID(raisedBy),
+		Status:       status,
+		Limit:        int32(limit),
+		Offset:       int32(offset),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("expense: list purchase orders: %w", err)
@@ -215,14 +217,16 @@ func (p *Postgres) GetPettyCashAdvance(ctx context.Context, tenantID, id uuid.UU
 	return pettyCashFromDB(row), nil
 }
 
-// ListPettyCashAdvances lists advances for a tenant/production. The status
-// parameter is not filterable in the current SQL query and is silently ignored.
-func (p *Postgres) ListPettyCashAdvances(ctx context.Context, tenantID, productionID uuid.UUID, _ string, limit, offset int) ([]expense.PettyCashAdvance, error) {
+// ListPettyCashAdvances lists advances for a tenant. Zero-UUID productionID /
+// issuedTo and empty status mean "do not filter".
+func (p *Postgres) ListPettyCashAdvances(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int, issuedTo uuid.UUID) ([]expense.PettyCashAdvance, error) {
 	rows, err := p.q.ListPettyCashAdvances(ctx, ListPettyCashAdvancesParams{
-		TenantID: tenantID,
-		Column2:  productionID,
-		Limit:    int32(limit),
-		Offset:   int32(offset),
+		TenantID:     tenantID,
+		ProductionID: nullableUUID(productionID),
+		IssuedTo:     nullableUUID(issuedTo),
+		Status:       status,
+		Limit:        int32(limit),
+		Offset:       int32(offset),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("expense: list petty cash advances: %w", err)

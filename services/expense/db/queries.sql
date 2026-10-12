@@ -11,9 +11,12 @@ SELECT * FROM purchase_orders WHERE id = $1 AND tenant_id = $2;
 
 -- name: ListPurchaseOrders :many
 SELECT * FROM purchase_orders
-WHERE tenant_id = $1 AND ($2::uuid IS NULL OR production_id = $2)
+WHERE tenant_id = sqlc.arg('tenant_id')
+  AND (sqlc.narg('production_id')::uuid IS NULL OR production_id = sqlc.narg('production_id'))
+  AND (sqlc.narg('raised_by')::uuid IS NULL OR raised_by = sqlc.narg('raised_by'))
+  AND (sqlc.arg('status') = '' OR status = sqlc.arg('status'))
 ORDER BY raised_at DESC
-LIMIT $3 OFFSET $4;
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: UpdatePurchaseOrderStatus :one
 UPDATE purchase_orders
@@ -61,9 +64,12 @@ SELECT * FROM petty_cash_advances WHERE id = $1 AND tenant_id = $2;
 
 -- name: ListPettyCashAdvances :many
 SELECT * FROM petty_cash_advances
-WHERE tenant_id = $1 AND ($2::uuid IS NULL OR production_id = $2)
+WHERE tenant_id = sqlc.arg('tenant_id')
+  AND (sqlc.narg('production_id')::uuid IS NULL OR production_id = sqlc.narg('production_id'))
+  AND (sqlc.narg('issued_to')::uuid IS NULL OR issued_to = sqlc.narg('issued_to'))
+  AND (sqlc.arg('status') = '' OR status = sqlc.arg('status'))
 ORDER BY issued_at DESC
-LIMIT $3 OFFSET $4;
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: SettlePettyCashAdvance :one
 UPDATE petty_cash_advances

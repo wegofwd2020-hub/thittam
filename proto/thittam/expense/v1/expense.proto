@@ -139,7 +139,15 @@ message CreatePurchaseOrderRequest {
 }
 
 message GetPurchaseOrderRequest { string id = 1; }
-message ListPurchaseOrdersRequest { string production_id = 1; string status = 2; int32 limit = 3; string after = 4; }
+message ListPurchaseOrdersRequest {
+  string production_id = 1;
+  string status = 2;
+  int32 limit = 3;
+  string after = 4;
+  // When true, scoped to the POs the caller raised (raised_by = verified token
+  // subject); requires no expense:read. False/absent = expense:read + tenant-wide.
+  bool raised_by_me = 5;
+}
 message ListPurchaseOrdersResponse { repeated PurchaseOrder purchase_orders = 1; }
 
 message SubmitExpenseRequest {
@@ -176,7 +184,15 @@ message CreatePettyCashAdvanceRequest {
 }
 
 message GetPettyCashAdvanceRequest { string id = 1; }
-message ListPettyCashAdvancesRequest { string production_id = 1; string status = 2; int32 limit = 3; string after = 4; }
+message ListPettyCashAdvancesRequest {
+  string production_id = 1;
+  string status = 2;
+  int32 limit = 3;
+  string after = 4;
+  // When true, scoped to advances the caller holds (issued_to = verified token
+  // subject); requires no expense:read. False/absent = expense:read + tenant-wide.
+  bool issued_to_me = 5;
+}
 message ListPettyCashAdvancesResponse { repeated PettyCashAdvance advances = 1; }
 
 message GetExpenseCategoriesRequest {}

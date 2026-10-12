@@ -96,14 +96,18 @@ func (h *Handler) CreatePurchaseOrder(ctx context.Context, req *expensev1.Create
 	return purchaseOrderToProto(out), nil
 }
 
+// GetPurchaseOrder is owner-first, mirroring GetExpense: the raiser may read
+// their own PO without expense:read. Ownership is only known after the fetch,
+// so the permission gate runs AFTER h.svc.GetPurchaseOrder.
 func (h *Handler) GetPurchaseOrder(ctx context.Context, req *expensev1.GetPurchaseOrderRequest) (*expensev1.PurchaseOrder, error) {
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
-		return nil, err
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
 	}
 
 	id, err := uuid.Parse(req.GetId())
@@ -115,6 +119,14 @@ func (h *Handler) GetPurchaseOrder(ctx context.Context, req *expensev1.GetPurcha
 	if err != nil {
 		return nil, grpcErr(err)
 	}
+
+	// A nil subject owns nothing. Without this guard, a zero RaisedBy would match.
+	if caller.UserID == uuid.Nil || po.RaisedBy != caller.UserID {
+		if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+			return nil, err
+		}
+	}
+
 	return purchaseOrderToProto(po), nil
 }
 
@@ -124,8 +136,20 @@ func (h *Handler) ListPurchaseOrders(ctx context.Context, req *expensev1.ListPur
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
-		return nil, err
+	// RaisedByMe branches the way ListExpenses does: self-scope IS the authz
+	// (a caller can only ask for POs they raised), so expense:read is not
+	// required. The owner id comes from the verified token, never the request.
+	var raisedBy uuid.UUID
+	if req.GetRaisedByMe() {
+		caller, err := interceptor.ActorFromRequest(ctx, "")
+		if err != nil {
+			return nil, err
+		}
+		raisedBy = caller
+	} else {
+		if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+			return nil, err
+		}
 	}
 
 	var productionID uuid.UUID
@@ -137,7 +161,7 @@ func (h *Handler) ListPurchaseOrders(ctx context.Context, req *expensev1.ListPur
 		}
 	}
 
-	pos, err := h.svc.ListPurchaseOrders(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0)
+	pos, err := h.svc.ListPurchaseOrders(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0, raisedBy)
 	if err != nil {
 		return nil, grpcErr(err)
 	}
@@ -443,14 +467,18 @@ func (h *Handler) CreatePettyCashAdvance(ctx context.Context, req *expensev1.Cre
 	return pettyCashToProto(out), nil
 }
 
+// GetPettyCashAdvance is owner-first. The owner is the holder (IssuedTo), not
+// the creator: a creator who did not issue the advance to themselves still
+// needs expense:read.
 func (h *Handler) GetPettyCashAdvance(ctx context.Context, req *expensev1.GetPettyCashAdvanceRequest) (*expensev1.PettyCashAdvance, error) {
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
-		return nil, err
+	caller, ok := interceptor.CallerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller identity not found in context")
 	}
 
 	id, err := uuid.Parse(req.GetId())
@@ -462,6 +490,13 @@ func (h *Handler) GetPettyCashAdvance(ctx context.Context, req *expensev1.GetPet
 	if err != nil {
 		return nil, grpcErr(err)
 	}
+
+	if caller.UserID == uuid.Nil || pc.IssuedTo != caller.UserID {
+		if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+			return nil, err
+		}
+	}
+
 	return pettyCashToProto(pc), nil
 }
 
@@ -471,8 +506,20 @@ func (h *Handler) ListPettyCashAdvances(ctx context.Context, req *expensev1.List
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
 	}
 
-	if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
-		return nil, err
+	// IssuedToMe branches the way ListExpenses does: self-scope IS the authz
+	// (a caller can only ask for advances issued to them), so expense:read is not
+	// required. The owner id comes from the verified token, never the request.
+	var issuedTo uuid.UUID
+	if req.GetIssuedToMe() {
+		caller, err := interceptor.ActorFromRequest(ctx, "")
+		if err != nil {
+			return nil, err
+		}
+		issuedTo = caller
+	} else {
+		if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+			return nil, err
+		}
 	}
 
 	var productionID uuid.UUID
@@ -484,7 +531,7 @@ func (h *Handler) ListPettyCashAdvances(ctx context.Context, req *expensev1.List
 		}
 	}
 
-	advances, err := h.svc.ListPettyCashAdvances(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0)
+	advances, err := h.svc.ListPettyCashAdvances(ctx, tenantID, productionID, req.GetStatus(), int(req.GetLimit()), 0, issuedTo)
 	if err != nil {
 		return nil, grpcErr(err)
 	}

@@ -417,7 +417,7 @@ func (r *expenseRepo) CreatePurchaseOrder(_ context.Context, _ *expense.Purchase
 func (r *expenseRepo) GetPurchaseOrder(_ context.Context, _, _ uuid.UUID) (*expense.PurchaseOrder, error) {
 	return nil, nil
 }
-func (r *expenseRepo) ListPurchaseOrders(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]expense.PurchaseOrder, error) {
+func (r *expenseRepo) ListPurchaseOrders(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]expense.PurchaseOrder, error) {
 	return nil, nil
 }
 func (r *expenseRepo) UpdatePurchaseOrder(_ context.Context, _ *expense.PurchaseOrder) error {
@@ -429,7 +429,7 @@ func (r *expenseRepo) CreatePettyCashAdvance(_ context.Context, _ *expense.Petty
 func (r *expenseRepo) GetPettyCashAdvance(_ context.Context, _, _ uuid.UUID) (*expense.PettyCashAdvance, error) {
 	return nil, nil
 }
-func (r *expenseRepo) ListPettyCashAdvances(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]expense.PettyCashAdvance, error) {
+func (r *expenseRepo) ListPettyCashAdvances(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]expense.PettyCashAdvance, error) {
 	return nil, nil
 }
 func (r *expenseRepo) UpdatePettyCashAdvance(_ context.Context, _ *expense.PettyCashAdvance) error {

@@ -169,9 +169,9 @@ func TestHandler_GetPurchaseOrder_InvalidID(t *testing.T) {
 func TestHandler_GetPurchaseOrder_Denied(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		getPOFn: func(_ context.Context, _, _ uuid.UUID) (*PurchaseOrder, error) {
-			t.Fatal("repository reached: GetPurchaseOrder must deny before querying")
-			return nil, nil
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			// Owned by someone else, so the caller is not the owner.
+			return &PurchaseOrder{ID: id, TenantID: tid, RaisedBy: uuid.New(), Status: "draft"}, nil
 		},
 	}), denyPerm{})
 
@@ -189,7 +189,7 @@ func TestHandler_ListPurchaseOrders_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]PurchaseOrder, error) {
+		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PurchaseOrder, error) {
 			return []PurchaseOrder{{ID: uuid.New(), TenantID: tenantID}}, nil
 		},
 	}), allowAllPerm{})
@@ -214,7 +214,7 @@ func TestHandler_ListPurchaseOrders_InvalidProductionID(t *testing.T) {
 func TestHandler_ListPurchaseOrders_Denied(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]PurchaseOrder, error) {
+		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PurchaseOrder, error) {
 			t.Fatal("repository reached: ListPurchaseOrders must deny before querying")
 			return nil, nil
 		},
@@ -741,9 +741,9 @@ func TestHandler_GetPettyCashAdvance_InvalidID(t *testing.T) {
 func TestHandler_GetPettyCashAdvance_Denied(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		getPettyCashFn: func(_ context.Context, _, _ uuid.UUID) (*PettyCashAdvance, error) {
-			t.Fatal("repository reached: GetPettyCashAdvance must deny before querying")
-			return nil, nil
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			// Held by someone else, so the caller is not the owner.
+			return &PettyCashAdvance{ID: id, TenantID: tid, IssuedTo: uuid.New()}, nil
 		},
 	}), denyPerm{})
 
@@ -761,7 +761,7 @@ func TestHandler_ListPettyCashAdvances_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	h := NewHandler(NewService(&mockRepo{
-		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]PettyCashAdvance, error) {
+		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PettyCashAdvance, error) {
 			return []PettyCashAdvance{{ID: uuid.New(), TenantID: tenantID}}, nil
 		},
 	}), allowAllPerm{})
@@ -780,7 +780,7 @@ func TestHandler_ListPettyCashAdvances_NoTenant(t *testing.T) {
 func TestHandler_ListPettyCashAdvances_Denied(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(NewService(&mockRepo{
-		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int) ([]PettyCashAdvance, error) {
+		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PettyCashAdvance, error) {
 			t.Fatal("repository reached: ListPettyCashAdvances must deny before querying")
 			return nil, nil
 		},
@@ -997,4 +997,218 @@ func TestHandler_SubmitExpense_SetsSubmittedBy(t *testing.T) {
 	_, err := h.SubmitExpense(ctxWithCaller(caller), &expensev1.SubmitExpenseRequest{ProductionId: uuid.New().String(), CategoryId: "catering", Amount: "100"})
 	require.NoError(t, err)
 	assert.Equal(t, caller.UserID, saved.SubmittedBy)
+}
+
+// --- ListPurchaseOrders self-scope (#220) ---
+
+func TestHandler_ListPurchaseOrders_RaisedByMe_SelfScope(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: uuid.New()}
+	repo := &mockRepo{}
+	h := NewHandler(NewService(repo), denyPerm{}) // no expense:read: self-scope must not need it
+
+	resp, err := h.ListPurchaseOrders(ctxWithCaller(caller), &expensev1.ListPurchaseOrdersRequest{RaisedByMe: true})
+	require.NoError(t, err)
+	assert.Empty(t, resp.GetPurchaseOrders())
+	assert.Equal(t, caller.UserID, repo.lastListPORaisedBy, "owner filter must be the verified token subject")
+}
+
+func TestHandler_ListPurchaseOrders_TenantWide_RequiresRead(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PurchaseOrder, error) {
+			t.Fatal("repository reached: tenant-wide list must deny before querying")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.ListPurchaseOrders(ctxWithTenant(uuid.New()), &expensev1.ListPurchaseOrdersRequest{RaisedByMe: false})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+// pins the unauthenticated outcome; does not by itself prove the self-scope branch (see _SelfScope tests)
+func TestHandler_ListPurchaseOrders_RaisedByMe_Unauthenticated_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ListPurchaseOrders(ctxTenantNoCaller(uuid.New()), &expensev1.ListPurchaseOrdersRequest{RaisedByMe: true})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestHandler_ListPurchaseOrders_RaisedByMe_NilSubjectRefused(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.Nil, TenantID: uuid.New()}
+	h := NewHandler(NewService(&mockRepo{
+		listPOsFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PurchaseOrder, error) {
+			t.Fatal("repository reached: nil subject must never become an unfiltered list")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.ListPurchaseOrders(ctxWithCaller(caller), &expensev1.ListPurchaseOrdersRequest{RaisedByMe: true})
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- ListPettyCashAdvances self-scope (#220) ---
+
+func TestHandler_ListPettyCashAdvances_IssuedToMe_SelfScope(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: uuid.New()}
+	repo := &mockRepo{}
+	h := NewHandler(NewService(repo), denyPerm{})
+
+	_, err := h.ListPettyCashAdvances(ctxWithCaller(caller), &expensev1.ListPettyCashAdvancesRequest{IssuedToMe: true})
+	require.NoError(t, err)
+	assert.Equal(t, caller.UserID, repo.lastListPCIssuedTo, "holder filter must be the verified token subject")
+}
+
+func TestHandler_ListPettyCashAdvances_TenantWide_RequiresRead(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(NewService(&mockRepo{
+		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PettyCashAdvance, error) {
+			t.Fatal("repository reached: tenant-wide list must deny before querying")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.ListPettyCashAdvances(ctxWithTenant(uuid.New()), &expensev1.ListPettyCashAdvancesRequest{IssuedToMe: false})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+// pins the unauthenticated outcome; does not by itself prove the self-scope branch (see _SelfScope tests)
+func TestHandler_ListPettyCashAdvances_IssuedToMe_Unauthenticated_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().ListPettyCashAdvances(ctxTenantNoCaller(uuid.New()), &expensev1.ListPettyCashAdvancesRequest{IssuedToMe: true})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestHandler_ListPettyCashAdvances_IssuedToMe_NilSubjectRefused(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.Nil, TenantID: uuid.New()}
+	h := NewHandler(NewService(&mockRepo{
+		listPettyCashFn: func(_ context.Context, _, _ uuid.UUID, _ string, _, _ int, _ uuid.UUID) ([]PettyCashAdvance, error) {
+			t.Fatal("repository reached: nil subject must never become an unfiltered list")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.ListPettyCashAdvances(ctxWithCaller(caller), &expensev1.ListPettyCashAdvancesRequest{IssuedToMe: true})
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- GetPurchaseOrder owner-first (#220) ---
+
+func TestHandler_GetPurchaseOrder_OwnerReadsWithoutRead(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: uuid.New()}
+	poID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, RaisedBy: caller.UserID}, nil
+		},
+	}), denyPerm{}) // owner must not need expense:read
+
+	resp, err := h.GetPurchaseOrder(ctxWithCaller(caller), &expensev1.GetPurchaseOrderRequest{Id: poID.String()})
+	require.NoError(t, err)
+	assert.Equal(t, poID.String(), resp.GetId())
+}
+
+func TestHandler_GetPurchaseOrder_NoCaller(t *testing.T) {
+	t.Parallel()
+	_, err := newHandler().GetPurchaseOrder(ctxTenantNoCaller(uuid.New()), &expensev1.GetPurchaseOrderRequest{Id: uuid.New().String()})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// Review Focus 1: a zero subject must never match a zero RaisedBy.
+func TestHandler_GetPurchaseOrder_NilSubjectNeverOwns(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.Nil, TenantID: uuid.New()}
+	h := NewHandler(NewService(&mockRepo{
+		getPOFn: func(_ context.Context, tid, id uuid.UUID) (*PurchaseOrder, error) {
+			return &PurchaseOrder{ID: id, TenantID: tid, RaisedBy: uuid.Nil}, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.GetPurchaseOrder(ctxWithCaller(caller), &expensev1.GetPurchaseOrderRequest{Id: uuid.New().String()})
+	require.Error(t, err)
+	// RequirePermission rejects a nil subject as Unauthenticated: still denied.
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// Review Focus 5: same user id, different tenant. The tenant-scoped fetch wins.
+func TestHandler_GetPurchaseOrder_CrossTenantNotFound(t *testing.T) {
+	t.Parallel()
+	userID := uuid.New()
+	caller := interceptor.CallerInfo{UserID: userID, TenantID: uuid.New()}
+	h := NewHandler(NewService(&mockRepo{
+		getPOFn: func(_ context.Context, _, _ uuid.UUID) (*PurchaseOrder, error) {
+			return nil, ErrPONotFound // the repo scopes by tenant: the row is not visible
+		},
+	}), denyPerm{})
+
+	_, err := h.GetPurchaseOrder(ctxWithCaller(caller), &expensev1.GetPurchaseOrderRequest{Id: uuid.New().String()})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+// --- GetPettyCashAdvance owner-first (#220) ---
+
+// Review Focus 4: the holder (IssuedTo) reads, not the creator.
+func TestHandler_GetPettyCashAdvance_HolderReadsWithoutRead(t *testing.T) {
+	t.Parallel()
+	holder := interceptor.CallerInfo{UserID: uuid.New(), TenantID: uuid.New()}
+	pcID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, IssuedTo: holder.UserID}, nil
+		},
+	}), denyPerm{})
+
+	resp, err := h.GetPettyCashAdvance(ctxWithCaller(holder), &expensev1.GetPettyCashAdvanceRequest{Id: pcID.String()})
+	require.NoError(t, err)
+	assert.Equal(t, pcID.String(), resp.GetId())
+}
+
+func TestHandler_GetPettyCashAdvance_CreatorNotHolderDenied(t *testing.T) {
+	t.Parallel()
+	creator := interceptor.CallerInfo{UserID: uuid.New(), TenantID: uuid.New()}
+	h := NewHandler(NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			// Held by someone else, even though the caller may have created it.
+			return &PettyCashAdvance{ID: id, TenantID: tid, IssuedTo: uuid.New()}, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.GetPettyCashAdvance(ctxWithCaller(creator), &expensev1.GetPettyCashAdvanceRequest{Id: uuid.New().String()})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestHandler_GetPettyCashAdvance_NilSubjectNeverOwns(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.Nil, TenantID: uuid.New()}
+	h := NewHandler(NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, tid, id uuid.UUID) (*PettyCashAdvance, error) {
+			return &PettyCashAdvance{ID: id, TenantID: tid, IssuedTo: uuid.Nil}, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.GetPettyCashAdvance(ctxWithCaller(caller), &expensev1.GetPettyCashAdvanceRequest{Id: uuid.New().String()})
+	require.Error(t, err)
+	// RequirePermission rejects a nil subject as Unauthenticated: still denied.
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestHandler_GetPettyCashAdvance_CrossTenantNotFound(t *testing.T) {
+	t.Parallel()
+	caller := interceptor.CallerInfo{UserID: uuid.New(), TenantID: uuid.New()}
+	h := NewHandler(NewService(&mockRepo{
+		getPettyCashFn: func(_ context.Context, _, _ uuid.UUID) (*PettyCashAdvance, error) {
+			return nil, ErrExpenseNotFound // what Postgres.GetPettyCashAdvance returns on no-rows
+		},
+	}), denyPerm{})
+
+	_, err := h.GetPettyCashAdvance(ctxWithCaller(caller), &expensev1.GetPettyCashAdvanceRequest{Id: uuid.New().String()})
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }
