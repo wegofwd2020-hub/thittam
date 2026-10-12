@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-10-11T08:34:56+00:00",
+  "generated": "2026-10-12T08:55:36+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -1333,7 +1333,7 @@
     {
       "id": "#222",
       "name": "Vulnerabilities detected in dependencies (2026-08-14)",
-      "status": "pending",
+      "status": "done",
       "commits": 0
     },
     {
