@@ -66,11 +66,11 @@ RETURNING *;
 
 -- name: ListJournalEntries :many
 SELECT * FROM journal_entries
-WHERE tenant_id = $1
-  AND ($2::uuid IS NULL OR period_id = $2)
-  AND ($3 = '' OR status = $3)
+WHERE tenant_id = sqlc.arg('tenant_id')
+  AND (sqlc.narg('period_id')::uuid IS NULL OR period_id = sqlc.narg('period_id'))
+  AND (sqlc.arg('status') = '' OR status = sqlc.arg('status'))
 ORDER BY created_at DESC
-LIMIT $4 OFFSET $5;
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CreateJournalLine :one
 INSERT INTO journal_lines (id, journal_id, account_id, debit_amount, credit_amount, description)

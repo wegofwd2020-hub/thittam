@@ -419,24 +419,24 @@ WHERE tenant_id = $1
   AND ($2::uuid IS NULL OR period_id = $2)
   AND ($3 = '' OR status = $3)
 ORDER BY created_at DESC
-LIMIT $4 OFFSET $5
+LIMIT $5 OFFSET $4
 `
 
 type ListJournalEntriesParams struct {
 	TenantID uuid.UUID   `json:"tenant_id"`
-	Column2  uuid.UUID   `json:"column_2"`
-	Column3  interface{} `json:"column_3"`
-	Limit    int32       `json:"limit"`
+	PeriodID pgtype.UUID `json:"period_id"`
+	Status   interface{} `json:"status"`
 	Offset   int32       `json:"offset"`
+	Limit    int32       `json:"limit"`
 }
 
 func (q *Queries) ListJournalEntries(ctx context.Context, arg ListJournalEntriesParams) ([]JournalEntry, error) {
 	rows, err := q.db.Query(ctx, listJournalEntries,
 		arg.TenantID,
-		arg.Column2,
-		arg.Column3,
-		arg.Limit,
+		arg.PeriodID,
+		arg.Status,
 		arg.Offset,
+		arg.Limit,
 	)
 	if err != nil {
 		return nil, err

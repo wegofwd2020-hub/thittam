@@ -239,15 +239,15 @@ func (p *Postgres) GetJournalEntry(ctx context.Context, tenantID, id uuid.UUID) 
 
 // ListJournalEntries returns journal entry headers without lines (lightweight for listing).
 func (p *Postgres) ListJournalEntries(ctx context.Context, tenantID uuid.UUID, periodID *uuid.UUID, status string, limit, offset int) ([]ledger.JournalEntry, error) {
-	var col2 uuid.UUID
+	var period uuid.UUID
 	if periodID != nil {
-		col2 = *periodID
+		period = *periodID
 	}
 
 	rows, err := p.q.ListJournalEntries(ctx, ListJournalEntriesParams{
 		TenantID: tenantID,
-		Column2:  col2,
-		Column3:  status,
+		PeriodID: nullableUUID(period),
+		Status:   status,
 		Limit:    int32(limit),
 		Offset:   int32(offset),
 	})
@@ -462,4 +462,12 @@ func stringFromPgText(t pgtype.Text) string {
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// nullableUUID maps the zero UUID to SQL NULL (an "omit this filter" sentinel).
+func nullableUUID(id uuid.UUID) pgtype.UUID {
+	if id == uuid.Nil {
+		return pgtype.UUID{}
+	}
+	return pgtype.UUID{Bytes: id, Valid: true}
 }
