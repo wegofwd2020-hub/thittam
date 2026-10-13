@@ -381,7 +381,7 @@ export default function DashboardPage() {
         <SectionHeading>Quick Actions</SectionHeading>
         <div className="flex flex-wrap items-center gap-3">
           <Link
-            href="/projects/new"
+            href="/productions/new"
             className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold font-heading transition-opacity hover:opacity-90"
             style={{
               backgroundColor: "var(--thittam-primary, #3b82f6)",
@@ -393,7 +393,7 @@ export default function DashboardPage() {
           </Link>
 
           <Link
-            href="/projects"
+            href="/productions"
             className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold font-heading transition-colors hover:opacity-80"
             style={{
               border: "1px solid var(--thittam-border, #e2e8f0)",
