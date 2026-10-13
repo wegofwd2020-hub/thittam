@@ -37,6 +37,11 @@ export const env = {
     return process.env.NEXT_PUBLIC_BUDGET_URL || hostUrl(9081);
   },
 
+  /** general-ledger grpc-gateway — chart of accounts, journal entries, periods. */
+  get ledgerApiUrl(): string {
+    return process.env.NEXT_PUBLIC_LEDGER_URL || hostUrl(9083);
+  },
+
   /**
    * Base URL for platform-level APIs (auth, tenant provisioning).
    * Defaults to the IAM grpc-gateway port in local dev.
