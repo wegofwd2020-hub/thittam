@@ -11,13 +11,18 @@ package thittam.ledger.v1;
 
 option go_package = "github.com/wegofwd2020/thittam/gen/ledger/v1;ledgerv1";
 
+import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 
 service LedgerService {
   // --- Chart of Accounts ---
-  rpc CreateAccount(CreateAccountRequest) returns (Account);
+  rpc CreateAccount(CreateAccountRequest) returns (Account) {
+    option (google.api.http) = { post: "/api/v1/ledger/accounts" body: "*" };
+  }
   rpc GetAccount(GetAccountRequest) returns (Account);
-  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse) {
+    option (google.api.http) = { get: "/api/v1/ledger/accounts" };
+  }
 
   // SeedChartOfAccounts creates the default accounts for a tenant from a
   // vertical's chart-of-accounts definition. Idempotent: existing codes skipped.
@@ -29,17 +34,25 @@ service LedgerService {
   rpc CloseAccountingPeriod(CloseAccountingPeriodRequest) returns (AccountingPeriod);
 
   // --- Journal Entries ---
-  rpc CreateJournalEntry(CreateJournalEntryRequest) returns (JournalEntry);
-  rpc PostJournalEntry(PostJournalEntryRequest) returns (JournalEntry);
+  rpc CreateJournalEntry(CreateJournalEntryRequest) returns (JournalEntry) {
+    option (google.api.http) = { post: "/api/v1/ledger/journal-entries" body: "*" };
+  }
+  rpc PostJournalEntry(PostJournalEntryRequest) returns (JournalEntry) {
+    option (google.api.http) = { post: "/api/v1/ledger/journal-entries/{id}/post" };
+  }
   rpc GetJournalEntry(GetJournalEntryRequest) returns (JournalEntry);
-  rpc ListJournalEntries(ListJournalEntriesRequest) returns (ListJournalEntriesResponse);
+  rpc ListJournalEntries(ListJournalEntriesRequest) returns (ListJournalEntriesResponse) {
+    option (google.api.http) = { get: "/api/v1/ledger/journal-entries" };
+  }
 
   // VoidJournalEntry marks a posted entry as void and automatically creates
   // and posts a reversing entry. Returns the reversing entry.
   rpc VoidJournalEntry(VoidJournalEntryRequest) returns (JournalEntry);
 
   // --- Reports ---
-  rpc GetTrialBalance(GetTrialBalanceRequest) returns (GetTrialBalanceResponse);
+  rpc GetTrialBalance(GetTrialBalanceRequest) returns (GetTrialBalanceResponse) {
+    option (google.api.http) = { get: "/api/v1/ledger/trial-balance" };
+  }
 }
 
 // --- Core domain messages ---
