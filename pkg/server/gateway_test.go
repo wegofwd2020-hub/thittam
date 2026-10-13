@@ -26,12 +26,12 @@ func TestBuildGatewayHandler_CORSPreflight(t *testing.T) {
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodOptions, "/api/v1/anything", nil)
-	req.Header.Set("Origin", "http://localhost:3100")
+	req.Header.Set("Origin", "http://localhost:4000")
 	req.Header.Set("Access-Control-Request-Method", "POST")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
-	assert.Equal(t, "http://localhost:3100", rec.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "http://localhost:4000", rec.Header().Get("Access-Control-Allow-Origin"))
 }
 
 func preflightAllowHeaders(t *testing.T, projectHeader bool) string {
@@ -43,7 +43,7 @@ func preflightAllowHeaders(t *testing.T, projectHeader bool) string {
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodOptions, "/api/v1/anything", nil)
-	req.Header.Set("Origin", "http://localhost:3100")
+	req.Header.Set("Origin", "http://localhost:4000")
 	req.Header.Set("Access-Control-Request-Method", "POST")
 	req.Header.Set("Access-Control-Request-Headers", "x-project-id")
 	rec := httptest.NewRecorder()
@@ -75,7 +75,7 @@ func TestBuildGatewayHandler_WrapInvoked(t *testing.T) {
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/anything", nil)
-	req.Header.Set("Origin", "http://localhost:3100")
+	req.Header.Set("Origin", "http://localhost:4000")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
