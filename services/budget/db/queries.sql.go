@@ -170,13 +170,15 @@ const listBudgets = `-- name: ListBudgets :many
 SELECT id, production_id, tenant_id, label, status, currency, total_amount, submitted_by, approved_by, submitted_at, approved_at, created_by, created_at, updated_at FROM budgets
 WHERE tenant_id = $1
   AND ($2::uuid IS NULL OR production_id = $2)
+  AND ($3 = '' OR status = $3)
 ORDER BY created_at DESC
-LIMIT $4 OFFSET $3
+LIMIT $5 OFFSET $4
 `
 
 type ListBudgetsParams struct {
 	TenantID     uuid.UUID   `json:"tenant_id"`
 	ProductionID pgtype.UUID `json:"production_id"`
+	Status       interface{} `json:"status"`
 	Offset       int32       `json:"offset"`
 	Limit        int32       `json:"limit"`
 }
@@ -185,6 +187,7 @@ func (q *Queries) ListBudgets(ctx context.Context, arg ListBudgetsParams) ([]Bud
 	rows, err := q.db.Query(ctx, listBudgets,
 		arg.TenantID,
 		arg.ProductionID,
+		arg.Status,
 		arg.Offset,
 		arg.Limit,
 	)

@@ -60,6 +60,7 @@ func (p *Postgres) ListBudgets(ctx context.Context, tenantID, productionID uuid.
 	rows, err := p.q.ListBudgets(ctx, ListBudgetsParams{
 		TenantID:     tenantID,
 		ProductionID: nullableUUID(productionID),
+		Status:       status,
 		Limit:        int32(limit),
 		Offset:       int32(offset),
 	})
