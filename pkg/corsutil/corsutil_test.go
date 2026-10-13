@@ -14,30 +14,30 @@ func TestLocalDevOriginFunc(t *testing.T) {
 		origin string
 		want   bool
 	}{
-		{"http://localhost:3100", true},
+		{"http://localhost:4000", true},
 		{"http://localhost:3000", true},
-		{"http://127.0.0.1:3100", true},
-		{"http://192.168.68.55:3100", true},
+		{"http://127.0.0.1:4000", true},
+		{"http://192.168.68.55:4000", true},
 		{"http://10.0.0.5:3000", true},
-		{"http://172.16.4.2:3100", true},
-		{"http://172.31.255.1:3100", true},
+		{"http://172.16.4.2:4000", true},
+		{"http://172.31.255.1:4000", true},
 
 		// Wrong port.
 		{"http://localhost:3200", false},
 		{"http://192.168.1.1:8080", false},
 
 		// Wrong scheme — https is explicitly out of scope for local dev.
-		{"https://localhost:3100", false},
+		{"https://localhost:4000", false},
 
 		// Public IPs and non-RFC-1918 ranges.
-		{"http://8.8.8.8:3100", false},
-		{"http://172.32.0.1:3100", false}, // just outside 172.16-31
-		{"http://example.com:3100", false},
+		{"http://8.8.8.8:4000", false},
+		{"http://172.32.0.1:4000", false}, // just outside 172.16-31
+		{"http://example.com:4000", false},
 
 		// Garbage.
 		{"", false},
 		{"not-a-url", false},
-		{"http://:3100", false},
+		{"http://:4000", false},
 	}
 
 	for _, tc := range cases {
@@ -67,8 +67,8 @@ func TestOriginFunc_WithExtras(t *testing.T) {
 		{"https://whitespace.example.com", true},
 
 		// Local dev still works alongside extras.
-		{"http://localhost:3100", true},
-		{"http://192.168.1.50:3100", true},
+		{"http://localhost:4000", true},
+		{"http://192.168.1.50:4000", true},
 
 		// Not in extras and doesn't pass local-dev check.
 		{"https://other.example.com", false},

@@ -22,16 +22,16 @@ import (
 )
 
 // webPorts are the ports the Next.js dev server is allowed to run on.
-// :3100 is Thittam's current port; :3000 is kept because StudyBuddy uses it
+// :4000 is Thittam's current port; :3000 is kept because StudyBuddy uses it
 // and some contributors still run the Thittam web there historically.
 var webPorts = map[string]bool{
-	"3100": true,
+	"4000": true,
 	"3000": true,
 }
 
 // OriginFunc returns a CORS AllowOriginFunc that accepts:
 //   - any http://<host>:<port> where host is a loopback or RFC-1918 address
-//     and port is one of the Next.js dev-server ports (3100, 3000), and
+//     and port is one of the Next.js dev-server ports (4000, 3000), and
 //   - any origin whose exact string matches an entry in `extra`.
 //
 // Use `extra` to admit public demo hostnames (e.g. https://demo.example.com)

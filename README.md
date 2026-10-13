@@ -61,7 +61,7 @@ adaptation, and the runbook for adding new tenants — is documented in
 ├── seeds/demo/               # per-tenant demo fixtures
 │   ├── xyz-cba/              # XYZ_CBA Productions (movie vertical, INR) — seeded
 │   └── xyz-construction/     # XYZ Construction LLC (construction, USD) — scaffolded
-├── web/                      # Next.js frontend (port 3100)
+├── web/                      # Next.js frontend (port 4000)
 ├── e2e/critical_path/        # in-process Go E2E tests (no Docker)
 ├── load-tests/               # k6 scenarios + chaos tests
 ├── infra/local/              # docker-compose for Redis / NATS / MinIO
@@ -97,10 +97,10 @@ make dev-keys
 make dev-start
 
 # 5. In a separate terminal, start the frontend
-make run-web                     # Next.js on :3100
+make run-web                     # Next.js on :4000
 ```
 
-Log in at <http://localhost:3100/login> as `rajesh.kumar@xyzcba.com` /
+Log in at <http://localhost:4000/login> as `rajesh.kumar@xyzcba.com` /
 `demo1234`. See
 [`seeds/demo/xyz-cba/README.md`](seeds/demo/xyz-cba/README.md) for the full
 user roster and fixture details.

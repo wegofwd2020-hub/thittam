@@ -66,7 +66,7 @@ help:
 	@echo "    make dev-stop       Stop all dev services (keeps Docker containers running)"
 	@echo "    make dev-stop-all   Stop all dev services AND Docker containers"
 	@echo "    make run-all        Start all 9 backend services via tmuxinator (requires tmuxinator)"
-	@echo "    make run-web        Start Next.js frontend on :3000"
+	@echo "    make run-web        Start Next.js frontend on :4000"
 	@echo ""
 	@echo "  Quality:"
 	@echo "    make test                Unit tests"
@@ -310,7 +310,7 @@ test-integration: db-test-bootstrap
 
 # test-e2e — Playwright UX tests against the Next.js frontend.
 # Assumes backend services are up (make dev-start) and DB is seeded (make seed).
-# Playwright auto-boots `npm run dev` on :3100 via its webServer config.
+# Playwright auto-boots `npm run dev` on :4000 via its webServer config.
 test-e2e:
 	cd web && npm run test:e2e
 
