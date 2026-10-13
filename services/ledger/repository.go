@@ -18,6 +18,7 @@ type Repository interface {
 	// Accounting Periods
 	CreatePeriod(ctx context.Context, period *AccountingPeriod) error
 	GetPeriodByID(ctx context.Context, tenantID, id uuid.UUID) (*AccountingPeriod, error)
+	ListPeriods(ctx context.Context, tenantID uuid.UUID) ([]AccountingPeriod, error)
 	GetOpenPeriod(ctx context.Context, tenantID uuid.UUID, year, month int) (*AccountingPeriod, error)
 	ClosePeriod(ctx context.Context, tenantID, periodID, closedBy uuid.UUID, closedAt time.Time) error
 

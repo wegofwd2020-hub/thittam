@@ -72,6 +72,15 @@ func (s *Service) ListAccounts(ctx context.Context, tenantID uuid.UUID, limit, o
 	return accounts, nil
 }
 
+// ListAccountingPeriods returns every period for a tenant, newest first.
+func (s *Service) ListAccountingPeriods(ctx context.Context, tenantID uuid.UUID) ([]AccountingPeriod, error) {
+	periods, err := s.repo.ListPeriods(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("ledger: list accounting periods: %w", err)
+	}
+	return periods, nil
+}
+
 // SeedChartOfAccounts creates the default accounts for a tenant from a vertical's
 // chart-of-accounts definition. Idempotent: existing codes are skipped.
 // Implements registration.LedgerSeeder via a gRPC client adapter in production.

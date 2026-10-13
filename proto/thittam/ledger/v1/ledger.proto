@@ -30,6 +30,9 @@ service LedgerService {
   rpc SeedChartOfAccounts(SeedChartOfAccountsRequest) returns (SeedChartOfAccountsResponse);
 
   // --- Accounting Periods ---
+  rpc ListAccountingPeriods(ListAccountingPeriodsRequest) returns (ListAccountingPeriodsResponse) {
+    option (google.api.http) = { get: "/api/v1/ledger/periods" };
+  }
   rpc OpenAccountingPeriod(OpenAccountingPeriodRequest) returns (OpenAccountingPeriodResponse);
   rpc CloseAccountingPeriod(CloseAccountingPeriodRequest) returns (AccountingPeriod);
 
@@ -283,4 +286,16 @@ message GetTrialBalanceRequest {
 
 message GetTrialBalanceResponse {
   repeated TrialBalanceEntry entries = 1;
+}
+
+message ListAccountingPeriodsRequest {
+  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // (#144). Sending a value that differs from the token's tenant is rejected
+  // with PermissionDenied.
+  string tenant_id = 1;
+}
+
+message ListAccountingPeriodsResponse {
+  // Most recent period first.
+  repeated AccountingPeriod periods = 1;
 }

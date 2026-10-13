@@ -73,6 +73,10 @@ func (m *mockRepo) CreatePeriod(ctx context.Context, period *AccountingPeriod) e
 	}
 	return nil
 }
+func (m *mockRepo) ListPeriods(_ context.Context, _ uuid.UUID) ([]AccountingPeriod, error) {
+	return nil, nil
+}
+
 func (m *mockRepo) GetPeriodByID(ctx context.Context, tenantID, id uuid.UUID) (*AccountingPeriod, error) {
 	if m.getPeriodByIDFn != nil {
 		return m.getPeriodByIDFn(ctx, tenantID, id)

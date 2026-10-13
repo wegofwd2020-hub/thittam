@@ -366,6 +366,40 @@ func (q *Queries) GetOpenPeriod(ctx context.Context, tenantID uuid.UUID) (Accoun
 	return i, err
 }
 
+const listAccountingPeriods = `-- name: ListAccountingPeriods :many
+SELECT id, tenant_id, year, month, status, closed_by, closed_at FROM accounting_periods
+WHERE tenant_id = $1
+ORDER BY year DESC, month DESC
+`
+
+func (q *Queries) ListAccountingPeriods(ctx context.Context, tenantID uuid.UUID) ([]AccountingPeriod, error) {
+	rows, err := q.db.Query(ctx, listAccountingPeriods, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AccountingPeriod{}
+	for rows.Next() {
+		var i AccountingPeriod
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.Year,
+			&i.Month,
+			&i.Status,
+			&i.ClosedBy,
+			&i.ClosedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAccounts = `-- name: ListAccounts :many
 SELECT id, tenant_id, code, name, account_type, parent_id, is_active FROM accounts
 WHERE tenant_id = $1 AND ($2 = '' OR account_type = $2) AND is_active = true

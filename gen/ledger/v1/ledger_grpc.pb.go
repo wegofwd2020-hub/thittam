@@ -30,6 +30,7 @@ const (
 	LedgerService_GetAccount_FullMethodName            = "/thittam.ledger.v1.LedgerService/GetAccount"
 	LedgerService_ListAccounts_FullMethodName          = "/thittam.ledger.v1.LedgerService/ListAccounts"
 	LedgerService_SeedChartOfAccounts_FullMethodName   = "/thittam.ledger.v1.LedgerService/SeedChartOfAccounts"
+	LedgerService_ListAccountingPeriods_FullMethodName = "/thittam.ledger.v1.LedgerService/ListAccountingPeriods"
 	LedgerService_OpenAccountingPeriod_FullMethodName  = "/thittam.ledger.v1.LedgerService/OpenAccountingPeriod"
 	LedgerService_CloseAccountingPeriod_FullMethodName = "/thittam.ledger.v1.LedgerService/CloseAccountingPeriod"
 	LedgerService_CreateJournalEntry_FullMethodName    = "/thittam.ledger.v1.LedgerService/CreateJournalEntry"
@@ -53,6 +54,7 @@ type LedgerServiceClient interface {
 	// Called by the registration pipeline after tenant schema creation.
 	SeedChartOfAccounts(ctx context.Context, in *SeedChartOfAccountsRequest, opts ...grpc.CallOption) (*SeedChartOfAccountsResponse, error)
 	// --- Accounting Periods ---
+	ListAccountingPeriods(ctx context.Context, in *ListAccountingPeriodsRequest, opts ...grpc.CallOption) (*ListAccountingPeriodsResponse, error)
 	OpenAccountingPeriod(ctx context.Context, in *OpenAccountingPeriodRequest, opts ...grpc.CallOption) (*OpenAccountingPeriodResponse, error)
 	CloseAccountingPeriod(ctx context.Context, in *CloseAccountingPeriodRequest, opts ...grpc.CallOption) (*AccountingPeriod, error)
 	// --- Journal Entries ---
@@ -105,6 +107,15 @@ func (c *ledgerServiceClient) ListAccounts(ctx context.Context, in *ListAccounts
 func (c *ledgerServiceClient) SeedChartOfAccounts(ctx context.Context, in *SeedChartOfAccountsRequest, opts ...grpc.CallOption) (*SeedChartOfAccountsResponse, error) {
 	out := new(SeedChartOfAccountsResponse)
 	err := c.cc.Invoke(ctx, LedgerService_SeedChartOfAccounts_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ledgerServiceClient) ListAccountingPeriods(ctx context.Context, in *ListAccountingPeriodsRequest, opts ...grpc.CallOption) (*ListAccountingPeriodsResponse, error) {
+	out := new(ListAccountingPeriodsResponse)
+	err := c.cc.Invoke(ctx, LedgerService_ListAccountingPeriods_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +207,7 @@ type LedgerServiceServer interface {
 	// Called by the registration pipeline after tenant schema creation.
 	SeedChartOfAccounts(context.Context, *SeedChartOfAccountsRequest) (*SeedChartOfAccountsResponse, error)
 	// --- Accounting Periods ---
+	ListAccountingPeriods(context.Context, *ListAccountingPeriodsRequest) (*ListAccountingPeriodsResponse, error)
 	OpenAccountingPeriod(context.Context, *OpenAccountingPeriodRequest) (*OpenAccountingPeriodResponse, error)
 	CloseAccountingPeriod(context.Context, *CloseAccountingPeriodRequest) (*AccountingPeriod, error)
 	// --- Journal Entries ---
@@ -226,6 +238,9 @@ func (UnimplementedLedgerServiceServer) ListAccounts(context.Context, *ListAccou
 }
 func (UnimplementedLedgerServiceServer) SeedChartOfAccounts(context.Context, *SeedChartOfAccountsRequest) (*SeedChartOfAccountsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SeedChartOfAccounts not implemented")
+}
+func (UnimplementedLedgerServiceServer) ListAccountingPeriods(context.Context, *ListAccountingPeriodsRequest) (*ListAccountingPeriodsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListAccountingPeriods not implemented")
 }
 func (UnimplementedLedgerServiceServer) OpenAccountingPeriod(context.Context, *OpenAccountingPeriodRequest) (*OpenAccountingPeriodResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OpenAccountingPeriod not implemented")
@@ -332,6 +347,24 @@ func _LedgerService_SeedChartOfAccounts_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LedgerServiceServer).SeedChartOfAccounts(ctx, req.(*SeedChartOfAccountsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LedgerService_ListAccountingPeriods_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAccountingPeriodsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LedgerServiceServer).ListAccountingPeriods(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LedgerService_ListAccountingPeriods_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LedgerServiceServer).ListAccountingPeriods(ctx, req.(*ListAccountingPeriodsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -502,6 +535,10 @@ var LedgerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SeedChartOfAccounts",
 			Handler:    _LedgerService_SeedChartOfAccounts_Handler,
+		},
+		{
+			MethodName: "ListAccountingPeriods",
+			Handler:    _LedgerService_ListAccountingPeriods_Handler,
 		},
 		{
 			MethodName: "OpenAccountingPeriod",

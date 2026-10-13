@@ -478,6 +478,14 @@ func (r *ledgerRepo) CreatePeriod(_ context.Context, p *ledger.AccountingPeriod)
 	r.periods[p.ID] = p
 	return nil
 }
+func (r *ledgerRepo) ListPeriods(_ context.Context, _ uuid.UUID) ([]ledger.AccountingPeriod, error) {
+	out := make([]ledger.AccountingPeriod, 0, len(r.periods))
+	for _, p := range r.periods {
+		out = append(out, *p)
+	}
+	return out, nil
+}
+
 func (r *ledgerRepo) GetPeriodByID(_ context.Context, _, id uuid.UUID) (*ledger.AccountingPeriod, error) {
 	if p, ok := r.periods[id]; ok {
 		return p, nil
