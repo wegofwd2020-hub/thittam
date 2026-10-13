@@ -104,7 +104,7 @@ Widen both List signatures by one trailing `uuid.UUID` (mirroring `ListExpenses`
 - `ListPurchaseOrders(ctx, tenantID, productionID uuid.UUID, status string, limit, offset int, raisedBy uuid.UUID) ([]PurchaseOrder, error)`
 - `ListPettyCashAdvances(ctx, tenantID, productionID uuid.UUID, status string, limit, offset int, issuedTo uuid.UUID) ([]PettyCashAdvance, error)`
 
-`Service` passes through. `mockRepo`/`expenseMock`/`expenseRepo` gain the trailing param (e2e/mock: filter or ignore consistent with their existing behavior — the e2e `expenseRepo` should honor the filter so the e2e self-scope path is real, mirroring how #165's helpers were made discriminating). All four edited in the SAME commit as the interface change.
+`Service` passes through. `mockRepo`/`expenseMock`/`expenseRepo` gain the trailing param (e2e/mock: the e2e `expenseRepo` fakes ignore the filter, matching its existing `ListExpenses` fake. No e2e test exercises the self-scope flags, so honoring the filter would not be tested. The real-Postgres test `services/expense/db/list_po_pc_filter_integration_test.go` is the authoritative proof of the owner filter). All four edited in the SAME commit as the interface change.
 
 ### SQL (`services/expense/db/queries.sql`) + regen
 
