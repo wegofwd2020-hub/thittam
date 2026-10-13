@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 import path from "node:path";
 
-const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3100);
+const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 4000);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`;
 const STORAGE_STATE = path.join(__dirname, "playwright/.auth/user.json");
 
