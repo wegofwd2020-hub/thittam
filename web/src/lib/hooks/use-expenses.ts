@@ -54,13 +54,12 @@ export const expenseKeys = {
 // ---------------------------------------------------------------------------
 
 export function useExpenses(
-  productionId: string,
+  productionId?: string,
   params?: { status?: string },
 ) {
   return useQuery({
-    queryKey: expenseKeys.list(productionId, params),
+    queryKey: expenseKeys.list(productionId ?? "all", params),
     queryFn: () => listExpenses(productionId, params),
-    enabled: !!productionId,
   });
 }
 

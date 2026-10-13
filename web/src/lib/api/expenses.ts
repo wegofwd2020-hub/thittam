@@ -129,11 +129,12 @@ function qs(params?: Record<string, string | number | undefined>): string {
 
 const BASE = "/api/v1/expenses";
 
+// Tenant-wide when productionId is omitted (server scopes by the caller's token).
 export async function listExpenses(
-  productionId: string,
+  productionId?: string,
   params?: { status?: string; limit?: number; after?: string },
-): Promise<Expense[]> {
-  return api.getList<Expense[]>(
+): Promise<{ expenses: Expense[] }> {
+  return api.getList<{ expenses: Expense[] }>(
     `${BASE}${qs({ production_id: productionId, ...params })}`,
   );
 }
@@ -168,8 +169,8 @@ const PO_BASE = "/api/v1/purchase-orders";
 export async function listPurchaseOrders(
   productionId: string,
   params?: { status?: string; limit?: number; after?: string },
-): Promise<PurchaseOrder[]> {
-  return api.getList<PurchaseOrder[]>(
+): Promise<{ purchase_orders: PurchaseOrder[] }> {
+  return api.getList<{ purchase_orders: PurchaseOrder[] }>(
     `${PO_BASE}${qs({ production_id: productionId, ...params })}`,
   );
 }
@@ -195,8 +196,8 @@ const PETTY_BASE = "/api/v1/petty-cash";
 export async function listPettyCash(
   productionId: string,
   params?: { status?: string; limit?: number; after?: string },
-): Promise<PettyCashAdvance[]> {
-  return api.getList<PettyCashAdvance[]>(
+): Promise<{ advances: PettyCashAdvance[] }> {
+  return api.getList<{ advances: PettyCashAdvance[] }>(
     `${PETTY_BASE}${qs({ production_id: productionId, ...params })}`,
   );
 }
@@ -221,8 +222,8 @@ export async function settlePettyCash(
 // Categories & Approval config (vertical config)
 // ---------------------------------------------------------------------------
 
-export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
-  return api.getList<ExpenseCategory[]>(
+export async function getExpenseCategories(): Promise<{ categories: ExpenseCategory[] }> {
+  return api.getList<{ categories: ExpenseCategory[] }>(
     "/api/v1/config/expense-categories",
   );
 }

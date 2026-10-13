@@ -37,6 +37,11 @@ export const env = {
     return process.env.NEXT_PUBLIC_BUDGET_URL || hostUrl(9081);
   },
 
+  /** expense-tracking grpc-gateway — expenses, purchase orders, petty cash. */
+  get expenseApiUrl(): string {
+    return process.env.NEXT_PUBLIC_EXPENSE_URL || hostUrl(9082);
+  },
+
   /** general-ledger grpc-gateway — chart of accounts, journal entries, periods. */
   get ledgerApiUrl(): string {
     return process.env.NEXT_PUBLIC_LEDGER_URL || hostUrl(9083);
