@@ -50,7 +50,7 @@ products:
     stage: build
     start_date: 2026-10-20
   - slug: studybuddy-ondemand
-    title: StudyBuddy OnDemand
+    title: StudyBuddy
     description: Adaptive STEM tutoring SaaS.
     stage: build
     start_date: 2026-10-20
