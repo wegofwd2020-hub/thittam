@@ -87,7 +87,7 @@ function useSidebarMenu(): MenuSection[] {
         {
           key: "projects",
           label: entityLabels.projectPlural,
-          href: "/projects",
+          href: "/productions",
           iconName: sidebarIcons.productions ?? "FolderKanban",
           fallbackIcon: FolderKanban,
         },

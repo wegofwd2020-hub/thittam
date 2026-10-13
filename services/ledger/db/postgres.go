@@ -127,6 +127,19 @@ func (p *Postgres) GetPeriodByID(ctx context.Context, tenantID, id uuid.UUID) (*
 	return periodFromDB(row), nil
 }
 
+// ListPeriods returns every accounting period for the tenant, newest first.
+func (p *Postgres) ListPeriods(ctx context.Context, tenantID uuid.UUID) ([]ledger.AccountingPeriod, error) {
+	rows, err := p.q.ListAccountingPeriods(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("ledger: list periods: %w", err)
+	}
+	result := make([]ledger.AccountingPeriod, len(rows))
+	for i, row := range rows {
+		result[i] = *periodFromDB(row)
+	}
+	return result, nil
+}
+
 // GetOpenPeriod returns the most recent open period for the tenant.
 // The year/month parameters are accepted by the interface but are not used
 // in the current SQL query — it returns the most recently opened period.

@@ -153,6 +153,40 @@ func TestHandler_ListAccounts_InvalidTenantID(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+// --- ListAccountingPeriods ---
+
+func TestHandler_ListAccountingPeriods_Success(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		listPeriodsFn: func(_ context.Context, _ uuid.UUID) ([]AccountingPeriod, error) {
+			return []AccountingPeriod{
+				{ID: uuid.New(), TenantID: tenantID, Year: 2026, Month: 12, Status: "open"},
+				{ID: uuid.New(), TenantID: tenantID, Year: 2026, Month: 10, Status: "open"},
+			}, nil
+		},
+	}), allowAllPerm{})
+
+	resp, err := h.ListAccountingPeriods(callerCtx(tenantID), &ledgerv1.ListAccountingPeriodsRequest{TenantId: tenantID.String()})
+	require.NoError(t, err)
+	require.Len(t, resp.GetPeriods(), 2)
+	assert.Equal(t, int32(12), resp.GetPeriods()[0].GetMonth())
+}
+
+func TestHandler_ListAccountingPeriods_MemberDenied(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	h := NewHandler(NewService(&mockRepo{
+		listPeriodsFn: func(context.Context, uuid.UUID) ([]AccountingPeriod, error) {
+			t.Fatal("gate must fire before the repository is read")
+			return nil, nil
+		},
+	}), denyPerm{})
+
+	_, err := h.ListAccountingPeriods(callerCtx(tenantID), &ledgerv1.ListAccountingPeriodsRequest{TenantId: tenantID.String()})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
 // --- SeedChartOfAccounts ---
 
 func TestHandler_SeedChartOfAccounts_Success(t *testing.T) {

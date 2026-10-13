@@ -135,6 +135,28 @@ func (h *Handler) ListAccounts(ctx context.Context, req *ledgerv1.ListAccountsRe
 	return &ledgerv1.ListAccountsResponse{Accounts: out}, nil
 }
 
+func (h *Handler) ListAccountingPeriods(ctx context.Context, req *ledgerv1.ListAccountingPeriodsRequest) (*ledgerv1.ListAccountingPeriodsResponse, error) {
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
+	if err != nil {
+		return nil, err
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerRead); err != nil {
+		return nil, err
+	}
+
+	periods, err := h.svc.ListAccountingPeriods(ctx, tenantID)
+	if err != nil {
+		return nil, grpcErr(err)
+	}
+
+	out := make([]*ledgerv1.AccountingPeriod, len(periods))
+	for i := range periods {
+		out[i] = periodToProto(&periods[i])
+	}
+	return &ledgerv1.ListAccountingPeriodsResponse{Periods: out}, nil
+}
+
 func (h *Handler) SeedChartOfAccounts(ctx context.Context, req *ledgerv1.SeedChartOfAccountsRequest) (*ledgerv1.SeedChartOfAccountsResponse, error) {
 	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
 	if err != nil {

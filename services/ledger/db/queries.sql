@@ -33,6 +33,11 @@ LIMIT 1;
 -- name: GetAccountingPeriod :one
 SELECT * FROM accounting_periods WHERE id = $1 AND tenant_id = $2;
 
+-- name: ListAccountingPeriods :many
+SELECT * FROM accounting_periods
+WHERE tenant_id = $1
+ORDER BY year DESC, month DESC;
+
 -- name: CloseAccountingPeriod :one
 UPDATE accounting_periods SET status = 'closed', closed_at = now(), closed_by = $3
 WHERE id = $1 AND tenant_id = $2

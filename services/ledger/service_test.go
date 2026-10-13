@@ -27,20 +27,21 @@ var (
 // --- Mock Repository ---
 
 type mockRepo struct {
-	createAccountFn        func(ctx context.Context, account *Account) error
-	getAccountByIDFn       func(ctx context.Context, tenantID, id uuid.UUID) (*Account, error)
-	getAccountByCodeFn     func(ctx context.Context, tenantID uuid.UUID, code string) (*Account, error)
-	listAccountsFn         func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]Account, error)
-	createPeriodFn         func(ctx context.Context, period *AccountingPeriod) error
-	getPeriodByIDFn        func(ctx context.Context, tenantID, id uuid.UUID) (*AccountingPeriod, error)
-	getOpenPeriodFn        func(ctx context.Context, tenantID uuid.UUID, year, month int) (*AccountingPeriod, error)
-	closePeriodFn          func(ctx context.Context, tenantID, periodID, closedBy uuid.UUID, closedAt time.Time) error
-	allocateEntryNumberFn  func(ctx context.Context, tenantID uuid.UUID, year int) (string, error)
-	createJournalEntryFn   func(ctx context.Context, je *JournalEntry) error
-	getJournalEntryFn      func(ctx context.Context, tenantID, id uuid.UUID) (*JournalEntry, error)
-	listJournalEntriesFn   func(ctx context.Context, tenantID uuid.UUID, periodID *uuid.UUID, status string, limit, offset int) ([]JournalEntry, error)
-	updateJournalStatusFn  func(ctx context.Context, tenantID, id uuid.UUID, status string, actorID uuid.UUID, at time.Time) error
-	getTrialBalanceFn      func(ctx context.Context, tenantID uuid.UUID, asOf time.Time) ([]TrialBalanceEntry, error)
+	createAccountFn       func(ctx context.Context, account *Account) error
+	getAccountByIDFn      func(ctx context.Context, tenantID, id uuid.UUID) (*Account, error)
+	getAccountByCodeFn    func(ctx context.Context, tenantID uuid.UUID, code string) (*Account, error)
+	listAccountsFn        func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]Account, error)
+	listPeriodsFn         func(ctx context.Context, tenantID uuid.UUID) ([]AccountingPeriod, error)
+	createPeriodFn        func(ctx context.Context, period *AccountingPeriod) error
+	getPeriodByIDFn       func(ctx context.Context, tenantID, id uuid.UUID) (*AccountingPeriod, error)
+	getOpenPeriodFn       func(ctx context.Context, tenantID uuid.UUID, year, month int) (*AccountingPeriod, error)
+	closePeriodFn         func(ctx context.Context, tenantID, periodID, closedBy uuid.UUID, closedAt time.Time) error
+	allocateEntryNumberFn func(ctx context.Context, tenantID uuid.UUID, year int) (string, error)
+	createJournalEntryFn  func(ctx context.Context, je *JournalEntry) error
+	getJournalEntryFn     func(ctx context.Context, tenantID, id uuid.UUID) (*JournalEntry, error)
+	listJournalEntriesFn  func(ctx context.Context, tenantID uuid.UUID, periodID *uuid.UUID, status string, limit, offset int) ([]JournalEntry, error)
+	updateJournalStatusFn func(ctx context.Context, tenantID, id uuid.UUID, status string, actorID uuid.UUID, at time.Time) error
+	getTrialBalanceFn     func(ctx context.Context, tenantID uuid.UUID, asOf time.Time) ([]TrialBalanceEntry, error)
 }
 
 func (m *mockRepo) CreateAccount(ctx context.Context, account *Account) error {
@@ -73,6 +74,13 @@ func (m *mockRepo) CreatePeriod(ctx context.Context, period *AccountingPeriod) e
 	}
 	return nil
 }
+func (m *mockRepo) ListPeriods(ctx context.Context, tenantID uuid.UUID) ([]AccountingPeriod, error) {
+	if m.listPeriodsFn != nil {
+		return m.listPeriodsFn(ctx, tenantID)
+	}
+	return nil, nil
+}
+
 func (m *mockRepo) GetPeriodByID(ctx context.Context, tenantID, id uuid.UUID) (*AccountingPeriod, error) {
 	if m.getPeriodByIDFn != nil {
 		return m.getPeriodByIDFn(ctx, tenantID, id)
@@ -725,4 +733,30 @@ func TestPublish_NilPublisher_IsNoOp(t *testing.T) {
 		return nil
 	})
 	assert.False(t, called, "nil publisher: fn must not be called")
+}
+
+func TestListAccountingPeriods_Success(t *testing.T) {
+	t.Parallel()
+	tenantID := uuid.New()
+	svc := NewService(&mockRepo{
+		listPeriodsFn: func(_ context.Context, tid uuid.UUID) ([]AccountingPeriod, error) {
+			assert.Equal(t, tenantID, tid)
+			return []AccountingPeriod{{ID: uuid.New(), TenantID: tenantID, Year: 2026, Month: 10, Status: "open"}}, nil
+		},
+	})
+	periods, err := svc.ListAccountingPeriods(context.Background(), tenantID)
+	require.NoError(t, err)
+	assert.Len(t, periods, 1)
+	assert.Equal(t, 10, periods[0].Month)
+}
+
+func TestListAccountingPeriods_RepoError(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{
+		listPeriodsFn: func(context.Context, uuid.UUID) ([]AccountingPeriod, error) {
+			return nil, fmt.Errorf("db down")
+		},
+	})
+	_, err := svc.ListAccountingPeriods(context.Background(), uuid.New())
+	assert.ErrorContains(t, err, "db down")
 }

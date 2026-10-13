@@ -105,6 +105,18 @@ func main() {
 
 	ledgerv1.RegisterLedgerServiceServer(srv.GRPCServer(), handler)
 
+	// --- REST gateway (grpc-gateway) — via the shared helper. ---
+	go func() {
+		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
+			ServiceName:  "general-ledger",
+			GRPCEndpoint: "localhost:8083",
+			HTTPPort:     9083,
+			Register:     ledgerv1.RegisterLedgerServiceHandlerFromEndpoint,
+		}); err != nil {
+			log.Fatalf("general-ledger: gateway: %v", err)
+		}
+	}()
+
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
 	srv.RegisterHealthChecker("nats", &natsChecker{nc: nc})
 
