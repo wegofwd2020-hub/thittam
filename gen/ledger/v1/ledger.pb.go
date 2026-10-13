@@ -632,7 +632,7 @@ type CreateAccountRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId    string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -714,7 +714,7 @@ type GetAccountRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -772,7 +772,7 @@ type ListAccountsRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -869,7 +869,7 @@ type SeedChartOfAccountsRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -983,7 +983,7 @@ type OpenAccountingPeriodRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -1096,12 +1096,12 @@ type CloseAccountingPeriodRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	PeriodId string `protobuf:"bytes,2,opt,name=period_id,json=periodId,proto3" json:"period_id,omitempty"`
-	// Deprecated: ignored. The actor is derived from the caller's verified token
+	// Ignored. The actor is derived from the caller's verified token
 	// (#149). Sending a value that differs from the authenticated caller is rejected
 	// with PermissionDenied.
 	ClosedBy string `protobuf:"bytes,3,opt,name=closed_by,json=closedBy,proto3" json:"closed_by,omitempty"`
@@ -1166,7 +1166,7 @@ type CreateJournalEntryRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId     string              `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -1337,12 +1337,12 @@ type PostJournalEntryRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	Id       string `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
-	// Deprecated: ignored. The actor is derived from the caller's verified token
+	// Ignored. The actor is derived from the caller's verified token
 	// (#149). Sending a value that differs from the authenticated caller is rejected
 	// with PermissionDenied.
 	PostedBy string `protobuf:"bytes,3,opt,name=posted_by,json=postedBy,proto3" json:"posted_by,omitempty"`
@@ -1406,7 +1406,7 @@ type GetJournalEntryRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -1464,7 +1464,7 @@ type ListJournalEntriesRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -1593,12 +1593,12 @@ type VoidJournalEntryRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	Id       string `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
-	// Deprecated: ignored. The actor is derived from the caller's verified token
+	// Ignored. The actor is derived from the caller's verified token
 	// (#149). Sending a value that differs from the authenticated caller is rejected
 	// with PermissionDenied.
 	VoidedBy string `protobuf:"bytes,3,opt,name=voided_by,json=voidedBy,proto3" json:"voided_by,omitempty"`
@@ -1663,7 +1663,7 @@ type GetTrialBalanceRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -1768,7 +1768,7 @@ type ListAccountingPeriodsRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Deprecated: ignored. The tenant is derived from the caller's verified token
+	// Ignored. The tenant is derived from the caller's verified token
 	// (#144). Sending a value that differs from the token's tenant is rejected
 	// with PermissionDenied.
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
