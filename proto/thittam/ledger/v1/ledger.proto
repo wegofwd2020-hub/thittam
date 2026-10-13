@@ -137,7 +137,7 @@ message TrialBalanceEntry {
 
 // Chart of Accounts
 message CreateAccountRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
@@ -148,7 +148,7 @@ message CreateAccountRequest {
 }
 
 message GetAccountRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
@@ -156,7 +156,7 @@ message GetAccountRequest {
 }
 
 message ListAccountsRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
@@ -167,7 +167,7 @@ message ListAccountsResponse {
 }
 
 message SeedChartOfAccountsRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
@@ -181,7 +181,7 @@ message SeedChartOfAccountsResponse {
 
 // Accounting Periods
 message OpenAccountingPeriodRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
@@ -194,12 +194,12 @@ message OpenAccountingPeriodResponse {
 }
 
 message CloseAccountingPeriodRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
   string period_id = 2;
-  // Deprecated: ignored. The actor is derived from the caller's verified token
+  // Ignored. The actor is derived from the caller's verified token
   // (#149). Sending a value that differs from the authenticated caller is rejected
   // with PermissionDenied.
   string closed_by = 3;
@@ -207,7 +207,7 @@ message CloseAccountingPeriodRequest {
 
 // Journal Entries
 message CreateJournalEntryRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
@@ -229,19 +229,19 @@ message JournalLineInput {
 }
 
 message PostJournalEntryRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
   string id = 2;
-  // Deprecated: ignored. The actor is derived from the caller's verified token
+  // Ignored. The actor is derived from the caller's verified token
   // (#149). Sending a value that differs from the authenticated caller is rejected
   // with PermissionDenied.
   string posted_by = 3;
 }
 
 message GetJournalEntryRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
@@ -249,7 +249,7 @@ message GetJournalEntryRequest {
 }
 
 message ListJournalEntriesRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
@@ -264,12 +264,12 @@ message ListJournalEntriesResponse {
 }
 
 message VoidJournalEntryRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
   string id = 2;
-  // Deprecated: ignored. The actor is derived from the caller's verified token
+  // Ignored. The actor is derived from the caller's verified token
   // (#149). Sending a value that differs from the authenticated caller is rejected
   // with PermissionDenied.
   string voided_by = 3;
@@ -277,7 +277,7 @@ message VoidJournalEntryRequest {
 
 // Reports
 message GetTrialBalanceRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
@@ -289,7 +289,7 @@ message GetTrialBalanceResponse {
 }
 
 message ListAccountingPeriodsRequest {
-  // Deprecated: ignored. The tenant is derived from the caller's verified token
+  // Ignored. The tenant is derived from the caller's verified token
   // (#144). Sending a value that differs from the token's tenant is rejected
   // with PermissionDenied.
   string tenant_id = 1;
