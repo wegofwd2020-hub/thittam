@@ -9,6 +9,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AmountDisplay } from "@/components/ui/amount-display";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import type { Expense as ApiExpense, ExpenseCategory } from "@/lib/api/expenses";
+import { useExpenses, useExpenseCategories } from "@/lib/hooks/use-expenses";
+import { useProductions } from "@/lib/hooks/use-productions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,216 +62,6 @@ function TaxTreatmentBadge({ treatment }: { treatment: TaxTreatment }) {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data — 12 expenses matching XYZ_CBA pattern
-// ---------------------------------------------------------------------------
-const mockExpenses: Expense[] = [
-  {
-    id: "exp-001",
-    description: "Film City Studio Rental — 45 days",
-    category: "Locations",
-    taxTreatment: "gst_18",
-    amount: "1800000.00",
-    taxAmount: "324000.00",
-    currency: "INR",
-    status: "paid",
-    poNumber: "PO-001",
-    poId: "po-001",
-    submittedBy: "Ravi Kumar",
-    date: "2026-01-15",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-  },
-  {
-    id: "exp-002",
-    description: "Goa Location Permits & Logistics",
-    category: "Locations",
-    taxTreatment: "gst_18",
-    amount: "500000.00",
-    taxAmount: "90000.00",
-    currency: "INR",
-    status: "paid",
-    poNumber: "PO-002",
-    poId: "po-002",
-    submittedBy: "Priya Sharma",
-    date: "2026-01-28",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-  },
-  {
-    id: "exp-003",
-    description: "ARRI Alexa Mini LF Camera Package",
-    category: "Camera Equipment",
-    taxTreatment: "gst_18",
-    amount: "2200000.00",
-    taxAmount: "396000.00",
-    currency: "INR",
-    status: "paid",
-    poNumber: "PO-003",
-    poId: "po-003",
-    submittedBy: "Arjun Mehta",
-    date: "2026-02-05",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-  },
-  {
-    id: "exp-004",
-    description: "Lighting Equipment — Tungsten + LED Kit",
-    category: "Camera Equipment",
-    taxTreatment: "gst_18",
-    amount: "800000.00",
-    taxAmount: "144000.00",
-    currency: "INR",
-    status: "paid",
-    poNumber: null,
-    poId: null,
-    submittedBy: "Arjun Mehta",
-    date: "2026-02-10",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-  },
-  {
-    id: "exp-005",
-    description: "Ladakh Location Recce & Permits",
-    category: "Locations",
-    taxTreatment: "gst_5",
-    amount: "750000.00",
-    taxAmount: "37500.00",
-    currency: "INR",
-    status: "approved",
-    poNumber: null,
-    poId: null,
-    submittedBy: "Priya Sharma",
-    date: "2026-03-01",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-  },
-  {
-    id: "exp-006",
-    description: "Luxury Hotel — Cast Accommodation (at approval limit)",
-    category: "Travel & Accommodation",
-    taxTreatment: "gst_18",
-    amount: "200000.00",
-    taxAmount: "36000.00",
-    currency: "INR",
-    status: "approved",
-    poNumber: null,
-    poId: null,
-    submittedBy: "Deepa Nair",
-    date: "2026-03-05",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-  },
-  {
-    id: "exp-007",
-    description: "Heritage Building Shoot Location",
-    category: "Locations",
-    taxTreatment: "gst_12",
-    amount: "250000.00",
-    taxAmount: "30000.00",
-    currency: "INR",
-    status: "submitted",
-    poNumber: "PO-004",
-    poId: "po-004",
-    submittedBy: "Priya Sharma",
-    date: "2026-03-12",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-  },
-  {
-    id: "exp-008",
-    description: "Drone Operator — Aerial Shots Package",
-    category: "Camera Equipment",
-    taxTreatment: "tds_194j",
-    amount: "180000.00",
-    taxAmount: "18000.00",
-    currency: "INR",
-    status: "submitted",
-    poNumber: "PO-005",
-    poId: "po-005",
-    submittedBy: "Arjun Mehta",
-    date: "2026-03-15",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-  },
-  {
-    id: "exp-009",
-    description: "VFX Render Farm — 2000 hrs",
-    category: "Post Production",
-    taxTreatment: "gst_18",
-    amount: "150000.00",
-    taxAmount: "27000.00",
-    currency: "INR",
-    status: "submitted",
-    poNumber: null,
-    poId: null,
-    submittedBy: "Kiran Rao",
-    date: "2026-03-20",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-  },
-  {
-    id: "exp-010",
-    description: "IMAX Camera Rental — 30 days",
-    category: "Camera Equipment",
-    taxTreatment: "gst_18",
-    amount: "3500000.00",
-    taxAmount: "630000.00",
-    currency: "INR",
-    status: "rejected",
-    poNumber: null,
-    poId: null,
-    submittedBy: "Arjun Mehta",
-    date: "2026-03-08",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-  },
-  {
-    id: "exp-011",
-    description: "Post Production Studio Booking — 3 weeks",
-    category: "Post Production",
-    taxTreatment: "gst_18",
-    amount: "400000.00",
-    taxAmount: "72000.00",
-    currency: "INR",
-    status: "draft",
-    poNumber: null,
-    poId: null,
-    submittedBy: "Kiran Rao",
-    date: "2026-03-25",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-  },
-  {
-    id: "exp-012",
-    description: "Crew Meals — Outdoor Shoot (3 days)",
-    category: "Crew & Catering",
-    taxTreatment: "gst_5",
-    amount: "8500.00",
-    taxAmount: "425.00",
-    currency: "INR",
-    status: "paid",
-    poNumber: null,
-    poId: null,
-    submittedBy: "Deepa Nair",
-    date: "2026-02-20",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: true,
-  },
-];
-
-// ---------------------------------------------------------------------------
 // Filter chip definitions
 // ---------------------------------------------------------------------------
 const FILTER_OPTIONS = [
@@ -282,23 +75,38 @@ const FILTER_OPTIONS = [
 
 type FilterKey = (typeof FILTER_OPTIONS)[number]["key"];
 
-const CATEGORY_OPTIONS = [
-  "All Categories",
-  "Locations",
-  "Camera Equipment",
-  "Post Production",
-  "Travel & Accommodation",
-  "Crew & Catering",
-];
 
-const PRODUCTION_OPTIONS = [
-  { id: "all", title: "All Productions" },
-  ...Array.from(
-    new Map(
-      mockExpenses.map((e) => [e.productionId, { id: e.productionId, title: e.productionTitle }])
-    ).values()
-  ),
-];
+// ---------------------------------------------------------------------------
+// API → row mapping
+// ---------------------------------------------------------------------------
+function toTaxTreatment(value: string | undefined): TaxTreatment {
+  return value && value in TAX_LABELS ? (value as TaxTreatment) : "gst_exempt";
+}
+
+function toRow(
+  e: ApiExpense,
+  categories: Map<string, ExpenseCategory>,
+  productions: Map<string, string>,
+): Expense {
+  const cat = categories.get(e.category_id);
+  return {
+    id: e.id,
+    description: e.description,
+    category: cat?.label ?? "Uncategorised",
+    taxTreatment: toTaxTreatment(cat?.tax_treatment),
+    amount: e.amount,
+    taxAmount: e.tax_amount,
+    currency: e.currency,
+    status: e.status as ExpenseStatus,
+    poNumber: e.purchase_order_id || null,
+    poId: e.purchase_order_id || null,
+    submittedBy: e.submitted_by ?? "",
+    date: (e.submitted_at ?? e.created_at ?? "").slice(0, 10),
+    productionId: e.production_id,
+    productionTitle: productions.get(e.production_id) ?? e.production_id,
+    isPettyCash: false,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Page
@@ -310,14 +118,37 @@ export default function ExpensesPage() {
   const [categoryFilter, setCategoryFilter] = useState("All Categories");
   const [productionFilter, setProductionFilter] = useState("all");
 
+  const expensesQuery = useExpenses();
+  const productionsQuery = useProductions();
+  const categoriesQuery = useExpenseCategories();
+
+  const productionOptions = useMemo(
+    () => [
+      { id: "all", title: "All Productions" },
+      ...(productionsQuery.data?.productions ?? []).map((p) => ({ id: p.id, title: p.title })),
+    ],
+    [productionsQuery.data],
+  );
+
+  const rows = useMemo(() => {
+    const cats = new Map((categoriesQuery.data?.categories ?? []).map((c) => [c.id, c]));
+    const prods = new Map((productionsQuery.data?.productions ?? []).map((p) => [p.id, p.title]));
+    return (expensesQuery.data?.expenses ?? []).map((e) => toRow(e, cats, prods));
+  }, [expensesQuery.data, categoriesQuery.data, productionsQuery.data]);
+
+  const categoryOptions = useMemo(
+    () => ["All Categories", ...Array.from(new Set(rows.map((r) => r.category)))],
+    [rows],
+  );
+
   const filtered = useMemo(() => {
-    return mockExpenses.filter((e) => {
+    return rows.filter((e) => {
       if (statusFilter !== "all" && e.status !== statusFilter) return false;
       if (categoryFilter !== "All Categories" && e.category !== categoryFilter) return false;
       if (productionFilter !== "all" && e.productionId !== productionFilter) return false;
       return true;
     });
-  }, [statusFilter, categoryFilter, productionFilter]);
+  }, [rows, statusFilter, categoryFilter, productionFilter]);
 
   const columns: Column<Expense>[] = [
     {
@@ -497,7 +328,7 @@ export default function ExpensesPage() {
               color: "var(--thittam-foreground, #0f172a)",
             }}
           >
-            {CATEGORY_OPTIONS.map((c) => (
+            {categoryOptions.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
@@ -514,7 +345,7 @@ export default function ExpensesPage() {
               color: "var(--thittam-foreground, #0f172a)",
             }}
           >
-            {PRODUCTION_OPTIONS.map((p) => (
+            {productionOptions.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.title}
               </option>
@@ -545,8 +376,13 @@ export default function ExpensesPage() {
       <DataTable<Record<string, unknown>>
         columns={columns as unknown as Column<Record<string, unknown>>[]}
         data={filtered as unknown as Record<string, unknown>[]}
+        isLoading={expensesQuery.isLoading}
         onRowClick={(row) => router.push(`/expenses/${(row as unknown as Expense).id}`)}
-        emptyMessage="No expenses match the selected filters."
+        emptyMessage={
+          expensesQuery.error
+            ? `Failed to load expenses: ${expensesQuery.error.message}`
+            : "No expenses match the selected filters."
+        }
       />
     </div>
   );
