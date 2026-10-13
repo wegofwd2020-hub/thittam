@@ -11,6 +11,26 @@
   --background: #ffffff;
   --foreground: #171717;
 
+  /* Kaundinya Labs brand (from kl-brand-kit) */
+  --thittam-primary: #16213A;
+  --thittam-primary-foreground: #FFFFFF;
+  --thittam-secondary: #243150;
+  --thittam-secondary-foreground: #D5DAE4;
+  --thittam-accent: #A3541A;
+  --thittam-accent-foreground: #FFFFFF;
+  --thittam-background: #FFFFFF;
+  --thittam-foreground: #16213A;
+  --thittam-muted: #EEF0F4;
+  --thittam-muted-foreground: #4A5368;
+  --thittam-border: #C9CDD6;
+  --thittam-sidebar-bg: #16213A;
+  --thittam-sidebar-text: #D5DAE4;
+  --thittam-sidebar-active-item: #E08A3C;
+  --thittam-sidebar-active-bg: #243150;
+  --thittam-status-on-track: #15803D;
+  --thittam-status-at-risk: #B45309;
+  --thittam-status-over-budget: #B91C1C;
+
   /* shadcn token aliases → --thittam-* (set by ThemeProvider on :root) */
   --primary: var(--thittam-primary, #3b82f6);
   --primary-foreground: var(--thittam-primary-foreground, #ffffff);

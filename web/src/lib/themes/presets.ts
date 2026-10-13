@@ -46,4 +46,33 @@ export const THEME_PRESETS: ThemePreset[] = [
       accentForeground: "#FFF1F2",
     },
   },
+  {
+    id: "kaundinya-labs",
+    name: "Kaundinya Labs",
+    description: "Navy ink with a saffron accent — the Kaundinya Labs house look.",
+    colors: {
+      primary: "#16213A",
+      primaryForeground: "#FFFFFF",
+      secondary: "#243150",
+      secondaryForeground: "#D5DAE4",
+      accent: "#A3541A",
+      accentForeground: "#FFFFFF",
+      background: "#FFFFFF",
+      foreground: "#16213A",
+      muted: "#EEF0F4",
+      mutedForeground: "#4A5368",
+      border: "#C9CDD6",
+      sidebar: {
+        bg: "#16213A",
+        text: "#D5DAE4",
+        activeItem: "#E08A3C",
+        activeBg: "#243150",
+      },
+      status: {
+        onTrack: "#15803D",
+        atRisk: "#B45309",
+        overBudget: "#B91C1C",
+      },
+    },
+  },
 ];
