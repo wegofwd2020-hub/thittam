@@ -23,6 +23,7 @@ import {
   CreditCard,
   FileText,
   Bell,
+  BookOpen,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/context";
@@ -97,6 +98,14 @@ function useSidebarMenu(): MenuSection[] {
           href: "/budgets",
           iconName: sidebarIcons.budgets ?? "DollarSign",
           fallbackIcon: Wallet,
+        },
+        {
+          key: "ledger",
+          label: "Ledger",
+          href: "/ledger",
+          iconName: sidebarIcons.ledger ?? "BookOpen",
+          fallbackIcon: BookOpen,
+          roles: ["super_admin"],
         },
         {
           key: "expenses",

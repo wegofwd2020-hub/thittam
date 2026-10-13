@@ -49,6 +49,10 @@ function resolveBaseUrl(path: string): string {
     return env.budgetApiUrl;
   }
 
+  if (path.startsWith("/api/v1/ledger")) {
+    return env.ledgerApiUrl;
+  }
+
   return env.iamApiUrl;
 }
 
