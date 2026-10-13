@@ -13,6 +13,7 @@ SELECT * FROM budgets WHERE id = $1 AND tenant_id = $2;
 SELECT * FROM budgets
 WHERE tenant_id = sqlc.arg('tenant_id')
   AND (sqlc.narg('production_id')::uuid IS NULL OR production_id = sqlc.narg('production_id'))
+  AND (sqlc.arg('status') = '' OR status = sqlc.arg('status'))
 ORDER BY created_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
