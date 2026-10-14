@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -17,6 +17,14 @@ import {
 import { useTheme } from "@/lib/themes/provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AmountDisplay } from "@/components/ui/amount-display";
+import type { Expense as ApiExpense, ExpenseCategory } from "@/lib/api/expenses";
+import {
+  useApproveExpense,
+  useExpense,
+  useExpenseCategories,
+  useRejectExpense,
+} from "@/lib/hooks/use-expenses";
+import { useProductions } from "@/lib/hooks/use-productions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -167,138 +175,61 @@ function DualApprovalIndicator() {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data
+// API → detail mapping
 // ---------------------------------------------------------------------------
-const mockExpenses: Record<string, ExpenseDetail> = {
-  "exp-001": {
-    id: "exp-001",
-    description: "Film City Studio Rental \u2014 45 days",
-    category: "Locations",
-    taxTreatment: "gst_18",
-    amount: "1800000.00",
-    taxAmount: "324000.00",
-    currency: "INR",
-    status: "paid",
-    poNumber: "PO-001",
-    poId: "po-001",
-    poStatus: "closed",
-    budgetLineRef: "Locations (2400)",
-    submittedBy: "Ravi Kumar",
-    submittedDate: "2026-01-15",
-    approvedBy: "Ananya Desai",
-    approvedDate: "2026-01-16",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-    approvalHistory: [
-      { id: "ah-1", action: "submitted", actor: "Ravi Kumar", role: "Production Manager", timestamp: "2026-01-15T10:30:00Z", note: null },
-      { id: "ah-2", action: "approved", actor: "Ananya Desai", role: "Line Producer", timestamp: "2026-01-16T09:15:00Z", note: "Verified against PO-001. Rate matches contract." },
-      { id: "ah-3", action: "approved", actor: "Vikram Shah", role: "Executive Producer", timestamp: "2026-01-16T14:00:00Z", note: "Second approval \u2014 amount exceeds 10L threshold." },
-      { id: "ah-4", action: "paid", actor: "Finance System", role: "System", timestamp: "2026-01-18T11:00:00Z", note: "Payment processed via NEFT. Ref: NEFT20260118001" },
-    ],
-    receipts: ["film_city_invoice_jan2026.pdf", "film_city_receipt_stamp.pdf"],
-  },
-  "exp-005": {
-    id: "exp-005",
-    description: "Ladakh Location Recce & Permits",
-    category: "Locations",
-    taxTreatment: "gst_5",
-    amount: "750000.00",
-    taxAmount: "37500.00",
-    currency: "INR",
-    status: "approved",
+const TAX_TREATMENTS: TaxTreatment[] = ["gst_18", "gst_12", "gst_5", "gst_exempt", "tds_194c", "tds_194j"];
+
+function toDetail(
+  e: ApiExpense,
+  categories: Map<string, ExpenseCategory>,
+  productionTitle: string,
+): ExpenseDetail {
+  const cat = categories.get(e.category_id);
+  const tax = cat?.tax_treatment as TaxTreatment | undefined;
+  const history: ApprovalEntry[] = [
+    {
+      id: `${e.id}-submitted`,
+      action: "submitted",
+      actor: e.submitted_by ?? "",
+      role: "",
+      timestamp: e.submitted_at ?? e.created_at ?? "",
+      note: null,
+    },
+  ];
+  if (e.approved_at && (e.status === "approved" || e.status === "rejected")) {
+    history.push({
+      id: `${e.id}-${e.status}`,
+      action: e.status,
+      actor: e.approved_by ?? "",
+      role: "",
+      timestamp: e.approved_at,
+      note: null,
+    });
+  }
+  return {
+    id: e.id,
+    description: e.description,
+    category: cat?.label ?? "Uncategorised",
+    taxTreatment: tax && TAX_TREATMENTS.includes(tax) ? tax : "gst_exempt",
+    amount: e.amount,
+    taxAmount: e.tax_amount,
+    currency: e.currency,
+    status: e.status as ExpenseStatus,
     poNumber: null,
-    poId: null,
+    poId: e.purchase_order_id || null,
     poStatus: null,
-    budgetLineRef: "Locations (2400)",
-    submittedBy: "Priya Sharma",
-    submittedDate: "2026-03-01",
-    approvedBy: "Ananya Desai",
-    approvedDate: "2026-03-02",
-    productionId: "1",
-    productionTitle: "The Last Horizon",
+    budgetLineRef: e.budget_line_id || null,
+    submittedBy: e.submitted_by ?? "",
+    submittedDate: (e.submitted_at ?? "").slice(0, 10),
+    approvedBy: e.approved_by || null,
+    approvedDate: e.approved_at ? e.approved_at.slice(0, 10) : null,
+    productionId: e.production_id,
+    productionTitle,
     isPettyCash: false,
-    approvalHistory: [
-      { id: "ah-5", action: "submitted", actor: "Priya Sharma", role: "Location Manager", timestamp: "2026-03-01T16:00:00Z", note: "Includes permits for 3 locations in Leh-Ladakh region." },
-      { id: "ah-6", action: "approved", actor: "Ananya Desai", role: "Line Producer", timestamp: "2026-03-02T10:30:00Z", note: "Under single-approval limit. Approved." },
-    ],
-    receipts: ["ladakh_permits_receipt.pdf"],
-  },
-  "exp-007": {
-    id: "exp-007",
-    description: "Heritage Building Shoot Location",
-    category: "Locations",
-    taxTreatment: "gst_12",
-    amount: "250000.00",
-    taxAmount: "30000.00",
-    currency: "INR",
-    status: "submitted",
-    poNumber: "PO-004",
-    poId: "po-004",
-    poStatus: "draft",
-    budgetLineRef: "Locations (2400)",
-    submittedBy: "Priya Sharma",
-    submittedDate: "2026-03-12",
-    approvedBy: null,
-    approvedDate: null,
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-    approvalHistory: [
-      { id: "ah-7", action: "submitted", actor: "Priya Sharma", role: "Location Manager", timestamp: "2026-03-12T09:00:00Z", note: "Heritage site with restricted hours. PO-004 pending approval." },
-    ],
+    approvalHistory: history,
     receipts: [],
-  },
-  "exp-010": {
-    id: "exp-010",
-    description: "IMAX Camera Rental \u2014 30 days",
-    category: "Camera Equipment",
-    taxTreatment: "gst_18",
-    amount: "3500000.00",
-    taxAmount: "630000.00",
-    currency: "INR",
-    status: "rejected",
-    poNumber: null,
-    poId: null,
-    poStatus: null,
-    budgetLineRef: "Camera Equipment (2300)",
-    submittedBy: "Arjun Mehta",
-    submittedDate: "2026-03-08",
-    approvedBy: null,
-    approvedDate: null,
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-    approvalHistory: [
-      { id: "ah-8", action: "submitted", actor: "Arjun Mehta", role: "Cinematographer", timestamp: "2026-03-08T11:00:00Z", note: "IMAX package for climax sequence." },
-      { id: "ah-9", action: "rejected", actor: "Vikram Shah", role: "Executive Producer", timestamp: "2026-03-09T16:30:00Z", note: "Over budget. Camera Equipment line has only 45L allocated. Explore ARRI 65 as alternative." },
-    ],
-    receipts: [],
-  },
-  "exp-011": {
-    id: "exp-011",
-    description: "Post Production Studio Booking \u2014 3 weeks",
-    category: "Post Production",
-    taxTreatment: "gst_18",
-    amount: "400000.00",
-    taxAmount: "72000.00",
-    currency: "INR",
-    status: "draft",
-    poNumber: null,
-    poId: null,
-    poStatus: null,
-    budgetLineRef: "VFX (3100)",
-    submittedBy: "Kiran Rao",
-    submittedDate: "2026-03-25",
-    approvedBy: null,
-    approvedDate: null,
-    productionId: "1",
-    productionTitle: "The Last Horizon",
-    isPettyCash: false,
-    approvalHistory: [],
-    receipts: [],
-  },
-};
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -335,12 +266,33 @@ export default function ExpenseDetailPage() {
   const { entityLabels } = useTheme();
   const params = useParams<{ id: string }>();
 
-  const [expense, setExpense] = useState<ExpenseDetail | null>(
-    () => mockExpenses[params.id] ?? null
-  );
+  const expenseQuery = useExpense(params.id);
+  const productionsQuery = useProductions();
+  const categoriesQuery = useExpenseCategories();
+  const approveMutation = useApproveExpense();
+  const rejectMutation = useRejectExpense();
+
+  const expense = useMemo<ExpenseDetail | null>(() => {
+    if (!expenseQuery.data) return null;
+    const cats = new Map((categoriesQuery.data?.categories ?? []).map((c) => [c.id, c]));
+    const title =
+      (productionsQuery.data?.productions ?? []).find((p) => p.id === expenseQuery.data?.production_id)?.title ??
+      expenseQuery.data.production_id;
+    return toDetail(expenseQuery.data, cats, title);
+  }, [expenseQuery.data, categoriesQuery.data, productionsQuery.data]);
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [approvalAction, setApprovalAction] = useState<"approve" | "reject">("approve");
   const [approvalNote, setApprovalNote] = useState("");
+
+  if (expenseQuery.isLoading) {
+    return (
+      <div className="mx-auto max-w-4xl py-12 text-center">
+        <p className="font-body text-sm" style={{ color: "var(--thittam-muted-foreground, #64748b)" }}>
+          Loading expense…
+        </p>
+      </div>
+    );
+  }
 
   if (!expense) {
     return (
@@ -369,15 +321,23 @@ export default function ExpenseDetailPage() {
     );
   }
 
-  const isDraft = expense.status === "draft";
   const isSubmitted = expense.status === "submitted";
   const expenseAmount = parseFloat(expense.amount);
   const needsDualApproval = expenseAmount >= parseFloat(DUAL_APPROVAL_THRESHOLD);
 
-  function handleStatusChange(newStatus: ExpenseStatus) {
-    setExpense((prev) => (prev ? { ...prev, status: newStatus } : prev));
-    setShowApprovalDialog(false);
-    setApprovalNote("");
+  const decisionPending = approveMutation.isPending || rejectMutation.isPending;
+  const decisionError = (approveMutation.error ?? rejectMutation.error)?.message ?? null;
+
+  function handleDecision() {
+    const done = () => {
+      setShowApprovalDialog(false);
+      setApprovalNote("");
+    };
+    if (approvalAction === "approve") {
+      approveMutation.mutate(expense!.id, { onSuccess: done });
+    } else {
+      rejectMutation.mutate({ id: expense!.id, reason: approvalNote.trim() }, { onSuccess: done });
+    }
   }
 
   return (
@@ -406,16 +366,6 @@ export default function ExpenseDetailPage() {
 
         {/* Action buttons based on status */}
         <div className="flex items-center gap-2">
-          {isDraft && (
-            <button
-              onClick={() => handleStatusChange("submitted")}
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-heading font-medium text-white transition-colors hover:opacity-90"
-              style={{ backgroundColor: "var(--thittam-primary, #3b82f6)" }}
-            >
-              <Send className="h-4 w-4" />
-              Submit
-            </button>
-          )}
           {isSubmitted && (
             <>
               <button
@@ -710,7 +660,7 @@ export default function ExpenseDetailPage() {
           >
             Receipts & Documents ({expense.receipts.length})
           </h2>
-          {(isDraft || isSubmitted) && (
+          {isSubmitted && (
             <button
               className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-heading font-medium transition-colors hover:opacity-90"
               style={{
@@ -826,6 +776,12 @@ export default function ExpenseDetailPage() {
               />
             </div>
 
+            {decisionError && (
+              <p className="mb-3 text-sm" style={{ color: "var(--thittam-status-over-budget, #DC2626)" }}>
+                {decisionError}
+              </p>
+            )}
+
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowApprovalDialog(false)}
@@ -838,9 +794,8 @@ export default function ExpenseDetailPage() {
                 Cancel
               </button>
               <button
-                onClick={() =>
-                  handleStatusChange(approvalAction === "approve" ? "approved" : "draft")
-                }
+                disabled={decisionPending || (approvalAction === "reject" && !approvalNote.trim())}
+                onClick={handleDecision}
                 className="rounded-lg px-4 py-2 text-sm font-heading font-medium text-white shadow-sm transition-colors hover:opacity-90"
                 style={{
                   backgroundColor:
