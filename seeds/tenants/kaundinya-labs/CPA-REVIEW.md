@@ -76,7 +76,7 @@ Line numbers are for Form 1065 page 1. **Verify against the current-year form be
 | 6900 | Other Expenses | 20 | |
 | 6050 / 6055 | Guaranteed payments | 10 | see §3 |
 
-Line 9 (salaries and wages, other than to partners) is not used: the company has no W-2 employees.
+Line 9 (salaries and wages, other than to partners) is left unused. **CPA to confirm** that the company has no W-2 employees.
 
 ## 5. Questions for the CPA (15 Oct agenda)
 
