@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Plus, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { AmountDisplay } from "@/components/ui/amount-display";
 import { StatusBadge } from "@/components/ui/status-badge";
+import type { PettyCashAdvance as ApiAdvance } from "@/lib/api/expenses";
+import { usePettyCash } from "@/lib/hooks/use-expenses";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,68 +26,43 @@ interface PettyCashAdvance {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data — 2 active, 2 settled
+// API → row mapping
 // ---------------------------------------------------------------------------
-const mockAdvances: PettyCashAdvance[] = [
-  {
-    id: "pc-001",
-    issuedTo: "Priya Sharma",
-    amount: "25000.00",
-    currency: "INR",
-    purpose: "Location scout — Rajasthan (travel, food, local transport)",
-    issueDate: "2026-03-20",
-    status: "active",
-    settledDate: null,
-    settledAmount: null,
-    unspentAmount: null,
-    settlementNotes: null,
-  },
-  {
-    id: "pc-002",
-    issuedTo: "Arjun Mehta",
-    amount: "15000.00",
-    currency: "INR",
-    purpose: "Props purchase — local market items for set dressing",
-    issueDate: "2026-03-22",
-    status: "active",
-    settledDate: null,
-    settledAmount: null,
-    unspentAmount: null,
-    settlementNotes: null,
-  },
-  {
-    id: "pc-003",
-    issuedTo: "Deepa Nair",
-    amount: "10000.00",
-    currency: "INR",
-    purpose: "Crew meals — 3-day outdoor shoot at Lonavala",
-    issueDate: "2026-02-18",
-    status: "settled",
-    settledDate: "2026-02-21",
-    settledAmount: "8500.00",
-    unspentAmount: "1500.00",
-    settlementNotes: "Receipts for 12 meals across 3 days. Unspent returned to float.",
-  },
-  {
-    id: "pc-004",
-    issuedTo: "Ravi Kumar",
-    amount: "3000.00",
-    currency: "INR",
-    purpose: "Taxi & auto fares — equipment transport to set",
-    issueDate: "2026-02-10",
-    status: "settled",
-    settledDate: "2026-02-12",
-    settledAmount: "2200.00",
-    unspentAmount: "800.00",
-    settlementNotes: "7 taxi receipts. Remaining amount returned.",
-  },
-];
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
+// The API does not carry a currency on advances; this tenant books in USD.
+const CURRENCY = "USD";
+
+/** "1500.00" → cents, for exact subtraction (never float). */
+function toCents(amount: string): number {
+  const [whole = "0", frac = ""] = amount.split(".");
+  return Number(whole) * 100 + Number((frac + "00").slice(0, 2));
+}
+
+function fromCents(cents: number): string {
+  return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+}
+
+function toAdvance(a: ApiAdvance): PettyCashAdvance {
+  const settled = a.status === "settled";
+  const unspent = a.unspent_amount || null;
+  return {
+    id: a.id,
+    issuedTo: a.issued_to,
+    amount: a.amount,
+    currency: CURRENCY,
+    purpose: a.purpose,
+    issueDate: (a.issued_at ?? "").slice(0, 10),
+    status: settled ? "settled" : "active",
+    settledDate: a.settled_at ? a.settled_at.slice(0, 10) : null,
+    settledAmount: settled && unspent !== null ? fromCents(toCents(a.amount) - toCents(unspent)) : null,
+    unspentAmount: unspent,
+    settlementNotes: null,
+  };
+}
+
 export default function PettyCashPage() {
-  const [advances] = useState(mockAdvances);
+  const advancesQuery = usePettyCash();
+  const advances = (advancesQuery.data?.advances ?? []).map(toAdvance);
 
   const activeAdvances = advances.filter((a) => a.status === "active");
   const settledAdvances = advances.filter((a) => a.status === "settled");

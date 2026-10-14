@@ -180,13 +180,12 @@ export function useApprovePurchaseOrder() {
 // ---------------------------------------------------------------------------
 
 export function usePettyCash(
-  productionId: string,
+  productionId?: string,
   params?: { status?: string },
 ) {
   return useQuery({
-    queryKey: expenseKeys.pettyCashList(productionId, params),
+    queryKey: expenseKeys.pettyCashList(productionId ?? "all", params),
     queryFn: () => listPettyCash(productionId, params),
-    enabled: !!productionId,
   });
 }
 
