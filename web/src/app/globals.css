@@ -148,3 +148,18 @@ td[data-type="number"],
 .dyslexia-mode .account-code {
   font-family: var(--font-mono);
 }
+
+/* Sidebar ticker: text scrolls right-to-left; static when the user prefers reduced motion. */
+@keyframes sidebar-ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.sidebar-ticker-track {
+  display: inline-flex;
+  animation: sidebar-ticker-scroll 18s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-ticker-track {
+    animation: none;
+  }
+}
