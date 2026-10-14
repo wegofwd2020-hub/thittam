@@ -168,6 +168,10 @@ func (h *Handler) ListUsers(ctx context.Context, req *iamv1.ListUsersRequest) (*
 	if err != nil {
 		return nil, err
 	}
+	// The user directory (emails, status) is admin data: gate it before reading.
+	if err := h.requireUserManage(ctx); err != nil {
+		return nil, err
+	}
 	users, err := h.svc.ListUsers(ctx, tenantID, req.GetStatus(), int(req.GetLimit()), int(req.GetOffset()))
 	if err != nil {
 		return nil, grpcError(err)
