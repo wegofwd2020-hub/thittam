@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronUp, Mail, Phone, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy, Mail, Phone, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Party, PartyContact } from "@/lib/api/ledger";
@@ -187,21 +187,41 @@ function ContactBlock({ contact, label }: { contact: PartyContact; label?: strin
 function ContactLinks({ email, phone }: { email: string; phone: string }) {
   return (
     <div className="flex flex-col gap-1 text-sm">
-      {email && (
-        <a className="flex items-center gap-2 hover:underline" href={`mailto:${email}`}>
-          <Mail className="h-3.5 w-3.5" />
-          {email}
-        </a>
-      )}
-      {phone && (
-        <a
-          className="flex items-center gap-2 hover:underline"
-          href={`tel:${phone.replace(/[^+\d]/g, "")}`}
-        >
-          <Phone className="h-3.5 w-3.5" />
-          {phone}
-        </a>
-      )}
+      {email && <CopyableValue icon={<Mail className="h-3.5 w-3.5" />} value={email} />}
+      {phone && <CopyableValue icon={<Phone className="h-3.5 w-3.5" />} value={phone} />}
+    </div>
+  );
+}
+
+// Shows a value as plain text with a copy button. It does not open a mail or
+// dialer app.
+function CopyableValue({ icon, value }: { icon: React.ReactNode; value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard can be unavailable (insecure origin or denied permission).
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-muted-foreground">{icon}</span>
+      <span className="min-w-0 truncate">{value}</span>
+      <button
+        type="button"
+        className="ml-auto shrink-0 rounded p-1 text-muted-foreground hover:bg-muted"
+        aria-label={`Copy ${value}`}
+        title="Copy"
+        onClick={copy}
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
     </div>
   );
 }
