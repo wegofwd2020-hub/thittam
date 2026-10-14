@@ -19,6 +19,7 @@ var (
 	ErrPartyEmailInvalid    = errors.New("ledger: party email is not a valid address")
 	ErrPartyFieldTooLong    = errors.New("ledger: a party field is longer than allowed")
 	ErrPartyCurrencyInvalid = errors.New("ledger: party currency must be a 3-letter ISO 4217 code")
+	ErrContactInvalid       = errors.New("ledger: invalid party contact")
 	ErrPeriodNotFound       = errors.New("ledger: accounting period not found")
 	ErrPeriodClosed         = errors.New("ledger: accounting period is closed")
 	ErrPeriodAlreadyExists  = errors.New("ledger: accounting period already exists")

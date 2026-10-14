@@ -30,17 +30,36 @@ var partyCurrencyRE = regexp.MustCompile(`^[A-Z]{3}$`)
 
 // Party is a customer, a supplier, or both.
 type Party struct {
-	ID              uuid.UUID `json:"id"`
-	TenantID        uuid.UUID `json:"tenant_id"`
-	Name            string    `json:"name"`
-	PartyType       string    `json:"party_type"`
-	Email           string    `json:"email"`
-	Phone           string    `json:"phone"`
-	TaxID           string    `json:"tax_id"`
-	Address         string    `json:"address"`
-	DefaultCurrency string    `json:"default_currency"`
-	IsActive        bool      `json:"is_active"`
+	ID              uuid.UUID      `json:"id"`
+	TenantID        uuid.UUID      `json:"tenant_id"`
+	Name            string         `json:"name"`
+	PartyType       string         `json:"party_type"`
+	Email           string         `json:"email"`
+	Phone           string         `json:"phone"`
+	TaxID           string         `json:"tax_id"`
+	Address         string         `json:"address"`
+	DefaultCurrency string         `json:"default_currency"`
+	IsActive        bool           `json:"is_active"`
+	Contacts        []PartyContact `json:"contacts"`
 }
+
+// PartyContact is a person at a party, to reach about a specific matter.
+type PartyContact struct {
+	ID          uuid.UUID `json:"id"`
+	PartyID     uuid.UUID `json:"party_id"`
+	Name        string    `json:"name"`
+	Designation string    `json:"designation"`
+	Email       string    `json:"email"`
+	Phone       string    `json:"phone"`
+	IsPrimary   bool      `json:"is_primary"`
+}
+
+const (
+	partyContactsMax   = 20
+	contactNameMaxLen  = 200
+	contactDesigMaxLen = 100
+	contactPhoneMaxLen = 30
+)
 
 // CreateParty validates and stores a new party.
 func (s *Service) CreateParty(ctx context.Context, p *Party) (*Party, error) {
@@ -49,6 +68,7 @@ func (s *Service) CreateParty(ctx context.Context, p *Party) (*Party, error) {
 	}
 	p.ID = uuid.New()
 	p.IsActive = true
+	assignContactIDs(p)
 	if err := s.repo.CreateParty(ctx, p); err != nil {
 		return nil, fmt.Errorf("ledger: create party: %w", err)
 	}
@@ -82,6 +102,8 @@ func (s *Service) UpdateParty(ctx context.Context, p *Party) (*Party, error) {
 	if err := normalizeParty(p); err != nil {
 		return nil, err
 	}
+	// Contacts are replaced as a set, so every row gets a fresh ID.
+	assignContactIDs(p)
 	if err := s.repo.UpdateParty(ctx, p); err != nil {
 		return nil, fmt.Errorf("ledger: update party %s: %w", p.ID, err)
 	}
@@ -125,5 +147,58 @@ func normalizeParty(p *Party) error {
 	if p.DefaultCurrency != "" && !partyCurrencyRE.MatchString(p.DefaultCurrency) {
 		return ErrPartyCurrencyInvalid
 	}
+	return normalizeContacts(p.Contacts)
+}
+
+// normalizeContacts trims each contact, requires a name and at least one way
+// to reach the person, and enforces one primary contact. When contacts exist
+// but none is marked primary, the first one becomes primary.
+func normalizeContacts(contacts []PartyContact) error {
+	if len(contacts) > partyContactsMax {
+		return fmt.Errorf("%w: at most %d contacts per party", ErrContactInvalid, partyContactsMax)
+	}
+	primaries := 0
+	for i := range contacts {
+		c := &contacts[i]
+		n := i + 1
+		c.Name = strings.TrimSpace(c.Name)
+		c.Designation = strings.TrimSpace(c.Designation)
+		c.Email = strings.TrimSpace(c.Email)
+		c.Phone = strings.TrimSpace(c.Phone)
+
+		switch {
+		case c.Name == "" || utf8.RuneCountInString(c.Name) > contactNameMaxLen:
+			return fmt.Errorf("%w: contact %d needs a name of at most %d characters", ErrContactInvalid, n, contactNameMaxLen)
+		case utf8.RuneCountInString(c.Designation) > contactDesigMaxLen:
+			return fmt.Errorf("%w: contact %d designation is longer than %d characters", ErrContactInvalid, n, contactDesigMaxLen)
+		case utf8.RuneCountInString(c.Phone) > contactPhoneMaxLen:
+			return fmt.Errorf("%w: contact %d phone is longer than %d characters", ErrContactInvalid, n, contactPhoneMaxLen)
+		case c.Email == "" && c.Phone == "":
+			return fmt.Errorf("%w: contact %d needs an email or a phone number", ErrContactInvalid, n)
+		}
+		if c.Email != "" {
+			addr, err := mail.ParseAddress(c.Email)
+			if err != nil || addr.Address != c.Email || len(c.Email) > partyEmailMaxLen {
+				return fmt.Errorf("%w: contact %d email is not a valid address", ErrContactInvalid, n)
+			}
+		}
+		if c.IsPrimary {
+			primaries++
+		}
+	}
+	if primaries > 1 {
+		return fmt.Errorf("%w: only one contact can be primary", ErrContactInvalid)
+	}
+	if len(contacts) > 0 && primaries == 0 {
+		contacts[0].IsPrimary = true
+	}
 	return nil
+}
+
+// assignContactIDs gives each contact an ID and links it to its party.
+func assignContactIDs(p *Party) {
+	for i := range p.Contacts {
+		p.Contacts[i].ID = uuid.New()
+		p.Contacts[i].PartyID = p.ID
+	}
 }

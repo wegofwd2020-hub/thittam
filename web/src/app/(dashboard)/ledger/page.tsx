@@ -15,6 +15,7 @@ import {
   listParties,
   updateParty,
   type Party,
+  type PartyContactInput,
   fromCents,
   getTrialBalance,
   listAccountingPeriods,
@@ -35,6 +36,14 @@ const ledgerKeys = {
   entries: ["ledger", "entries"] as const,
   trial: ["ledger", "trial-balance"] as const,
   parties: ["ledger", "parties"] as const,
+};
+
+const BLANK_CONTACT: PartyContactInput = {
+  name: "",
+  designation: "",
+  email: "",
+  phone: "",
+  is_primary: false,
 };
 
 const PARTY_TYPES = [
@@ -183,6 +192,7 @@ export default function LedgerPage() {
   const [partyTaxId, setPartyTaxId] = useState("");
   const [partyAddress, setPartyAddress] = useState("");
   const [partyCurrency, setPartyCurrency] = useState("");
+  const [partyContacts, setPartyContacts] = useState<PartyContactInput[]>([{ ...BLANK_CONTACT }]);
   const [partyError, setPartyError] = useState<string | null>(null);
 
   const partiesQuery = useQuery({
@@ -198,6 +208,15 @@ export default function LedgerPage() {
     setPartyTaxId("");
     setPartyAddress("");
     setPartyCurrency("");
+    setPartyContacts([{ ...BLANK_CONTACT }]);
+  }
+
+  function updateContact(i: number, patch: Partial<PartyContactInput>) {
+    setPartyContacts((prev) => prev.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  }
+
+  function setPrimaryContact(i: number) {
+    setPartyContacts((prev) => prev.map((c, idx) => ({ ...c, is_primary: idx === i })));
   }
 
   const partyMutation = useMutation({
@@ -210,6 +229,8 @@ export default function LedgerPage() {
         tax_id: partyTaxId,
         address: partyAddress,
         default_currency: partyCurrency,
+        // Drop rows left blank; the server requires a name and an email or phone.
+        contacts: partyContacts.filter((c) => c.name.trim() || c.email.trim() || c.phone.trim()),
       }),
     onSuccess: () => {
       setPartyError(null);
@@ -230,21 +251,34 @@ export default function LedgerPage() {
         tax_id: p.tax_id,
         address: p.address,
         default_currency: p.default_currency,
+        contacts: p.contacts.map(({ name, designation, email, phone, is_primary }) => ({
+          name,
+          designation,
+          email,
+          phone,
+          is_primary,
+        })),
         is_active: !p.is_active,
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ledgerKeys.parties }),
     onError: (err: Error) => setPartyError(err.message),
   });
 
-  const partyRows = (partiesQuery.data?.parties ?? []).map((p) => ({
-    id: p.id,
-    name: p.name,
-    party_type: PARTY_TYPES.find((t) => t.value === p.party_type)?.label ?? p.party_type,
-    email: p.email,
-    currency: p.default_currency,
-    status: p.is_active ? "active" : "inactive",
-    raw: p,
-  }));
+  const partyRows = (partiesQuery.data?.parties ?? []).map((p) => {
+    const primary = p.contacts.find((c) => c.is_primary) ?? p.contacts[0];
+    return {
+      id: p.id,
+      name: p.name,
+      party_type: PARTY_TYPES.find((t) => t.value === p.party_type)?.label ?? p.party_type,
+      contact: primary
+        ? [primary.name, primary.designation].filter(Boolean).join(", ")
+        : "",
+      email: p.email,
+      currency: p.default_currency,
+      status: p.is_active ? "active" : "inactive",
+      raw: p,
+    };
+  });
 
   // ---- Table rows ----------------------------------------------------------
   const accountRows = accounts.map((a) => ({
@@ -274,6 +308,7 @@ export default function LedgerPage() {
   const partyColumns: Column<Record<string, unknown>>[] = [
     { key: "name", header: "Name" },
     { key: "party_type", header: "Type" },
+    { key: "contact", header: "Primary contact" },
     { key: "email", header: "Email" },
     { key: "currency", header: "Currency" },
     { key: "status", header: "Status", type: "status" },
@@ -604,6 +639,67 @@ export default function LedgerPage() {
                   <span>Address</span>
                   <Input value={partyAddress} onChange={(e) => setPartyAddress(e.target.value)} />
                 </label>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Contacts</h3>
+                <p className="text-xs text-muted-foreground">
+                  People to reach about a specific matter. Each needs a name and an email or phone.
+                </p>
+                {partyContacts.map((c, i) => (
+                  <div key={i} className="grid grid-cols-12 items-center gap-2">
+                    <Input
+                      className="col-span-3"
+                      placeholder="Name"
+                      value={c.name}
+                      onChange={(e) => updateContact(i, { name: e.target.value })}
+                    />
+                    <Input
+                      className="col-span-2"
+                      placeholder="Designation"
+                      value={c.designation}
+                      onChange={(e) => updateContact(i, { designation: e.target.value })}
+                    />
+                    <Input
+                      className="col-span-3"
+                      placeholder="Email"
+                      value={c.email}
+                      onChange={(e) => updateContact(i, { email: e.target.value })}
+                    />
+                    <Input
+                      className="col-span-2"
+                      placeholder="Phone"
+                      value={c.phone}
+                      onChange={(e) => updateContact(i, { phone: e.target.value })}
+                    />
+                    <label className="col-span-1 flex items-center gap-1 text-xs">
+                      <input
+                        type="radio"
+                        name="primary-contact"
+                        checked={c.is_primary}
+                        onChange={() => setPrimaryContact(i)}
+                      />
+                      Primary
+                    </label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="col-span-1"
+                      onClick={() =>
+                        setPartyContacts((prev) => prev.filter((_, idx) => idx !== i))
+                      }
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPartyContacts((prev) => [...prev, { ...BLANK_CONTACT }])}
+                >
+                  Add contact
+                </Button>
               </div>
               <div className="flex items-center justify-between gap-3">
                 {partyError ? <p className="text-sm text-red-700">{partyError}</p> : <span />}

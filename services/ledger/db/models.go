@@ -78,3 +78,17 @@ type Party struct {
 	CreatedAt       time.Time   `json:"created_at"`
 	UpdatedAt       time.Time   `json:"updated_at"`
 }
+
+type PartyContact struct {
+	ID          uuid.UUID `json:"id"`
+	TenantID    uuid.UUID `json:"tenant_id"`
+	PartyID     uuid.UUID `json:"party_id"`
+	Name        string    `json:"name"`
+	Designation string    `json:"designation"`
+	Email       string    `json:"email"`
+	Phone       string    `json:"phone"`
+	IsPrimary   bool      `json:"is_primary"`
+	Position    int32     `json:"position"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}

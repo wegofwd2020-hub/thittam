@@ -484,6 +484,7 @@ func (h *Handler) CreateParty(ctx context.Context, req *ledgerv1.CreatePartyRequ
 		TaxID:           req.GetTaxId(),
 		Address:         req.GetAddress(),
 		DefaultCurrency: req.GetDefaultCurrency(),
+		Contacts:        contactsFromProto(req.GetContacts()),
 	})
 	if err != nil {
 		return nil, grpcErr(err)
@@ -552,6 +553,7 @@ func (h *Handler) UpdateParty(ctx context.Context, req *ledgerv1.UpdatePartyRequ
 		Address:         req.GetAddress(),
 		DefaultCurrency: req.GetDefaultCurrency(),
 		IsActive:        req.GetIsActive(),
+		Contacts:        contactsFromProto(req.GetContacts()),
 	})
 	if err != nil {
 		return nil, grpcErr(err)
@@ -571,7 +573,38 @@ func partyToProto(p *Party) *ledgerv1.Party {
 		Address:         p.Address,
 		DefaultCurrency: p.DefaultCurrency,
 		IsActive:        p.IsActive,
+		Contacts:        contactsToProto(p.Contacts),
 	}
+}
+
+func contactsFromProto(in []*ledgerv1.PartyContact) []PartyContact {
+	out := make([]PartyContact, 0, len(in))
+	for _, c := range in {
+		out = append(out, PartyContact{
+			Name:        c.GetName(),
+			Designation: c.GetDesignation(),
+			Email:       c.GetEmail(),
+			Phone:       c.GetPhone(),
+			IsPrimary:   c.GetIsPrimary(),
+		})
+	}
+	return out
+}
+
+func contactsToProto(in []PartyContact) []*ledgerv1.PartyContact {
+	out := make([]*ledgerv1.PartyContact, 0, len(in))
+	for _, c := range in {
+		out = append(out, &ledgerv1.PartyContact{
+			Id:          c.ID.String(),
+			PartyId:     c.PartyID.String(),
+			Name:        c.Name,
+			Designation: c.Designation,
+			Email:       c.Email,
+			Phone:       c.Phone,
+			IsPrimary:   c.IsPrimary,
+		})
+	}
+	return out
 }
 
 func accountToProto(a *Account) *ledgerv1.Account {
@@ -672,7 +705,8 @@ func grpcErr(err error) error {
 		errors.Is(err, ErrPartyTypeInvalid),
 		errors.Is(err, ErrPartyEmailInvalid),
 		errors.Is(err, ErrPartyFieldTooLong),
-		errors.Is(err, ErrPartyCurrencyInvalid):
+		errors.Is(err, ErrPartyCurrencyInvalid),
+		errors.Is(err, ErrContactInvalid):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, ErrPeriodNotFound):
 		return status.Error(codes.NotFound, "accounting period not found")

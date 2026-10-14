@@ -138,3 +138,21 @@ SET name = $3, party_type = $4, email = $5, phone = $6, tax_id = $7,
     address = $8, default_currency = $9, is_active = $10, updated_at = now()
 WHERE id = $1 AND tenant_id = $2
 RETURNING *;
+
+-- name: CreatePartyContact :one
+INSERT INTO party_contacts (id, tenant_id, party_id, name, designation, email, phone, is_primary, position)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING *;
+
+-- name: ListPartyContacts :many
+SELECT * FROM party_contacts
+WHERE tenant_id = $1 AND party_id = $2
+ORDER BY position ASC;
+
+-- name: ListPartyContactsByTenant :many
+SELECT * FROM party_contacts
+WHERE tenant_id = $1
+ORDER BY party_id, position ASC;
+
+-- name: DeletePartyContacts :exec
+DELETE FROM party_contacts WHERE tenant_id = $1 AND party_id = $2;

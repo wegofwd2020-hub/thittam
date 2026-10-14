@@ -71,7 +71,14 @@ func (p *Postgres) NextBankAccountCode(ctx context.Context, tenantID uuid.UUID) 
 // --- Parties ---
 
 func (p *Postgres) CreateParty(ctx context.Context, party *ledger.Party) error {
-	row, err := p.q.CreateParty(ctx, CreatePartyParams{
+	tx, err := p.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("ledger: begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	q := p.q.WithTx(tx)
+	row, err := q.CreateParty(ctx, CreatePartyParams{
 		ID:              party.ID,
 		TenantID:        party.TenantID,
 		Name:            party.Name,
@@ -89,6 +96,33 @@ func (p *Postgres) CreateParty(ctx context.Context, party *ledger.Party) error {
 		return fmt.Errorf("ledger: create party: %w", err)
 	}
 	party.IsActive = row.IsActive
+
+	for i := range party.Contacts {
+		if err := insertPartyContact(ctx, q, party.TenantID, &party.Contacts[i], i); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("ledger: commit party: %w", err)
+	}
+	return nil
+}
+
+func insertPartyContact(ctx context.Context, q *Queries, tenantID uuid.UUID, c *ledger.PartyContact, position int) error {
+	_, err := q.CreatePartyContact(ctx, CreatePartyContactParams{
+		ID:          c.ID,
+		TenantID:    tenantID,
+		PartyID:     c.PartyID,
+		Name:        c.Name,
+		Designation: c.Designation,
+		Email:       c.Email,
+		Phone:       c.Phone,
+		IsPrimary:   c.IsPrimary,
+		Position:    int32(position),
+	})
+	if err != nil {
+		return fmt.Errorf("ledger: insert party contact: %w", err)
+	}
 	return nil
 }
 
@@ -100,7 +134,13 @@ func (p *Postgres) GetPartyByID(ctx context.Context, tenantID, id uuid.UUID) (*l
 		}
 		return nil, fmt.Errorf("ledger: get party: %w", err)
 	}
-	return partyFromDB(row), nil
+	party := partyFromDB(row)
+	contacts, err := p.q.ListPartyContacts(ctx, ListPartyContactsParams{TenantID: tenantID, PartyID: id})
+	if err != nil {
+		return nil, fmt.Errorf("ledger: list party contacts: %w", err)
+	}
+	party.Contacts = contactsFromDB(contacts)
+	return party, nil
 }
 
 func (p *Postgres) ListParties(ctx context.Context, tenantID uuid.UUID, partyType string, includeInactive bool) ([]ledger.Party, error) {
@@ -112,15 +152,34 @@ func (p *Postgres) ListParties(ctx context.Context, tenantID uuid.UUID, partyTyp
 	if err != nil {
 		return nil, fmt.Errorf("ledger: list parties: %w", err)
 	}
+	contactRows, err := p.q.ListPartyContactsByTenant(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("ledger: list party contacts: %w", err)
+	}
+	byParty := make(map[uuid.UUID][]ledger.PartyContact)
+	for _, c := range contactRows {
+		byParty[c.PartyID] = append(byParty[c.PartyID], *contactFromDB(c))
+	}
 	out := make([]ledger.Party, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, *partyFromDB(r))
+		party := partyFromDB(r)
+		party.Contacts = byParty[party.ID]
+		out = append(out, *party)
 	}
 	return out, nil
 }
 
+// UpdateParty writes the party fields and replaces its contacts in one
+// transaction, so a failed contact write leaves the party unchanged.
 func (p *Postgres) UpdateParty(ctx context.Context, party *ledger.Party) error {
-	row, err := p.q.UpdateParty(ctx, UpdatePartyParams{
+	tx, err := p.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("ledger: begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	q := p.q.WithTx(tx)
+	row, err := q.UpdateParty(ctx, UpdatePartyParams{
 		ID:              party.ID,
 		TenantID:        party.TenantID,
 		Name:            party.Name,
@@ -142,6 +201,18 @@ func (p *Postgres) UpdateParty(ctx context.Context, party *ledger.Party) error {
 		return fmt.Errorf("ledger: update party: %w", err)
 	}
 	party.IsActive = row.IsActive
+
+	if err := q.DeletePartyContacts(ctx, DeletePartyContactsParams{TenantID: party.TenantID, PartyID: party.ID}); err != nil {
+		return fmt.Errorf("ledger: clear party contacts: %w", err)
+	}
+	for i := range party.Contacts {
+		if err := insertPartyContact(ctx, q, party.TenantID, &party.Contacts[i], i); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("ledger: commit party update: %w", err)
+	}
 	return nil
 }
 
@@ -465,6 +536,26 @@ func partyFromDB(row Party) *ledger.Party {
 		DefaultCurrency: stringFromPgText(row.DefaultCurrency),
 		IsActive:        row.IsActive,
 	}
+}
+
+func contactFromDB(row PartyContact) *ledger.PartyContact {
+	return &ledger.PartyContact{
+		ID:          row.ID,
+		PartyID:     row.PartyID,
+		Name:        row.Name,
+		Designation: row.Designation,
+		Email:       row.Email,
+		Phone:       row.Phone,
+		IsPrimary:   row.IsPrimary,
+	}
+}
+
+func contactsFromDB(rows []PartyContact) []ledger.PartyContact {
+	out := make([]ledger.PartyContact, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, *contactFromDB(r))
+	}
+	return out
 }
 
 func accountFromDB(row Account) *ledger.Account {

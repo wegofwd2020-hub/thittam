@@ -122,3 +122,35 @@ func TestHandler_Party_WriteDeniedForReadOnly(t *testing.T) {
 	})
 	assert.Error(t, err)
 }
+
+func TestHandler_CreateParty_MapsContacts(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := NewHandler(NewService(&mockRepo{}), allowAllPerm{})
+	resp, err := h.CreateParty(callerCtx(tid), &ledgerv1.CreatePartyRequest{
+		TenantId:  tid.String(),
+		Name:      "Acme Studios",
+		PartyType: "customer",
+		Contacts: []*ledgerv1.PartyContact{
+			{Name: "Asha Rao", Designation: "Accounts payable", Email: "asha@acme.test", IsPrimary: true},
+			{Name: "Ravi K", Phone: "+91 98400 00000"},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.GetContacts(), 2)
+	assert.Equal(t, "Accounts payable", resp.GetContacts()[0].GetDesignation())
+	assert.True(t, resp.GetContacts()[0].GetIsPrimary())
+	assert.NotEmpty(t, resp.GetContacts()[1].GetId())
+}
+
+func TestHandler_CreateParty_ContactErrorIsInvalidArgument(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	_, err := newHandler().CreateParty(callerCtx(tid), &ledgerv1.CreatePartyRequest{
+		TenantId:  tid.String(),
+		Name:      "Acme",
+		PartyType: "customer",
+		Contacts:  []*ledgerv1.PartyContact{{Name: "Asha"}},
+	})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}

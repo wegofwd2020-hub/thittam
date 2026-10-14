@@ -206,6 +206,18 @@ message Party {
   string address = 8;
   string default_currency = 9; // ISO 4217; empty if none
   bool is_active = 10;
+  repeated PartyContact contacts = 11;
+}
+
+// A person at a party, to contact about a specific matter.
+message PartyContact {
+  string id = 1;        // assigned by the service; ignored on input
+  string party_id = 2;  // assigned by the service; ignored on input
+  string name = 3;
+  string designation = 4; // free text, e.g. "Accounts payable"
+  string email = 5;
+  string phone = 6;
+  bool is_primary = 7;  // at most one per party
 }
 
 message CreatePartyRequest {
@@ -218,6 +230,7 @@ message CreatePartyRequest {
   string tax_id = 6;
   string address = 7;
   string default_currency = 8; // optional ISO 4217
+  repeated PartyContact contacts = 9;
 }
 
 message GetPartyRequest {
@@ -251,6 +264,7 @@ message UpdatePartyRequest {
   string address = 8;
   string default_currency = 9;
   bool is_active = 10;
+  repeated PartyContact contacts = 11;
 }
 
 message SeedChartOfAccountsRequest {
