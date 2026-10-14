@@ -465,6 +465,115 @@ func (h *Handler) GetTrialBalance(ctx context.Context, req *ledgerv1.GetTrialBal
 
 // --- proto conversion helpers ---
 
+// --- Parties ---
+
+func (h *Handler) CreateParty(ctx context.Context, req *ledgerv1.CreatePartyRequest) (*ledgerv1.Party, error) {
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
+	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerWrite); err != nil {
+		return nil, err
+	}
+	out, err := h.svc.CreateParty(ctx, &Party{
+		TenantID:        tenantID,
+		Name:            req.GetName(),
+		PartyType:       req.GetPartyType(),
+		Email:           req.GetEmail(),
+		Phone:           req.GetPhone(),
+		TaxID:           req.GetTaxId(),
+		Address:         req.GetAddress(),
+		DefaultCurrency: req.GetDefaultCurrency(),
+	})
+	if err != nil {
+		return nil, grpcErr(err)
+	}
+	return partyToProto(out), nil
+}
+
+func (h *Handler) GetParty(ctx context.Context, req *ledgerv1.GetPartyRequest) (*ledgerv1.Party, error) {
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
+	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerRead); err != nil {
+		return nil, err
+	}
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid party ID")
+	}
+	out, err := h.svc.GetParty(ctx, tenantID, id)
+	if err != nil {
+		return nil, grpcErr(err)
+	}
+	return partyToProto(out), nil
+}
+
+func (h *Handler) ListParties(ctx context.Context, req *ledgerv1.ListPartiesRequest) (*ledgerv1.ListPartiesResponse, error) {
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
+	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerRead); err != nil {
+		return nil, err
+	}
+	parties, err := h.svc.ListParties(ctx, tenantID, req.GetPartyType(), req.GetIncludeInactive())
+	if err != nil {
+		return nil, grpcErr(err)
+	}
+	out := &ledgerv1.ListPartiesResponse{Parties: make([]*ledgerv1.Party, 0, len(parties))}
+	for i := range parties {
+		out.Parties = append(out.Parties, partyToProto(&parties[i]))
+	}
+	return out, nil
+}
+
+func (h *Handler) UpdateParty(ctx context.Context, req *ledgerv1.UpdatePartyRequest) (*ledgerv1.Party, error) {
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
+	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerWrite); err != nil {
+		return nil, err
+	}
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid party ID")
+	}
+	out, err := h.svc.UpdateParty(ctx, &Party{
+		ID:              id,
+		TenantID:        tenantID,
+		Name:            req.GetName(),
+		PartyType:       req.GetPartyType(),
+		Email:           req.GetEmail(),
+		Phone:           req.GetPhone(),
+		TaxID:           req.GetTaxId(),
+		Address:         req.GetAddress(),
+		DefaultCurrency: req.GetDefaultCurrency(),
+		IsActive:        req.GetIsActive(),
+	})
+	if err != nil {
+		return nil, grpcErr(err)
+	}
+	return partyToProto(out), nil
+}
+
+func partyToProto(p *Party) *ledgerv1.Party {
+	return &ledgerv1.Party{
+		Id:              p.ID.String(),
+		TenantId:        p.TenantID.String(),
+		Name:            p.Name,
+		PartyType:       p.PartyType,
+		Email:           p.Email,
+		Phone:           p.Phone,
+		TaxId:           p.TaxID,
+		Address:         p.Address,
+		DefaultCurrency: p.DefaultCurrency,
+		IsActive:        p.IsActive,
+	}
+}
+
 func accountToProto(a *Account) *ledgerv1.Account {
 	out := &ledgerv1.Account{
 		Id:           a.ID.String(),
@@ -555,6 +664,16 @@ func grpcErr(err error) error {
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, ErrNoBankCodeAvailable):
 		return status.Error(codes.FailedPrecondition, err.Error())
+	case errors.Is(err, ErrPartyNotFound):
+		return status.Error(codes.NotFound, "party not found")
+	case errors.Is(err, ErrPartyNameExists):
+		return status.Error(codes.AlreadyExists, err.Error())
+	case errors.Is(err, ErrPartyNameInvalid),
+		errors.Is(err, ErrPartyTypeInvalid),
+		errors.Is(err, ErrPartyEmailInvalid),
+		errors.Is(err, ErrPartyFieldTooLong),
+		errors.Is(err, ErrPartyCurrencyInvalid):
+		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, ErrPeriodNotFound):
 		return status.Error(codes.NotFound, "accounting period not found")
 	case errors.Is(err, ErrPeriodClosed):

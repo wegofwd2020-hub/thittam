@@ -29,6 +29,10 @@ const (
 	LedgerService_CreateAccount_FullMethodName         = "/thittam.ledger.v1.LedgerService/CreateAccount"
 	LedgerService_GetAccount_FullMethodName            = "/thittam.ledger.v1.LedgerService/GetAccount"
 	LedgerService_ListAccounts_FullMethodName          = "/thittam.ledger.v1.LedgerService/ListAccounts"
+	LedgerService_CreateParty_FullMethodName           = "/thittam.ledger.v1.LedgerService/CreateParty"
+	LedgerService_GetParty_FullMethodName              = "/thittam.ledger.v1.LedgerService/GetParty"
+	LedgerService_ListParties_FullMethodName           = "/thittam.ledger.v1.LedgerService/ListParties"
+	LedgerService_UpdateParty_FullMethodName           = "/thittam.ledger.v1.LedgerService/UpdateParty"
 	LedgerService_SeedChartOfAccounts_FullMethodName   = "/thittam.ledger.v1.LedgerService/SeedChartOfAccounts"
 	LedgerService_ListAccountingPeriods_FullMethodName = "/thittam.ledger.v1.LedgerService/ListAccountingPeriods"
 	LedgerService_OpenAccountingPeriod_FullMethodName  = "/thittam.ledger.v1.LedgerService/OpenAccountingPeriod"
@@ -49,6 +53,11 @@ type LedgerServiceClient interface {
 	CreateAccount(ctx context.Context, in *CreateAccountRequest, opts ...grpc.CallOption) (*Account, error)
 	GetAccount(ctx context.Context, in *GetAccountRequest, opts ...grpc.CallOption) (*Account, error)
 	ListAccounts(ctx context.Context, in *ListAccountsRequest, opts ...grpc.CallOption) (*ListAccountsResponse, error)
+	// Customers and vendors.
+	CreateParty(ctx context.Context, in *CreatePartyRequest, opts ...grpc.CallOption) (*Party, error)
+	GetParty(ctx context.Context, in *GetPartyRequest, opts ...grpc.CallOption) (*Party, error)
+	ListParties(ctx context.Context, in *ListPartiesRequest, opts ...grpc.CallOption) (*ListPartiesResponse, error)
+	UpdateParty(ctx context.Context, in *UpdatePartyRequest, opts ...grpc.CallOption) (*Party, error)
 	// SeedChartOfAccounts creates the default accounts for a tenant from a
 	// vertical's chart-of-accounts definition. Idempotent: existing codes skipped.
 	// Called by the registration pipeline after tenant schema creation.
@@ -98,6 +107,42 @@ func (c *ledgerServiceClient) GetAccount(ctx context.Context, in *GetAccountRequ
 func (c *ledgerServiceClient) ListAccounts(ctx context.Context, in *ListAccountsRequest, opts ...grpc.CallOption) (*ListAccountsResponse, error) {
 	out := new(ListAccountsResponse)
 	err := c.cc.Invoke(ctx, LedgerService_ListAccounts_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ledgerServiceClient) CreateParty(ctx context.Context, in *CreatePartyRequest, opts ...grpc.CallOption) (*Party, error) {
+	out := new(Party)
+	err := c.cc.Invoke(ctx, LedgerService_CreateParty_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ledgerServiceClient) GetParty(ctx context.Context, in *GetPartyRequest, opts ...grpc.CallOption) (*Party, error) {
+	out := new(Party)
+	err := c.cc.Invoke(ctx, LedgerService_GetParty_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ledgerServiceClient) ListParties(ctx context.Context, in *ListPartiesRequest, opts ...grpc.CallOption) (*ListPartiesResponse, error) {
+	out := new(ListPartiesResponse)
+	err := c.cc.Invoke(ctx, LedgerService_ListParties_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ledgerServiceClient) UpdateParty(ctx context.Context, in *UpdatePartyRequest, opts ...grpc.CallOption) (*Party, error) {
+	out := new(Party)
+	err := c.cc.Invoke(ctx, LedgerService_UpdateParty_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -202,6 +247,11 @@ type LedgerServiceServer interface {
 	CreateAccount(context.Context, *CreateAccountRequest) (*Account, error)
 	GetAccount(context.Context, *GetAccountRequest) (*Account, error)
 	ListAccounts(context.Context, *ListAccountsRequest) (*ListAccountsResponse, error)
+	// Customers and vendors.
+	CreateParty(context.Context, *CreatePartyRequest) (*Party, error)
+	GetParty(context.Context, *GetPartyRequest) (*Party, error)
+	ListParties(context.Context, *ListPartiesRequest) (*ListPartiesResponse, error)
+	UpdateParty(context.Context, *UpdatePartyRequest) (*Party, error)
 	// SeedChartOfAccounts creates the default accounts for a tenant from a
 	// vertical's chart-of-accounts definition. Idempotent: existing codes skipped.
 	// Called by the registration pipeline after tenant schema creation.
@@ -235,6 +285,18 @@ func (UnimplementedLedgerServiceServer) GetAccount(context.Context, *GetAccountR
 }
 func (UnimplementedLedgerServiceServer) ListAccounts(context.Context, *ListAccountsRequest) (*ListAccountsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListAccounts not implemented")
+}
+func (UnimplementedLedgerServiceServer) CreateParty(context.Context, *CreatePartyRequest) (*Party, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateParty not implemented")
+}
+func (UnimplementedLedgerServiceServer) GetParty(context.Context, *GetPartyRequest) (*Party, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetParty not implemented")
+}
+func (UnimplementedLedgerServiceServer) ListParties(context.Context, *ListPartiesRequest) (*ListPartiesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListParties not implemented")
+}
+func (UnimplementedLedgerServiceServer) UpdateParty(context.Context, *UpdatePartyRequest) (*Party, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateParty not implemented")
 }
 func (UnimplementedLedgerServiceServer) SeedChartOfAccounts(context.Context, *SeedChartOfAccountsRequest) (*SeedChartOfAccountsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SeedChartOfAccounts not implemented")
@@ -329,6 +391,78 @@ func _LedgerService_ListAccounts_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LedgerServiceServer).ListAccounts(ctx, req.(*ListAccountsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LedgerService_CreateParty_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreatePartyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LedgerServiceServer).CreateParty(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LedgerService_CreateParty_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LedgerServiceServer).CreateParty(ctx, req.(*CreatePartyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LedgerService_GetParty_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPartyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LedgerServiceServer).GetParty(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LedgerService_GetParty_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LedgerServiceServer).GetParty(ctx, req.(*GetPartyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LedgerService_ListParties_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPartiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LedgerServiceServer).ListParties(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LedgerService_ListParties_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LedgerServiceServer).ListParties(ctx, req.(*ListPartiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LedgerService_UpdateParty_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdatePartyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LedgerServiceServer).UpdateParty(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LedgerService_UpdateParty_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LedgerServiceServer).UpdateParty(ctx, req.(*UpdatePartyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -531,6 +665,22 @@ var LedgerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListAccounts",
 			Handler:    _LedgerService_ListAccounts_Handler,
+		},
+		{
+			MethodName: "CreateParty",
+			Handler:    _LedgerService_CreateParty_Handler,
+		},
+		{
+			MethodName: "GetParty",
+			Handler:    _LedgerService_GetParty_Handler,
+		},
+		{
+			MethodName: "ListParties",
+			Handler:    _LedgerService_ListParties_Handler,
+		},
+		{
+			MethodName: "UpdateParty",
+			Handler:    _LedgerService_UpdateParty_Handler,
 		},
 		{
 			MethodName: "SeedChartOfAccounts",

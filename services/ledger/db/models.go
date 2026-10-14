@@ -63,3 +63,18 @@ type JournalLine struct {
 	Currency     string         `json:"currency"`
 	Description  pgtype.Text    `json:"description"`
 }
+
+type Party struct {
+	ID              uuid.UUID   `json:"id"`
+	TenantID        uuid.UUID   `json:"tenant_id"`
+	Name            string      `json:"name"`
+	PartyType       string      `json:"party_type"`
+	Email           string      `json:"email"`
+	Phone           string      `json:"phone"`
+	TaxID           string      `json:"tax_id"`
+	Address         string      `json:"address"`
+	DefaultCurrency pgtype.Text `json:"default_currency"`
+	IsActive        bool        `json:"is_active"`
+	CreatedAt       time.Time   `json:"created_at"`
+	UpdatedAt       time.Time   `json:"updated_at"`
+}

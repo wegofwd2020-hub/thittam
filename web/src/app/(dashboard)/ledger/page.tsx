@@ -11,6 +11,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   createBankAccount,
   createJournalEntry,
+  createParty,
+  listParties,
+  updateParty,
+  type Party,
   fromCents,
   getTrialBalance,
   listAccountingPeriods,
@@ -30,7 +34,14 @@ const ledgerKeys = {
   periods: ["ledger", "periods"] as const,
   entries: ["ledger", "entries"] as const,
   trial: ["ledger", "trial-balance"] as const,
+  parties: ["ledger", "parties"] as const,
 };
+
+const PARTY_TYPES = [
+  { value: "customer", label: "Customer" },
+  { value: "supplier", label: "Vendor" },
+  { value: "both", label: "Customer & vendor" },
+];
 
 interface DraftLine {
   account_id: string;
@@ -162,6 +173,79 @@ export default function LedgerPage() {
     onError: (err: Error) => setBankError(err.message),
   });
 
+  // ---- Customers & vendors -------------------------------------------------
+  const [showPartyForm, setShowPartyForm] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
+  const [partyName, setPartyName] = useState("");
+  const [partyType, setPartyType] = useState("customer");
+  const [partyEmail, setPartyEmail] = useState("");
+  const [partyPhone, setPartyPhone] = useState("");
+  const [partyTaxId, setPartyTaxId] = useState("");
+  const [partyAddress, setPartyAddress] = useState("");
+  const [partyCurrency, setPartyCurrency] = useState("");
+  const [partyError, setPartyError] = useState<string | null>(null);
+
+  const partiesQuery = useQuery({
+    queryKey: [...ledgerKeys.parties, showInactive],
+    queryFn: () => listParties({ include_inactive: showInactive }),
+  });
+
+  function resetPartyForm() {
+    setPartyName("");
+    setPartyType("customer");
+    setPartyEmail("");
+    setPartyPhone("");
+    setPartyTaxId("");
+    setPartyAddress("");
+    setPartyCurrency("");
+  }
+
+  const partyMutation = useMutation({
+    mutationFn: () =>
+      createParty({
+        name: partyName,
+        party_type: partyType,
+        email: partyEmail,
+        phone: partyPhone,
+        tax_id: partyTaxId,
+        address: partyAddress,
+        default_currency: partyCurrency,
+      }),
+    onSuccess: () => {
+      setPartyError(null);
+      resetPartyForm();
+      setShowPartyForm(false);
+      queryClient.invalidateQueries({ queryKey: ledgerKeys.parties });
+    },
+    onError: (err: Error) => setPartyError(err.message),
+  });
+
+  const togglePartyMutation = useMutation({
+    mutationFn: (p: Party) =>
+      updateParty(p.id, {
+        name: p.name,
+        party_type: p.party_type,
+        email: p.email,
+        phone: p.phone,
+        tax_id: p.tax_id,
+        address: p.address,
+        default_currency: p.default_currency,
+        is_active: !p.is_active,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ledgerKeys.parties }),
+    onError: (err: Error) => setPartyError(err.message),
+  });
+
+  const partyRows = (partiesQuery.data?.parties ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    party_type: PARTY_TYPES.find((t) => t.value === p.party_type)?.label ?? p.party_type,
+    email: p.email,
+    currency: p.default_currency,
+    status: p.is_active ? "active" : "inactive",
+    raw: p,
+  }));
+
   // ---- Table rows ----------------------------------------------------------
   const accountRows = accounts.map((a) => ({
     code: a.code,
@@ -186,6 +270,31 @@ export default function LedgerPage() {
     credit: t.credit,
     balance: t.balance,
   }));
+
+  const partyColumns: Column<Record<string, unknown>>[] = [
+    { key: "name", header: "Name" },
+    { key: "party_type", header: "Type" },
+    { key: "email", header: "Email" },
+    { key: "currency", header: "Currency" },
+    { key: "status", header: "Status", type: "status" },
+    {
+      key: "id",
+      header: "",
+      render: (row) => {
+        const p = row.raw as Party;
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={togglePartyMutation.isPending}
+            onClick={() => togglePartyMutation.mutate(p)}
+          >
+            {p.is_active ? "Deactivate" : "Reactivate"}
+          </Button>
+        );
+      },
+    },
+  ];
 
   const accountColumns: Column<Record<string, unknown>>[] = [
     { key: "code", header: "Code" },
@@ -229,6 +338,7 @@ export default function LedgerPage() {
           <TabsTrigger value="entries">Journal entries</TabsTrigger>
           <TabsTrigger value="accounts">Accounts</TabsTrigger>
           <TabsTrigger value="trial">Trial balance</TabsTrigger>
+          <TabsTrigger value="parties">Customers &amp; vendors</TabsTrigger>
         </TabsList>
 
         <TabsContent value="accounts" className="space-y-4 pt-4">
@@ -429,6 +539,94 @@ export default function LedgerPage() {
               entriesQuery.error
                 ? `Failed to load journal entries: ${entriesQuery.error.message}`
                 : "No journal entries yet."
+            }
+          />
+        </TabsContent>
+
+        <TabsContent value="parties" className="space-y-4 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+              />
+              Show inactive
+            </label>
+            <Button variant="outline" size="sm" onClick={() => setShowPartyForm((v) => !v)}>
+              {showPartyForm ? "Cancel" : "New customer or vendor"}
+            </Button>
+          </div>
+
+          {showPartyForm && (
+            <section className="rounded-lg border p-4 space-y-4">
+              <h2 className="font-medium">New customer or vendor</h2>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="space-y-1 text-sm">
+                  <span>Name</span>
+                  <Input value={partyName} onChange={(e) => setPartyName(e.target.value)} />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span>Type</span>
+                  <select
+                    className={selectClass}
+                    value={partyType}
+                    onChange={(e) => setPartyType(e.target.value)}
+                  >
+                    {PARTY_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span>Default currency (optional)</span>
+                  <Input
+                    maxLength={3}
+                    value={partyCurrency}
+                    onChange={(e) => setPartyCurrency(e.target.value)}
+                  />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span>Email</span>
+                  <Input value={partyEmail} onChange={(e) => setPartyEmail(e.target.value)} />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span>Phone</span>
+                  <Input value={partyPhone} onChange={(e) => setPartyPhone(e.target.value)} />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span>Tax ID</span>
+                  <Input value={partyTaxId} onChange={(e) => setPartyTaxId(e.target.value)} />
+                </label>
+                <label className="space-y-1 text-sm md:col-span-3">
+                  <span>Address</span>
+                  <Input value={partyAddress} onChange={(e) => setPartyAddress(e.target.value)} />
+                </label>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                {partyError ? <p className="text-sm text-red-700">{partyError}</p> : <span />}
+                <Button
+                  disabled={partyMutation.isPending}
+                  onClick={() => partyMutation.mutate()}
+                >
+                  {partyMutation.isPending ? "Saving…" : "Save"}
+                </Button>
+              </div>
+            </section>
+          )}
+
+          {!showPartyForm && partyError && <p className="text-sm text-red-700">{partyError}</p>}
+
+          <DataTable<Record<string, unknown>>
+            columns={partyColumns}
+            data={partyRows}
+            isLoading={partiesQuery.isLoading}
+            emptyMessage={
+              partiesQuery.error
+                ? `Failed to load customers and vendors: ${partiesQuery.error.message}`
+                : "No customers or vendors yet."
             }
           />
         </TabsContent>

@@ -114,3 +114,27 @@ LEFT JOIN journal_lines jl   ON jl.account_id  = a.id
 LEFT JOIN journal_entries je ON je.id = jl.journal_id AND je.status = 'posted'
 WHERE a.id = $1 AND a.tenant_id = $2
 GROUP BY a.id, a.code, a.name, a.account_type;
+
+-- name: CreateParty :one
+INSERT INTO parties (id, tenant_id, name, party_type, email, phone, tax_id, address, default_currency)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING *;
+
+-- name: GetParty :one
+SELECT * FROM parties WHERE id = $1 AND tenant_id = $2;
+
+-- name: ListParties :many
+-- $2 filters by type: customer returns customers and both; supplier returns
+-- suppliers and both. Empty $2 returns all types.
+SELECT * FROM parties
+WHERE tenant_id = $1
+  AND (sqlc.arg(party_type)::text = '' OR party_type = sqlc.arg(party_type)::text OR party_type = 'both')
+  AND (is_active = true OR sqlc.arg(include_inactive)::bool)
+ORDER BY lower(name) ASC;
+
+-- name: UpdateParty :one
+UPDATE parties
+SET name = $3, party_type = $4, email = $5, phone = $6, tax_id = $7,
+    address = $8, default_currency = $9, is_active = $10, updated_at = now()
+WHERE id = $1 AND tenant_id = $2
+RETURNING *;

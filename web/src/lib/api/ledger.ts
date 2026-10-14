@@ -154,6 +154,57 @@ export async function postJournalEntry(id: string): Promise<JournalEntry> {
   return api.post<JournalEntry>(`${BASE}/journal-entries/${id}/post`, {});
 }
 
+// ---------------------------------------------------------------------------
+// Parties (customers and vendors)
+// ---------------------------------------------------------------------------
+
+export interface Party {
+  id: string;
+  tenant_id: string;
+  name: string;
+  party_type: string; // customer|supplier|both
+  email: string;
+  phone: string;
+  tax_id: string;
+  address: string;
+  default_currency: string; // ISO 4217 or empty
+  is_active: boolean;
+}
+
+export interface PartyInput {
+  name: string;
+  party_type: string;
+  email: string;
+  phone: string;
+  tax_id: string;
+  address: string;
+  default_currency: string;
+}
+
+// party_type "customer" returns customers and both; "supplier" returns suppliers and both.
+export async function listParties(params?: {
+  party_type?: string;
+  include_inactive?: boolean;
+}): Promise<{ parties: Party[] }> {
+  const q = new URLSearchParams();
+  if (params?.party_type) q.set("party_type", params.party_type);
+  if (params?.include_inactive) q.set("include_inactive", "true");
+  const qs = q.toString() ? `?${q}` : "";
+  return api.getList<{ parties: Party[] }>(`${BASE}/parties${qs}`);
+}
+
+export async function createParty(data: PartyInput): Promise<Party> {
+  return api.post<Party>(`${BASE}/parties`, data);
+}
+
+// Replaces every editable field; send the full record.
+export async function updateParty(
+  id: string,
+  data: PartyInput & { is_active: boolean },
+): Promise<Party> {
+  return api.put<Party>(`${BASE}/parties/${id}`, data);
+}
+
 export async function getTrialBalance(): Promise<{ entries: TrialBalanceEntry[] }> {
   return api.getList<{ entries: TrialBalanceEntry[] }>(`${BASE}/trial-balance`);
 }

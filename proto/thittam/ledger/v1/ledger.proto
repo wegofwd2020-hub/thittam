@@ -24,6 +24,20 @@ service LedgerService {
     option (google.api.http) = { get: "/api/v1/ledger/accounts" };
   }
 
+  // Customers and vendors.
+  rpc CreateParty(CreatePartyRequest) returns (Party) {
+    option (google.api.http) = { post: "/api/v1/ledger/parties" body: "*" };
+  }
+  rpc GetParty(GetPartyRequest) returns (Party) {
+    option (google.api.http) = { get: "/api/v1/ledger/parties/{id}" };
+  }
+  rpc ListParties(ListPartiesRequest) returns (ListPartiesResponse) {
+    option (google.api.http) = { get: "/api/v1/ledger/parties" };
+  }
+  rpc UpdateParty(UpdatePartyRequest) returns (Party) {
+    option (google.api.http) = { put: "/api/v1/ledger/parties/{id}" body: "*" };
+  }
+
   // SeedChartOfAccounts creates the default accounts for a tenant from a
   // vertical's chart-of-accounts definition. Idempotent: existing codes skipped.
   // Called by the registration pipeline after tenant schema creation.
@@ -176,6 +190,67 @@ message ListAccountsRequest {
 
 message ListAccountsResponse {
   repeated Account accounts = 1;
+}
+
+// --- Parties (customers and vendors) ---
+
+// A party is a customer, a supplier, or both.
+message Party {
+  string id = 1;
+  string tenant_id = 2;
+  string name = 3;
+  string party_type = 4;       // customer|supplier|both
+  string email = 5;
+  string phone = 6;
+  string tax_id = 7;
+  string address = 8;
+  string default_currency = 9; // ISO 4217; empty if none
+  bool is_active = 10;
+}
+
+message CreatePartyRequest {
+  // Ignored. The tenant is derived from the caller's verified token (#144).
+  string tenant_id = 1;
+  string name = 2;
+  string party_type = 3;       // customer|supplier|both
+  string email = 4;
+  string phone = 5;
+  string tax_id = 6;
+  string address = 7;
+  string default_currency = 8; // optional ISO 4217
+}
+
+message GetPartyRequest {
+  // Ignored. The tenant is derived from the caller's verified token (#144).
+  string tenant_id = 1;
+  string id = 2;
+}
+
+message ListPartiesRequest {
+  // Ignored. The tenant is derived from the caller's verified token (#144).
+  string tenant_id = 1;
+  // Optional. customer returns customers and both; supplier returns suppliers and both.
+  string party_type = 2;
+  bool include_inactive = 3;
+}
+
+message ListPartiesResponse {
+  repeated Party parties = 1;
+}
+
+// UpdatePartyRequest replaces every editable field. Send the full record.
+message UpdatePartyRequest {
+  // Ignored. The tenant is derived from the caller's verified token (#144).
+  string tenant_id = 1;
+  string id = 2;
+  string name = 3;
+  string party_type = 4;
+  string email = 5;
+  string phone = 6;
+  string tax_id = 7;
+  string address = 8;
+  string default_currency = 9;
+  bool is_active = 10;
 }
 
 message SeedChartOfAccountsRequest {
