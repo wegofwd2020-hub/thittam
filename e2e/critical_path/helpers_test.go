@@ -477,6 +477,14 @@ func (r *ledgerRepo) ListAccounts(_ context.Context, _ uuid.UUID, _, _ int) ([]l
 func (r *ledgerRepo) NextBankAccountCode(_ context.Context, _ uuid.UUID) (int, error) {
 	return 0, nil
 }
+func (r *ledgerRepo) CreateParty(_ context.Context, _ *ledger.Party) error { return nil }
+func (r *ledgerRepo) GetPartyByID(_ context.Context, _, _ uuid.UUID) (*ledger.Party, error) {
+	return nil, ledger.ErrPartyNotFound
+}
+func (r *ledgerRepo) ListParties(_ context.Context, _ uuid.UUID, _ string, _ bool) ([]ledger.Party, error) {
+	return nil, nil
+}
+func (r *ledgerRepo) UpdateParty(_ context.Context, _ *ledger.Party) error { return nil }
 func (r *ledgerRepo) CreatePeriod(_ context.Context, p *ledger.AccountingPeriod) error {
 	r.periods[p.ID] = p
 	return nil

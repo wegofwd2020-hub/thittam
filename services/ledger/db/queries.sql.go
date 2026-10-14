@@ -211,6 +211,54 @@ func (q *Queries) CreateJournalLine(ctx context.Context, arg CreateJournalLinePa
 	return i, err
 }
 
+const createParty = `-- name: CreateParty :one
+INSERT INTO parties (id, tenant_id, name, party_type, email, phone, tax_id, address, default_currency)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, tenant_id, name, party_type, email, phone, tax_id, address, default_currency, is_active, created_at, updated_at
+`
+
+type CreatePartyParams struct {
+	ID              uuid.UUID   `json:"id"`
+	TenantID        uuid.UUID   `json:"tenant_id"`
+	Name            string      `json:"name"`
+	PartyType       string      `json:"party_type"`
+	Email           string      `json:"email"`
+	Phone           string      `json:"phone"`
+	TaxID           string      `json:"tax_id"`
+	Address         string      `json:"address"`
+	DefaultCurrency pgtype.Text `json:"default_currency"`
+}
+
+func (q *Queries) CreateParty(ctx context.Context, arg CreatePartyParams) (Party, error) {
+	row := q.db.QueryRow(ctx, createParty,
+		arg.ID,
+		arg.TenantID,
+		arg.Name,
+		arg.PartyType,
+		arg.Email,
+		arg.Phone,
+		arg.TaxID,
+		arg.Address,
+		arg.DefaultCurrency,
+	)
+	var i Party
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Name,
+		&i.PartyType,
+		&i.Email,
+		&i.Phone,
+		&i.TaxID,
+		&i.Address,
+		&i.DefaultCurrency,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getAccount = `-- name: GetAccount :one
 SELECT id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency FROM accounts WHERE id = $1 AND tenant_id = $2
 `
@@ -378,6 +426,35 @@ func (q *Queries) GetOpenPeriod(ctx context.Context, tenantID uuid.UUID) (Accoun
 		&i.Status,
 		&i.ClosedBy,
 		&i.ClosedAt,
+	)
+	return i, err
+}
+
+const getParty = `-- name: GetParty :one
+SELECT id, tenant_id, name, party_type, email, phone, tax_id, address, default_currency, is_active, created_at, updated_at FROM parties WHERE id = $1 AND tenant_id = $2
+`
+
+type GetPartyParams struct {
+	ID       uuid.UUID `json:"id"`
+	TenantID uuid.UUID `json:"tenant_id"`
+}
+
+func (q *Queries) GetParty(ctx context.Context, arg GetPartyParams) (Party, error) {
+	row := q.db.QueryRow(ctx, getParty, arg.ID, arg.TenantID)
+	var i Party
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Name,
+		&i.PartyType,
+		&i.Email,
+		&i.Phone,
+		&i.TaxID,
+		&i.Address,
+		&i.DefaultCurrency,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -562,6 +639,55 @@ func (q *Queries) ListJournalLines(ctx context.Context, arg ListJournalLinesPara
 	return items, nil
 }
 
+const listParties = `-- name: ListParties :many
+SELECT id, tenant_id, name, party_type, email, phone, tax_id, address, default_currency, is_active, created_at, updated_at FROM parties
+WHERE tenant_id = $1
+  AND ($2::text = '' OR party_type = $2::text OR party_type = 'both')
+  AND (is_active = true OR $3::bool)
+ORDER BY lower(name) ASC
+`
+
+type ListPartiesParams struct {
+	TenantID        uuid.UUID `json:"tenant_id"`
+	PartyType       string    `json:"party_type"`
+	IncludeInactive bool      `json:"include_inactive"`
+}
+
+// $2 filters by type: customer returns customers and both; supplier returns
+// suppliers and both. Empty $2 returns all types.
+func (q *Queries) ListParties(ctx context.Context, arg ListPartiesParams) ([]Party, error) {
+	rows, err := q.db.Query(ctx, listParties, arg.TenantID, arg.PartyType, arg.IncludeInactive)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Party{}
+	for rows.Next() {
+		var i Party
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.Name,
+			&i.PartyType,
+			&i.Email,
+			&i.Phone,
+			&i.TaxID,
+			&i.Address,
+			&i.DefaultCurrency,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nextBankAccountCode = `-- name: NextBankAccountCode :one
 SELECT COALESCE(MAX(c), 0)::int AS max_code
 FROM (
@@ -627,6 +753,58 @@ func (q *Queries) PostJournalEntry(ctx context.Context, arg PostJournalEntryPara
 		&i.PostedBy,
 		&i.PostedAt,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateParty = `-- name: UpdateParty :one
+UPDATE parties
+SET name = $3, party_type = $4, email = $5, phone = $6, tax_id = $7,
+    address = $8, default_currency = $9, is_active = $10, updated_at = now()
+WHERE id = $1 AND tenant_id = $2
+RETURNING id, tenant_id, name, party_type, email, phone, tax_id, address, default_currency, is_active, created_at, updated_at
+`
+
+type UpdatePartyParams struct {
+	ID              uuid.UUID   `json:"id"`
+	TenantID        uuid.UUID   `json:"tenant_id"`
+	Name            string      `json:"name"`
+	PartyType       string      `json:"party_type"`
+	Email           string      `json:"email"`
+	Phone           string      `json:"phone"`
+	TaxID           string      `json:"tax_id"`
+	Address         string      `json:"address"`
+	DefaultCurrency pgtype.Text `json:"default_currency"`
+	IsActive        bool        `json:"is_active"`
+}
+
+func (q *Queries) UpdateParty(ctx context.Context, arg UpdatePartyParams) (Party, error) {
+	row := q.db.QueryRow(ctx, updateParty,
+		arg.ID,
+		arg.TenantID,
+		arg.Name,
+		arg.PartyType,
+		arg.Email,
+		arg.Phone,
+		arg.TaxID,
+		arg.Address,
+		arg.DefaultCurrency,
+		arg.IsActive,
+	)
+	var i Party
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Name,
+		&i.PartyType,
+		&i.Email,
+		&i.Phone,
+		&i.TaxID,
+		&i.Address,
+		&i.DefaultCurrency,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

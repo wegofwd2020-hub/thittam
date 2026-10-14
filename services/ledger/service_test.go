@@ -29,6 +29,10 @@ var (
 type mockRepo struct {
 	createAccountFn       func(ctx context.Context, account *Account) error
 	nextBankCodeFn        func(ctx context.Context, tenantID uuid.UUID) (int, error)
+	createPartyFn         func(ctx context.Context, p *Party) error
+	getPartyFn            func(ctx context.Context, tenantID, id uuid.UUID) (*Party, error)
+	listPartiesFn         func(ctx context.Context, tenantID uuid.UUID, partyType string, includeInactive bool) ([]Party, error)
+	updatePartyFn         func(ctx context.Context, p *Party) error
 	getAccountByIDFn      func(ctx context.Context, tenantID, id uuid.UUID) (*Account, error)
 	getAccountByCodeFn    func(ctx context.Context, tenantID uuid.UUID, code string) (*Account, error)
 	listAccountsFn        func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]Account, error)
@@ -56,6 +60,30 @@ func (m *mockRepo) NextBankAccountCode(ctx context.Context, tenantID uuid.UUID) 
 		return m.nextBankCodeFn(ctx, tenantID)
 	}
 	return 0, nil
+}
+func (m *mockRepo) CreateParty(ctx context.Context, p *Party) error {
+	if m.createPartyFn != nil {
+		return m.createPartyFn(ctx, p)
+	}
+	return nil
+}
+func (m *mockRepo) GetPartyByID(ctx context.Context, tenantID, id uuid.UUID) (*Party, error) {
+	if m.getPartyFn != nil {
+		return m.getPartyFn(ctx, tenantID, id)
+	}
+	return &Party{ID: id, TenantID: tenantID, Name: "Acme", PartyType: PartyTypeCustomer, IsActive: true}, nil
+}
+func (m *mockRepo) ListParties(ctx context.Context, tenantID uuid.UUID, partyType string, includeInactive bool) ([]Party, error) {
+	if m.listPartiesFn != nil {
+		return m.listPartiesFn(ctx, tenantID, partyType, includeInactive)
+	}
+	return nil, nil
+}
+func (m *mockRepo) UpdateParty(ctx context.Context, p *Party) error {
+	if m.updatePartyFn != nil {
+		return m.updatePartyFn(ctx, p)
+	}
+	return nil
 }
 func (m *mockRepo) GetAccountByID(ctx context.Context, tenantID, id uuid.UUID) (*Account, error) {
 	if m.getAccountByIDFn != nil {

@@ -18,6 +18,12 @@ type Repository interface {
 	// tenant as an integer, or 0 when there is none.
 	NextBankAccountCode(ctx context.Context, tenantID uuid.UUID) (int, error)
 
+	// Parties (customers and suppliers)
+	CreateParty(ctx context.Context, p *Party) error
+	GetPartyByID(ctx context.Context, tenantID, id uuid.UUID) (*Party, error)
+	ListParties(ctx context.Context, tenantID uuid.UUID, partyType string, includeInactive bool) ([]Party, error)
+	UpdateParty(ctx context.Context, p *Party) error
+
 	// Accounting Periods
 	CreatePeriod(ctx context.Context, period *AccountingPeriod) error
 	GetPeriodByID(ctx context.Context, tenantID, id uuid.UUID) (*AccountingPeriod, error)

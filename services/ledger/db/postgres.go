@@ -68,6 +68,83 @@ func (p *Postgres) NextBankAccountCode(ctx context.Context, tenantID uuid.UUID) 
 	return int(n), nil
 }
 
+// --- Parties ---
+
+func (p *Postgres) CreateParty(ctx context.Context, party *ledger.Party) error {
+	row, err := p.q.CreateParty(ctx, CreatePartyParams{
+		ID:              party.ID,
+		TenantID:        party.TenantID,
+		Name:            party.Name,
+		PartyType:       party.PartyType,
+		Email:           party.Email,
+		Phone:           party.Phone,
+		TaxID:           party.TaxID,
+		Address:         party.Address,
+		DefaultCurrency: pgTextFromString(party.DefaultCurrency),
+	})
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ledger.ErrPartyNameExists
+		}
+		return fmt.Errorf("ledger: create party: %w", err)
+	}
+	party.IsActive = row.IsActive
+	return nil
+}
+
+func (p *Postgres) GetPartyByID(ctx context.Context, tenantID, id uuid.UUID) (*ledger.Party, error) {
+	row, err := p.q.GetParty(ctx, GetPartyParams{ID: id, TenantID: tenantID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ledger.ErrPartyNotFound
+		}
+		return nil, fmt.Errorf("ledger: get party: %w", err)
+	}
+	return partyFromDB(row), nil
+}
+
+func (p *Postgres) ListParties(ctx context.Context, tenantID uuid.UUID, partyType string, includeInactive bool) ([]ledger.Party, error) {
+	rows, err := p.q.ListParties(ctx, ListPartiesParams{
+		TenantID:        tenantID,
+		PartyType:       partyType,
+		IncludeInactive: includeInactive,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ledger: list parties: %w", err)
+	}
+	out := make([]ledger.Party, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, *partyFromDB(r))
+	}
+	return out, nil
+}
+
+func (p *Postgres) UpdateParty(ctx context.Context, party *ledger.Party) error {
+	row, err := p.q.UpdateParty(ctx, UpdatePartyParams{
+		ID:              party.ID,
+		TenantID:        party.TenantID,
+		Name:            party.Name,
+		PartyType:       party.PartyType,
+		Email:           party.Email,
+		Phone:           party.Phone,
+		TaxID:           party.TaxID,
+		Address:         party.Address,
+		DefaultCurrency: pgTextFromString(party.DefaultCurrency),
+		IsActive:        party.IsActive,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ledger.ErrPartyNotFound
+		}
+		if isUniqueViolation(err) {
+			return ledger.ErrPartyNameExists
+		}
+		return fmt.Errorf("ledger: update party: %w", err)
+	}
+	party.IsActive = row.IsActive
+	return nil
+}
+
 func (p *Postgres) GetAccountByID(ctx context.Context, tenantID, id uuid.UUID) (*ledger.Account, error) {
 	row, err := p.q.GetAccount(ctx, GetAccountParams{ID: id, TenantID: tenantID})
 	if err != nil {
@@ -374,6 +451,21 @@ ORDER BY a.code`
 }
 
 // --- model conversion helpers ---
+
+func partyFromDB(row Party) *ledger.Party {
+	return &ledger.Party{
+		ID:              row.ID,
+		TenantID:        row.TenantID,
+		Name:            row.Name,
+		PartyType:       row.PartyType,
+		Email:           row.Email,
+		Phone:           row.Phone,
+		TaxID:           row.TaxID,
+		Address:         row.Address,
+		DefaultCurrency: stringFromPgText(row.DefaultCurrency),
+		IsActive:        row.IsActive,
+	}
+}
 
 func accountFromDB(row Account) *ledger.Account {
 	a := &ledger.Account{
