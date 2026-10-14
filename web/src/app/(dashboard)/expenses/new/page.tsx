@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Check, AlertTriangle } from "lucide-react";
 import { useTheme } from "@/lib/themes/provider";
+import type { ExpenseCategory as ApiCategory } from "@/lib/api/expenses";
+import { useExpenseCategories, usePurchaseOrders, useSubmitExpense } from "@/lib/hooks/use-expenses";
+import { useProductions } from "@/lib/hooks/use-productions";
+import { useBudgets, useLineItems } from "@/lib/hooks/use-budgets";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -12,6 +16,7 @@ import { useTheme } from "@/lib/themes/provider";
 type TaxTreatment = "gst_18" | "gst_12" | "gst_5" | "gst_exempt" | "tds_194c" | "tds_194j";
 
 interface ExpenseCategory {
+  id: string;
   name: string;
   taxTreatment: TaxTreatment;
   requiresPo: boolean;
@@ -44,40 +49,18 @@ function TaxTreatmentBadge({ treatment }: { treatment: TaxTreatment }) {
 // ---------------------------------------------------------------------------
 // Mock data — vertical config categories
 // ---------------------------------------------------------------------------
-const EXPENSE_CATEGORIES: ExpenseCategory[] = [
-  { name: "Locations", taxTreatment: "gst_18", requiresPo: true },
-  { name: "Camera Equipment", taxTreatment: "gst_18", requiresPo: true },
-  { name: "Post Production", taxTreatment: "gst_18", requiresPo: true },
-  { name: "Travel & Accommodation", taxTreatment: "gst_18", requiresPo: false },
-  { name: "Crew & Catering", taxTreatment: "gst_5", requiresPo: false },
-  { name: "Talent Fees", taxTreatment: "tds_194j", requiresPo: true },
-  { name: "Contractor Services", taxTreatment: "tds_194c", requiresPo: true },
-  { name: "Insurance & Legal", taxTreatment: "gst_exempt", requiresPo: false },
-  { name: "Miscellaneous", taxTreatment: "gst_12", requiresPo: false },
-];
+const CURRENCY = "USD";
+const AMOUNT_RE = /^\d+(\.\d{1,2})?$/;
 
-const mockProductions = [
-  { id: "1", title: "The Last Horizon" },
-  { id: "2", title: "Midnight Express Reboot" },
-  { id: "3", title: "Project Starfall" },
-  { id: "4", title: "Urban Legends: Season 2" },
-];
-
-const mockPurchaseOrders = [
-  { id: "po-001", number: "PO-001", vendor: "Film City Studios", amount: "1800000.00" },
-  { id: "po-002", number: "PO-002", vendor: "Goa Locations Pvt Ltd", amount: "500000.00" },
-  { id: "po-003", number: "PO-003", vendor: "ARRI Rental India", amount: "2200000.00" },
-  { id: "po-004", number: "PO-004", vendor: "Heritage Building Trust", amount: "250000.00" },
-  { id: "po-005", number: "PO-005", vendor: "SkyView Drone Services", amount: "180000.00" },
-];
-
-const mockBudgetLines = [
-  { id: "li-07", label: "Camera Equipment (2300)" },
-  { id: "li-08", label: "Locations (2400)" },
-  { id: "li-09", label: "Crew (2500)" },
-  { id: "li-11", label: "VFX (3100)" },
-  { id: "li-12", label: "Sound Design (3200)" },
-];
+function toCategory(c: ApiCategory): ExpenseCategory {
+  const tax = c.tax_treatment as TaxTreatment;
+  return {
+    id: c.id,
+    name: c.label,
+    taxTreatment: tax in TAX_LABELS ? tax : "gst_exempt",
+    requiresPo: c.requires_po,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Page
@@ -87,29 +70,56 @@ export default function NewExpensePage() {
   const router = useRouter();
 
   const [selectedProduction, setSelectedProduction] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState(""); // category id
   const [selectedPo, setSelectedPo] = useState("");
   const [selectedBudgetLine, setSelectedBudgetLine] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const category = EXPENSE_CATEGORIES.find((c) => c.name === selectedCategory);
+  const productionsQuery = useProductions();
+  const categoriesQuery = useExpenseCategories();
+  const posQuery = usePurchaseOrders(selectedProduction || undefined);
+  const budgetsQuery = useBudgets(selectedProduction);
+  const approvedBudget = (budgetsQuery.data?.budgets ?? []).find((b) => b.status === "approved");
+  const lineItemsQuery = useLineItems(approvedBudget?.id ?? "");
+  const submitMutation = useSubmitExpense();
+
+  const isSubmitting = submitMutation.isPending;
+  const productions = productionsQuery.data?.productions ?? [];
+  const categories = useMemo(
+    () => (categoriesQuery.data?.categories ?? []).map(toCategory),
+    [categoriesQuery.data],
+  );
+  const pos = posQuery.data?.purchase_orders ?? [];
+  const lineItems = lineItemsQuery.data ?? [];
+
+  const category = categories.find((c) => c.id === selectedCategory);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedProduction || !selectedCategory || !amount.trim() || !description.trim()) return;
-
-    setIsSubmitting(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setIsSubmitting(false);
-    setShowToast(true);
-
-    setTimeout(() => {
-      router.push("/expenses");
-    }, 1200);
+    setFormError(null);
+    if (!selectedProduction || !selectedCategory || !description.trim()) return;
+    if (!AMOUNT_RE.test(amount.trim())) {
+      setFormError("Amount must be a number like 1500.00.");
+      return;
+    }
+    try {
+      await submitMutation.mutateAsync({
+        production_id: selectedProduction,
+        category_id: selectedCategory,
+        description: description.trim(),
+        amount: amount.trim(),
+        currency: CURRENCY,
+        budget_line_id: selectedBudgetLine || undefined,
+        purchase_order_id: selectedPo || undefined,
+      });
+      setShowToast(true);
+      setTimeout(() => router.push("/expenses"), 1200);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to submit expense.");
+    }
   }
 
   return (
@@ -168,7 +178,7 @@ export default function NewExpensePage() {
               }}
             >
               <option value="">Select a {entityLabels.project.toLowerCase()}...</option>
-              {mockProductions.map((p) => (
+              {productions.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.title}
                 </option>
@@ -200,8 +210,8 @@ export default function NewExpensePage() {
               }}
             >
               <option value="">Select a category...</option>
-              {EXPENSE_CATEGORIES.map((c) => (
-                <option key={c.name} value={c.name}>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
@@ -245,9 +255,9 @@ export default function NewExpensePage() {
                 }}
               >
                 <option value="">Select a PO...</option>
-                {mockPurchaseOrders.map((po) => (
+                {pos.map((po) => (
                   <option key={po.id} value={po.id}>
-                    {po.number} — {po.vendor}
+                    {po.po_number} — {po.vendor_name}
                   </option>
                 ))}
               </select>
@@ -340,9 +350,9 @@ export default function NewExpensePage() {
               }}
             >
               <option value="">No budget line linked</option>
-              {mockBudgetLines.map((bl) => (
+              {lineItems.map((bl) => (
                 <option key={bl.id} value={bl.id}>
-                  {bl.label}
+                  {bl.description} ({bl.account_code})
                 </option>
               ))}
             </select>
@@ -379,6 +389,12 @@ export default function NewExpensePage() {
       </form>
 
       {/* Success toast */}
+      {formError && (
+        <p className="mt-4 text-sm" style={{ color: "var(--thittam-status-over-budget, #DC2626)" }}>
+          {formError}
+        </p>
+      )}
+
       {showToast && (
         <div
           className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-heading font-medium text-white shadow-lg"
