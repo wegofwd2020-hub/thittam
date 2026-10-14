@@ -169,6 +169,29 @@ func (p *Postgres) ListParties(ctx context.Context, tenantID uuid.UUID, partyTyp
 	return out, nil
 }
 
+func (p *Postgres) ListPartyLedgerLines(ctx context.Context, tenantID, partyID uuid.UUID) ([]ledger.PartyLedgerLine, error) {
+	rows, err := p.q.ListPartyLedgerLines(ctx, ListPartyLedgerLinesParams{TenantID: tenantID, PartyID: pgUUIDFromPtr(&partyID)})
+	if err != nil {
+		return nil, fmt.Errorf("ledger: list party ledger lines: %w", err)
+	}
+	out := make([]ledger.PartyLedgerLine, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, ledger.PartyLedgerLine{
+			EntryID:      r.EntryID,
+			EntryNumber:  r.EntryNumber,
+			EntryDate:    r.EntryDate,
+			Narration:    r.Narration,
+			AccountCode:  r.AccountCode,
+			AccountName:  r.AccountName,
+			DebitAmount:  decimalFromPgNumeric(r.DebitAmount),
+			CreditAmount: decimalFromPgNumeric(r.CreditAmount),
+			Currency:     r.Currency,
+			Description:  stringFromPgText(r.Description),
+		})
+	}
+	return out, nil
+}
+
 // UpdateParty writes the party fields and replaces its contacts in one
 // transaction, so a failed contact write leaves the party unchanged.
 func (p *Postgres) UpdateParty(ctx context.Context, party *ledger.Party) error {
@@ -377,6 +400,7 @@ func (p *Postgres) CreateJournalEntry(ctx context.Context, je *ledger.JournalEnt
 			DebitAmount:  pgNumericFromDecimal(line.DebitAmount),
 			CreditAmount: pgNumericFromDecimal(line.CreditAmount),
 			Description:  pgTextFromString(line.Description),
+			PartyID:      pgUUIDFromPtr(line.PartyID),
 		})
 		if err != nil {
 			return fmt.Errorf("ledger: insert journal line %d: %w", i, err)
@@ -631,7 +655,16 @@ func journalLineFromDB(row JournalLine) ledger.JournalLine {
 		CreditAmount: decimalFromPgNumeric(row.CreditAmount),
 		Currency:     row.Currency,
 		Description:  stringFromPgText(row.Description),
+		PartyID:      uuidPtrFromPgUUID(row.PartyID),
 	}
+}
+
+func uuidPtrFromPgUUID(u pgtype.UUID) *uuid.UUID {
+	if !u.Valid {
+		return nil
+	}
+	id := uuid.UUID(u.Bytes)
+	return &id
 }
 
 // --- pgtype conversion helpers ---

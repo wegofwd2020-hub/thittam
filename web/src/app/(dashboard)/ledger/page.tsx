@@ -58,9 +58,10 @@ interface DraftLine {
   debit: string;
   credit: string;
   description: string;
+  party_id: string;
 }
 
-const EMPTY_LINE: DraftLine = { account_id: "", debit: "", credit: "", description: "" };
+const EMPTY_LINE: DraftLine = { account_id: "", debit: "", credit: "", description: "", party_id: "" };
 
 export default function LedgerPage() {
   const queryClient = useQueryClient();
@@ -136,6 +137,7 @@ export default function LedgerPage() {
         credit_amount: fromCents(cc),
         currency: CURRENCY,
         description: l.description.trim(),
+        ...(l.party_id ? { party_id: l.party_id } : {}),
       });
     }
     if (totals.diff !== 0) return `Entry is not balanced (difference ${fromCents(totals.diff)}).`;
@@ -479,16 +481,17 @@ export default function LedgerPage() {
 
             <div className="space-y-2">
               <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground">
-                <span className="col-span-4">Account</span>
+                <span className="col-span-3">Account</span>
+                <span className="col-span-2">Party</span>
                 <span className="col-span-2">Debit (USD)</span>
                 <span className="col-span-2">Credit (USD)</span>
-                <span className="col-span-3">Description</span>
+                <span className="col-span-2">Description</span>
                 <span className="col-span-1" />
               </div>
               {lines.map((l, i) => (
                 <div key={i} className="grid grid-cols-12 items-center gap-2">
                   <select
-                    className={`${selectClass} col-span-4`}
+                    className={`${selectClass} col-span-3`}
                     value={l.account_id}
                     onChange={(e) => updateLine(i, { account_id: e.target.value })}
                   >
@@ -498,6 +501,21 @@ export default function LedgerPage() {
                       .map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.code} {a.name}
+                        </option>
+                      ))}
+                  </select>
+                  <select
+                    className={`${selectClass} col-span-2`}
+                    aria-label="Party (optional)"
+                    value={l.party_id}
+                    onChange={(e) => updateLine(i, { party_id: e.target.value })}
+                  >
+                    <option value="">No party</option>
+                    {(partiesQuery.data?.parties ?? [])
+                      .filter((p) => p.is_active)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
                         </option>
                       ))}
                   </select>
@@ -516,7 +534,7 @@ export default function LedgerPage() {
                     onChange={(e) => updateLine(i, { credit: e.target.value })}
                   />
                   <Input
-                    className="col-span-3"
+                    className="col-span-2"
                     value={l.description}
                     onChange={(e) => updateLine(i, { description: e.target.value })}
                   />

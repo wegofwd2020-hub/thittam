@@ -33,6 +33,7 @@ type mockRepo struct {
 	getPartyFn            func(ctx context.Context, tenantID, id uuid.UUID) (*Party, error)
 	listPartiesFn         func(ctx context.Context, tenantID uuid.UUID, partyType string, includeInactive bool) ([]Party, error)
 	updatePartyFn         func(ctx context.Context, p *Party) error
+	listPartyLinesFn      func(ctx context.Context, tenantID, partyID uuid.UUID) ([]PartyLedgerLine, error)
 	getAccountByIDFn      func(ctx context.Context, tenantID, id uuid.UUID) (*Account, error)
 	getAccountByCodeFn    func(ctx context.Context, tenantID uuid.UUID, code string) (*Account, error)
 	listAccountsFn        func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]Account, error)
@@ -84,6 +85,12 @@ func (m *mockRepo) UpdateParty(ctx context.Context, p *Party) error {
 		return m.updatePartyFn(ctx, p)
 	}
 	return nil
+}
+func (m *mockRepo) ListPartyLedgerLines(ctx context.Context, tenantID, partyID uuid.UUID) ([]PartyLedgerLine, error) {
+	if m.listPartyLinesFn != nil {
+		return m.listPartyLinesFn(ctx, tenantID, partyID)
+	}
+	return nil, nil
 }
 func (m *mockRepo) GetAccountByID(ctx context.Context, tenantID, id uuid.UUID) (*Account, error) {
 	if m.getAccountByIDFn != nil {

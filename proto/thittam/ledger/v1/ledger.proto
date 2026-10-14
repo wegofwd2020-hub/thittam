@@ -37,6 +37,10 @@ service LedgerService {
   rpc UpdateParty(UpdatePartyRequest) returns (Party) {
     option (google.api.http) = { put: "/api/v1/ledger/parties/{id}" body: "*" };
   }
+  // Posted ledger lines tagged to a party, for viewing.
+  rpc ListPartyTransactions(ListPartyTransactionsRequest) returns (ListPartyTransactionsResponse) {
+    option (google.api.http) = { get: "/api/v1/ledger/parties/{party_id}/transactions" };
+  }
 
   // SeedChartOfAccounts creates the default accounts for a tenant from a
   // vertical's chart-of-accounts definition. Idempotent: existing codes skipped.
@@ -130,6 +134,7 @@ message JournalLine {
   string credit_amount = 5; // "0.00" when this is a debit line
   string currency = 6;
   string description = 7;
+  string party_id = 8; // optional customer or vendor; empty if none
 }
 
 // ChartOfAccountEntry is one account in a seed payload, sourced from the
@@ -327,6 +332,7 @@ message JournalLineInput {
   string credit_amount = 3; // decimal string; "0.00" for debit lines
   string currency = 4;
   string description = 5;
+  string party_id = 6; // optional customer or vendor
 }
 
 message PostJournalEntryRequest {
@@ -399,4 +405,31 @@ message ListAccountingPeriodsRequest {
 message ListAccountingPeriodsResponse {
   // Most recent period first.
   repeated AccountingPeriod periods = 1;
+}
+
+// --- Party transactions (view only) ---
+
+message PartyLedgerLine {
+  string entry_id = 1;
+  string entry_number = 2;
+  string entry_date = 3;     // RFC 3339
+  string narration = 4;
+  string account_code = 5;
+  string account_name = 6;
+  string debit_amount = 7;   // "0.00" when this is a credit line
+  string credit_amount = 8;  // "0.00" when this is a debit line
+  string currency = 9;
+  string description = 10;
+}
+
+message ListPartyTransactionsRequest {
+  // Ignored. The tenant is derived from the caller's verified token (#144).
+  string tenant_id = 1;
+  string party_id = 2;
+}
+
+message ListPartyTransactionsResponse {
+  repeated PartyLedgerLine lines = 1;
+  string total_debit = 2;
+  string total_credit = 3;
 }
