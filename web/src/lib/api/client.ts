@@ -53,6 +53,10 @@ function resolveBaseUrl(path: string): string {
     return env.ledgerApiUrl;
   }
 
+  if (path.startsWith("/api/v1/reports/dashboard")) {
+    return env.reportingApiUrl;
+  }
+
   if (
     path.startsWith("/api/v1/expenses") ||
     path.startsWith("/api/v1/purchase-orders") ||

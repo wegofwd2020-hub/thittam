@@ -14,6 +14,7 @@ import {
   logout as apiLogout,
   refreshToken as apiRefreshToken,
 } from "@/lib/api/auth";
+import { useQueryClient } from "@tanstack/react-query";
 import type { TokenPair } from "@/lib/api/types";
 
 export interface User {
@@ -76,7 +77,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
+  // Cached queries are keyed without tenant or user, so drop them whenever the
+  // session changes; otherwise the next login can briefly render the previous
+  // tenant's data.
   const clearAuth = useCallback(() => {
     clearTokens();
     api.setToken(null);
@@ -84,7 +89,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.setCaller(null);
     setUser(null);
     setTenant(null);
-  }, []);
+    queryClient.clear();
+  }, [queryClient]);
 
   const hydrateSession = useCallback(
     async (accessToken: string) => {
@@ -151,6 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const pair: TokenPair = await apiLogin(email, password);
       storeTokens(pair);
       api.setToken(pair.access_token);
+      queryClient.clear();
 
       const me = await api.get<{ user: User; tenant: Tenant }>(
         "/api/v1/auth/me"
@@ -165,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       localStorage.setItem(TENANT_ID_KEY, me.tenant.id);
     },
-    []
+    [queryClient]
   );
 
   const logout = useCallback(async () => {

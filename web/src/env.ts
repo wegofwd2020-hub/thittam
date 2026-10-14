@@ -47,6 +47,11 @@ export const env = {
     return process.env.NEXT_PUBLIC_LEDGER_URL || hostUrl(9083);
   },
 
+  /** reporting-analytics grpc-gateway — dashboard summaries (read-only projections). */
+  get reportingApiUrl(): string {
+    return process.env.NEXT_PUBLIC_REPORTING_URL || hostUrl(9085);
+  },
+
   /**
    * Base URL for platform-level APIs (auth, tenant provisioning).
    * Defaults to the IAM grpc-gateway port in local dev.
