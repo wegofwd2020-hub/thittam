@@ -194,7 +194,7 @@ export async function approvePurchaseOrder(
 const PETTY_BASE = "/api/v1/petty-cash";
 
 export async function listPettyCash(
-  productionId: string,
+  productionId?: string,
   params?: { status?: string; limit?: number; after?: string },
 ): Promise<{ advances: PettyCashAdvance[] }> {
   return api.getList<{ advances: PettyCashAdvance[] }>(
