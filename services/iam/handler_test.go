@@ -211,6 +211,7 @@ func TestHandler_ListUsers_Success(t *testing.T) {
 	t.Parallel()
 	tenantID := uuid.New()
 	h := NewHandler(newTestService(&mockRepo{
+		getUserPermissionsFn: grantUserManage(),
 		listUsersFn: func(_ context.Context, _ uuid.UUID, _ string, _, _ int) ([]User, error) {
 			return []User{{ID: uuid.New(), TenantID: tenantID, Email: "a@b.com", Status: "active"}}, nil
 		},
@@ -219,6 +220,21 @@ func TestHandler_ListUsers_Success(t *testing.T) {
 	resp, err := h.ListUsers(memberCtx(tenantID), &iamv1.ListUsersRequest{TenantId: tenantID.String()}) //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
 	require.NoError(t, err)
 	assert.Len(t, resp.GetUsers(), 1)
+}
+
+// A bare member may not read the user directory (emails, status).
+func TestHandler_ListUsers_MemberDenied(t *testing.T) {
+	t.Parallel()
+	tid := uuid.New()
+	h := newHandlerWithRepo(&mockRepo{
+		listUsersFn: func(context.Context, uuid.UUID, string, int, int) ([]User, error) {
+			t.Fatal("repository must not be reached without user:manage")
+			return nil, nil
+		},
+	})
+	_, err := h.ListUsers(memberCtx(tid), &iamv1.ListUsersRequest{TenantId: tid.String()}) //nolint:staticcheck // deprecated field, set on purpose to exercise server-side handling of it
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 func TestHandler_ListUsers_InvalidTenantID(t *testing.T) {
