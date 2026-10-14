@@ -28,6 +28,7 @@ var (
 
 type mockRepo struct {
 	createAccountFn       func(ctx context.Context, account *Account) error
+	nextBankCodeFn        func(ctx context.Context, tenantID uuid.UUID) (int, error)
 	getAccountByIDFn      func(ctx context.Context, tenantID, id uuid.UUID) (*Account, error)
 	getAccountByCodeFn    func(ctx context.Context, tenantID uuid.UUID, code string) (*Account, error)
 	listAccountsFn        func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]Account, error)
@@ -49,6 +50,12 @@ func (m *mockRepo) CreateAccount(ctx context.Context, account *Account) error {
 		return m.createAccountFn(ctx, account)
 	}
 	return nil
+}
+func (m *mockRepo) NextBankAccountCode(ctx context.Context, tenantID uuid.UUID) (int, error) {
+	if m.nextBankCodeFn != nil {
+		return m.nextBankCodeFn(ctx, tenantID)
+	}
+	return 0, nil
 }
 func (m *mockRepo) GetAccountByID(ctx context.Context, tenantID, id uuid.UUID) (*Account, error) {
 	if m.getAccountByIDFn != nil {

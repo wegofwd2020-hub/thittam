@@ -13,6 +13,10 @@ export interface LedgerAccount {
   account_type: string; // asset|liability|equity|revenue|expense
   parent_id: string;
   is_active: boolean;
+  // Bank accounts only; empty strings for all other accounts.
+  bank_name: string;
+  account_last4: string;
+  bank_currency: string;
 }
 
 export interface AccountingPeriod {
@@ -105,6 +109,20 @@ const BASE = "/api/v1/ledger";
 
 export async function listLedgerAccounts(): Promise<{ accounts: LedgerAccount[] }> {
   return api.getList<{ accounts: LedgerAccount[] }>(`${BASE}/accounts`);
+}
+
+export interface CreateBankAccountInput {
+  bank_name: string;
+  account_number: string; // only the last four digits are kept
+  bank_currency: string; // ISO 4217, e.g. USD
+}
+
+// The service assigns the account code and returns the account with only the
+// last four digits of the number.
+export async function createBankAccount(
+  data: CreateBankAccountInput,
+): Promise<LedgerAccount> {
+  return api.post<LedgerAccount>(`${BASE}/accounts`, data);
 }
 
 export async function listAccountingPeriods(): Promise<{ periods: AccountingPeriod[] }> {

@@ -1,10 +1,21 @@
 -- General ledger service queries.
 
 -- name: CreateAccount :one
-INSERT INTO accounts (id, tenant_id, code, name, account_type, parent_id, is_active)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO accounts (id, tenant_id, code, name, account_type, parent_id, is_active,
+                      bank_name, account_last4, bank_currency)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (tenant_id, code) DO NOTHING
 RETURNING *;
+
+-- name: NextBankAccountCode :one
+-- Highest existing 1xxx asset-range code for the tenant, as an int. Caller adds
+-- the step. Returns 0 when the tenant has no codes in the range.
+SELECT COALESCE(MAX(c), 0)::int AS max_code
+FROM (
+    SELECT code::int AS c
+    FROM accounts
+    WHERE tenant_id = $1 AND code ~ '^1[0-9]{3}$'
+) AS codes;
 
 -- name: GetAccount :one
 SELECT * FROM accounts WHERE id = $1 AND tenant_id = $2;

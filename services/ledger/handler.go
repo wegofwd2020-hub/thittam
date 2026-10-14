@@ -67,6 +67,22 @@ func (h *Handler) CreateAccount(ctx context.Context, req *ledgerv1.CreateAccount
 		return nil, err
 	}
 
+	if req.GetBankName() != "" || req.GetAccountNumber() != "" || req.GetBankCurrency() != "" {
+		if req.GetCode() != "" || req.GetParentId() != "" ||
+			(req.GetAccountType() != "" && req.GetAccountType() != "asset") {
+			return nil, grpcErr(ErrBankAccountNotAsset)
+		}
+		out, err := h.svc.CreateBankAccount(ctx, tenantID, BankAccountInput{
+			BankName:      req.GetBankName(),
+			AccountNumber: req.GetAccountNumber(),
+			Currency:      req.GetBankCurrency(),
+		})
+		if err != nil {
+			return nil, grpcErr(err)
+		}
+		return accountToProto(out), nil
+	}
+
 	account := &Account{
 		TenantID:    tenantID,
 		Code:        req.GetCode(),
@@ -451,12 +467,15 @@ func (h *Handler) GetTrialBalance(ctx context.Context, req *ledgerv1.GetTrialBal
 
 func accountToProto(a *Account) *ledgerv1.Account {
 	out := &ledgerv1.Account{
-		Id:          a.ID.String(),
-		TenantId:    a.TenantID.String(),
-		Code:        a.Code,
-		Name:        a.Name,
-		AccountType: a.AccountType,
-		IsActive:    a.IsActive,
+		Id:           a.ID.String(),
+		TenantId:     a.TenantID.String(),
+		Code:         a.Code,
+		Name:         a.Name,
+		AccountType:  a.AccountType,
+		IsActive:     a.IsActive,
+		BankName:     a.BankName,
+		AccountLast4: a.AccountLast4,
+		BankCurrency: a.BankCurrency,
 	}
 	if a.ParentID != nil {
 		out.ParentId = a.ParentID.String()
@@ -529,6 +548,13 @@ func grpcErr(err error) error {
 		return status.Error(codes.AlreadyExists, "account code already exists for tenant")
 	case errors.Is(err, ErrInvalidAccountType):
 		return status.Error(codes.InvalidArgument, "invalid account type")
+	case errors.Is(err, ErrBankNameInvalid),
+		errors.Is(err, ErrAccountNumberInvalid),
+		errors.Is(err, ErrBankCurrencyInvalid),
+		errors.Is(err, ErrBankAccountNotAsset):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, ErrNoBankCodeAvailable):
+		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, ErrPeriodNotFound):
 		return status.Error(codes.NotFound, "accounting period not found")
 	case errors.Is(err, ErrPeriodClosed):

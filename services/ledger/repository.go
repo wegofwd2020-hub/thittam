@@ -14,6 +14,9 @@ type Repository interface {
 	GetAccountByID(ctx context.Context, tenantID, id uuid.UUID) (*Account, error)
 	GetAccountByCode(ctx context.Context, tenantID uuid.UUID, code string) (*Account, error)
 	ListAccounts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]Account, error)
+	// NextBankAccountCode returns the highest existing 1xxx account code for the
+	// tenant as an integer, or 0 when there is none.
+	NextBankAccountCode(ctx context.Context, tenantID uuid.UUID) (int, error)
 
 	// Accounting Periods
 	CreatePeriod(ctx context.Context, period *AccountingPeriod) error

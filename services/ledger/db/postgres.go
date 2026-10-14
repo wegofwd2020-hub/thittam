@@ -33,13 +33,16 @@ var _ ledger.Repository = (*Postgres)(nil)
 
 func (p *Postgres) CreateAccount(ctx context.Context, account *ledger.Account) error {
 	row, err := p.q.CreateAccount(ctx, CreateAccountParams{
-		ID:          account.ID,
-		TenantID:    account.TenantID,
-		Code:        account.Code,
-		Name:        account.Name,
-		AccountType: account.AccountType,
-		ParentID:    pgUUIDFromPtr(account.ParentID),
-		IsActive:    account.IsActive,
+		ID:           account.ID,
+		TenantID:     account.TenantID,
+		Code:         account.Code,
+		Name:         account.Name,
+		AccountType:  account.AccountType,
+		ParentID:     pgUUIDFromPtr(account.ParentID),
+		IsActive:     account.IsActive,
+		BankName:     pgTextFromString(account.BankName),
+		AccountLast4: pgTextFromString(account.AccountLast4),
+		BankCurrency: pgTextFromString(account.BankCurrency),
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -55,6 +58,14 @@ func (p *Postgres) CreateAccount(ctx context.Context, account *ledger.Account) e
 	account.ID = row.ID
 	account.IsActive = row.IsActive
 	return nil
+}
+
+func (p *Postgres) NextBankAccountCode(ctx context.Context, tenantID uuid.UUID) (int, error) {
+	n, err := p.q.NextBankAccountCode(ctx, tenantID)
+	if err != nil {
+		return 0, fmt.Errorf("ledger: next bank account code: %w", err)
+	}
+	return int(n), nil
 }
 
 func (p *Postgres) GetAccountByID(ctx context.Context, tenantID, id uuid.UUID) (*ledger.Account, error) {
@@ -366,12 +377,15 @@ ORDER BY a.code`
 
 func accountFromDB(row Account) *ledger.Account {
 	a := &ledger.Account{
-		ID:          row.ID,
-		TenantID:    row.TenantID,
-		Code:        row.Code,
-		Name:        row.Name,
-		AccountType: row.AccountType,
-		IsActive:    row.IsActive,
+		ID:           row.ID,
+		TenantID:     row.TenantID,
+		Code:         row.Code,
+		Name:         row.Name,
+		AccountType:  row.AccountType,
+		IsActive:     row.IsActive,
+		BankName:     stringFromPgText(row.BankName),
+		AccountLast4: stringFromPgText(row.AccountLast4),
+		BankCurrency: stringFromPgText(row.BankCurrency),
 	}
 	if row.ParentID.Valid {
 		id := uuid.UUID(row.ParentID.Bytes)

@@ -474,6 +474,9 @@ func (r *ledgerRepo) GetAccountByCode(_ context.Context, _ uuid.UUID, code strin
 func (r *ledgerRepo) ListAccounts(_ context.Context, _ uuid.UUID, _, _ int) ([]ledger.Account, error) {
 	return nil, nil
 }
+func (r *ledgerRepo) NextBankAccountCode(_ context.Context, _ uuid.UUID) (int, error) {
+	return 0, nil
+}
 func (r *ledgerRepo) CreatePeriod(_ context.Context, p *ledger.AccountingPeriod) error {
 	r.periods[p.ID] = p
 	return nil
