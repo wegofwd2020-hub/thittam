@@ -7,6 +7,7 @@ import { z } from "zod/v4";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LogIn, ShieldCheck, Loader2 } from "lucide-react";
 import { useAuth, ApiError } from "@/lib/auth/context";
+import Image from "next/image";
 
 const loginSchema = z.object({
   email: z.email("Please enter a valid email address"),
@@ -60,6 +61,7 @@ export default function LoginPage() {
     <div className="flex min-h-full flex-1 items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="rounded-xl border border-[var(--thittam-border,#e2e8f0)] bg-white p-8 shadow-sm dark:bg-zinc-900">
+          <Image src="/brand/kl-lockup.svg" alt="Kaundinya Labs" width={300} height={40} unoptimized className="mb-6 h-10 w-auto" />
           <h1 className="mb-1 text-2xl font-semibold tracking-tight text-[var(--thittam-foreground,#0f172a)]">
             Sign in
           </h1>

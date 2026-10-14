@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/context";
 import { useTheme } from "@/lib/themes/provider";
+import Image from "next/image";
 
 // Map icon name strings from vertical definitions to actual components
 const iconMap: Record<string, LucideIcon> = {
@@ -217,24 +218,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           borderBottom: "1px solid var(--thittam-border, #e2e8f0)",
         }}
       >
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div
-              className="flex h-7 w-7 items-center justify-center rounded-md text-xs font-bold"
-              style={{
-                backgroundColor: "var(--thittam-primary, #3b82f6)",
-                color: "var(--thittam-primary-foreground, #fff)",
-              }}
-            >
-              T
-            </div>
-            <span
-              className="text-sm font-semibold"
-              style={{ color: "var(--thittam-foreground, #0f172a)" }}
-            >
-              Thittam
-            </span>
-          </div>
+        {collapsed ? (
+          <Image src="/brand/kl-mark-reversed.svg" alt="Kaundinya Labs" width={28} height={28} unoptimized />
+        ) : (
+          <Image src="/brand/kl-lockup-compact-reversed.svg" alt="Kaundinya Labs" width={160} height={28} unoptimized />
         )}
         <button
           onClick={onToggle}
