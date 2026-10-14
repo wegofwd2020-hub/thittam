@@ -69,6 +69,11 @@ message Account {
   string account_type = 5; // asset|liability|equity|revenue|expense
   string parent_id = 6;    // empty if root account
   bool is_active = 7;
+  // Bank accounts only (empty for all other accounts). The full account number
+  // is never returned; only its last four digits.
+  string bank_name = 8;
+  string account_last4 = 9;
+  string bank_currency = 10; // ISO 4217
 }
 
 // AccountingPeriod represents a calendar month. Posting to a closed period
@@ -145,6 +150,13 @@ message CreateAccountRequest {
   string name = 3;
   string account_type = 4; // asset|liability|equity|revenue|expense
   string parent_id = 5;    // optional
+  // Bank account (asset) fields. When any bank field is set, account_type must
+  // be asset or empty, code and parent_id must be empty (the service assigns
+  // the next free 1xxx code), and account_number is used only to derive
+  // account_last4 and is never stored.
+  string bank_name = 6;
+  string account_number = 7;
+  string bank_currency = 8; // ISO 4217, e.g. USD
 }
 
 message GetAccountRequest {

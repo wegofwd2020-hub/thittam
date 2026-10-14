@@ -12,13 +12,16 @@ import (
 )
 
 type Account struct {
-	ID          uuid.UUID   `json:"id"`
-	TenantID    uuid.UUID   `json:"tenant_id"`
-	Code        string      `json:"code"`
-	Name        string      `json:"name"`
-	AccountType string      `json:"account_type"`
-	ParentID    pgtype.UUID `json:"parent_id"`
-	IsActive    bool        `json:"is_active"`
+	ID           uuid.UUID   `json:"id"`
+	TenantID     uuid.UUID   `json:"tenant_id"`
+	Code         string      `json:"code"`
+	Name         string      `json:"name"`
+	AccountType  string      `json:"account_type"`
+	ParentID     pgtype.UUID `json:"parent_id"`
+	IsActive     bool        `json:"is_active"`
+	BankName     pgtype.Text `json:"bank_name"`
+	AccountLast4 pgtype.Text `json:"account_last4"`
+	BankCurrency pgtype.Text `json:"bank_currency"`
 }
 
 type AccountingPeriod struct {

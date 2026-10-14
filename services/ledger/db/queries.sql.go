@@ -41,20 +41,24 @@ func (q *Queries) CloseAccountingPeriod(ctx context.Context, arg CloseAccounting
 
 const createAccount = `-- name: CreateAccount :one
 
-INSERT INTO accounts (id, tenant_id, code, name, account_type, parent_id, is_active)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO accounts (id, tenant_id, code, name, account_type, parent_id, is_active,
+                      bank_name, account_last4, bank_currency)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (tenant_id, code) DO NOTHING
-RETURNING id, tenant_id, code, name, account_type, parent_id, is_active
+RETURNING id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency
 `
 
 type CreateAccountParams struct {
-	ID          uuid.UUID   `json:"id"`
-	TenantID    uuid.UUID   `json:"tenant_id"`
-	Code        string      `json:"code"`
-	Name        string      `json:"name"`
-	AccountType string      `json:"account_type"`
-	ParentID    pgtype.UUID `json:"parent_id"`
-	IsActive    bool        `json:"is_active"`
+	ID           uuid.UUID   `json:"id"`
+	TenantID     uuid.UUID   `json:"tenant_id"`
+	Code         string      `json:"code"`
+	Name         string      `json:"name"`
+	AccountType  string      `json:"account_type"`
+	ParentID     pgtype.UUID `json:"parent_id"`
+	IsActive     bool        `json:"is_active"`
+	BankName     pgtype.Text `json:"bank_name"`
+	AccountLast4 pgtype.Text `json:"account_last4"`
+	BankCurrency pgtype.Text `json:"bank_currency"`
 }
 
 // General ledger service queries.
@@ -67,6 +71,9 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		arg.AccountType,
 		arg.ParentID,
 		arg.IsActive,
+		arg.BankName,
+		arg.AccountLast4,
+		arg.BankCurrency,
 	)
 	var i Account
 	err := row.Scan(
@@ -77,6 +84,9 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.AccountType,
 		&i.ParentID,
 		&i.IsActive,
+		&i.BankName,
+		&i.AccountLast4,
+		&i.BankCurrency,
 	)
 	return i, err
 }
@@ -202,7 +212,7 @@ func (q *Queries) CreateJournalLine(ctx context.Context, arg CreateJournalLinePa
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, tenant_id, code, name, account_type, parent_id, is_active FROM accounts WHERE id = $1 AND tenant_id = $2
+SELECT id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency FROM accounts WHERE id = $1 AND tenant_id = $2
 `
 
 type GetAccountParams struct {
@@ -221,6 +231,9 @@ func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (Account
 		&i.AccountType,
 		&i.ParentID,
 		&i.IsActive,
+		&i.BankName,
+		&i.AccountLast4,
+		&i.BankCurrency,
 	)
 	return i, err
 }
@@ -269,7 +282,7 @@ func (q *Queries) GetAccountBalance(ctx context.Context, arg GetAccountBalancePa
 }
 
 const getAccountByCode = `-- name: GetAccountByCode :one
-SELECT id, tenant_id, code, name, account_type, parent_id, is_active FROM accounts WHERE code = $1 AND tenant_id = $2
+SELECT id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency FROM accounts WHERE code = $1 AND tenant_id = $2
 `
 
 type GetAccountByCodeParams struct {
@@ -288,6 +301,9 @@ func (q *Queries) GetAccountByCode(ctx context.Context, arg GetAccountByCodePara
 		&i.AccountType,
 		&i.ParentID,
 		&i.IsActive,
+		&i.BankName,
+		&i.AccountLast4,
+		&i.BankCurrency,
 	)
 	return i, err
 }
@@ -401,7 +417,7 @@ func (q *Queries) ListAccountingPeriods(ctx context.Context, tenantID uuid.UUID)
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, tenant_id, code, name, account_type, parent_id, is_active FROM accounts
+SELECT id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency FROM accounts
 WHERE tenant_id = $1 AND ($2 = '' OR account_type = $2) AND is_active = true
 ORDER BY code ASC
 LIMIT $3 OFFSET $4
@@ -436,6 +452,9 @@ func (q *Queries) ListAccounts(ctx context.Context, arg ListAccountsParams) ([]A
 			&i.AccountType,
 			&i.ParentID,
 			&i.IsActive,
+			&i.BankName,
+			&i.AccountLast4,
+			&i.BankCurrency,
 		); err != nil {
 			return nil, err
 		}
@@ -541,6 +560,24 @@ func (q *Queries) ListJournalLines(ctx context.Context, arg ListJournalLinesPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const nextBankAccountCode = `-- name: NextBankAccountCode :one
+SELECT COALESCE(MAX(c), 0)::int AS max_code
+FROM (
+    SELECT code::int AS c
+    FROM accounts
+    WHERE tenant_id = $1 AND code ~ '^1[0-9]{3}$'
+) AS codes
+`
+
+// Highest existing 1xxx asset-range code for the tenant, as an int. Caller adds
+// the step. Returns 0 when the tenant has no codes in the range.
+func (q *Queries) NextBankAccountCode(ctx context.Context, tenantID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, nextBankAccountCode, tenantID)
+	var max_code int32
+	err := row.Scan(&max_code)
+	return max_code, err
 }
 
 const nextJournalEntrySeq = `-- name: NextJournalEntrySeq :one

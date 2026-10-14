@@ -19,6 +19,11 @@ type Account struct {
 	AccountType string     `json:"account_type"` // asset|liability|equity|revenue|expense
 	ParentID    *uuid.UUID `json:"parent_id,omitempty"`
 	IsActive    bool       `json:"is_active"`
+
+	// Bank accounts only. AccountLast4 is the sole stored form of the number.
+	BankName     string `json:"bank_name,omitempty"`
+	AccountLast4 string `json:"account_last4,omitempty"`
+	BankCurrency string `json:"bank_currency,omitempty"`
 }
 
 // AccountingPeriod represents a calendar month for a tenant.
@@ -36,18 +41,18 @@ type AccountingPeriod struct {
 // JournalEntry is the header for a double-entry transaction.
 // Once posted it is immutable; corrections require a reversing entry.
 type JournalEntry struct {
-	ID           uuid.UUID    `json:"id"`
-	TenantID     uuid.UUID    `json:"tenant_id"`
-	ProductionID *uuid.UUID   `json:"production_id,omitempty"`
-	PeriodID     uuid.UUID    `json:"period_id"`
-	EntryNumber  string       `json:"entry_number"` // JE-2024-00001
-	Reference    string       `json:"reference,omitempty"`
-	Narration    string       `json:"narration"`
-	Status       string       `json:"status"` // draft|posted|void
+	ID           uuid.UUID     `json:"id"`
+	TenantID     uuid.UUID     `json:"tenant_id"`
+	ProductionID *uuid.UUID    `json:"production_id,omitempty"`
+	PeriodID     uuid.UUID     `json:"period_id"`
+	EntryNumber  string        `json:"entry_number"` // JE-2024-00001
+	Reference    string        `json:"reference,omitempty"`
+	Narration    string        `json:"narration"`
+	Status       string        `json:"status"` // draft|posted|void
 	Lines        []JournalLine `json:"lines,omitempty"`
-	PostedBy     *uuid.UUID   `json:"posted_by,omitempty"`
-	PostedAt     *time.Time   `json:"posted_at,omitempty"`
-	CreatedAt    time.Time    `json:"created_at"`
+	PostedBy     *uuid.UUID    `json:"posted_by,omitempty"`
+	PostedAt     *time.Time    `json:"posted_at,omitempty"`
+	CreatedAt    time.Time     `json:"created_at"`
 }
 
 // JournalLine is one side of a double-entry transaction.

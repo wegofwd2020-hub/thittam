@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
+  createBankAccount,
   createJournalEntry,
   fromCents,
   getTrialBalance,
@@ -73,6 +74,13 @@ export default function LedgerPage() {
   const [lines, setLines] = useState<DraftLine[]>([{ ...EMPTY_LINE }, { ...EMPTY_LINE }]);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // ---- Bank account form state ---------------------------------------------
+  const [showBankForm, setShowBankForm] = useState(false);
+  const [bankName, setBankName] = useState("");
+  const [bankNumber, setBankNumber] = useState("");
+  const [bankCurrency, setBankCurrency] = useState("USD");
+  const [bankError, setBankError] = useState<string | null>(null);
+
   const selectedPeriod = periodId || openPeriods[0]?.id || "";
 
   const totals = useMemo(() => {
@@ -136,11 +144,30 @@ export default function LedgerPage() {
     onError: (err: Error) => setFormError(err.message),
   });
 
+  const bankMutation = useMutation({
+    mutationFn: () =>
+      createBankAccount({
+        bank_name: bankName.trim(),
+        account_number: bankNumber.trim(),
+        bank_currency: bankCurrency.trim().toUpperCase(),
+      }),
+    onSuccess: () => {
+      setBankError(null);
+      setBankName("");
+      setBankNumber("");
+      setBankCurrency("USD");
+      setShowBankForm(false);
+      queryClient.invalidateQueries({ queryKey: ledgerKeys.accounts });
+    },
+    onError: (err: Error) => setBankError(err.message),
+  });
+
   // ---- Table rows ----------------------------------------------------------
   const accountRows = accounts.map((a) => ({
     code: a.code,
     name: a.name,
     account_type: a.account_type,
+    currency: a.bank_currency,
     status: a.is_active ? "active" : "inactive",
   }));
 
@@ -164,6 +191,7 @@ export default function LedgerPage() {
     { key: "code", header: "Code" },
     { key: "name", header: "Account" },
     { key: "account_type", header: "Type" },
+    { key: "currency", header: "Currency" },
     { key: "status", header: "Status", type: "status" },
   ];
   const entryColumns: Column<Record<string, unknown>>[] = [
@@ -203,7 +231,60 @@ export default function LedgerPage() {
           <TabsTrigger value="trial">Trial balance</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="accounts" className="pt-4">
+        <TabsContent value="accounts" className="space-y-4 pt-4">
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={() => setShowBankForm((v) => !v)}>
+              {showBankForm ? "Cancel" : "New bank account"}
+            </Button>
+          </div>
+
+          {showBankForm && (
+            <section className="rounded-lg border p-4 space-y-4">
+              <h2 className="font-medium">New bank account</h2>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="space-y-1 text-sm">
+                  <span>Bank name</span>
+                  <Input
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    placeholder="e.g. HDFC Bank"
+                  />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span>Account number</span>
+                  <Input
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={bankNumber}
+                    onChange={(e) => setBankNumber(e.target.value)}
+                    placeholder="Only the last 4 digits are stored"
+                  />
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span>Currency</span>
+                  <Input
+                    maxLength={3}
+                    value={bankCurrency}
+                    onChange={(e) => setBankCurrency(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                {bankError ? (
+                  <p className="text-sm text-red-700">{bankError}</p>
+                ) : (
+                  <span />
+                )}
+                <Button
+                  disabled={bankMutation.isPending}
+                  onClick={() => bankMutation.mutate()}
+                >
+                  {bankMutation.isPending ? "Saving…" : "Save bank account"}
+                </Button>
+              </div>
+            </section>
+          )}
+
           <DataTable<Record<string, unknown>>
             columns={accountColumns}
             data={accountRows}
