@@ -116,3 +116,72 @@ func TestUpdateParty_NotFound(t *testing.T) {
 	_, err := svc.UpdateParty(context.Background(), p)
 	assert.ErrorIs(t, err, ErrPartyNotFound)
 }
+
+// --- Contacts ---
+
+func TestCreateParty_ContactsGetIDsAndFirstPrimary(t *testing.T) {
+	t.Parallel()
+	svc := NewService(&mockRepo{})
+	p := validParty()
+	p.Contacts = []PartyContact{
+		{Name: "  Asha Rao ", Designation: "Accounts payable", Email: "asha@acme.test"},
+		{Name: "Ravi K", Phone: "+91 98400 00000"},
+	}
+	got, err := svc.CreateParty(context.Background(), p)
+	require.NoError(t, err)
+	require.Len(t, got.Contacts, 2)
+	assert.Equal(t, "Asha Rao", got.Contacts[0].Name)
+	assert.True(t, got.Contacts[0].IsPrimary, "first contact becomes primary when none is marked")
+	assert.False(t, got.Contacts[1].IsPrimary)
+	for _, c := range got.Contacts {
+		assert.NotEqual(t, uuid.Nil, c.ID)
+		assert.Equal(t, got.ID, c.PartyID)
+	}
+}
+
+func TestCreateParty_ContactValidation(t *testing.T) {
+	t.Parallel()
+	many := make([]PartyContact, partyContactsMax+1)
+	for i := range many {
+		many[i] = PartyContact{Name: "P", Email: "p@acme.test"}
+	}
+	cases := []struct {
+		name     string
+		contacts []PartyContact
+	}{
+		{"missing name", []PartyContact{{Email: "a@acme.test"}}},
+		{"no email or phone", []PartyContact{{Name: "Asha"}}},
+		{"bad email", []PartyContact{{Name: "Asha", Email: "nope"}}},
+		{"two primaries", []PartyContact{{Name: "A", Email: "a@acme.test", IsPrimary: true}, {Name: "B", Email: "b@acme.test", IsPrimary: true}}},
+		{"designation too long", []PartyContact{{Name: "A", Email: "a@acme.test", Designation: string(make([]rune, 101))}}},
+		{"phone too long", []PartyContact{{Name: "A", Phone: string(make([]rune, 31))}}},
+		{"too many contacts", many},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := NewService(&mockRepo{})
+			p := validParty()
+			p.Contacts = tc.contacts
+			_, err := svc.CreateParty(context.Background(), p)
+			assert.ErrorIs(t, err, ErrContactInvalid)
+		})
+	}
+}
+
+func TestUpdateParty_ReplacesContactIDs(t *testing.T) {
+	t.Parallel()
+	var saved *Party
+	svc := NewService(&mockRepo{updatePartyFn: func(_ context.Context, p *Party) error {
+		saved = p
+		return nil
+	}})
+	p := validParty()
+	p.ID = uuid.New()
+	p.Contacts = []PartyContact{{Name: "Asha", Email: "asha@acme.test"}}
+	got, err := svc.UpdateParty(context.Background(), p)
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	assert.NotEqual(t, uuid.Nil, got.Contacts[0].ID)
+	assert.Equal(t, p.ID, got.Contacts[0].PartyID)
+}

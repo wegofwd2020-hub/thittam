@@ -259,6 +259,67 @@ func (q *Queries) CreateParty(ctx context.Context, arg CreatePartyParams) (Party
 	return i, err
 }
 
+const createPartyContact = `-- name: CreatePartyContact :one
+INSERT INTO party_contacts (id, tenant_id, party_id, name, designation, email, phone, is_primary, position)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, tenant_id, party_id, name, designation, email, phone, is_primary, position, created_at, updated_at
+`
+
+type CreatePartyContactParams struct {
+	ID          uuid.UUID `json:"id"`
+	TenantID    uuid.UUID `json:"tenant_id"`
+	PartyID     uuid.UUID `json:"party_id"`
+	Name        string    `json:"name"`
+	Designation string    `json:"designation"`
+	Email       string    `json:"email"`
+	Phone       string    `json:"phone"`
+	IsPrimary   bool      `json:"is_primary"`
+	Position    int32     `json:"position"`
+}
+
+func (q *Queries) CreatePartyContact(ctx context.Context, arg CreatePartyContactParams) (PartyContact, error) {
+	row := q.db.QueryRow(ctx, createPartyContact,
+		arg.ID,
+		arg.TenantID,
+		arg.PartyID,
+		arg.Name,
+		arg.Designation,
+		arg.Email,
+		arg.Phone,
+		arg.IsPrimary,
+		arg.Position,
+	)
+	var i PartyContact
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PartyID,
+		&i.Name,
+		&i.Designation,
+		&i.Email,
+		&i.Phone,
+		&i.IsPrimary,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deletePartyContacts = `-- name: DeletePartyContacts :exec
+DELETE FROM party_contacts WHERE tenant_id = $1 AND party_id = $2
+`
+
+type DeletePartyContactsParams struct {
+	TenantID uuid.UUID `json:"tenant_id"`
+	PartyID  uuid.UUID `json:"party_id"`
+}
+
+func (q *Queries) DeletePartyContacts(ctx context.Context, arg DeletePartyContactsParams) error {
+	_, err := q.db.Exec(ctx, deletePartyContacts, arg.TenantID, arg.PartyID)
+	return err
+}
+
 const getAccount = `-- name: GetAccount :one
 SELECT id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency FROM accounts WHERE id = $1 AND tenant_id = $2
 `
@@ -675,6 +736,87 @@ func (q *Queries) ListParties(ctx context.Context, arg ListPartiesParams) ([]Par
 			&i.Address,
 			&i.DefaultCurrency,
 			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPartyContacts = `-- name: ListPartyContacts :many
+SELECT id, tenant_id, party_id, name, designation, email, phone, is_primary, position, created_at, updated_at FROM party_contacts
+WHERE tenant_id = $1 AND party_id = $2
+ORDER BY position ASC
+`
+
+type ListPartyContactsParams struct {
+	TenantID uuid.UUID `json:"tenant_id"`
+	PartyID  uuid.UUID `json:"party_id"`
+}
+
+func (q *Queries) ListPartyContacts(ctx context.Context, arg ListPartyContactsParams) ([]PartyContact, error) {
+	rows, err := q.db.Query(ctx, listPartyContacts, arg.TenantID, arg.PartyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PartyContact{}
+	for rows.Next() {
+		var i PartyContact
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PartyID,
+			&i.Name,
+			&i.Designation,
+			&i.Email,
+			&i.Phone,
+			&i.IsPrimary,
+			&i.Position,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPartyContactsByTenant = `-- name: ListPartyContactsByTenant :many
+SELECT id, tenant_id, party_id, name, designation, email, phone, is_primary, position, created_at, updated_at FROM party_contacts
+WHERE tenant_id = $1
+ORDER BY party_id, position ASC
+`
+
+func (q *Queries) ListPartyContactsByTenant(ctx context.Context, tenantID uuid.UUID) ([]PartyContact, error) {
+	rows, err := q.db.Query(ctx, listPartyContactsByTenant, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PartyContact{}
+	for rows.Next() {
+		var i PartyContact
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PartyID,
+			&i.Name,
+			&i.Designation,
+			&i.Email,
+			&i.Phone,
+			&i.IsPrimary,
+			&i.Position,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

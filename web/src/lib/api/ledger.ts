@@ -169,7 +169,21 @@ export interface Party {
   address: string;
   default_currency: string; // ISO 4217 or empty
   is_active: boolean;
+  contacts: PartyContact[];
 }
+
+// A person at a party. The organization-level email and phone live on Party.
+export interface PartyContact {
+  id: string;
+  party_id: string;
+  name: string;
+  designation: string; // free text, e.g. "Accounts payable"
+  email: string;
+  phone: string;
+  is_primary: boolean;
+}
+
+export type PartyContactInput = Omit<PartyContact, "id" | "party_id">;
 
 export interface PartyInput {
   name: string;
@@ -179,6 +193,7 @@ export interface PartyInput {
   tax_id: string;
   address: string;
   default_currency: string;
+  contacts: PartyContactInput[];
 }
 
 // party_type "customer" returns customers and both; "supplier" returns suppliers and both.
