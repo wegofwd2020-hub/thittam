@@ -167,7 +167,7 @@ export async function rejectExpense(
 const PO_BASE = "/api/v1/purchase-orders";
 
 export async function listPurchaseOrders(
-  productionId: string,
+  productionId?: string,
   params?: { status?: string; limit?: number; after?: string },
 ): Promise<{ purchase_orders: PurchaseOrder[] }> {
   return api.getList<{ purchase_orders: PurchaseOrder[] }>(

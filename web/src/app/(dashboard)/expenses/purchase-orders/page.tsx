@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Plus, ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { AmountDisplay } from "@/components/ui/amount-display";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { usePurchaseOrders } from "@/lib/hooks/use-expenses";
+import type { PurchaseOrder as ApiPurchaseOrder } from "@/lib/api/expenses";
 
 // ---------------------------------------------------------------------------
-// Types
+// Row shape used by the table (mapped from the API's snake_case fields)
 // ---------------------------------------------------------------------------
-type POStatus = "draft" | "sent" | "acknowledged" | "approved" | "closed";
-
-interface PurchaseOrder {
+interface PurchaseOrderRow {
   id: string;
   poNumber: string;
   vendor: string;
@@ -20,129 +20,32 @@ interface PurchaseOrder {
   amount: string;
   currency: string;
   gstin: string;
-  status: POStatus;
+  status: string;
   createdAt: string;
 }
 
-// ---------------------------------------------------------------------------
-// PO Status Pipeline
-// ---------------------------------------------------------------------------
-const PO_STAGES: POStatus[] = ["draft", "sent", "acknowledged", "approved", "closed"];
-const PO_STAGE_LABELS: Record<POStatus, string> = {
-  draft: "Draft",
-  sent: "Sent",
-  acknowledged: "Ack",
-  approved: "Approved",
-  closed: "Closed",
-};
-
-function POStatusPipeline({ currentStatus }: { currentStatus: POStatus }) {
-  const currentIdx = PO_STAGES.indexOf(currentStatus);
-  return (
-    <div className="flex items-center gap-1">
-      {PO_STAGES.map((stage, idx) => (
-        <div key={stage} className="flex items-center gap-1">
-          <div
-            className="flex h-5 items-center rounded-full px-2 text-[9px] font-heading font-medium"
-            style={
-              idx <= currentIdx
-                ? {
-                    backgroundColor: "color-mix(in srgb, var(--thittam-primary, #3b82f6) 15%, transparent)",
-                    color: "var(--thittam-primary, #3b82f6)",
-                  }
-                : {
-                    backgroundColor: "var(--thittam-muted, #f1f5f9)",
-                    color: "var(--thittam-muted-foreground, #64748b)",
-                  }
-            }
-          >
-            {PO_STAGE_LABELS[stage]}
-          </div>
-          {idx < PO_STAGES.length - 1 && (
-            <div
-              className="h-0.5 w-2"
-              style={{
-                backgroundColor:
-                  idx < currentIdx
-                    ? "var(--thittam-primary, #3b82f6)"
-                    : "var(--thittam-border, #e2e8f0)",
-              }}
-            />
-          )}
-        </div>
-      ))}
-    </div>
-  );
+function toRow(po: ApiPurchaseOrder): PurchaseOrderRow {
+  return {
+    id: po.id,
+    poNumber: po.po_number,
+    vendor: po.vendor_name,
+    description: po.description,
+    amount: po.amount,
+    currency: po.currency,
+    gstin: po.vendor_gstin,
+    status: po.status,
+    createdAt: (po.raised_at ?? "").slice(0, 10),
+  };
 }
-
-// ---------------------------------------------------------------------------
-// Mock data — 5 POs
-// ---------------------------------------------------------------------------
-const mockPOs: PurchaseOrder[] = [
-  {
-    id: "po-001",
-    poNumber: "PO-001",
-    vendor: "Film City Studios",
-    description: "Studio rental — 45 shooting days, Stage 4 & 7",
-    amount: "1800000.00",
-    currency: "INR",
-    gstin: "27AABCF1234C1Z5",
-    status: "approved",
-    createdAt: "2026-01-10",
-  },
-  {
-    id: "po-002",
-    poNumber: "PO-002",
-    vendor: "Goa Locations Pvt Ltd",
-    description: "Location permits & logistics — 3 sites in North Goa",
-    amount: "500000.00",
-    currency: "INR",
-    gstin: "30AABCG5678D1Z8",
-    status: "approved",
-    createdAt: "2026-01-20",
-  },
-  {
-    id: "po-003",
-    poNumber: "PO-003",
-    vendor: "ARRI Rental India",
-    description: "ARRI Alexa Mini LF camera package — 60 day rental",
-    amount: "2200000.00",
-    currency: "INR",
-    gstin: "29AABCA9012E1Z3",
-    status: "approved",
-    createdAt: "2026-01-25",
-  },
-  {
-    id: "po-004",
-    poNumber: "PO-004",
-    vendor: "Heritage Building Trust",
-    description: "Heritage site shoot permission — 5 days with restricted hours",
-    amount: "250000.00",
-    currency: "INR",
-    gstin: "27AABCH3456F1Z1",
-    status: "draft",
-    createdAt: "2026-03-10",
-  },
-  {
-    id: "po-005",
-    poNumber: "PO-005",
-    vendor: "SkyView Drone Services",
-    description: "Drone operator & equipment — aerial shots package",
-    amount: "180000.00",
-    currency: "INR",
-    gstin: "29AABCS7890G1Z6",
-    status: "draft",
-    createdAt: "2026-03-12",
-  },
-];
 
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 export default function PurchaseOrdersPage() {
-  const [data] = useState(mockPOs);
+  const posQuery = usePurchaseOrders();
+  const rows = (posQuery.data?.purchase_orders ?? []).map(toRow);
 
-  const columns: Column<PurchaseOrder>[] = [
+  const columns: Column<PurchaseOrderRow>[] = [
     {
       key: "poNumber",
       header: "PO Number",
@@ -193,7 +96,7 @@ export default function PurchaseOrdersPage() {
     {
       key: "status",
       header: "Status",
-      render: (row) => <POStatusPipeline currentStatus={row.status} />,
+      render: (row) => <StatusBadge status={row.status} />,
     },
     {
       key: "gstin",
@@ -256,8 +159,13 @@ export default function PurchaseOrdersPage() {
 
       <DataTable<Record<string, unknown>>
         columns={columns as unknown as Column<Record<string, unknown>>[]}
-        data={data as unknown as Record<string, unknown>[]}
-        emptyMessage="No purchase orders found."
+        data={rows as unknown as Record<string, unknown>[]}
+        isLoading={posQuery.isLoading}
+        emptyMessage={
+          posQuery.error
+            ? `Failed to load purchase orders: ${posQuery.error.message}`
+            : "No purchase orders found."
+        }
       />
     </div>
   );

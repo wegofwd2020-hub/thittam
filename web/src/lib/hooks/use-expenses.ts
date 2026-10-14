@@ -130,13 +130,12 @@ export function useRejectExpense() {
 // ---------------------------------------------------------------------------
 
 export function usePurchaseOrders(
-  productionId: string,
+  productionId?: string,
   params?: { status?: string },
 ) {
   return useQuery({
-    queryKey: expenseKeys.poList(productionId, params),
+    queryKey: expenseKeys.poList(productionId ?? "all", params),
     queryFn: () => listPurchaseOrders(productionId, params),
-    enabled: !!productionId,
   });
 }
 
