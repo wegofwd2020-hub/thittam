@@ -117,8 +117,8 @@ function qs(params?: Record<string, string | number | undefined>): string {
 
 const USERS_BASE = "/api/v1/users";
 
-export async function listUsers(): Promise<User[]> {
-  return api.getList<User[]>(USERS_BASE);
+export async function listUsers(): Promise<{ users: User[] }> {
+  return api.getList<{ users: User[] }>(USERS_BASE);
 }
 
 export async function getUser(id: string): Promise<User> {
