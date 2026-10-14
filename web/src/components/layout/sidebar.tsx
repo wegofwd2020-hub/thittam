@@ -29,6 +29,7 @@ import {
 import { useAuth } from "@/lib/auth/context";
 import { useTheme } from "@/lib/themes/provider";
 import Image from "next/image";
+import { SidebarTicker } from "@/components/layout/sidebar-ticker";
 
 // Map icon name strings from vertical definitions to actual components
 const iconMap: Record<string, LucideIcon> = {
@@ -311,6 +312,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </span>
         </div>
       )}
+
+      {!collapsed && <SidebarTicker />}
     </aside>
   );
 }
