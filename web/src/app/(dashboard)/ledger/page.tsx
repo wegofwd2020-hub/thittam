@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PartyRolodex } from "@/components/ledger/party-rolodex";
 import {
   createBankAccount,
   createJournalEntry,
@@ -185,6 +186,7 @@ export default function LedgerPage() {
   // ---- Customers & vendors -------------------------------------------------
   const [showPartyForm, setShowPartyForm] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  const [partyView, setPartyView] = useState<"rolodex" | "table">("rolodex");
   const [partyName, setPartyName] = useState("");
   const [partyType, setPartyType] = useState("customer");
   const [partyEmail, setPartyEmail] = useState("");
@@ -588,9 +590,27 @@ export default function LedgerPage() {
               />
               Show inactive
             </label>
-            <Button variant="outline" size="sm" onClick={() => setShowPartyForm((v) => !v)}>
-              {showPartyForm ? "Cancel" : "New customer or vendor"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant={partyView === "rolodex" ? "default" : "outline"}
+                  onClick={() => setPartyView("rolodex")}
+                >
+                  Rolodex
+                </Button>
+                <Button
+                  size="sm"
+                  variant={partyView === "table" ? "default" : "outline"}
+                  onClick={() => setPartyView("table")}
+                >
+                  Table
+                </Button>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setShowPartyForm((v) => !v)}>
+                {showPartyForm ? "Cancel" : "New customer or vendor"}
+              </Button>
+            </div>
           </div>
 
           {showPartyForm && (
@@ -715,16 +735,28 @@ export default function LedgerPage() {
 
           {!showPartyForm && partyError && <p className="text-sm text-red-700">{partyError}</p>}
 
-          <DataTable<Record<string, unknown>>
-            columns={partyColumns}
-            data={partyRows}
-            isLoading={partiesQuery.isLoading}
-            emptyMessage={
-              partiesQuery.error
-                ? `Failed to load customers and vendors: ${partiesQuery.error.message}`
-                : "No customers or vendors yet."
-            }
-          />
+          {partyView === "rolodex" ? (
+            partiesQuery.error ? (
+              <p className="text-sm text-red-700">
+                Failed to load customers and vendors: {partiesQuery.error.message}
+              </p>
+            ) : partiesQuery.isLoading ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
+            ) : (
+              <PartyRolodex parties={partiesQuery.data?.parties ?? []} />
+            )
+          ) : (
+            <DataTable<Record<string, unknown>>
+              columns={partyColumns}
+              data={partyRows}
+              isLoading={partiesQuery.isLoading}
+              emptyMessage={
+                partiesQuery.error
+                  ? `Failed to load customers and vendors: ${partiesQuery.error.message}`
+                  : "No customers or vendors yet."
+              }
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="trial" className="pt-4">
