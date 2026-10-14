@@ -173,6 +173,11 @@ func (s *Service) CreateJournalEntry(ctx context.Context, je *JournalEntry) (*Jo
 		if !acct.IsActive {
 			return nil, fmt.Errorf("ledger: line %d account %s — %w", i, acct.Code, ErrAccountInactive)
 		}
+		if line.PartyID != nil {
+			if _, err := s.repo.GetPartyByID(ctx, je.TenantID, *line.PartyID); err != nil {
+				return nil, fmt.Errorf("ledger: line %d party — %w", i, ErrPartyNotFound)
+			}
+		}
 		if line.ID == uuid.Nil {
 			je.Lines[i].ID = uuid.New()
 		}

@@ -65,6 +65,7 @@ type JournalLine struct {
 	CreditAmount decimal.Decimal `json:"credit_amount"`
 	Currency     string          `json:"currency"`
 	Description  string          `json:"description,omitempty"`
+	PartyID      *uuid.UUID      `json:"party_id,omitempty"`
 }
 
 // TrialBalanceEntry is a computed row in the trial balance report.

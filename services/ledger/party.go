@@ -6,9 +6,11 @@ import (
 	"net/mail"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 // Party types. A "both" party is returned by both customer and supplier filters.
@@ -201,4 +203,44 @@ func assignContactIDs(p *Party) {
 		p.Contacts[i].ID = uuid.New()
 		p.Contacts[i].PartyID = p.ID
 	}
+}
+
+// PartyLedgerLine is one posted journal line tagged to a party, with its entry
+// and account. It is for viewing only.
+type PartyLedgerLine struct {
+	EntryID      uuid.UUID
+	EntryNumber  string
+	EntryDate    time.Time
+	Narration    string
+	AccountCode  string
+	AccountName  string
+	DebitAmount  decimal.Decimal
+	CreditAmount decimal.Decimal
+	Currency     string
+	Description  string
+}
+
+// PartyTransactions is a party's posted ledger lines with their totals.
+type PartyTransactions struct {
+	Lines       []PartyLedgerLine
+	TotalDebit  decimal.Decimal
+	TotalCredit decimal.Decimal
+}
+
+// ListPartyTransactions returns a party's posted ledger lines. The party must
+// exist in the tenant.
+func (s *Service) ListPartyTransactions(ctx context.Context, tenantID, partyID uuid.UUID) (*PartyTransactions, error) {
+	if _, err := s.repo.GetPartyByID(ctx, tenantID, partyID); err != nil {
+		return nil, fmt.Errorf("ledger: party transactions: %w", err)
+	}
+	lines, err := s.repo.ListPartyLedgerLines(ctx, tenantID, partyID)
+	if err != nil {
+		return nil, fmt.Errorf("ledger: list party ledger lines: %w", err)
+	}
+	out := &PartyTransactions{Lines: lines, TotalDebit: decimal.Zero, TotalCredit: decimal.Zero}
+	for _, l := range lines {
+		out.TotalDebit = out.TotalDebit.Add(l.DebitAmount)
+		out.TotalCredit = out.TotalCredit.Add(l.CreditAmount)
+	}
+	return out, nil
 }

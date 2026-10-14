@@ -89,17 +89,29 @@ ORDER BY created_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CreateJournalLine :one
-INSERT INTO journal_lines (id, journal_id, account_id, debit_amount, credit_amount, description)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO journal_lines (id, journal_id, account_id, debit_amount, credit_amount, description, party_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: ListJournalLines :many
-SELECT jl.id, jl.journal_id, jl.account_id, jl.debit_amount, jl.credit_amount, jl.currency, jl.description
+SELECT jl.id, jl.journal_id, jl.account_id, jl.debit_amount, jl.credit_amount, jl.currency, jl.description, jl.party_id
 FROM journal_lines jl
 JOIN journal_entries je ON je.id = jl.journal_id
 WHERE jl.journal_id = $1 AND je.tenant_id = $2
 ORDER BY jl.id ASC;
+
+-- name: ListPartyLedgerLines :many
+-- Lines tagged to a party on posted entries, oldest first. Filtered by tenant
+-- through the entry.
+SELECT je.id AS entry_id, je.entry_number, je.created_at AS entry_date, je.narration,
+       a.code AS account_code, a.name AS account_name,
+       jl.debit_amount, jl.credit_amount, jl.currency, jl.description
+FROM journal_lines jl
+JOIN journal_entries je ON je.id = jl.journal_id
+JOIN accounts a ON a.id = jl.account_id
+WHERE je.tenant_id = $1 AND jl.party_id = $2 AND je.status = 'posted'
+ORDER BY je.created_at ASC, je.entry_number ASC, jl.id ASC;
 
 -- name: GetAccountBalance :one
 SELECT

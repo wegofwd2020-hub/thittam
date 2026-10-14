@@ -62,6 +62,7 @@ type JournalLine struct {
 	CreditAmount pgtype.Numeric `json:"credit_amount"`
 	Currency     string         `json:"currency"`
 	Description  pgtype.Text    `json:"description"`
+	PartyID      pgtype.UUID    `json:"party_id"`
 }
 
 type Party struct {

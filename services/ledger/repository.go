@@ -23,6 +23,8 @@ type Repository interface {
 	GetPartyByID(ctx context.Context, tenantID, id uuid.UUID) (*Party, error)
 	ListParties(ctx context.Context, tenantID uuid.UUID, partyType string, includeInactive bool) ([]Party, error)
 	UpdateParty(ctx context.Context, p *Party) error
+	// ListPartyLedgerLines returns posted journal lines tagged to a party.
+	ListPartyLedgerLines(ctx context.Context, tenantID, partyID uuid.UUID) ([]PartyLedgerLine, error)
 
 	// Accounting Periods
 	CreatePeriod(ctx context.Context, period *AccountingPeriod) error

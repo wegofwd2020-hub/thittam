@@ -485,6 +485,9 @@ func (r *ledgerRepo) ListParties(_ context.Context, _ uuid.UUID, _ string, _ boo
 	return nil, nil
 }
 func (r *ledgerRepo) UpdateParty(_ context.Context, _ *ledger.Party) error { return nil }
+func (r *ledgerRepo) ListPartyLedgerLines(_ context.Context, _, _ uuid.UUID) ([]ledger.PartyLedgerLine, error) {
+	return nil, nil
+}
 func (r *ledgerRepo) CreatePeriod(_ context.Context, p *ledger.AccountingPeriod) error {
 	r.periods[p.ID] = p
 	return nil

@@ -37,6 +37,7 @@ export interface JournalLine {
   credit_amount: string;
   currency: string;
   description: string;
+  party_id?: string; // empty or absent when the line has no party
 }
 
 export interface JournalEntry {
@@ -70,6 +71,7 @@ export interface JournalLineInput {
   credit_amount: string;
   currency: string;
   description: string;
+  party_id?: string;
 }
 
 export interface CreateJournalEntryInput {
@@ -222,4 +224,31 @@ export async function updateParty(
 
 export async function getTrialBalance(): Promise<{ entries: TrialBalanceEntry[] }> {
   return api.getList<{ entries: TrialBalanceEntry[] }>(`${BASE}/trial-balance`);
+}
+
+// ---------------------------------------------------------------------------
+// Party transactions (view only)
+// ---------------------------------------------------------------------------
+
+export interface PartyLedgerLine {
+  entry_id: string;
+  entry_number: string;
+  entry_date: string; // RFC 3339
+  narration: string;
+  account_code: string;
+  account_name: string;
+  debit_amount: string;
+  credit_amount: string;
+  currency: string;
+  description: string;
+}
+
+export interface PartyTransactions {
+  lines: PartyLedgerLine[];
+  total_debit: string;
+  total_credit: string;
+}
+
+export async function listPartyTransactions(partyId: string): Promise<PartyTransactions> {
+  return api.getList<PartyTransactions>(`${BASE}/parties/${partyId}/transactions`);
 }

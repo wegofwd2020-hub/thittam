@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -174,10 +175,10 @@ func (q *Queries) CreateJournalEntry(ctx context.Context, arg CreateJournalEntry
 }
 
 const createJournalLine = `-- name: CreateJournalLine :one
-INSERT INTO journal_lines (id, journal_id, account_id, debit_amount, credit_amount, description)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO journal_lines (id, journal_id, account_id, debit_amount, credit_amount, description, party_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, journal_id, account_id, debit_amount, credit_amount, currency, description
+RETURNING id, journal_id, account_id, debit_amount, credit_amount, currency, description, party_id
 `
 
 type CreateJournalLineParams struct {
@@ -187,6 +188,7 @@ type CreateJournalLineParams struct {
 	DebitAmount  pgtype.Numeric `json:"debit_amount"`
 	CreditAmount pgtype.Numeric `json:"credit_amount"`
 	Description  pgtype.Text    `json:"description"`
+	PartyID      pgtype.UUID    `json:"party_id"`
 }
 
 func (q *Queries) CreateJournalLine(ctx context.Context, arg CreateJournalLineParams) (JournalLine, error) {
@@ -197,6 +199,7 @@ func (q *Queries) CreateJournalLine(ctx context.Context, arg CreateJournalLinePa
 		arg.DebitAmount,
 		arg.CreditAmount,
 		arg.Description,
+		arg.PartyID,
 	)
 	var i JournalLine
 	err := row.Scan(
@@ -207,6 +210,7 @@ func (q *Queries) CreateJournalLine(ctx context.Context, arg CreateJournalLinePa
 		&i.CreditAmount,
 		&i.Currency,
 		&i.Description,
+		&i.PartyID,
 	)
 	return i, err
 }
@@ -660,7 +664,7 @@ func (q *Queries) ListJournalEntries(ctx context.Context, arg ListJournalEntries
 }
 
 const listJournalLines = `-- name: ListJournalLines :many
-SELECT jl.id, jl.journal_id, jl.account_id, jl.debit_amount, jl.credit_amount, jl.currency, jl.description
+SELECT jl.id, jl.journal_id, jl.account_id, jl.debit_amount, jl.credit_amount, jl.currency, jl.description, jl.party_id
 FROM journal_lines jl
 JOIN journal_entries je ON je.id = jl.journal_id
 WHERE jl.journal_id = $1 AND je.tenant_id = $2
@@ -689,6 +693,7 @@ func (q *Queries) ListJournalLines(ctx context.Context, arg ListJournalLinesPara
 			&i.CreditAmount,
 			&i.Currency,
 			&i.Description,
+			&i.PartyID,
 		); err != nil {
 			return nil, err
 		}
@@ -819,6 +824,68 @@ func (q *Queries) ListPartyContactsByTenant(ctx context.Context, tenantID uuid.U
 			&i.Position,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPartyLedgerLines = `-- name: ListPartyLedgerLines :many
+SELECT je.id AS entry_id, je.entry_number, je.created_at AS entry_date, je.narration,
+       a.code AS account_code, a.name AS account_name,
+       jl.debit_amount, jl.credit_amount, jl.currency, jl.description
+FROM journal_lines jl
+JOIN journal_entries je ON je.id = jl.journal_id
+JOIN accounts a ON a.id = jl.account_id
+WHERE je.tenant_id = $1 AND jl.party_id = $2 AND je.status = 'posted'
+ORDER BY je.created_at ASC, je.entry_number ASC, jl.id ASC
+`
+
+type ListPartyLedgerLinesParams struct {
+	TenantID uuid.UUID   `json:"tenant_id"`
+	PartyID  pgtype.UUID `json:"party_id"`
+}
+
+type ListPartyLedgerLinesRow struct {
+	EntryID      uuid.UUID      `json:"entry_id"`
+	EntryNumber  string         `json:"entry_number"`
+	EntryDate    time.Time      `json:"entry_date"`
+	Narration    string         `json:"narration"`
+	AccountCode  string         `json:"account_code"`
+	AccountName  string         `json:"account_name"`
+	DebitAmount  pgtype.Numeric `json:"debit_amount"`
+	CreditAmount pgtype.Numeric `json:"credit_amount"`
+	Currency     string         `json:"currency"`
+	Description  pgtype.Text    `json:"description"`
+}
+
+// Lines tagged to a party on posted entries, oldest first. Filtered by tenant
+// through the entry.
+func (q *Queries) ListPartyLedgerLines(ctx context.Context, arg ListPartyLedgerLinesParams) ([]ListPartyLedgerLinesRow, error) {
+	rows, err := q.db.Query(ctx, listPartyLedgerLines, arg.TenantID, arg.PartyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPartyLedgerLinesRow{}
+	for rows.Next() {
+		var i ListPartyLedgerLinesRow
+		if err := rows.Scan(
+			&i.EntryID,
+			&i.EntryNumber,
+			&i.EntryDate,
+			&i.Narration,
+			&i.AccountCode,
+			&i.AccountName,
+			&i.DebitAmount,
+			&i.CreditAmount,
+			&i.Currency,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}

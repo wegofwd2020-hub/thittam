@@ -294,6 +294,13 @@ func (h *Handler) CreateJournalEntry(ctx context.Context, req *ledgerv1.CreateJo
 			Currency:     l.GetCurrency(),
 			Description:  l.GetDescription(),
 		}
+		if s := l.GetPartyId(); s != "" {
+			pid, err := uuid.Parse(s)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "line %d: invalid party_id", i)
+			}
+			lines[i].PartyID = &pid
+		}
 	}
 
 	je := &JournalEntry{
@@ -673,6 +680,7 @@ func journalEntryToProto(je *JournalEntry) *ledgerv1.JournalEntry {
 				CreditAmount: l.CreditAmount.StringFixed(2),
 				Currency:     l.Currency,
 				Description:  l.Description,
+				PartyId:      partyIDString(l.PartyID),
 			}
 		}
 	}
@@ -726,4 +734,51 @@ func grpcErr(err error) error {
 		return status.Error(codes.InvalidArgument, "journal entry must have at least two lines")
 	}
 	return status.Error(codes.Internal, "internal error")
+}
+
+// --- Party transactions (view only) ---
+
+func (h *Handler) ListPartyTransactions(ctx context.Context, req *ledgerv1.ListPartyTransactionsRequest) (*ledgerv1.ListPartyTransactionsResponse, error) {
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
+	if err != nil {
+		return nil, err
+	}
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerRead); err != nil {
+		return nil, err
+	}
+	partyID, err := uuid.Parse(req.GetPartyId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid party ID")
+	}
+	out, err := h.svc.ListPartyTransactions(ctx, tenantID, partyID)
+	if err != nil {
+		return nil, grpcErr(err)
+	}
+	resp := &ledgerv1.ListPartyTransactionsResponse{
+		Lines:       make([]*ledgerv1.PartyLedgerLine, 0, len(out.Lines)),
+		TotalDebit:  out.TotalDebit.StringFixed(2),
+		TotalCredit: out.TotalCredit.StringFixed(2),
+	}
+	for _, l := range out.Lines {
+		resp.Lines = append(resp.Lines, &ledgerv1.PartyLedgerLine{
+			EntryId:      l.EntryID.String(),
+			EntryNumber:  l.EntryNumber,
+			EntryDate:    l.EntryDate.UTC().Format(time.RFC3339),
+			Narration:    l.Narration,
+			AccountCode:  l.AccountCode,
+			AccountName:  l.AccountName,
+			DebitAmount:  l.DebitAmount.StringFixed(2),
+			CreditAmount: l.CreditAmount.StringFixed(2),
+			Currency:     l.Currency,
+			Description:  l.Description,
+		})
+	}
+	return resp, nil
+}
+
+func partyIDString(id *uuid.UUID) string {
+	if id == nil {
+		return ""
+	}
+	return id.String()
 }

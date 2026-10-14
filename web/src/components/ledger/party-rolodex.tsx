@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Check, ChevronDown, ChevronUp, Copy, Mail, Phone, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,7 +112,11 @@ function PartyCard({ party }: { party: Party }) {
     <li className="flex flex-col gap-3 rounded-lg border p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="truncate font-medium">{party.name}</h3>
+          <h3 className="truncate font-medium">
+            <Link href={`/ledger/parties/${party.id}`} className="hover:underline">
+              {party.name}
+            </Link>
+          </h3>
           <p className="text-xs text-muted-foreground">
             {TYPE_LABEL[party.party_type] ?? party.party_type}
             {party.default_currency ? ` · ${party.default_currency}` : ""}
