@@ -2,13 +2,20 @@
 
 import { useAuth } from "@/lib/auth/context";
 import { useTheme } from "@/lib/themes/provider";
+import {
+  useApprovalPipeline,
+  useComplianceStatus,
+  useFinancialSummary,
+  usePortfolioOverview,
+  useTeamUtilization,
+} from "@/lib/hooks/use-dashboard";
 import { KPICard } from "@/components/dashboard/kpi-card";
 import { BudgetHealthPie } from "@/components/dashboard/budget-health-pie";
 import { BurnRateChart } from "@/components/dashboard/burn-rate-chart";
 import { ApprovalAgeBars } from "@/components/dashboard/approval-age-bars";
 import { UtilizationGauge } from "@/components/dashboard/utilization-gauge";
 import { ComplianceTable, type ComplianceItem } from "@/components/dashboard/compliance-table";
-import { ActivityTimeline, type ActivityItem } from "@/components/dashboard/activity-timeline";
+import { ActivityTimeline } from "@/components/dashboard/activity-timeline";
 import Link from "next/link";
 import {
   FolderKanban,
@@ -23,174 +30,30 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-// ---------------------------------------------------------------------------
-// Mock data — XYZ_CBA demo company
-// ---------------------------------------------------------------------------
+// Compact display for totals (e.g. 1.2M). Amounts arrive as decimal strings
+// from the reporting service; Number() here is for display only, never for
+// arithmetic that is stored or compared.
+const compact = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
 
-const MOCK_PRODUCTIONS = [
-  {
-    id: "prod-001",
-    name: "Naan Mudhalvan",
-    status: "production",
-    health: "on_track",
-    budget: 10_00_00_000,
-    actual: 7_20_00_000,
-    teamCount: 15,
-  },
-  {
-    id: "prod-002",
-    name: "Ponniyin Selvan III",
-    status: "pre_production",
-    health: "on_track",
-    budget: 9_50_00_000,
-    actual: 4_80_00_000,
-    teamCount: 12,
-  },
-  {
-    id: "prod-003",
-    name: "Vikram 2",
-    status: "post_production",
-    health: "on_track",
-    budget: 5_00_00_000,
-    actual: 3_50_00_000,
-    teamCount: 5,
-  },
-  {
-    id: "prod-004",
-    name: "Master Class",
-    status: "production",
-    health: "on_track",
-    budget: 6_00_00_000,
-    actual: 3_00_00_000,
-    teamCount: 10,
-  },
-  {
-    id: "prod-005",
-    name: "Jailer Returns",
-    status: "pre_production",
-    health: "on_track",
-    budget: 8_00_00_000,
-    actual: 1_50_00_000,
-    teamCount: 8,
-  },
-  {
-    id: "prod-006",
-    name: "Beast Mode",
-    status: "production",
-    health: "at_risk",
-    budget: 4_50_00_000,
-    actual: 3_80_00_000,
-    teamCount: 7,
-  },
-  {
-    id: "prod-007",
-    name: "Kaithi 2",
-    status: "production",
-    health: "at_risk",
-    budget: 7_00_00_000,
-    actual: 6_20_00_000,
-    teamCount: 9,
-  },
-  {
-    id: "prod-008",
-    name: "Don 3",
-    status: "post_production",
-    health: "over_budget",
-    budget: 3_00_00_000,
-    actual: 3_40_00_000,
-    teamCount: 4,
-  },
-];
+function formatTotal(amount: string | undefined): string {
+  if (amount === undefined) return "—";
+  return compact.format(Number(amount));
+}
 
-const TOTAL_BUDGET = 53_00_00_000;
-const TOTAL_ACTUAL = 33_40_00_000;
-const LAST_MONTH_ACTUAL = 28_50_00_000;
-
-const BURN_RATE_DATA = [
-  { month: "Nov 2025", actual: 3_80_00_000, budget: 4_00_00_000 },
-  { month: "Dec 2025", actual: 4_50_00_000, budget: 4_00_00_000 },
-  { month: "Jan 2026", actual: 5_20_00_000, budget: 4_50_00_000 },
-  { month: "Feb 2026", actual: 5_80_00_000, budget: 5_00_00_000 },
-  { month: "Mar 2026", actual: 6_10_00_000, budget: 5_50_00_000 },
-  { month: "Apr 2026", actual: 4_00_00_000, budget: 5_50_00_000 },
-];
-
-const MOCK_COMPLIANCE: ComplianceItem[] = [
-  {
-    id: "c-1",
-    type: "Overdue Approval",
-    description: "PO #4521 pending for 12 days without action",
-    severity: "critical",
-    detectedAt: "2026-04-02",
-    projectTitle: "Kaithi 2",
-  },
-  {
-    id: "c-2",
-    type: "Policy Violation",
-    description: "Expense submitted without receipt attachment",
-    severity: "warning",
-    detectedAt: "2026-04-01",
-    projectTitle: "Beast Mode",
-  },
-  {
-    id: "c-3",
-    type: "Budget Overrun",
-    description: "Don 3 post-production spend exceeds approved budget by 13%",
-    severity: "critical",
-    detectedAt: "2026-03-30",
-    projectTitle: "Don 3",
-  },
-  {
-    id: "c-4",
-    type: "Audit Flag",
-    description: "Duplicate vendor payment detected for catering PO",
-    severity: "warning",
-    detectedAt: "2026-03-28",
-    projectTitle: "Naan Mudhalvan",
-  },
-];
-
-// Timestamps relative to "now" — using fixed dates for deterministic display
-const now = new Date();
-const hours = (h: number) => new Date(now.getTime() - h * 3_600_000).toISOString();
-
-const MOCK_ACTIVITY: ActivityItem[] = [
-  {
-    id: "a-1",
-    actor: "Priya Sharma",
-    action: "approved expense",
-    target: "\u20B91,50,000 — Camera Equipment Rental",
-    timestamp: hours(2),
-  },
-  {
-    id: "a-2",
-    actor: "Arun Kumar",
-    action: "submitted budget",
-    target: "V2 — Ponniyin Selvan III",
-    timestamp: hours(5),
-  },
-  {
-    id: "a-3",
-    actor: "Deepa Rajan",
-    action: "created purchase order",
-    target: "PO #4580 — Set Construction Phase 3",
-    timestamp: hours(8),
-  },
-  {
-    id: "a-4",
-    actor: "Vikram Patel",
-    action: "closed phase",
-    target: "Post-Production — Don 3",
-    timestamp: hours(18),
-  },
-  {
-    id: "a-5",
-    actor: "Meena Sundaram",
-    action: "assigned crew to",
-    target: "Jailer Returns — 8 crew members",
-    timestamp: hours(26),
-  },
-];
+// Percentage change between the last two months of the burn-rate trend, or
+// null when there is not enough history to compare.
+function monthOverMonthPct(
+  trend: { actual: string }[] | undefined,
+): string | null {
+  if (!trend || trend.length < 2) return null;
+  const prev = Number(trend[trend.length - 2].actual);
+  const last = Number(trend[trend.length - 1].actual);
+  if (prev === 0) return null;
+  return (((last - prev) / prev) * 100).toFixed(1);
+}
 
 // ---------------------------------------------------------------------------
 // Helper components
@@ -215,12 +78,51 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { entityLabels } = useTheme();
 
-  const activeCount = MOCK_PRODUCTIONS.length;
-  const pendingApprovals = 8;
-  const spendTrendPct = (
-    ((TOTAL_ACTUAL - LAST_MONTH_ACTUAL) / LAST_MONTH_ACTUAL) *
-    100
-  ).toFixed(1);
+  const portfolioQuery = usePortfolioOverview();
+  const financialQuery = useFinancialSummary();
+  const approvalsQuery = useApprovalPipeline();
+  const teamQuery = useTeamUtilization();
+  const complianceQuery = useComplianceStatus();
+
+  const portfolio = portfolioQuery.data;
+  const financial = financialQuery.data;
+  const approvals = approvalsQuery.data;
+  const team = teamQuery.data;
+  const compliance = complianceQuery.data;
+
+  const failedSections = [
+    portfolioQuery,
+    financialQuery,
+    approvalsQuery,
+    teamQuery,
+    complianceQuery,
+  ].filter((q) => q.isError).length;
+
+  const totalBudget = portfolio?.total_budget;
+  const totalActual = portfolio?.total_actual;
+  const budgetUsedPct =
+    totalBudget && Number(totalBudget) > 0 && totalActual !== undefined
+      ? ((Number(totalActual) / Number(totalBudget)) * 100).toFixed(1)
+      : null;
+  const spendTrendPct = monthOverMonthPct(financial?.monthly_trend);
+  const pendingApprovals = approvals?.total_pending;
+
+  const complianceItems: ComplianceItem[] = (compliance?.recent_violations ?? []).map(
+    (v) => ({
+      id: v.id,
+      type: v.type,
+      description: v.description,
+      severity: v.severity === "critical" ? "critical" : "warning",
+      detectedAt: v.detected_at,
+      projectTitle: v.project_title,
+    }),
+  );
+
+  const burnRateData = (financial?.monthly_trend ?? []).map((m) => ({
+    month: m.month,
+    actual: Number(m.actual),
+    budget: Number(m.budget),
+  }));
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">
@@ -238,6 +140,13 @@ export default function DashboardPage() {
         >
           Executive overview of your {entityLabels.projectPlural.toLowerCase()}.
         </p>
+        {failedSections > 0 && (
+          <p className="mt-2 text-sm text-red-700">
+            {failedSections === 1
+              ? "One dashboard section failed to load."
+              : `${failedSections} dashboard sections failed to load.`}
+          </p>
+        )}
       </div>
 
       {/* ── Row 1: KPI Cards ────────────────────────────────────────── */}
@@ -245,31 +154,38 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <KPICard
             title={`Total ${entityLabels.projectPlural}`}
-            value={activeCount}
-            subtitle="Across all phases"
+            value={portfolio?.total_active ?? "—"}
+            subtitle="Active"
             icon={<FolderKanban className="h-4 w-4" />}
           />
 
           <KPICard
-            title="Total Budget [INR]"
-            value={`${(TOTAL_BUDGET / 1_00_00_000).toFixed(1)} Cr`}
+            title="Total Budget"
+            value={formatTotal(totalBudget)}
             subtitle="Approved allocation"
             icon={<Wallet className="h-4 w-4" />}
           />
 
           <KPICard
-            title="Total Actual Spend [INR]"
-            value={`${(TOTAL_ACTUAL / 1_00_00_000).toFixed(1)} Cr`}
-            subtitle={`${((TOTAL_ACTUAL / TOTAL_BUDGET) * 100).toFixed(1)}% of budget`}
-            trend={{ direction: "up", value: `${spendTrendPct}% vs last month` }}
+            title="Total Actual Spend"
+            value={formatTotal(totalActual)}
+            subtitle={budgetUsedPct !== null ? `${budgetUsedPct}% of budget` : "No budget yet"}
+            trend={
+              spendTrendPct !== null
+                ? {
+                    direction: Number(spendTrendPct) >= 0 ? "up" : "down",
+                    value: `${spendTrendPct}% vs last month`,
+                  }
+                : undefined
+            }
             icon={<TrendingUp className="h-4 w-4" />}
           />
 
           <KPICard
             title="Pending Approvals"
-            value={pendingApprovals}
+            value={pendingApprovals ?? "—"}
             subtitle="Awaiting review"
-            variant={pendingApprovals > 5 ? "warning" : "default"}
+            variant={pendingApprovals !== undefined && pendingApprovals > 5 ? "warning" : "default"}
             icon={<Clock className="h-4 w-4" />}
           />
         </div>
@@ -279,8 +195,12 @@ export default function DashboardPage() {
       <section>
         <SectionHeading>Portfolio &amp; Financial Overview</SectionHeading>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <BudgetHealthPie onTrack={5} atRisk={2} overBudget={1} />
-          <BurnRateChart data={BURN_RATE_DATA} />
+          <BudgetHealthPie
+            onTrack={portfolio?.health_counts.on_track ?? 0}
+            atRisk={portfolio?.health_counts.at_risk ?? 0}
+            overBudget={portfolio?.health_counts.over_budget ?? 0}
+          />
+          <BurnRateChart data={burnRateData} />
         </div>
       </section>
 
@@ -289,16 +209,16 @@ export default function DashboardPage() {
         <SectionHeading>Operations</SectionHeading>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <ApprovalAgeBars
-            under24h={3}
-            oneToThreeDays={2}
-            threeToSevenDays={1}
-            overSevenDays={2}
+            under24h={approvals?.by_age.under_24h ?? 0}
+            oneToThreeDays={approvals?.by_age.days_1_to_3 ?? 0}
+            threeToSevenDays={approvals?.by_age.days_3_to_7 ?? 0}
+            overSevenDays={approvals?.by_age.over_7_days ?? 0}
           />
           <UtilizationGauge
-            percentage={80}
-            label={`${entityLabels.teamMemberPlural} Utilization`}
-            assigned={32}
-            total={40}
+            percentage={Number(team?.utilization_pct ?? 0)}
+            label={`${team?.team_member_label ?? entityLabels.teamMemberPlural} Utilization`}
+            assigned={team?.assigned ?? 0}
+            total={team?.total_members ?? 0}
           />
         </div>
       </section>
@@ -321,7 +241,7 @@ export default function DashboardPage() {
               Overdue Approvals
             </span>
             <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-100 px-1.5 text-xs font-mono font-bold text-amber-700">
-              2
+              {compliance?.overdue_approvals ?? 0}
             </span>
           </div>
 
@@ -337,7 +257,7 @@ export default function DashboardPage() {
               Policy Violations
             </span>
             <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-100 px-1.5 text-xs font-mono font-bold text-red-700">
-              1
+              {compliance?.policy_violations ?? 0}
             </span>
           </div>
 
@@ -353,13 +273,13 @@ export default function DashboardPage() {
               Audit Flags
             </span>
             <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-gray-100 px-1.5 text-xs font-mono font-bold text-gray-600">
-              1
+              {compliance?.audit_flags ?? 0}
             </span>
           </div>
         </div>
 
         {/* Violations table */}
-        <ComplianceTable items={MOCK_COMPLIANCE} />
+        <ComplianceTable items={complianceItems} isLoading={complianceQuery.isLoading} />
       </section>
 
       {/* ── Row 5: Recent Activity ──────────────────────────────────── */}
@@ -372,7 +292,8 @@ export default function DashboardPage() {
             border: "1px solid var(--thittam-border, #e2e8f0)",
           }}
         >
-          <ActivityTimeline items={MOCK_ACTIVITY} />
+          {/* No activity-feed endpoint exists yet; the timeline shows its empty state. */}
+          <ActivityTimeline items={[]} />
         </div>
       </section>
 
@@ -421,7 +342,7 @@ export default function DashboardPage() {
                 color: "var(--thittam-primary-foreground, #fff)",
               }}
             >
-              {pendingApprovals}
+              {pendingApprovals ?? "—"}
             </span>
           </Link>
         </div>
