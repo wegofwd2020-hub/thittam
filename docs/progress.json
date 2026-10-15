@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-10-14T07:21:12+00:00",
+  "generated": "2026-10-15T07:12:27+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -1459,6 +1459,108 @@
     {
       "id": "#243",
       "name": "feat(web): wire expenses list to expense-tracking service",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#244",
+      "name": "feat(web): wire purchase orders list to expense-tracking service",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#245",
+      "name": "feat(web): wire petty cash page to expense-tracking service",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#246",
+      "name": "feat(web): wire expense detail to expense-tracking service",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#247",
+      "name": "docs(tenant): CPA review packet for Kaundinya Labs partnership chart",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#248",
+      "name": "feat(web): wire new expense form to expense-tracking service",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#249",
+      "name": "feat(iam): expose ListUsers over REST, gated on user:manage",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#250",
+      "name": "feat(web): wire team page to crew and users APIs",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#251",
+      "name": "feat(web): show Kaundinya Labs logo in sidebar and on login",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#252",
+      "name": "feat(web): sidebar ticker with product version and live date/time",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#253",
+      "name": "feat(web): wire dashboard home to reporting service",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#254",
+      "name": "feat(ledger): add bank accounts with bank name, last-4 and currency",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#255",
+      "name": "fix(iam): backfill ledger permissions on existing system roles",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#256",
+      "name": "feat(ledger): add customers and vendors (parties)",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#257",
+      "name": "feat(ledger): add contacts to customers and vendors",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#258",
+      "name": "feat(web): add rolodex view for customers and vendors",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#259",
+      "name": "fix(web): show rolodex email and phone as text with copy buttons",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#260",
+      "name": "feat(ledger): tag journal lines to customers and vendors",
       "status": "done",
       "commits": 1
     }
