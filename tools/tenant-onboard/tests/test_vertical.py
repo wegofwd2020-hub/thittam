@@ -115,3 +115,31 @@ class TestMigration:
 
     def test_deterministic(self, vertical):
         assert render_migration(vertical, "x.yaml") == render_migration(vertical, "x.yaml")
+
+
+class TestUpdateDown:
+    """render_update_down restores an earlier registration (mock vertical)."""
+
+    def test_restores_previous_statement_verbatim(self, vertical):
+        from tenant_onboard.vertical import render_update_down
+        previous_up, _ = render_migration(vertical, "fixtures/vertical_minimal.yaml")
+        down = render_update_down(vertical, "fixtures/v.yaml", previous_up, "migrations/shared/001_x.up.sql")
+        statement = previous_up[previous_up.index("INSERT INTO vertical_definitions"):]
+        assert down.endswith(statement)
+        assert "-- Restores the test-studio definition registered by\n-- migrations/shared/001_x.up.sql." in down
+        assert "DELETE FROM" not in down
+
+    def test_rejects_file_that_registers_nothing(self, vertical):
+        from tenant_onboard.errors import RenderError
+        from tenant_onboard.vertical import render_update_down
+        with pytest.raises(RenderError, match="does not register a vertical"):
+            render_update_down(vertical, "v.yaml", "-- nothing here\nSELECT 1;\n", "x.up.sql")
+
+    def test_rejects_other_vertical(self, vertical, vertical_dict):
+        from tenant_onboard.errors import RenderError
+        from tenant_onboard.vertical import render_update_down
+        other_dict = copy.deepcopy(vertical_dict)
+        other_dict["vertical"]["id"] = "other-studio"
+        other_up, _ = render_migration(parse_vertical(other_dict), "o.yaml")
+        with pytest.raises(RenderError, match="different vertical"):
+            render_update_down(vertical, "v.yaml", other_up, "o.up.sql")

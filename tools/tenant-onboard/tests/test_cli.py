@@ -88,6 +88,53 @@ class TestVerticalMigration:
         assert code == cli.EXIT_CHECK_FAILED and "missing" in err
 
 
+class TestUpdateMigration:
+    """--restores: an update migration whose down restores the earlier one."""
+
+    def _args(self, vertical_path, tmp_path, previous):
+        return ["--vertical", str(vertical_path), "--source-rel", "fixtures/vertical_minimal.yaml",
+                "--up", str(tmp_path / "u.up.sql"), "--down", str(tmp_path / "u.down.sql"),
+                "--restores", str(previous)]
+
+    def _previous(self, run, vertical_path, tmp_path):
+        run("vertical-migration", "--vertical", str(vertical_path), "--up", str(tmp_path / "p.up.sql"),
+            "--down", str(tmp_path / "p.down.sql"))
+        return tmp_path / "p.up.sql"
+
+    def test_generate_then_check(self, run, vertical_path, tmp_path):
+        args = self._args(vertical_path, tmp_path, self._previous(run, vertical_path, tmp_path))
+        assert run("vertical-migration", *args)[0] == cli.EXIT_OK
+        down = (tmp_path / "u.down.sql").read_text()
+        assert "Restores the test-studio definition" in down and "DELETE FROM" not in down
+        assert run("check-vertical-migration", *args)[0] == cli.EXIT_OK
+
+    def test_missing_previous_is_input_error(self, run, vertical_path, tmp_path):
+        code, _, err = run("vertical-migration", *self._args(vertical_path, tmp_path, tmp_path / "nope.up.sql"))
+        assert code == cli.EXIT_INPUT and "nope.up.sql" in err
+
+    def test_previous_that_registers_nothing_is_input_error(self, run, vertical_path, tmp_path):
+        bogus = tmp_path / "bogus.up.sql"
+        bogus.write_text("SELECT 1;\n")
+        code, _, err = run("vertical-migration", *self._args(vertical_path, tmp_path, bogus))
+        assert code == cli.EXIT_INPUT and "does not register a vertical" in err
+
+
+class TestPartnershipCli:
+    def test_validate_reports_entity(self, run, fixtures_dir, vertical_path):
+        code, out, _ = run("validate", "--config", str(fixtures_dir / "company_partnership.yaml"),
+                           "--vertical", str(vertical_path))
+        assert code == cli.EXIT_OK
+        assert "partnership_1065, 2 member(s)" in out and "14 accounts" in out
+
+    def test_bad_shares_exit_2(self, run, write_yaml, fixtures_dir, vertical_path):
+        import yaml
+        data = yaml.safe_load((fixtures_dir / "company_partnership.yaml").read_text())
+        data["entity"]["members"]["a"]["ownership_pct"] = 70
+        cfg = write_yaml("company.yaml", data)
+        code, _, err = run("validate", "--config", str(cfg), "--vertical", str(vertical_path))
+        assert code == cli.EXIT_INPUT and "must total 100" in err
+
+
 class TestHashPassword:
     def _feed(self, monkeypatch, *answers):
         it = iter(answers)

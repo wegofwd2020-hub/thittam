@@ -24,9 +24,10 @@ from pathlib import Path
 from typing import Sequence
 
 from .company import check_against_vertical, load_company
+from .entity import equity_accounts
 from .errors import InputFileError, OnboardError, OutputError, ValidationError
 from .render import render_all, write_files
-from .vertical import load_vertical, render_migration
+from .vertical import load_vertical, render_migration, render_update_down
 
 EXIT_OK, EXIT_CHECK_FAILED, EXIT_INPUT, EXIT_OUTPUT, EXIT_INTERNAL = 0, 1, 2, 3, 70
 
@@ -54,6 +55,8 @@ def _build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--up", required=True, help="path of the .up.sql migration")
         sp.add_argument("--down", required=True, help="path of the .down.sql migration")
         sp.add_argument("--source-rel", help="repo-relative YAML path for the header (default: --vertical as given)")
+        sp.add_argument("--restores", help="earlier .up.sql this migration updates; the down migration "
+                                           "then restores that definition instead of deleting the vertical")
 
     hp = sub.add_parser("hash-password", help="print a bcrypt hash for the admin password")
     hp.add_argument("--cost", type=int, default=12, help="bcrypt cost (IAM uses 12)")
@@ -71,8 +74,11 @@ def _load(args: argparse.Namespace):
 
 def cmd_validate(args: argparse.Namespace) -> int:
     company, vertical = _load(args)
-    print(f"OK: {company.name} → {vertical.id} · {len(company.products)} product(s) · "
-          f"{len(vertical.accounts)} accounts · {len(company.books.open_periods())} open period(s)")
+    ent = company.entity
+    owners = len(equity_accounts(ent))
+    entity_note = f"{ent.tax_classification}, {len(ent.members)} member(s) · " if ent else ""
+    print(f"OK: {company.name} → {vertical.id} · {len(company.products)} product(s) · {entity_note}"
+          f"{len(vertical.accounts) + owners} accounts · {len(company.books.open_periods())} open period(s)")
     return EXIT_OK
 
 
@@ -85,7 +91,15 @@ def cmd_tenant(args: argparse.Namespace) -> int:
 
 def _migration_texts(args: argparse.Namespace) -> tuple[str, str]:
     vertical = load_vertical(args.vertical)
-    return render_migration(vertical, args.source_rel or args.vertical)
+    source_rel = args.source_rel or args.vertical
+    up, down = render_migration(vertical, source_rel)
+    if args.restores:
+        try:
+            previous = Path(args.restores).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise InputFileError(args.restores, exc.strerror or str(exc)) from exc
+        down = render_update_down(vertical, source_rel, previous, args.restores)
+    return up, down
 
 
 def cmd_vertical_migration(args: argparse.Namespace) -> int:

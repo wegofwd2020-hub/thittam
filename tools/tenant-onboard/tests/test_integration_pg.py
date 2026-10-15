@@ -80,6 +80,8 @@ def seed_dir(tmp_path_factory):
     data["tenant"]["vertical"] = "software-development-us"
     data["products"][0]["stage"] = "build"
     data["products"][1]["stage"] = "maintenance"
+    data["entity"] = {"tax_classification": "disregarded_schedule_c",
+                      "members": {"owner": {"label": "Owner", "ownership_pct": 100}}}
     company = parse_company(data)
     vertical = load_vertical(REPO_ROOT / "pkg" / "vertical" / "configs" / "software-development-us.yaml")
     out = tmp_path_factory.mktemp("seed")
@@ -127,7 +129,10 @@ def test_full_seed_applies_and_is_idempotent(db, seed_dir):
     assert db.scalar(
         f"SELECT string_agg(slug||'='||status, ',' ORDER BY slug) FROM productions WHERE tenant_id='{t}'"
     ) == "gadget-api=released,widget-app=production"
-    assert db.scalar(f"SELECT count(*) FROM accounts WHERE tenant_id='{t}'") == str(len(vertical.accounts))
+    assert db.scalar(f"SELECT count(*) FROM accounts WHERE tenant_id='{t}'") == str(len(vertical.accounts) + 2)
+    assert db.scalar(
+        f"SELECT p.code FROM accounts c JOIN accounts p ON p.id=c.parent_id WHERE c.tenant_id='{t}' AND c.code='3200'"
+    ) == "3000"
     assert db.scalar(
         f"SELECT p.code FROM accounts c JOIN accounts p ON p.id=c.parent_id WHERE c.tenant_id='{t}' AND c.code='6510'"
     ) == "6500"
@@ -148,3 +153,86 @@ def test_partial_existing_accounts_still_resolve_parents(db, seed_dir):
     assert db.scalar(
         f"SELECT p.name FROM accounts c JOIN accounts p ON p.id=c.parent_id WHERE c.tenant_id='{t2}' AND c.code='6100'"
     ) == "Opex (pre-existing)"
+
+
+# ── partnership books (add-partnership-books) ──────────────────────────────
+
+LEGACY_V1_0 = (  # the single-owner rows software-development-us v1.0.0 seeded
+    ("3000", "Owner''s Capital", "equity"),
+    ("3100", "Owner''s Contributions", "equity"),
+    ("3200", "Owner''s Draws", "equity"),
+    ("2300", "Due to Owner (reimbursable)", "liability"),
+)
+
+
+def _partnership_ledger(tmp_path, tenant_id: str):
+    """004_ledger.sql for the mock partnership, bound to the US vertical."""
+    import yaml
+
+    from conftest import FIXTURES
+
+    data = yaml.safe_load((FIXTURES / "company_partnership.yaml").read_text())
+    data["tenant"]["id"] = tenant_id
+    data["tenant"]["vertical"] = "software-development-us"
+    company = parse_company(data)
+    vertical = load_vertical(REPO_ROOT / "pkg" / "vertical" / "configs" / "software-development-us.yaml")
+    path = tmp_path / f"ledger_{tenant_id[-4:]}.sql"
+    path.write_text(render_all(company, vertical)["004_ledger.sql"])
+    return path, vertical
+
+
+def _seed_legacy(db: Psql, tenant_id: str, rename_3000_to: str | None = None) -> None:
+    rows = []
+    for code, name, kind in LEGACY_V1_0:
+        if code == "3000" and rename_3000_to:
+            name = rename_3000_to
+        rows.append(f"('{tenant_id}', '{code}', '{name}', '{kind}')")
+    db.run("-c", "INSERT INTO accounts (tenant_id, code, name, account_type) VALUES " + ", ".join(rows))
+    db.run("-c", f"UPDATE accounts c SET parent_id = p.id FROM accounts p WHERE c.tenant_id='{tenant_id}' "
+                 f"AND p.tenant_id='{tenant_id}' AND p.code='3000' AND c.code IN ('3100','3200')")
+
+
+def test_update_migration_registers_v1_1(db):
+    assert db.scalar("SELECT version FROM vertical_definitions WHERE id='software-development-us'") == "1.1.0"
+    assert db.scalar(
+        "SELECT count(*) FROM vertical_definitions, jsonb_array_elements(config->'report_definitions') r "
+        "WHERE id='software-development-us' AND r->>'id'='tax_return_rollup'") == "1"
+
+
+def test_update_migration_down_restores_v1_0_and_up_reapplies(db):
+    down = REPO_ROOT / "migrations" / "shared" / "008_update_software_development_us_vertical_v1_1.down.sql"
+    db.file(down)
+    assert db.scalar("SELECT version FROM vertical_definitions WHERE id='software-development-us'") == "1.0.0"
+    db.file(down.with_name(down.name.replace(".down.", ".up.")))
+    assert db.scalar("SELECT version FROM vertical_definitions WHERE id='software-development-us'") == "1.1.0"
+
+
+def test_partnership_upgrade_from_single_owner_chart(db, tmp_path):
+    t = "0f6b1c2e-7777-4a5b-9c3d-000000000007"
+    _seed_legacy(db, t)
+    ledger, vertical = _partnership_ledger(tmp_path, t)
+    db.file(ledger)
+    before = db.scalar(f"SELECT string_agg(code||name||is_active::text, ',' ORDER BY code) FROM accounts WHERE tenant_id='{t}'")
+    db.file(ledger)  # re-run is a no-op
+    assert db.scalar(f"SELECT string_agg(code||name||is_active::text, ',' ORDER BY code) FROM accounts WHERE tenant_id='{t}'") == before
+
+    q = lambda code: db.scalar(f"SELECT name||'|'||is_active FROM accounts WHERE tenant_id='{t}' AND code='{code}'")
+    assert q("3000") == "Equity|true"
+    assert q("2300") == "Due to Owners (reimbursable)|true"
+    assert q("3100") == "Owner's Contributions|false"  # history kept, not deleted
+    assert q("3200") == "Owner's Draws|false"
+    assert q("3020") == "Capital — Robin O'Hara|true"
+    assert db.scalar(f"SELECT p.code FROM accounts c JOIN accounts p ON p.id=c.parent_id "
+                     f"WHERE c.tenant_id='{t}' AND c.code='3110'") == "3000"
+    assert db.scalar(f"SELECT p.code FROM accounts c JOIN accounts p ON p.id=c.parent_id "
+                     f"WHERE c.tenant_id='{t}' AND c.code='6052'") == "6050"
+    active = int(db.scalar(f"SELECT count(*) FROM accounts WHERE tenant_id='{t}' AND is_active"))
+    assert active == len(vertical.accounts) + 8
+
+
+def test_partnership_upgrade_respects_names_changed_in_app(db, tmp_path):
+    t = "0f6b1c2e-8888-4a5b-9c3d-000000000008"
+    _seed_legacy(db, t, rename_3000_to="Partners Equity")
+    ledger, _ = _partnership_ledger(tmp_path, t)
+    db.file(ledger)
+    assert db.scalar(f"SELECT name FROM accounts WHERE tenant_id='{t}' AND code='3000'") == "Partners Equity"
