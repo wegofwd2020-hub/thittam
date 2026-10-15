@@ -107,8 +107,8 @@ func main() {
 	}
 	srv := server.New(server.Config{
 		Name:                    "document",
-		Port:                    8088,
-		MetricsPort:             9098,
+		Port:                    7088,
+		MetricsPort:             7198,
 		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
 		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
 	}, nil)
@@ -119,7 +119,7 @@ func main() {
 	// Uncomment when NATS publisher is wired (see event publisher block above):
 	// srv.RegisterHealthChecker("nats", &natsChecker{nc: nc})
 
-	log.Printf("document service ready on :8088")
+	log.Printf("document service ready on :7088")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("document: %v", err)
 	}

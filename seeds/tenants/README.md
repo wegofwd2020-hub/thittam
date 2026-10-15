@@ -41,8 +41,17 @@ psql "$DB_URL" -c "SELECT slug, status FROM productions
                    WHERE tenant_id = '960b876f-a3f4-4e73-9cb7-33a77870df50';"
 ```
 
-Then log in as the Owner and post the opening entry (owner's contribution →
-`3100`, bank → `1010`) dated 2026-10-20.
+Then log in as the Owner and post the opening entry dated 2026-10-20. The
+company is a two-member partnership, so contributions are credited to each
+member's own capital account (`3010` Member A, `3020` Member B) and debited
+to what was contributed: `1010` for cash, `1310` for software/IP, `1320` for
+§195/§709 start-up costs. Which member's capital is credited, and at what
+value, waits on the CPA's answers (agenda Q1 and Q2) — see
+`kaundinya-labs/CPA-REVIEW.md`.
+
+If the tenant was already seeded from the earlier single-owner chart, re-run
+step 4: it adds the member accounts, renames `3000`/`2300`, and deactivates
+`3100`/`3200` (history is kept).
 
 ## Adding another tenant
 

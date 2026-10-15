@@ -12,7 +12,7 @@ import (
 
 // API base URLs per environment.
 var envURLs = map[string]string{
-	"local":      "http://localhost:8086",
+	"local":      "http://localhost:7086",
 	"staging":    "https://api.staging.thittam.io",
 	"production": "https://api.thittam.io",
 }

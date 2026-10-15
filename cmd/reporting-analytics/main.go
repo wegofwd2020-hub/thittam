@@ -118,8 +118,8 @@ func main() {
 	}
 	srv := server.New(server.Config{
 		Name:                    "reporting-analytics",
-		Port:                    8085,
-		MetricsPort:             9095,
+		Port:                    7085,
+		MetricsPort:             7195,
 		Loader:                  loader,
 		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
 		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
@@ -136,8 +136,8 @@ func main() {
 	go func() {
 		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
 			ServiceName:   "reporting-analytics",
-			GRPCEndpoint:  "localhost:8085",
-			HTTPPort:      9085,
+			GRPCEndpoint:  "localhost:7085",
+			HTTPPort:      7185,
 			Register:      reportingv1.RegisterReportingServiceHandlerFromEndpoint,
 			ProjectHeader: false,
 		}); err != nil {
@@ -145,7 +145,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("reporting-analytics service ready on :8085")
+	log.Printf("reporting-analytics service ready on :7085")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("reporting-analytics: %v", err)
 	}

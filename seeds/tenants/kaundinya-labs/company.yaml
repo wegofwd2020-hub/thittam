@@ -1,7 +1,8 @@
 # Kaundinya Labs LLC — Thittam tenant definition (real tenant, not a demo).
 #
-# Management books for the studio; the CPA files the return. Single-member
-# Michigan LLC, default tax classification (disregarded entity → Schedule C).
+# Management books for the studio; the CPA files the return. Two-member
+# Michigan LLC, 50/50, default classification → partnership: Form 1065 with a
+# Schedule K-1 per member (confirmed with the CPA, 15 Oct 2026).
 #
 # This repository is public. Private details (street address, login email)
 # are REPLACE_ME here and supplied by company.local.yaml in this directory,
@@ -30,6 +31,19 @@ admin:
   id: dd5e77aa-ef1c-4aa7-8919-709dd2dd6b21
   email: REPLACE_ME
   display_name: Sivakumar Mambakkam
+
+# Owner equity is generated from this block (see tools/tenant-onboard/README.md).
+# Labels only: the members' real names go in company.local.yaml, which turns
+# "Capital — Member A" into "Capital — <name>" in the local books.
+entity:
+  tax_classification: partnership_1065
+  members:
+    a:
+      label: Member A
+      ownership_pct: 50
+    b:
+      label: Member B
+      ownership_pct: 50
 
 books:
   # LLC legal effective date (Vijayadashami). Calendar fiscal year.

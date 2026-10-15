@@ -6,7 +6,7 @@ Output files (applied in name order with ``psql -v ON_ERROR_STOP=1``):
 ``001_tenant.sql``  ``tenants`` row, ``tenant_verticals`` binding, 7 system roles
 ``002_admin.sql``   first user + tenant-wide ``super_admin`` grant
 ``003_products.sql`` one ``productions`` row per product
-``004_ledger.sql``  chart of accounts (from the vertical) + open periods
+``004_ledger.sql``  chart of accounts (vertical + entity equity) + open periods
 ==================  ==========================================================
 
 Every statement is safe to re-run: inserts use ``ON CONFLICT ... DO NOTHING``
@@ -21,6 +21,7 @@ from pathlib import Path
 
 from . import sql
 from .company import Company
+from .entity import LEGACY_RENAMES, LEGACY_SINGLE_OWNER, equity_accounts
 from .errors import OutputError
 from .vertical import Vertical
 
@@ -33,6 +34,7 @@ SYSTEM_ROLES: tuple[tuple[str, tuple[str, ...]], ...] = (
         "expense:read", "expense:submit", "expense:approve",
         "inventory:read", "inventory:checkout",
         "report:read",
+        "ledger:read", "ledger:write", "ledger:post", "ledger:admin",
         "user:manage",
         "billing:read", "billing:manage",
         "document:read", "document:write", "document:delete",
@@ -44,6 +46,7 @@ SYSTEM_ROLES: tuple[tuple[str, tuple[str, ...]], ...] = (
         "expense:read", "expense:approve",
         "inventory:read", "inventory:checkout",
         "report:read",
+        "ledger:read",
         "billing:read", "billing:manage",
         "document:read", "document:write", "document:delete",
         "notifications:read", "notifications:manage",
@@ -54,12 +57,14 @@ SYSTEM_ROLES: tuple[tuple[str, tuple[str, ...]], ...] = (
         "expense:read", "expense:approve",
         "inventory:read", "inventory:checkout",
         "report:read",
+        "ledger:read",
         "document:read", "document:write",
     )),
     ("accountant", (
         "budget:read",
         "expense:read", "expense:submit", "expense:approve",
         "report:read",
+        "ledger:read", "ledger:write", "ledger:post",
         "billing:read",
         "document:read", "document:write",
     )),
@@ -183,16 +188,51 @@ def render_products(company: Company) -> str:
     return _header(company, "Products (productions rows).") + "\n".join(rows) + "\nCOMMIT;\n"
 
 
+# Verticals whose earlier versions seeded single-owner accounts; see entity.py.
+_LEGACY_VERTICALS = ("software-development-us",)
+
+
+def _legacy_fixes(company: Company, vertical: Vertical) -> str:
+    """SQL correcting accounts seeded by an earlier, single-owner vertical.
+
+    Every statement matches on code *and* the old name, so it touches only
+    rows that still carry the legacy name and is a no-op on re-run.
+    """
+    if vertical.id not in _LEGACY_VERTICALS:
+        return ""
+    t = sql.uuid_lit(company.tenant_id)
+    out = ["\n-- Accounts seeded by software-development-us v1.0.0 (single-owner chart).\n"]
+    for code, old, new in LEGACY_RENAMES:
+        out.append(f"UPDATE accounts SET name = {sql.text(new)}\n"
+                   f" WHERE tenant_id = {t} AND code = {sql.text(code)} AND name = {sql.text(old)};\n")
+    if company.entity is not None and company.entity.is_partnership:
+        out.append("-- Single-owner equity has no meaning in a partnership: deactivate, keep history.\n")
+        for code, old in LEGACY_SINGLE_OWNER:
+            out.append(f"UPDATE accounts SET is_active = false\n"
+                       f" WHERE tenant_id = {t} AND code = {sql.text(code)} AND name = {sql.text(old)}"
+                       " AND is_active;\n")
+    return "".join(out)
+
+
 def render_ledger(company: Company, vertical: Vertical) -> str:
     """Render ``004_ledger.sql``: chart of accounts and open periods.
 
+    The vertical's accounts come first, then the owner-equity accounts the
+    tenant's ``entity:`` block implies (see :mod:`tenant_onboard.entity`).
     Accounts are inserted one statement at a time, parents first, and the
     parent id is resolved by code — so this also works for a tenant whose
     accounts were partly created by the ledger service already.
     """
     t = sql.uuid_lit(company.tenant_id)
-    out = [_header(company, f"Chart of accounts from {vertical.id} and open accounting periods.")]
-    for acc in vertical.accounts:
+    ent = company.entity
+    out = [_header(company, f"Chart of accounts from {vertical.id}"
+                            + (f", owner equity for a {ent.tax_classification} entity" if ent else "")
+                            + ", and open accounting periods.")]
+    entity_accounts = equity_accounts(ent)
+    for i, acc in enumerate((*vertical.accounts, *entity_accounts)):
+        if ent is not None and i == len(vertical.accounts):
+            out.append(f"\n-- Owner equity: {ent.tax_classification}, "
+                       f"{len(ent.members)} member(s).\n")
         parent = (
             f"(SELECT id FROM accounts WHERE tenant_id = {t} AND code = {sql.text(acc.parent_code)})"
             if acc.parent_code else "NULL"
@@ -202,6 +242,7 @@ def render_ledger(company: Company, vertical: Vertical) -> str:
             f"VALUES ({t}, {sql.text(acc.code)}, {sql.text(acc.name)}, {sql.text(acc.account_type)}, {parent}, true)\n"
             "ON CONFLICT (tenant_id, code) DO NOTHING;\n"
         )
+    out.append(_legacy_fixes(company, vertical))
     out.append(
         f"\n-- Books open {company.books.opening_date.isoformat()}; periods through fiscal year end "
         f"(month {company.books.fiscal_year_end_month}).\n"

@@ -93,8 +93,8 @@ func main() {
 	}
 	srv := server.New(server.Config{
 		Name:        "expense-tracking",
-		Port:        8082,
-		MetricsPort: 9092,
+		Port:        7082,
+		MetricsPort: 7192,
 		Loader:      loader,
 		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
 		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
@@ -110,8 +110,8 @@ func main() {
 	go func() {
 		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
 			ServiceName:   "expense-tracking",
-			GRPCEndpoint:  "localhost:8082",
-			HTTPPort:      9082,
+			GRPCEndpoint:  "localhost:7082",
+			HTTPPort:      7182,
 			Register:      expensev1.RegisterExpenseServiceHandlerFromEndpoint,
 			ProjectHeader: true,
 		}); err != nil {
@@ -119,7 +119,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("expense-tracking service ready on :8082")
+	log.Printf("expense-tracking service ready on :7082")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("expense-tracking: %v", err)
 	}

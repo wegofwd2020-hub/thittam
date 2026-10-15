@@ -137,3 +137,62 @@ class TestWriteFiles:
         with pytest.raises(OutputError):
             write_files({"a.sql": "x"}, tmp_path)
         assert not (tmp_path / ".a.sql.tmp").exists()
+
+
+class TestLedgerEntity:
+    """Owner-equity accounts appended from the entity block (mock data)."""
+
+    @pytest.fixture
+    def partnership(self, fixtures_dir):
+        import yaml
+
+        from tenant_onboard.company import parse_company
+        return parse_company(yaml.safe_load((fixtures_dir / "company_partnership.yaml").read_text()))
+
+    @pytest.fixture
+    def us_vertical(self, vertical):
+        import dataclasses
+        return dataclasses.replace(vertical, id="software-development-us")
+
+    def test_no_entity_leaves_ledger_unchanged(self, company, vertical):
+        s = render_ledger(company, vertical)
+        assert "Owner equity" not in s and "UPDATE accounts" not in s
+
+    def test_partnership_accounts_follow_vertical_accounts(self, partnership, vertical):
+        codes = re.findall(r"VALUES \(\S+, '(\d+)'", render_ledger(partnership, vertical))
+        assert codes == [a.code for a in vertical.accounts] + [
+            "3010", "3020", "3110", "3120", "3910", "6050", "6051", "6052"]
+
+    def test_member_name_escaped_in_account_name(self, partnership, vertical):
+        assert "'Capital — Robin O''Hara'" in render_ledger(partnership, vertical)
+
+    def test_guaranteed_payments_parent_resolved_by_code(self, partnership, vertical):
+        s = render_ledger(partnership, vertical)
+        assert "'6051', 'Guaranteed Payments — Member A', 'expense', (SELECT id FROM accounts" in s
+        assert "AND code = '6050')" in s
+
+    def test_legacy_fixes_only_for_us_vertical(self, partnership, vertical, us_vertical):
+        assert "UPDATE accounts" not in render_ledger(partnership, vertical)
+        s = render_ledger(partnership, us_vertical)
+        assert "SET name = 'Equity'" in s and "name = 'Owner''s Capital'" in s
+        assert "SET name = 'Due to Owners (reimbursable)'" in s
+
+    def test_partnership_deactivates_legacy_owner_accounts(self, partnership, us_vertical):
+        s = render_ledger(partnership, us_vertical)
+        assert s.count("SET is_active = false") == 2
+        assert "code = '3100' AND name = 'Owner''s Contributions' AND is_active" in s
+        assert "code = '3200' AND name = 'Owner''s Draws' AND is_active" in s
+
+    def test_single_owner_keeps_owner_accounts_active(self, company, us_vertical):
+        import dataclasses
+        from decimal import Decimal
+
+        from tenant_onboard.entity import SCHEDULE_C, Entity, Member
+        sole = dataclasses.replace(company, entity=Entity(SCHEDULE_C, (Member("owner", "Owner", None, Decimal(100)),)))
+        s = render_ledger(sole, us_vertical)
+        assert "is_active = false" not in s
+        assert "'3100', 'Owner''s Contributions', 'equity'" in s
+
+    def test_legacy_fixes_run_before_periods_and_commit(self, partnership, us_vertical):
+        s = render_ledger(partnership, us_vertical)
+        assert s.index("UPDATE accounts") < s.index("INSERT INTO accounting_periods") < s.index("COMMIT;")

@@ -39,11 +39,11 @@ PROJECT_LAST_HORIZON="d2000000-0000-0000-0000-000000000001"
 PROJECT_OTHER="d2000000-0000-0000-0000-000000000002"   # different production — Vikram unscoped
 
 # Service addresses (local dev defaults from cmd/*/main.go).
-IAM_ADDR=localhost:8086
-BUDGET_ADDR=localhost:8081
-EXPENSE_ADDR=localhost:8082
-PROJECT_ADDR=localhost:8090
-INVENTORY_ADDR=localhost:8084
+IAM_ADDR=localhost:7086
+BUDGET_ADDR=localhost:7081
+EXPENSE_ADDR=localhost:7082
+PROJECT_ADDR=localhost:7090
+INVENTORY_ADDR=localhost:7084
 
 # Dummy IDs for the gated RPC bodies. These don't need to refer to real rows —
 # the permission check fires before the handler dereferences them, and we only

@@ -4,15 +4,25 @@
 #
 # Built for independent software studios that build and sell their own
 # products (SaaS, apps, content) and keep management books in USD. First
-# tenant: Kaundinya Labs LLC (Michigan, single-member LLC).
+# tenant: Kaundinya Labs LLC (Michigan, two-member LLC taxed as a partnership).
 #
 # Chart of accounts design
 # ------------------------
-# Expense accounts are aligned to IRS Schedule C (Form 1040) lines so that
-# year-end hand-off to the CPA is a straight roll-up. The line reference is
-# in each account's comment, not its name, so the names stay readable in the
-# UI. The mapping is a starting point — the CPA has the final word, and an
-# entity that elects S-corp status files Form 1120-S instead.
+# The chart is entity-neutral. Each revenue and expense account carries, in
+# its comment, the line it rolls up to on BOTH returns a US studio usually
+# files:
+#   Sch C  — single-owner LLC or sole proprietor (Schedule C, Form 1040)
+#   1065   — multi-member LLC taxed as a partnership (Form 1065, page 1)
+# Line numbers are from the tax year 2025 forms; recheck each year.
+# The reference sits in the comment, not the name, so names stay readable in
+# the UI (schema.json allows no extra account fields). The mapping is a
+# starting point — the CPA has the final word, and an entity that elects
+# S-corp status files Form 1120-S instead.
+#
+# Owner equity is NOT defined here because it depends on the entity: one
+# owner gets contribution/draw accounts, a partnership gets capital and
+# distribution accounts per member. tools/tenant-onboard generates those from
+# the `entity:` block in each tenant's company.yaml, under 3000 Equity.
 #
 # Parents are listed before children: the ledger's SeedChartOfAccounts
 # resolves parent_code by looking up accounts already created.
@@ -21,11 +31,12 @@
 vertical:
   id: software-development-us
   name: Software Studio (US)
-  version: 1.0.0
+  version: 1.1.0
   description: >
     For US independent software studios and product companies that build and sell
-    their own software. USD amounts, Schedule C-aligned chart of accounts, 1099-NEC
-    contractor tracking, and state sales/use tax treatment on expenses.
+    their own software. USD amounts, chart of accounts mapped to Schedule C and
+    Form 1065, 1099-NEC contractor tracking, and state sales/use tax treatment on
+    expenses.
 
   entity_labels:
     project: Product
@@ -262,6 +273,22 @@ vertical:
       name: Prepaid Expenses
       account_type: asset
       parent_code: null
+    - code: "1300"
+      name: Intangible Assets
+      account_type: asset
+      parent_code: null
+    - code: "1310"
+      name: Software & Intellectual Property
+      account_type: asset          # contributed or acquired software, marks, domains
+      parent_code: "1300"
+    - code: "1320"
+      name: Start-up & Organizational Costs
+      account_type: asset          # IRC §195 start-up / §709 (§248) organizational, capitalised
+      parent_code: "1300"
+    - code: "1390"
+      name: Accumulated Amortization
+      account_type: asset          # contra-asset (credit balance)
+      parent_code: "1300"
     - code: "1500"
       name: Equipment
       account_type: asset
@@ -284,22 +311,15 @@ vertical:
       account_type: liability
       parent_code: null
     - code: "2300"
-      name: Due to Owner (reimbursable)
+      name: Due to Owners (reimbursable)
       account_type: liability
       parent_code: null
     # ── Equity ──────────────────────────────────────────────────────────
+    # Owner/member accounts are generated per tenant under 3000 (see header).
     - code: "3000"
-      name: Owner's Capital
+      name: Equity
       account_type: equity
       parent_code: null
-    - code: "3100"
-      name: Owner's Contributions
-      account_type: equity
-      parent_code: "3000"
-    - code: "3200"
-      name: Owner's Draws
-      account_type: equity         # contra-equity (debit balance)
-      parent_code: "3000"
     - code: "3900"
       name: Retained Earnings
       account_type: equity
@@ -307,7 +327,7 @@ vertical:
     # ── Revenue ─────────────────────────────────────────────────────────
     - code: "4000"
       name: Revenue
-      account_type: revenue        # Sch C line 1
+      account_type: revenue        # Sch C 1 · 1065 1a
       parent_code: null
     - code: "4100"
       name: Product & Subscription Revenue
@@ -319,16 +339,19 @@ vertical:
       parent_code: "4000"
     - code: "4900"
       name: Other Income
-      account_type: revenue        # Sch C line 6
+      account_type: revenue        # Sch C 6 · 1065 7
       parent_code: null
-    # ── Expenses (Schedule C line in comment) ───────────────────────────
+    # ── Expenses (Schedule C line · Form 1065 line in comment) ──────────
+    # 1065 has no separate lines for most studio costs: they go on line 21,
+    # "Other deductions", itemised on an attached statement under the
+    # account name.
     - code: "6000"
       name: Operating Expenses
       account_type: expense
       parent_code: null
     - code: "6100"
       name: Contract Labor
-      account_type: expense        # line 11
+      account_type: expense        # Sch C 11 · 1065 21 (statement: contract labor)
       parent_code: "6000"
     - code: "6200"
       name: Technology
@@ -336,31 +359,31 @@ vertical:
       parent_code: "6000"
     - code: "6210"
       name: Cloud & Hosting
-      account_type: expense        # line 27a (other) — confirm with CPA
+      account_type: expense        # Sch C 27a · 1065 21 — confirm label with CPA
       parent_code: "6200"
     - code: "6220"
       name: Software & SaaS Subscriptions
-      account_type: expense        # line 18 or 27a — confirm with CPA
+      account_type: expense        # Sch C 18 or 27a · 1065 21 — confirm with CPA
       parent_code: "6200"
     - code: "6300"
       name: Advertising & Marketing
-      account_type: expense        # line 8
+      account_type: expense        # Sch C 8 · 1065 21
       parent_code: "6000"
     - code: "6400"
       name: Legal & Professional Fees
-      account_type: expense        # line 17
+      account_type: expense        # Sch C 17 · 1065 21
       parent_code: "6000"
     - code: "6500"
       name: Travel
-      account_type: expense        # line 24a
+      account_type: expense        # Sch C 24a · 1065 21
       parent_code: "6000"
     - code: "6510"
       name: Business Meals (50% deductible)
-      account_type: expense        # line 24b
+      account_type: expense        # Sch C 24b · 1065 21 (50% limit)
       parent_code: "6500"
     - code: "6600"
       name: Taxes & Licenses
-      account_type: expense        # line 23 (MI annual statement fee, etc.)
+      account_type: expense        # Sch C 23 · 1065 14
       parent_code: "6000"
     - code: "6700"
       name: Office
@@ -368,27 +391,31 @@ vertical:
       parent_code: "6000"
     - code: "6710"
       name: Office Supplies & Expense
-      account_type: expense        # line 18 / 22
+      account_type: expense        # Sch C 18/22 · 1065 21
       parent_code: "6700"
     - code: "6720"
       name: Business Use of Home
-      account_type: expense        # line 30 (Form 8829 or simplified method)
+      account_type: expense        # Sch C 30 · 1065: claimed by partners, not the firm — CPA
       parent_code: "6700"
     - code: "6800"
       name: Insurance
-      account_type: expense        # line 15
+      account_type: expense        # Sch C 15 · 1065 21
       parent_code: "6000"
     - code: "6820"
       name: Bank & Payment Processing Fees
-      account_type: expense        # line 27a
+      account_type: expense        # Sch C 27a · 1065 21
       parent_code: "6000"
     - code: "6850"
       name: Depreciation
-      account_type: expense        # line 13 (Form 4562)
+      account_type: expense        # Sch C 13 · 1065 16a (Form 4562)
+      parent_code: "6000"
+    - code: "6860"
+      name: Amortization
+      account_type: expense        # Sch C 27a · 1065 21 (Form 4562; §195/§709 costs)
       parent_code: "6000"
     - code: "6900"
       name: Other Expenses
-      account_type: expense        # line 27a
+      account_type: expense        # Sch C 27a · 1065 21
       parent_code: "6000"
 
   report_definitions:
@@ -397,9 +424,11 @@ vertical:
       description: Revenue vs cost per product, with company overhead shown separately
       data_sources: [budget-planning, expense-tracking, general-ledger]
       default_columns: [product, revenue, cost, margin_pct, stage]
-    - id: schedule_c_rollup
-      name: Schedule C Roll-up
-      description: Year-to-date totals by expense account for the CPA hand-off
+    - id: tax_return_rollup
+      name: Tax Return Roll-up
+      description: >
+        Year-to-date totals by account for the CPA hand-off, mapped to Schedule C
+        (single owner) or Form 1065 page 1 (partnership)
       data_sources: [general-ledger]
       default_columns: [account_code, account_name, ytd_amount]
     - id: contractor_1099

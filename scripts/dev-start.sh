@@ -65,7 +65,7 @@ done
 # IAM must be reachable: RequirePermission now fails closed when the checker is
 # nil (#138), so every service needs IAM_SERVICE_ADDR whether or not
 # project-scoped RBAC is enabled.
-export IAM_SERVICE_ADDR="${IAM_SERVICE_ADDR:-localhost:8086}"
+export IAM_SERVICE_ADDR="${IAM_SERVICE_ADDR:-localhost:7086}"
 
 # --with-project-rbac additionally enables the ADR-014 Phase 2 rollout
 # enforcement so the four project-scoped services check project-scoped
@@ -311,7 +311,7 @@ fi  # end of SVC_ONLY skip block
 # masked the IAM client wiring.
 
 header "Service-port preflight"
-SERVICE_PORTS=(8090 8081 8082 8083 8084 8085 8086 8087 8088 8089)
+SERVICE_PORTS=(7090 7081 7082 7083 7084 7085 7086 7087 7088 7089)
 PORT_BUSY=()
 for p in "${SERVICE_PORTS[@]}"; do
   if (echo > "/dev/tcp/localhost/$p") >/dev/null 2>&1; then
@@ -340,8 +340,8 @@ echo ""
 # Wait for its /readyz before launching the rest.
 
 start_svc "iam" "cmd/iam"
-step "Waiting for IAM to be ready (port 9096)..."
-wait_http "IAM (/readyz)" "http://localhost:9096/readyz" 40 2
+step "Waiting for IAM to be ready (port 7196)..."
+wait_http "IAM (/readyz)" "http://localhost:7196/readyz" 40 2
 
 # Core transaction services — start in parallel.
 # These do not depend on each other at startup time.
@@ -356,11 +356,11 @@ start_svc "inventory-management" "cmd/inventory-management"
 # (reporting-analytics makes read-only gRPC calls to project, budget, expense, ledger).
 
 step "Waiting for core services..."
-wait_http "project-management  (/healthz)" "http://localhost:9100/healthz" 30 2
-wait_http "budget-planning     (/healthz)" "http://localhost:9091/healthz" 30 2
-wait_http "expense-tracking    (/healthz)" "http://localhost:9092/healthz" 30 2
-wait_http "general-ledger      (/healthz)" "http://localhost:9093/healthz" 30 2
-wait_http "inventory-management(/healthz)" "http://localhost:9094/healthz" 30 2
+wait_http "project-management  (/healthz)" "http://localhost:7200/healthz" 30 2
+wait_http "budget-planning     (/healthz)" "http://localhost:7191/healthz" 30 2
+wait_http "expense-tracking    (/healthz)" "http://localhost:7192/healthz" 30 2
+wait_http "general-ledger      (/healthz)" "http://localhost:7193/healthz" 30 2
+wait_http "inventory-management(/healthz)" "http://localhost:7194/healthz" 30 2
 
 # Auxiliary services — depend on core services being up.
 
@@ -368,13 +368,13 @@ start_svc "reporting-analytics" "cmd/reporting-analytics"
 start_svc "notifications"       "cmd/notifications"
 start_svc "document"            "cmd/document"
 start_svc "billing"             "cmd/billing" \
-  "DOCUMENT_SERVICE_ADDR=localhost:8088"
+  "DOCUMENT_SERVICE_ADDR=localhost:7088"
 
 step "Waiting for auxiliary services..."
-wait_http "reporting-analytics(/healthz)" "http://localhost:9095/healthz" 30 2
-wait_http "notifications       (/healthz)" "http://localhost:9097/healthz" 30 2
-wait_http "document            (/healthz)" "http://localhost:9098/healthz" 30 2
-wait_http "billing             (/healthz)" "http://localhost:9099/healthz" 30 2
+wait_http "reporting-analytics(/healthz)" "http://localhost:7195/healthz" 30 2
+wait_http "notifications       (/healthz)" "http://localhost:7197/healthz" 30 2
+wait_http "document            (/healthz)" "http://localhost:7198/healthz" 30 2
+wait_http "billing             (/healthz)" "http://localhost:7199/healthz" 30 2
 
 # ── Ready ─────────────────────────────────────────────────────────────────────
 
@@ -384,14 +384,14 @@ echo -e "${BOLD}${GREEN}  Thittam is ready for testing            ${RESET}"
 echo -e "${BOLD}${GREEN}══════════════════════════════════════════${RESET}"
 echo ""
 echo -e "  ${BOLD}Service endpoints (gRPC):${RESET}"
-echo "    project-management   :8090     budget-planning      :8081"
-echo "    expense-tracking     :8082     general-ledger       :8083"
-echo "    inventory-management :8084     reporting-analytics  :8085"
-echo "    iam                  :8086     notifications        :8087"
-echo "    document             :8088     billing              :8089"
+echo "    project-management   :7090     budget-planning      :7081"
+echo "    expense-tracking     :7082     general-ledger       :7083"
+echo "    inventory-management :7084     reporting-analytics  :7085"
+echo "    iam                  :7086     notifications        :7087"
+echo "    document             :7088     billing              :7089"
 echo ""
 echo -e "  ${BOLD}Metrics / health:${RESET}"
-echo "    http://localhost:9091-9099/healthz    (one per service; project-management is on 9100)"
+echo "    http://localhost:7191-7199/healthz    (one per service; project-management is on 7200)"
 echo "    http://localhost:9300                 (Prometheus UI)"
 echo ""
 echo -e "  ${BOLD}Infrastructure:${RESET}"

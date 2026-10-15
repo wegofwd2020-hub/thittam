@@ -245,21 +245,27 @@ seed-tenant: tenant-generate
 	@echo "==> Tenant $(TENANT) loaded."
 
 # Generated vertical migrations: vertical YAML -> migrations/shared/NNN_*.sql
+# Entry format  <vertical>:<migration>[:<earlier migration it updates>]
+# Only the latest migration per vertical is generated and drift-checked;
+# earlier ones are frozen history. With a third field, the down migration
+# restores that earlier definition instead of deleting the vertical.
 VERTICAL_MIGRATIONS := \
-	software-development-us:007_seed_software_development_us_vertical
+	software-development-us:008_update_software_development_us_vertical_v1_1:007_seed_software_development_us_vertical
 
 vertical-migrations:
-	@for pair in $(VERTICAL_MIGRATIONS); do \
-		v=$${pair%%:*}; m=$${pair#*:}; \
+	@for entry in $(VERTICAL_MIGRATIONS); do \
+		v=$$(echo $$entry | cut -d: -f1); m=$$(echo $$entry | cut -d: -f2); prev=$$(echo $$entry | cut -d: -f3); \
 		$(ONBOARD) vertical-migration --vertical pkg/vertical/configs/$$v.yaml \
-			--up migrations/shared/$$m.up.sql --down migrations/shared/$$m.down.sql || exit 1; \
+			--up migrations/shared/$$m.up.sql --down migrations/shared/$$m.down.sql \
+			$${prev:+--restores migrations/shared/$$prev.up.sql} || exit 1; \
 	done
 
 check-vertical-migrations:
-	@for pair in $(VERTICAL_MIGRATIONS); do \
-		v=$${pair%%:*}; m=$${pair#*:}; \
+	@for entry in $(VERTICAL_MIGRATIONS); do \
+		v=$$(echo $$entry | cut -d: -f1); m=$$(echo $$entry | cut -d: -f2); prev=$$(echo $$entry | cut -d: -f3); \
 		$(ONBOARD) check-vertical-migration --vertical pkg/vertical/configs/$$v.yaml \
-			--up migrations/shared/$$m.up.sql --down migrations/shared/$$m.down.sql || exit 1; \
+			--up migrations/shared/$$m.up.sql --down migrations/shared/$$m.down.sql \
+			$${prev:+--restores migrations/shared/$$prev.up.sql} || exit 1; \
 	done
 
 test-tenant-onboard:

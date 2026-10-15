@@ -1,6 +1,6 @@
 // Local-dev routing for the grpc-gateway HTTP ports. Each service exposes its
-// own gateway on a dedicated port (iam: 9086, project-management: 9080,
-// budget-planning: 9081). Once Kong (#60 Phase B) is in front of everything,
+// own gateway on a dedicated port (iam: 7186, project-management: 7180,
+// budget-planning: 7181). Once Kong (#60 Phase B) is in front of everything,
 // set NEXT_PUBLIC_API_URL=http://localhost:8500 and it will route to all.
 //
 // When a NEXT_PUBLIC_* env var is set, it wins. Otherwise, the URL is derived
@@ -24,32 +24,32 @@ export const env = {
 
   /** IAM grpc-gateway — default for auth, users, tenants. */
   get iamApiUrl(): string {
-    return process.env.NEXT_PUBLIC_IAM_URL || hostUrl(9086);
+    return process.env.NEXT_PUBLIC_IAM_URL || hostUrl(7186);
   },
 
   /** project-management grpc-gateway — productions, phases, crew. */
   get projectApiUrl(): string {
-    return process.env.NEXT_PUBLIC_PROJECT_URL || hostUrl(9080);
+    return process.env.NEXT_PUBLIC_PROJECT_URL || hostUrl(7180);
   },
 
   /** budget-planning grpc-gateway — budgets, line items, categories. */
   get budgetApiUrl(): string {
-    return process.env.NEXT_PUBLIC_BUDGET_URL || hostUrl(9081);
+    return process.env.NEXT_PUBLIC_BUDGET_URL || hostUrl(7181);
   },
 
   /** expense-tracking grpc-gateway — expenses, purchase orders, petty cash. */
   get expenseApiUrl(): string {
-    return process.env.NEXT_PUBLIC_EXPENSE_URL || hostUrl(9082);
+    return process.env.NEXT_PUBLIC_EXPENSE_URL || hostUrl(7182);
   },
 
   /** general-ledger grpc-gateway — chart of accounts, journal entries, periods. */
   get ledgerApiUrl(): string {
-    return process.env.NEXT_PUBLIC_LEDGER_URL || hostUrl(9083);
+    return process.env.NEXT_PUBLIC_LEDGER_URL || hostUrl(7183);
   },
 
   /** reporting-analytics grpc-gateway — dashboard summaries (read-only projections). */
   get reportingApiUrl(): string {
-    return process.env.NEXT_PUBLIC_REPORTING_URL || hostUrl(9085);
+    return process.env.NEXT_PUBLIC_REPORTING_URL || hostUrl(7185);
   },
 
   /**
@@ -57,6 +57,6 @@ export const env = {
    * Defaults to the IAM grpc-gateway port in local dev.
    */
   get platformApiUrl(): string {
-    return process.env.NEXT_PUBLIC_PLATFORM_API_URL || hostUrl(9086);
+    return process.env.NEXT_PUBLIC_PLATFORM_API_URL || hostUrl(7186);
   },
 };

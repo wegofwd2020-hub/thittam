@@ -1,0 +1,40 @@
+# Mock two-member partnership for unit tests — every value is fictitious.
+tenant:
+  id: 0f6b1c2e-3333-4a5b-9c3d-000000000003
+  name: Mock Partners LLC
+  slug: mock-partners
+  plan: starter
+  vertical: test-studio
+  primary_currency: USD
+
+address:
+  line1: 200 Example Blvd
+  city: Testville
+  postal_code: "49998"
+  country: US
+
+admin:
+  id: 0f6b1c2e-4444-4a5b-9c3d-000000000004
+  email: partner.one@example.test
+  display_name: Partner One
+
+books:
+  opening_date: 2026-10-20
+  fiscal_year_end_month: 12
+
+entity:
+  tax_classification: partnership_1065
+  members:
+    a:
+      label: Member A
+      ownership_pct: 60
+    b:
+      label: Member B
+      name: Robin   O'Hara        # extra spaces collapse; quote exercises escaping
+      ownership_pct: 40
+
+products:
+  - slug: widget-app
+    title: Widget App
+    stage: build
+    start_date: 2026-10-20

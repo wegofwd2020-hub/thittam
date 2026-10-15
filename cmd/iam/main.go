@@ -224,8 +224,8 @@ func main() {
 	}
 	srv := server.New(server.Config{
 		Name:        "iam",
-		Port:        8086,
-		MetricsPort: 9096,
+		Port:        7086,
+		MetricsPort: 7196,
 		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(jwtVerifier, interceptor.PublicMethods)},
 		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(jwtVerifier, interceptor.PublicMethods)},
 	}, nil)
@@ -251,8 +251,8 @@ func main() {
 	go func() {
 		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
 			ServiceName:  "iam",
-			GRPCEndpoint: "localhost:8086",
-			HTTPPort:     9086,
+			GRPCEndpoint: "localhost:7086",
+			HTTPPort:     7186,
 			Register:     iamv1.RegisterIAMServiceHandlerFromEndpoint,
 			Wrap: func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -269,9 +269,9 @@ func main() {
 	}()
 
 	if vaultAddr != "" {
-		log.Printf("iam service ready on :8086")
+		log.Printf("iam service ready on :7086")
 	} else {
-		log.Printf("iam service ready on :8086 (local dev — no Vault)")
+		log.Printf("iam service ready on :7086 (local dev — no Vault)")
 	}
 
 	if err := srv.Run(); err != nil {

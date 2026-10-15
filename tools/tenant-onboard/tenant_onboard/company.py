@@ -20,6 +20,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from .entity import Entity, check_entity_against_vertical, parse_entity
 from .errors import CompanyConfigError, Issue
 from .vertical import Vertical
 from .yamlio import load_yaml_mapping
@@ -120,6 +121,7 @@ class Company:
     books: Books
     products: tuple[Product, ...]
     stage_status_map: dict[str, str]
+    entity: Entity | None
 
     def status_for(self, stage: str) -> str:
         """Map a vertical stage id to an allowed ``productions.status``."""
@@ -238,6 +240,7 @@ def parse_company(data: dict[str, Any], source: str = "<memory>") -> Company:
                 stage_map[str(stage)] = status
 
     products = _parse_products(data.get("products"), issues)
+    entity = parse_entity(data.get("entity"), issues)
 
     if issues:
         raise CompanyConfigError(source, issues)
@@ -248,7 +251,7 @@ def parse_company(data: dict[str, Any], source: str = "<memory>") -> Company:
         address=Address(line1=line1, line2=line2, city=city, postal_code=postal, country=country),
         admin=Admin(id=admin_id, email=email.lower(), display_name=display),
         books=Books(opening_date=opening, fiscal_year_end_month=fye),
-        products=tuple(products), stage_status_map=stage_map,
+        products=tuple(products), stage_status_map=stage_map, entity=entity,
     )
 
 
@@ -257,7 +260,8 @@ def check_against_vertical(company: Company, vertical: Vertical, source: str = "
 
     Raises:
         CompanyConfigError: If the vertical id differs, a product uses a stage
-            the vertical does not define, or a stage has no status mapping.
+            the vertical does not define, a stage has no status mapping, or the
+            entity's generated equity accounts do not fit the vertical's chart.
     """
     issues: list[Issue] = []
     if company.vertical_id != vertical.id:
@@ -267,6 +271,7 @@ def check_against_vertical(company: Company, vertical: Vertical, source: str = "
             issues.append(Issue(f"products[{i}].stage", f"{p.stage!r} is not a stage of {vertical.id} ({', '.join(vertical.stage_ids)})"))
         elif p.stage not in company.stage_status_map:
             issues.append(Issue(f"products[{i}].stage", f"no productions.status mapping for {p.stage!r}; add it to stage_status_map"))
+    issues.extend(check_entity_against_vertical(company.entity, vertical.id, vertical.accounts))
     if issues:
         raise CompanyConfigError(source, issues)
 

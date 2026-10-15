@@ -96,11 +96,10 @@ func main() {
 	}
 	srv := server.New(server.Config{
 		Name: "project-management",
-		// Ports shifted from 8080/9090 to 8090/9100 to avoid conflicts with
-		// other projects on the same dev host (notably StudyBuddy, which
-		// uses 8080 for its API). All other thittam services keep 808x/909x.
-		Port:        8090,
-		MetricsPort: 9100,
+		// Local dev ports moved into the 7xxx range. Originally 8080/9090;
+		// shifted to 8090/9100 to avoid StudyBuddy's 8080 API, now 7090/7200.
+		Port:        7090,
+		MetricsPort: 7200,
 		Loader:      loader,
 		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
 		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
@@ -116,8 +115,8 @@ func main() {
 	go func() {
 		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
 			ServiceName:   "project-management",
-			GRPCEndpoint:  "localhost:8090",
-			HTTPPort:      9080,
+			GRPCEndpoint:  "localhost:7090",
+			HTTPPort:      7180,
 			Register:      projectv1.RegisterProjectServiceHandlerFromEndpoint,
 			ProjectHeader: true,
 		}); err != nil {
@@ -125,7 +124,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("project-management service ready on :8090")
+	log.Printf("project-management service ready on :7090")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("project-management: %v", err)
 	}

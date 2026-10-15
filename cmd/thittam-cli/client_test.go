@@ -15,7 +15,7 @@ func TestNewAdminClient_ValidEnv(t *testing.T) {
 
 	client, err := NewAdminClient("local", "")
 	require.NoError(t, err)
-	assert.Equal(t, "http://localhost:8086", client.baseURL)
+	assert.Equal(t, "http://localhost:7086", client.baseURL)
 	assert.Equal(t, "test-token", client.token)
 }
 

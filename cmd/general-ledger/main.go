@@ -96,8 +96,8 @@ func main() {
 	}
 	srv := server.New(server.Config{
 		Name:        "general-ledger",
-		Port:        8083,
-		MetricsPort: 9093,
+		Port:        7083,
+		MetricsPort: 7193,
 		// Loader: nil — vertical interceptor is not used for this service.
 		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
 		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
@@ -109,8 +109,8 @@ func main() {
 	go func() {
 		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
 			ServiceName:  "general-ledger",
-			GRPCEndpoint: "localhost:8083",
-			HTTPPort:     9083,
+			GRPCEndpoint: "localhost:7083",
+			HTTPPort:     7183,
 			Register:     ledgerv1.RegisterLedgerServiceHandlerFromEndpoint,
 		}); err != nil {
 			log.Fatalf("general-ledger: gateway: %v", err)
@@ -120,7 +120,7 @@ func main() {
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
 	srv.RegisterHealthChecker("nats", &natsChecker{nc: nc})
 
-	log.Printf("general-ledger service ready on :8083")
+	log.Printf("general-ledger service ready on :7083")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("general-ledger: %v", err)
 	}
