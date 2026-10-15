@@ -95,3 +95,10 @@ func (m *reportingMock) GetFinancialSummary(ctx context.Context, tid uuid.UUID) 
 func (m *reportingMock) GetApprovalPipeline(ctx context.Context, tid uuid.UUID) (*reporting.ApprovalPipeline, error) { return &reporting.ApprovalPipeline{TenantID: tid}, nil }
 func (m *reportingMock) GetTeamUtilization(ctx context.Context, tid uuid.UUID) (*reporting.TeamUtilization, error) { return &reporting.TeamUtilization{TenantID: tid}, nil }
 func (m *reportingMock) GetComplianceStatus(ctx context.Context, tid uuid.UUID) (*reporting.ComplianceStatus, error) { return &reporting.ComplianceStatus{TenantID: tid}, nil }
+
+func (m *expenseMock) ListExpensesByParty(_ context.Context, _, _ uuid.UUID, _, _ int) ([]expense.Expense, error) {
+	return nil, nil
+}
+func (m *expenseMock) ListPurchaseOrdersByParty(_ context.Context, _, _ uuid.UUID, _, _ int) ([]expense.PurchaseOrder, error) {
+	return nil, nil
+}

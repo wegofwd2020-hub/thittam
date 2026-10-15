@@ -15,9 +15,11 @@ import (
 // --- Mock repository ---
 
 type mockRepo struct {
-	createExpenseFn func(ctx context.Context, e *Expense) error
-	getExpenseFn    func(ctx context.Context, tenantID, id uuid.UUID) (*Expense, error)
-	listExpensesFn  func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int, submittedBy uuid.UUID) ([]Expense, error)
+	listExpensesByPartyFn func(ctx context.Context, tenantID, partyID uuid.UUID, limit, offset int) ([]Expense, error)
+	listPOsByPartyFn      func(ctx context.Context, tenantID, partyID uuid.UUID, limit, offset int) ([]PurchaseOrder, error)
+	createExpenseFn       func(ctx context.Context, e *Expense) error
+	getExpenseFn          func(ctx context.Context, tenantID, id uuid.UUID) (*Expense, error)
+	listExpensesFn        func(ctx context.Context, tenantID, prodID uuid.UUID, status string, limit, offset int, submittedBy uuid.UUID) ([]Expense, error)
 	// lastListExpensesSubmittedBy records the submittedBy arg from the most
 	// recent ListExpenses call, so Task 3's handler test can assert the
 	// submitted_by_me flag actually reached the repo call.
@@ -798,4 +800,17 @@ func TestService_ApprovePurchaseOrder_SuperAdminStillHitsDualApproval(t *testing
 		},
 	})
 	assert.ErrorIs(t, svc.ApprovePurchaseOrder(ctxConstruction(), uuid.New(), uuid.New(), uuid.New(), []string{"super_admin"}), ErrDualApprovalRequired)
+}
+
+func (m *mockRepo) ListExpensesByParty(ctx context.Context, tenantID, partyID uuid.UUID, limit, offset int) ([]Expense, error) {
+	if m.listExpensesByPartyFn != nil {
+		return m.listExpensesByPartyFn(ctx, tenantID, partyID, limit, offset)
+	}
+	return nil, nil
+}
+func (m *mockRepo) ListPurchaseOrdersByParty(ctx context.Context, tenantID, partyID uuid.UUID, limit, offset int) ([]PurchaseOrder, error) {
+	if m.listPOsByPartyFn != nil {
+		return m.listPOsByPartyFn(ctx, tenantID, partyID, limit, offset)
+	}
+	return nil, nil
 }

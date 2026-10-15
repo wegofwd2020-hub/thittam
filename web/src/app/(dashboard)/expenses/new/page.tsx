@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Check, AlertTriangle } from "lucide-react";
@@ -9,6 +10,7 @@ import type { ExpenseCategory as ApiCategory } from "@/lib/api/expenses";
 import { useExpenseCategories, usePurchaseOrders, useSubmitExpense } from "@/lib/hooks/use-expenses";
 import { useProductions } from "@/lib/hooks/use-productions";
 import { useBudgets, useLineItems } from "@/lib/hooks/use-budgets";
+import { listParties } from "@/lib/api/ledger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,6 +75,11 @@ export default function NewExpensePage() {
   const [selectedCategory, setSelectedCategory] = useState(""); // category id
   const [selectedPo, setSelectedPo] = useState("");
   const [selectedBudgetLine, setSelectedBudgetLine] = useState("");
+  const [selectedParty, setSelectedParty] = useState("");
+  const partiesQuery = useQuery({
+    queryKey: ["ledger", "parties", "expense-picker"],
+    queryFn: () => listParties(),
+  });
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [showToast, setShowToast] = useState(false);
@@ -114,6 +121,7 @@ export default function NewExpensePage() {
         currency: CURRENCY,
         budget_line_id: selectedBudgetLine || undefined,
         purchase_order_id: selectedPo || undefined,
+        party_id: selectedParty || undefined,
       });
       setShowToast(true);
       setTimeout(() => router.push("/expenses"), 1200);
@@ -327,6 +335,37 @@ export default function NewExpensePage() {
                 color: "var(--thittam-foreground, #0f172a)",
               }}
             />
+          </div>
+
+          {/* Customer or vendor (optional) */}
+          <div>
+            <label
+              htmlFor="party"
+              className="mb-1.5 block text-sm font-heading font-medium"
+              style={{ color: "var(--thittam-foreground, #0f172a)" }}
+            >
+              Customer or vendor (optional)
+            </label>
+            <select
+              id="party"
+              value={selectedParty}
+              onChange={(e) => setSelectedParty(e.target.value)}
+              className="w-full rounded-lg px-3 py-2 text-sm font-body"
+              style={{
+                backgroundColor: "var(--thittam-background, #fff)",
+                border: "1px solid var(--thittam-border, #e2e8f0)",
+                color: "var(--thittam-foreground, #0f172a)",
+              }}
+            >
+              <option value="">No customer or vendor</option>
+              {(partiesQuery.data?.parties ?? [])
+                .filter((p) => p.is_active)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
           </div>
 
           {/* Budget line (optional) */}

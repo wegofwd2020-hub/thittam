@@ -10,6 +10,7 @@ import {
   listPartyTransactions,
   type Party,
 } from "@/lib/api/ledger";
+import { listExpenses, listPurchaseOrders } from "@/lib/api/expenses";
 
 const TYPE_LABEL: Record<string, string> = {
   customer: "Customer",
@@ -29,6 +30,17 @@ export default function PartyTransactionsPage() {
   const txQuery = useQuery({
     queryKey: ["ledger", "parties", partyId, "transactions"],
     queryFn: () => listPartyTransactions(partyId),
+    enabled: !!partyId,
+  });
+
+  const poQuery = useQuery({
+    queryKey: ["expenses", "purchase-orders", "party", partyId],
+    queryFn: () => listPurchaseOrders(undefined, { party_id: partyId }),
+    enabled: !!partyId,
+  });
+  const expenseQuery = useQuery({
+    queryKey: ["expenses", "expenses", "party", partyId],
+    queryFn: () => listExpenses(undefined, { party_id: partyId }),
     enabled: !!partyId,
   });
 
@@ -74,6 +86,58 @@ export default function PartyTransactionsPage() {
       />
 
       {errorMessage && <p className="text-sm text-red-700">Failed to load: {errorMessage}</p>}
+
+      <section className="space-y-3">
+        <h2 className="font-medium">Purchase orders</h2>
+        <DataTable<Record<string, unknown>>
+          columns={[
+            { key: "po_number", header: "PO #" },
+            { key: "vendor", header: "Vendor" },
+            { key: "status", header: "Status", type: "status" },
+            { key: "amount", header: "Amount", type: "number" },
+            { key: "currency", header: "Currency" },
+          ]}
+          data={(poQuery.data?.purchase_orders ?? []).map((po) => ({
+            po_number: po.po_number,
+            vendor: po.vendor_name,
+            status: po.status,
+            amount: po.amount,
+            currency: po.currency,
+          }))}
+          isLoading={poQuery.isLoading}
+          emptyMessage={
+            poQuery.error
+              ? `Failed to load purchase orders: ${poQuery.error.message}`
+              : "No purchase orders tagged to this party."
+          }
+        />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-medium">Expenses</h2>
+        <DataTable<Record<string, unknown>>
+          columns={[
+            { key: "category", header: "Category" },
+            { key: "description", header: "Description" },
+            { key: "status", header: "Status", type: "status" },
+            { key: "amount", header: "Amount", type: "number" },
+            { key: "currency", header: "Currency" },
+          ]}
+          data={(expenseQuery.data?.expenses ?? []).map((e) => ({
+            category: e.category_id,
+            description: e.description,
+            status: e.status,
+            amount: e.amount,
+            currency: e.currency,
+          }))}
+          isLoading={expenseQuery.isLoading}
+          emptyMessage={
+            expenseQuery.error
+              ? `Failed to load expenses: ${expenseQuery.error.message}`
+              : "No expenses tagged to this party."
+          }
+        />
+      </section>
 
       {txQuery.data && (
         <div className="grid gap-4 sm:grid-cols-2">

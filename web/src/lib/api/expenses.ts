@@ -10,6 +10,7 @@ export interface Expense {
   tenant_id: string;
   budget_line_id: string | null;
   purchase_order_id: string | null;
+  party_id?: string | null; // customer or vendor; null when none
   category_id: string;
   description: string;
   amount: string; // decimal string
@@ -31,6 +32,7 @@ export interface PurchaseOrder {
   po_number: string;
   vendor_name: string;
   vendor_gstin: string;
+  party_id?: string | null;
   description: string;
   amount: string;
   currency: string;
@@ -84,6 +86,7 @@ export interface SubmitExpenseInput {
   currency?: string;
   budget_line_id?: string;
   purchase_order_id?: string;
+  party_id?: string;
 }
 
 export interface CreatePurchaseOrderInput {
@@ -91,6 +94,7 @@ export interface CreatePurchaseOrderInput {
   budget_line_id?: string;
   vendor_name: string;
   vendor_gstin?: string;
+  party_id?: string;
   description: string;
   amount: string;
   currency?: string;
@@ -132,7 +136,7 @@ const BASE = "/api/v1/expenses";
 // Tenant-wide when productionId is omitted (server scopes by the caller's token).
 export async function listExpenses(
   productionId?: string,
-  params?: { status?: string; limit?: number; after?: string },
+  params?: { status?: string; limit?: number; after?: string; party_id?: string },
 ): Promise<{ expenses: Expense[] }> {
   return api.getList<{ expenses: Expense[] }>(
     `${BASE}${qs({ production_id: productionId, ...params })}`,
@@ -168,7 +172,7 @@ const PO_BASE = "/api/v1/purchase-orders";
 
 export async function listPurchaseOrders(
   productionId?: string,
-  params?: { status?: string; limit?: number; after?: string },
+  params?: { status?: string; limit?: number; after?: string; party_id?: string },
 ): Promise<{ purchase_orders: PurchaseOrder[] }> {
   return api.getList<{ purchase_orders: PurchaseOrder[] }>(
     `${PO_BASE}${qs({ production_id: productionId, ...params })}`,

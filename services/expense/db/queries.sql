@@ -1,8 +1,8 @@
 -- Expense tracking service queries.
 
 -- name: CreatePurchaseOrder :one
-INSERT INTO purchase_orders (id, production_id, tenant_id, budget_line_id, po_number, vendor_name, vendor_gstin, description, amount, currency, raised_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO purchase_orders (id, production_id, tenant_id, budget_line_id, po_number, vendor_name, vendor_gstin, description, amount, currency, raised_by, party_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
@@ -27,8 +27,8 @@ WHERE id = $1 AND tenant_id = $2
 RETURNING *;
 
 -- name: CreateExpense :one
-INSERT INTO expenses (id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, submitted_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO expenses (id, production_id, tenant_id, budget_line_id, purchase_order_id, category_id, description, amount, currency, tax_amount, submitted_by, party_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
@@ -84,3 +84,15 @@ UPDATE expenses
 SET status = 'rejected', rejection_reason = $3, rejected_at = now(), rejected_by = $4
 WHERE id = $1 AND tenant_id = $2
 RETURNING *;
+
+-- name: ListExpensesByParty :many
+SELECT * FROM expenses
+WHERE tenant_id = $1 AND party_id = $2
+ORDER BY created_at DESC
+LIMIT $3 OFFSET $4;
+
+-- name: ListPurchaseOrdersByParty :many
+SELECT * FROM purchase_orders
+WHERE tenant_id = $1 AND party_id = $2
+ORDER BY raised_at DESC
+LIMIT $3 OFFSET $4;

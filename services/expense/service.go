@@ -129,6 +129,22 @@ func (s *Service) GetExpense(ctx context.Context, tenantID, id uuid.UUID) (*Expe
 }
 
 // ListExpenses lists expenses for a production.
+// ListExpensesByParty returns expenses tagged to a party, newest first.
+func (s *Service) ListExpensesByParty(ctx context.Context, tenantID, partyID uuid.UUID, limit, offset int) ([]Expense, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	return s.repo.ListExpensesByParty(ctx, tenantID, partyID, limit, offset)
+}
+
+// ListPurchaseOrdersByParty returns purchase orders tagged to a party, newest first.
+func (s *Service) ListPurchaseOrdersByParty(ctx context.Context, tenantID, partyID uuid.UUID, limit, offset int) ([]PurchaseOrder, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	return s.repo.ListPurchaseOrdersByParty(ctx, tenantID, partyID, limit, offset)
+}
+
 func (s *Service) ListExpenses(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int, submittedBy uuid.UUID) ([]Expense, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20

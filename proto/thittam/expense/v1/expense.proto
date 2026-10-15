@@ -76,6 +76,7 @@ message PurchaseOrder {
   google.protobuf.Timestamp raised_at = 14;
   google.protobuf.Timestamp approved_at = 15;
   google.protobuf.Timestamp created_at = 16;
+  string party_id = 17; // optional customer or vendor (general-ledger party)
 }
 
 message Expense {
@@ -98,6 +99,7 @@ message Expense {
   string rejected_by = 17;
   string rejection_reason = 18;
   google.protobuf.Timestamp rejected_at = 19;
+  string party_id = 20; // optional customer or vendor (general-ledger party)
 }
 
 message PettyCashAdvance {
@@ -136,6 +138,7 @@ message CreatePurchaseOrderRequest {
   string description = 6;
   string amount = 7;
   string currency = 8;
+  string party_id = 9; // optional; must be a party in this tenant
 }
 
 message GetPurchaseOrderRequest { string id = 1; }
@@ -147,6 +150,7 @@ message ListPurchaseOrdersRequest {
   // When true, scoped to the POs the caller raised (raised_by = verified token
   // subject); requires no expense:read. False/absent = expense:read + tenant-wide.
   bool raised_by_me = 5;
+  string party_id = 6; // optional filter; requires expense:read unless raised_by_me
 }
 message ListPurchaseOrdersResponse { repeated PurchaseOrder purchase_orders = 1; }
 
@@ -158,6 +162,7 @@ message SubmitExpenseRequest {
   string description = 5;
   string amount = 6;
   string currency = 7;
+  string party_id = 8; // optional; must be a party in this tenant
 }
 
 message GetExpenseRequest { string id = 1; }
@@ -169,6 +174,7 @@ message ListExpensesRequest {
   // When true, scoped to the caller's own submissions (submitted_by = verified token
   // subject); requires no expense:read. False/absent = expense:read + tenant-wide (#165).
   bool submitted_by_me = 5;
+  string party_id = 6; // optional filter; requires expense:read unless submitted_by_me
 }
 message ListExpensesResponse { repeated Expense expenses = 1; }
 message ApproveExpenseRequest { string expense_id = 1; }
