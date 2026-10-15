@@ -130,8 +130,8 @@ func main() {
 	}
 	srv := server.New(server.Config{
 		Name:        "billing",
-		Port:        8089,
-		MetricsPort: 9099,
+		Port:        7089,
+		MetricsPort: 7199,
 		// Loader: nil — vertical interceptor is not used for this service.
 		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
 		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
@@ -141,7 +141,7 @@ func main() {
 
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
 
-	log.Printf("billing service ready on :8089")
+	log.Printf("billing service ready on :7089")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("billing: %v", err)
 	}

@@ -97,8 +97,8 @@ func main() {
 	}
 	srv := server.New(server.Config{
 		Name:                    "budget-planning",
-		Port:                    8081,
-		MetricsPort:             9091,
+		Port:                    7081,
+		MetricsPort:             7191,
 		Loader:                  loader,
 		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
 		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
@@ -114,8 +114,8 @@ func main() {
 	go func() {
 		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
 			ServiceName:   "budget-planning",
-			GRPCEndpoint:  "localhost:8081",
-			HTTPPort:      9081,
+			GRPCEndpoint:  "localhost:7081",
+			HTTPPort:      7181,
 			Register:      budgetv1.RegisterBudgetServiceHandlerFromEndpoint,
 			ProjectHeader: true,
 		}); err != nil {
@@ -123,7 +123,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("budget-planning service ready on :8081")
+	log.Printf("budget-planning service ready on :7081")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("budget-planning: %v", err)
 	}

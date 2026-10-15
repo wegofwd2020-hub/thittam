@@ -72,8 +72,8 @@ func main() {
 	}
 	srv := server.New(server.Config{
 		Name:        "inventory-management",
-		Port:        8084,
-		MetricsPort: 9094,
+		Port:        7084,
+		MetricsPort: 7194,
 		Loader:      loader,
 		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
 		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
@@ -88,8 +88,8 @@ func main() {
 	go func() {
 		if err := server.RunRESTGateway(ctx, server.GatewayConfig{
 			ServiceName:   "inventory-management",
-			GRPCEndpoint:  "localhost:8084",
-			HTTPPort:      9084,
+			GRPCEndpoint:  "localhost:7084",
+			HTTPPort:      7184,
 			Register:      inventoryv1.RegisterInventoryServiceHandlerFromEndpoint,
 			ProjectHeader: true,
 		}); err != nil {
@@ -97,7 +97,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("inventory-management service ready on :8084")
+	log.Printf("inventory-management service ready on :7084")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("inventory-management: %v", err)
 	}

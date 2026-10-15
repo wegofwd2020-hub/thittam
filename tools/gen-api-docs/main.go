@@ -49,16 +49,16 @@ type service struct {
 // Kept in code (not parsed) because ports live in deployment config, not proto.
 // Update when a new service lands.
 var servicePorts = map[string]int{
-	"ProjectService":       8080,
-	"BudgetService":        8081,
-	"ExpenseService":       8082,
-	"GeneralLedgerService": 8083,
-	"InventoryService":     8084,
-	"ReportingService":     8085,
-	"IAMService":           8086,
-	"NotificationService":  8087,
-	"DocumentService":      8088,
-	"BillingService":       8089,
+	"ProjectService":       7080,
+	"BudgetService":        7081,
+	"ExpenseService":       7082,
+	"GeneralLedgerService": 7083,
+	"InventoryService":     7084,
+	"ReportingService":     7085,
+	"IAMService":           7086,
+	"NotificationService":  7087,
+	"DocumentService":      7088,
+	"BillingService":       7089,
 }
 
 var (

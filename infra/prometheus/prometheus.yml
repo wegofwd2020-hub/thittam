@@ -1,7 +1,7 @@
 # Prometheus configuration for Thittam local development.
 #
 # Assumes Go services run on the HOST machine at their standard metrics ports
-# (9090-9098). Prometheus itself runs in docker-compose alongside middleware
+# (7190-7198). Prometheus itself runs in docker-compose alongside middleware
 # (Redis, NATS, MinIO).
 #
 # host.docker.internal resolves to the host machine from inside Docker on
@@ -51,84 +51,84 @@ scrape_configs:
   # the metrics port carries Prometheus and health endpoints only.
   #
   # gRPC port → metrics port mapping:
-  #   8080 → 9090  project-management
-  #   8081 → 9091  budget-planning
-  #   8082 → 9092  expense-tracking
-  #   8083 → 9093  general-ledger
-  #   8084 → 9094  inventory-management
-  #   8085 → 9095  reporting-analytics
-  #   8086 → 9096  iam
-  #   8087 → 9097  notifications
-  #   8088 → 9098  document
-  #   9099 billing
+  #   7080 → 7190  project-management
+  #   7081 → 7191  budget-planning
+  #   7082 → 7192  expense-tracking
+  #   7083 → 7193  general-ledger
+  #   7084 → 7194  inventory-management
+  #   7085 → 7195  reporting-analytics
+  #   7086 → 7196  iam
+  #   7087 → 7197  notifications
+  #   7088 → 7198  document
+  #   7199 billing
 
   - job_name: project-management
     static_configs:
-      # 9100 (was 9090) — shifted to avoid host-port conflict with parallel projects.
-      - targets: ["host.docker.internal:9100"]
+      # 7200 (was 9100 before the 7xxx move) — shifted to avoid host-port conflict with parallel projects.
+      - targets: ["host.docker.internal:7200"]
     relabel_configs:
       - target_label: service
         replacement: project-management
 
   - job_name: budget-planning
     static_configs:
-      - targets: ["host.docker.internal:9091"]
+      - targets: ["host.docker.internal:7191"]
     relabel_configs:
       - target_label: service
         replacement: budget-planning
 
   - job_name: expense-tracking
     static_configs:
-      - targets: ["host.docker.internal:9092"]
+      - targets: ["host.docker.internal:7192"]
     relabel_configs:
       - target_label: service
         replacement: expense-tracking
 
   - job_name: general-ledger
     static_configs:
-      - targets: ["host.docker.internal:9093"]
+      - targets: ["host.docker.internal:7193"]
     relabel_configs:
       - target_label: service
         replacement: general-ledger
 
   - job_name: inventory-management
     static_configs:
-      - targets: ["host.docker.internal:9094"]
+      - targets: ["host.docker.internal:7194"]
     relabel_configs:
       - target_label: service
         replacement: inventory-management
 
   - job_name: reporting-analytics
     static_configs:
-      - targets: ["host.docker.internal:9095"]
+      - targets: ["host.docker.internal:7195"]
     relabel_configs:
       - target_label: service
         replacement: reporting-analytics
 
   - job_name: iam
     static_configs:
-      - targets: ["host.docker.internal:9096"]
+      - targets: ["host.docker.internal:7196"]
     relabel_configs:
       - target_label: service
         replacement: iam
 
   - job_name: notifications
     static_configs:
-      - targets: ["host.docker.internal:9097"]
+      - targets: ["host.docker.internal:7197"]
     relabel_configs:
       - target_label: service
         replacement: notifications
 
   - job_name: document
     static_configs:
-      - targets: ["host.docker.internal:9098"]
+      - targets: ["host.docker.internal:7198"]
     relabel_configs:
       - target_label: service
         replacement: document
 
   - job_name: billing
     static_configs:
-      - targets: ["host.docker.internal:9099"]
+      - targets: ["host.docker.internal:7199"]
     relabel_configs:
       - target_label: service
         replacement: billing

@@ -18,8 +18,8 @@ import (
 // GatewayConfig configures a REST-over-gRPC gateway for one service.
 type GatewayConfig struct {
 	ServiceName  string // for log lines, e.g. "budget-planning"
-	GRPCEndpoint string // the service's own gRPC listen address, e.g. "localhost:8081"
-	HTTPPort     int    // the gateway's HTTP listen port, e.g. 9081
+	GRPCEndpoint string // the service's own gRPC listen address, e.g. "localhost:7081"
+	HTTPPort     int    // the gateway's HTTP listen port, e.g. 7181
 
 	// Register is the generated Register<Svc>ServiceHandlerFromEndpoint.
 	Register func(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) error

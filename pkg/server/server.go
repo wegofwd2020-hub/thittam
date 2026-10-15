@@ -28,7 +28,7 @@ import (
 type Config struct {
 	Name        string // service name (e.g., "project-management")
 	Port        int
-	MetricsPort int              // health/metrics HTTP port (default: 9090)
+	MetricsPort int              // health/metrics HTTP port (default: 7190)
 	Loader      *vertical.Loader // vertical config loader (nil = skip vertical interceptor)
 
 	// ExtraUnaryInterceptors are appended after the built-in chain
@@ -80,7 +80,7 @@ func New(cfg Config, logger Logger) *Server {
 		logger = defaultLogger{name: cfg.Name}
 	}
 	if cfg.MetricsPort == 0 {
-		cfg.MetricsPort = 9090
+		cfg.MetricsPort = 7190
 	}
 	if v := os.Getenv("GRPC_REFLECTION"); v == "1" || v == "true" {
 		cfg.EnableReflection = true

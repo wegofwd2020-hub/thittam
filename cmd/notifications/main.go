@@ -132,8 +132,8 @@ func main() {
 	}
 	srv := server.New(server.Config{
 		Name:                    "notifications",
-		Port:                    8087,
-		MetricsPort:             9097,
+		Port:                    7087,
+		MetricsPort:             7197,
 		ExtraUnaryInterceptors:  []grpc.UnaryServerInterceptor{interceptor.UnaryAuthInterceptor(verifier, interceptor.PublicMethods)},
 		ExtraStreamInterceptors: []grpc.StreamServerInterceptor{interceptor.StreamAuthInterceptor(verifier, interceptor.PublicMethods)},
 	}, nil)
@@ -143,7 +143,7 @@ func main() {
 	srv.RegisterHealthChecker("postgres", &dbChecker{pool: pool})
 	srv.RegisterHealthChecker("nats", &natsChecker{nc: nc})
 
-	log.Printf("notifications service ready on :8087")
+	log.Printf("notifications service ready on :7087")
 	if err := srv.Run(); err != nil {
 		log.Fatalf("notifications: %v", err)
 	}

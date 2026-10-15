@@ -26,20 +26,20 @@ DB_URL="${DATABASE_URL:-postgres://thittam:thittam_dev@localhost:5433/thittam?ss
 REDIS_HOST_PORT="${REDIS_URL:-localhost:6380}"
 NATS_URL="${NATS_URL:-nats://localhost:4222}"
 
-IAM_HTTP="${IAM_HTTP:-http://localhost:8086}"
-PROJECT_HTTP="${PROJECT_HTTP:-http://localhost:8080}"
-BUDGET_HTTP="${BUDGET_HTTP:-http://localhost:8081}"
-EXPENSE_HTTP="${EXPENSE_HTTP:-http://localhost:8082}"
-LEDGER_HTTP="${LEDGER_HTTP:-http://localhost:8083}"
-INVENTORY_HTTP="${INVENTORY_HTTP:-http://localhost:8084}"
-REPORTING_HTTP="${REPORTING_HTTP:-http://localhost:8085}"
-NOTIFICATIONS_HTTP="${NOTIFICATIONS_HTTP:-http://localhost:8087}"
-DOCUMENT_HTTP="${DOCUMENT_HTTP:-http://localhost:8088}"
+IAM_HTTP="${IAM_HTTP:-http://localhost:7086}"
+PROJECT_HTTP="${PROJECT_HTTP:-http://localhost:7180}"
+BUDGET_HTTP="${BUDGET_HTTP:-http://localhost:7081}"
+EXPENSE_HTTP="${EXPENSE_HTTP:-http://localhost:7082}"
+LEDGER_HTTP="${LEDGER_HTTP:-http://localhost:7083}"
+INVENTORY_HTTP="${INVENTORY_HTTP:-http://localhost:7084}"
+REPORTING_HTTP="${REPORTING_HTTP:-http://localhost:7085}"
+NOTIFICATIONS_HTTP="${NOTIFICATIONS_HTTP:-http://localhost:7087}"
+DOCUMENT_HTTP="${DOCUMENT_HTTP:-http://localhost:7088}"
 
 # grpc-gateway REST ports (what the web client actually calls)
-IAM_GW="${IAM_GW:-http://localhost:9086}"
-PROJECT_GW="${PROJECT_GW:-http://localhost:9080}"
-BUDGET_GW="${BUDGET_GW:-http://localhost:9081}"
+IAM_GW="${IAM_GW:-http://localhost:7186}"
+PROJECT_GW="${PROJECT_GW:-http://localhost:7180}"
+BUDGET_GW="${BUDGET_GW:-http://localhost:7181}"
 
 WEB_URL="${WEB_URL:-http://localhost:3100}"
 
