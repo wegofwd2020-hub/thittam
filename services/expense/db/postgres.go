@@ -42,6 +42,7 @@ func (p *Postgres) CreatePurchaseOrder(ctx context.Context, po *expense.Purchase
 		Amount:       pgNumericFromDecimal(po.Amount),
 		Currency:     po.Currency,
 		RaisedBy:     po.RaisedBy,
+		PartyID:      pgUUIDFromPtr(po.PartyID),
 	})
 	if err != nil {
 		return fmt.Errorf("expense: create purchase order: %w", err)
@@ -116,6 +117,7 @@ func (p *Postgres) CreateExpense(ctx context.Context, e *expense.Expense) error 
 		Currency:        e.Currency,
 		TaxAmount:       pgNumericFromDecimal(e.TaxAmount),
 		SubmittedBy:     e.SubmittedBy,
+		PartyID:         pgUUIDFromPtr(e.PartyID),
 	})
 	if err != nil {
 		return fmt.Errorf("expense: create expense: %w", err)
@@ -258,19 +260,20 @@ func (p *Postgres) UpdatePettyCashAdvance(ctx context.Context, pc *expense.Petty
 
 func purchaseOrderFromDB(row PurchaseOrder) *expense.PurchaseOrder {
 	po := &expense.PurchaseOrder{
-		ID:          row.ID,
+		PartyID:      optionalUUID(row.PartyID),
+		ID:           row.ID,
 		ProductionID: row.ProductionID,
-		TenantID:    row.TenantID,
-		PONumber:    row.PoNumber,
-		VendorName:  row.VendorName,
-		VendorGSTIN: stringFromPgText(row.VendorGstin),
-		Description: stringFromPgText(row.Description),
-		Amount:      decimalFromPgNumeric(row.Amount),
-		Currency:    row.Currency,
-		Status:      row.Status,
-		RaisedBy:    row.RaisedBy,
-		RaisedAt:    row.RaisedAt,
-		CreatedAt:   row.CreatedAt,
+		TenantID:     row.TenantID,
+		PONumber:     row.PoNumber,
+		VendorName:   row.VendorName,
+		VendorGSTIN:  stringFromPgText(row.VendorGstin),
+		Description:  stringFromPgText(row.Description),
+		Amount:       decimalFromPgNumeric(row.Amount),
+		Currency:     row.Currency,
+		Status:       row.Status,
+		RaisedBy:     row.RaisedBy,
+		RaisedAt:     row.RaisedAt,
+		CreatedAt:    row.CreatedAt,
 	}
 	if row.BudgetLineID.Valid {
 		id := uuid.UUID(row.BudgetLineID.Bytes)
@@ -289,6 +292,7 @@ func purchaseOrderFromDB(row PurchaseOrder) *expense.PurchaseOrder {
 
 func expenseFromDB(row Expense) *expense.Expense {
 	e := &expense.Expense{
+		PartyID:      optionalUUID(row.PartyID),
 		ID:           row.ID,
 		ProductionID: row.ProductionID,
 		TenantID:     row.TenantID,
@@ -382,6 +386,49 @@ func pgUUIDFromPtr(id *uuid.UUID) pgtype.UUID {
 }
 
 // nullableUUID maps the zero UUID to SQL NULL (an "omit this filter" sentinel).
+// optionalUUID turns a nullable UUID column into a pointer; nil when NULL.
+func optionalUUID(u pgtype.UUID) *uuid.UUID {
+	if !u.Valid {
+		return nil
+	}
+	id := uuid.UUID(u.Bytes)
+	return &id
+}
+
+func (p *Postgres) ListExpensesByParty(ctx context.Context, tenantID, partyID uuid.UUID, limit, offset int) ([]expense.Expense, error) {
+	rows, err := p.q.ListExpensesByParty(ctx, ListExpensesByPartyParams{
+		TenantID: tenantID,
+		PartyID:  pgUUIDFromPtr(&partyID),
+		Limit:    int32(limit),
+		Offset:   int32(offset),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("expense: list expenses by party: %w", err)
+	}
+	result := make([]expense.Expense, len(rows))
+	for i, row := range rows {
+		result[i] = *expenseFromDB(row)
+	}
+	return result, nil
+}
+
+func (p *Postgres) ListPurchaseOrdersByParty(ctx context.Context, tenantID, partyID uuid.UUID, limit, offset int) ([]expense.PurchaseOrder, error) {
+	rows, err := p.q.ListPurchaseOrdersByParty(ctx, ListPurchaseOrdersByPartyParams{
+		TenantID: tenantID,
+		PartyID:  pgUUIDFromPtr(&partyID),
+		Limit:    int32(limit),
+		Offset:   int32(offset),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("expense: list purchase orders by party: %w", err)
+	}
+	result := make([]expense.PurchaseOrder, len(rows))
+	for i, row := range rows {
+		result[i] = *purchaseOrderFromDB(row)
+	}
+	return result, nil
+}
+
 func nullableUUID(id uuid.UUID) pgtype.UUID {
 	if id == uuid.Nil {
 		return pgtype.UUID{}

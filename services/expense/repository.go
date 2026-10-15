@@ -18,6 +18,10 @@ type Repository interface {
 	CreateExpense(ctx context.Context, e *Expense) error
 	GetExpense(ctx context.Context, tenantID, id uuid.UUID) (*Expense, error)
 	ListExpenses(ctx context.Context, tenantID, productionID uuid.UUID, status string, limit, offset int, submittedBy uuid.UUID) ([]Expense, error)
+	// ListExpensesByParty and ListPurchaseOrdersByParty return rows tagged to a
+	// general-ledger party, tenant-scoped.
+	ListExpensesByParty(ctx context.Context, tenantID, partyID uuid.UUID, limit, offset int) ([]Expense, error)
+	ListPurchaseOrdersByParty(ctx context.Context, tenantID, partyID uuid.UUID, limit, offset int) ([]PurchaseOrder, error)
 	UpdateExpense(ctx context.Context, e *Expense) error
 	RejectExpense(ctx context.Context, tenantID, expenseID, rejecterID uuid.UUID, reason string) error
 

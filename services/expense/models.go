@@ -21,6 +21,7 @@ type PurchaseOrder struct {
 	Amount       decimal.Decimal `json:"amount"`
 	Currency     string          `json:"currency"`
 	Status       string          `json:"status"` // draft, approved, partially_invoiced, closed, cancelled
+	PartyID      *uuid.UUID      `json:"party_id,omitempty"`
 	RaisedBy     uuid.UUID       `json:"raised_by"`
 	ApprovedBy   *uuid.UUID      `json:"approved_by,omitempty"`
 	RaisedAt     time.Time       `json:"raised_at"`
@@ -41,6 +42,7 @@ type Expense struct {
 	Currency        string          `json:"currency"`
 	TaxAmount       decimal.Decimal `json:"tax_amount"`
 	Status          string          `json:"status"` // draft, submitted, approved, rejected, paid
+	PartyID         *uuid.UUID      `json:"party_id,omitempty"`
 	SubmittedBy     uuid.UUID       `json:"submitted_by"`
 	ApprovedBy      *uuid.UUID      `json:"approved_by,omitempty"`
 	RejectedBy      *uuid.UUID      `json:"rejected_by,omitempty"`

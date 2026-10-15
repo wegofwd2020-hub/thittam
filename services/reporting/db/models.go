@@ -106,6 +106,7 @@ type Expense struct {
 	RejectionReason pgtype.Text        `json:"rejection_reason"`
 	RejectedAt      pgtype.Timestamptz `json:"rejected_at"`
 	RejectedBy      pgtype.UUID        `json:"rejected_by"`
+	PartyID         pgtype.UUID        `json:"party_id"`
 }
 
 type ExpenseFact struct {
@@ -214,6 +215,7 @@ type PurchaseOrder struct {
 	RaisedAt     time.Time          `json:"raised_at"`
 	ApprovedAt   pgtype.Timestamptz `json:"approved_at"`
 	CreatedAt    time.Time          `json:"created_at"`
+	PartyID      pgtype.UUID        `json:"party_id"`
 }
 
 type RegistrationSaga struct {

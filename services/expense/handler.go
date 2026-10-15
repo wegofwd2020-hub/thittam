@@ -65,7 +65,12 @@ func (h *Handler) CreatePurchaseOrder(ctx context.Context, req *expensev1.Create
 		currency = "INR"
 	}
 
+	partyID, err := parseOptionalPartyID(req.GetPartyId())
+	if err != nil {
+		return nil, err
+	}
 	po := &PurchaseOrder{
+		PartyID:      partyID,
 		ProductionID: productionID,
 		TenantID:     tenantID,
 		PONumber:     req.GetPoNumber(),
@@ -134,6 +139,25 @@ func (h *Handler) ListPurchaseOrders(ctx context.Context, req *expensev1.ListPur
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if s := req.GetPartyId(); s != "" {
+		if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+			return nil, err
+		}
+		partyID, err := uuid.Parse(s)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid party_id")
+		}
+		pos, err := h.svc.ListPurchaseOrdersByParty(ctx, tenantID, partyID, 0, 0)
+		if err != nil {
+			return nil, grpcErr(err)
+		}
+		out := make([]*expensev1.PurchaseOrder, len(pos))
+		for i := range pos {
+			out[i] = purchaseOrderToProto(&pos[i])
+		}
+		return &expensev1.ListPurchaseOrdersResponse{PurchaseOrders: out}, nil
 	}
 
 	// RaisedByMe branches the way ListExpenses does: self-scope IS the authz
@@ -238,7 +262,12 @@ func (h *Handler) SubmitExpense(ctx context.Context, req *expensev1.SubmitExpens
 		currency = "INR"
 	}
 
+	partyID, err := parseOptionalPartyID(req.GetPartyId())
+	if err != nil {
+		return nil, err
+	}
 	e := &Expense{
+		PartyID:      partyID,
 		ProductionID: productionID,
 		TenantID:     tenantID,
 		CategoryID:   req.GetCategoryId(),
@@ -321,6 +350,25 @@ func (h *Handler) ListExpenses(ctx context.Context, req *expensev1.ListExpensesR
 	tenantID, ok := tenant.IDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "tenant ID not found in context")
+	}
+
+	if s := req.GetPartyId(); s != "" {
+		if err := interceptor.RequirePermission(ctx, h.perm, "expense:read"); err != nil {
+			return nil, err
+		}
+		partyID, err := uuid.Parse(s)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid party_id")
+		}
+		list, err := h.svc.ListExpensesByParty(ctx, tenantID, partyID, 0, 0)
+		if err != nil {
+			return nil, grpcErr(err)
+		}
+		out := make([]*expensev1.Expense, len(list))
+		for i := range list {
+			out[i] = expenseToProto(&list[i])
+		}
+		return &expensev1.ListExpensesResponse{Expenses: out}, nil
 	}
 
 	var submittedBy uuid.UUID
@@ -619,6 +667,7 @@ func (h *Handler) GetApprovalLimits(ctx context.Context, _ *expensev1.GetApprova
 
 func purchaseOrderToProto(po *PurchaseOrder) *expensev1.PurchaseOrder {
 	out := &expensev1.PurchaseOrder{
+		PartyId:      partyIDString(po.PartyID),
 		Id:           po.ID.String(),
 		ProductionId: po.ProductionID.String(),
 		TenantId:     po.TenantID.String(),
@@ -647,6 +696,7 @@ func purchaseOrderToProto(po *PurchaseOrder) *expensev1.PurchaseOrder {
 
 func expenseToProto(e *Expense) *expensev1.Expense {
 	out := &expensev1.Expense{
+		PartyId:      partyIDString(e.PartyID),
 		Id:           e.ID.String(),
 		ProductionId: e.ProductionID.String(),
 		TenantId:     e.TenantID.String(),
@@ -733,4 +783,23 @@ func grpcErr(err error) error {
 		return status.Error(codes.FailedPrecondition, "vertical config not found for tenant")
 	}
 	return status.Error(codes.Internal, "internal error")
+}
+
+// parseOptionalPartyID returns nil for an empty party_id and rejects a malformed one.
+func parseOptionalPartyID(s string) (*uuid.UUID, error) {
+	if s == "" {
+		return nil, nil
+	}
+	id, err := uuid.Parse(s)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid party_id")
+	}
+	return &id, nil
+}
+
+func partyIDString(id *uuid.UUID) string {
+	if id == nil {
+		return ""
+	}
+	return id.String()
 }

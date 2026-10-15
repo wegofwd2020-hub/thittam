@@ -581,3 +581,10 @@ func (r *reportingRepo) GetTeamUtilization(_ context.Context, tid uuid.UUID) (*r
 func (r *reportingRepo) GetComplianceStatus(_ context.Context, tid uuid.UUID) (*reporting.ComplianceStatus, error) {
 	return &reporting.ComplianceStatus{TenantID: tid}, nil
 }
+
+func (r *expenseRepo) ListExpensesByParty(_ context.Context, _, _ uuid.UUID, _, _ int) ([]expense.Expense, error) {
+	return nil, nil
+}
+func (r *expenseRepo) ListPurchaseOrdersByParty(_ context.Context, _, _ uuid.UUID, _, _ int) ([]expense.PurchaseOrder, error) {
+	return nil, nil
+}
