@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-10-15T07:12:27+00:00",
+  "generated": "2026-10-16T06:55:43+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -1561,6 +1561,18 @@
     {
       "id": "#260",
       "name": "feat(ledger): tag journal lines to customers and vendors",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#261",
+      "name": "feat(expense): link expenses and purchase orders to customers and vendors",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#262",
+      "name": "feat(ledger): partnership books (Form 1065) + 7xxx dev ports + ledger seed fix",
       "status": "done",
       "commits": 1
     }
