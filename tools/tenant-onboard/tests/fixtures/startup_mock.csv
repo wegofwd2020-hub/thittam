@@ -1,0 +1,14 @@
+date,vendor,reference,description,amount_usd,status,attribution,source,notes
+2026-03-20,Mock Vendor A,MOCK-0001,Hosting,100.00,candidate,100%,JSON,mock
+2026-03-21,Mock Vendor B,MOCK-0002,Shared tool,45.00,candidate,50%,JSON,mock fraction
+2026-03-22,Mock Vendor C,MOCK-0003,Filing,25.00,candidate-verify,100%,Receipt,mock verify
+2026-03-20,Mock Vendor A,MOCK-0001,Hosting,100.00,excluded-duplicate,n/a,JSON,mock duplicate
+2026-03-23,Mock Vendor D,MOCK-0004,Subscription,-10.00,excluded-net-zero,n/a,JSON,mock refund
+2026-04-01,Mock Vendor E,n/a,Fee,150.00,pending-unpaid,100%,JSON,mock pending
+2026-03-24,Michigan Secretary of State (mock),n/a,Counter filing,163.00,candidate,100%,JSON,mock held
+2026-03-25,Mock Vendor F,MOCK-0005,Other,30.00,candidate,0%,JSON,mock zero share
+2026-03-26,Mock Vendor G,MOCK-0006,Shared,20.00,candidate,TBD,JSON,mock tbd
+,Mock Vendor H,MOCK-0007,Bad date,5.00,candidate,100%,JSON,mock missing date
+2026-03-27,Mock Vendor H,MOCK-0008,Bad amount,,candidate,100%,JSON,mock missing amount
+2026-03-27,Mock Vendor H,MOCK-0009,Bad status,5.00,,100%,JSON,mock missing status
+2026-03-28,Mock Vendor H,MOCK-0010,Bad status,5.00,weird-status,100%,JSON,mock unknown status

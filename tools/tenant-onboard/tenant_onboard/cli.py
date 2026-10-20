@@ -7,11 +7,14 @@ Commands
 ``vertical-migration``        write the shared migration for a vertical YAML
 ``check-vertical-migration``  fail if a committed migration drifts from its YAML
 ``hash-password``             prompt for a password and print a bcrypt hash
+``startup-load``              reconcile a start-up expense extract; with --write,
+                              emit draft reimbursable-liability entries
 
 Exit codes
 ----------
-0 success · 1 check failed (drift) · 2 bad input · 3 cannot write output ·
-70 unexpected internal error (re-run with ``--debug`` for a traceback)
+0 success · 1 check failed (drift) · 2 bad input or blocked by a gate ·
+3 cannot write output · 70 unexpected internal error (re-run with ``--debug``
+for a traceback)
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ import argparse
 import difflib
 import getpass
 import sys
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Sequence
 
@@ -27,9 +31,23 @@ from .company import check_against_vertical, load_company
 from .entity import equity_accounts
 from .errors import InputFileError, OnboardError, OutputError, ValidationError
 from .render import render_all, write_files
+from .startup import (
+    V2_CANDIDATE_TOTAL,
+    Plan,
+    Reconciliation,
+    build_entries,
+    classify,
+    owed_member,
+    read_extract,
+    reconcile,
+    render_manifest,
+    render_sql,
+)
 from .vertical import load_vertical, render_migration, render_update_down
 
 EXIT_OK, EXIT_CHECK_FAILED, EXIT_INPUT, EXIT_OUTPUT, EXIT_INTERNAL = 0, 1, 2, 3, 70
+STARTUP_SQL = "005_startup_expenses.sql"
+STARTUP_MANIFEST = "startup_manifest.csv"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -60,7 +78,27 @@ def _build_parser() -> argparse.ArgumentParser:
 
     hp = sub.add_parser("hash-password", help="print a bcrypt hash for the admin password")
     hp.add_argument("--cost", type=int, default=12, help="bcrypt cost (IAM uses 12)")
+
+    sl = sub.add_parser("startup-load", help="load start-up expenses as reimbursable-liability drafts")
+    sl.add_argument("--config", required=True, help="path to company.yaml")
+    sl.add_argument("--local", help="override file (default: company.local.yaml beside --config, if present)")
+    sl.add_argument("--extract", required=True, help="expense extract CSV (never committed)")
+    sl.add_argument("--owed-to", required=True, help="entity.members key owed the reimbursement, e.g. a")
+    sl.add_argument("--expect-total", type=_money_arg, default=V2_CANDIDATE_TOTAL,
+                    help="total to reconcile loadable original amounts against (default: v2 candidate total)")
+    sl.add_argument("--write", action="store_true", help="write the SQL and manifest; default is a dry run")
+    sl.add_argument("--out", help="output directory (required with --write)")
     return p
+
+
+def _money_arg(text: str) -> Decimal:
+    try:
+        value = Decimal(text)
+    except InvalidOperation as exc:
+        raise argparse.ArgumentTypeError(f"not a number: {text!r}") from exc
+    if not value.is_finite() or value < 0:
+        raise argparse.ArgumentTypeError(f"must be a finite, non-negative amount: {text!r}")
+    return value
 
 
 def _load(args: argparse.Namespace):
@@ -153,12 +191,71 @@ def cmd_hash_password(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _print_startup_report(extract: str, plan: Plan, recon: Reconciliation) -> None:
+    print(f"Extract: {extract}")
+    print(f"Loadable: {len(plan.loadable)} · TBD: {len(plan.tbd)} · "
+          f"skipped: {len(plan.skipped)} · rejected: {len(plan.rejections)}")
+    for rej in plan.rejections:
+        print(f"  REJECTED line {rej.line}: {rej.reason}")
+    for sk in plan.skipped:
+        print(f"  SKIPPED  line {sk.line}: {sk.vendor} {sk.reference} ${sk.amount:.2f} — {sk.reason}")
+    for row in plan.tbd:
+        print(f"  TBD      line {row.line}: {row.when.isoformat()} {row.vendor} {row.reference} "
+              f"${row.amount:.2f} — owner must set attribution")
+    for item in plan.loadable:
+        pct = format((item.fraction * 100).normalize(), "f")
+        print(f"  LOAD     line {item.row.line}: {item.row.when.isoformat()} {item.row.vendor} "
+              f"{item.row.reference} ${item.row.amount:.2f} × {pct}% = ${item.company_amount:.2f}")
+    print(f"Candidate total (loadable + TBD, original amounts): ${recon.candidate_total:.2f}")
+    print(f"Loadable original: ${recon.loadable_total:.2f} · company share: ${recon.company_total:.2f}")
+    print(f"Expected: ${recon.expected:.2f} · difference: ${recon.difference:+.2f}")
+
+
+def cmd_startup_load(args: argparse.Namespace) -> int:
+    company = load_company(args.config, args.local)
+    owed_member(company, args.owed_to)  # fail fast on a bad key or missing name
+    rows, rejections = read_extract(args.extract)
+    plan = classify(rows, rejections)
+    recon = reconcile(plan.loadable, plan.tbd, args.expect_total)
+    _print_startup_report(args.extract, plan, recon)
+
+    blockers: list[str] = []
+    if plan.tbd:
+        lines = ", ".join(str(r.line) for r in plan.tbd)
+        blockers.append(f"{len(plan.tbd)} loadable row(s) have attribution TBD (lines {lines}); "
+                        "set each percentage before loading")
+    if not recon.matches:
+        blockers.append(f"loaded total differs from expected by ${recon.difference:+.2f}; "
+                        "reconcile line by line above (nothing forced)")
+    if blockers:
+        for message in blockers:
+            print(f"BLOCKED: {message}", file=sys.stderr)
+        return EXIT_INPUT
+
+    if not args.write:
+        print("READY: dry run, nothing written (add --write and --out to generate the files)")
+        return EXIT_OK
+    if not args.out:
+        print("ERROR: --write requires --out", file=sys.stderr)
+        return EXIT_INPUT
+
+    entries = build_entries(plan.loadable)
+    files = {
+        STARTUP_SQL: render_sql(entries, company, args.owed_to),
+        STARTUP_MANIFEST: render_manifest(entries),
+    }
+    for path in write_files(files, args.out):
+        print(f"wrote {path}")
+    return EXIT_OK
+
+
 _COMMANDS = {
     "validate": cmd_validate,
     "tenant": cmd_tenant,
     "vertical-migration": cmd_vertical_migration,
     "check-vertical-migration": cmd_check_vertical_migration,
     "hash-password": cmd_hash_password,
+    "startup-load": cmd_startup_load,
 }
 
 
