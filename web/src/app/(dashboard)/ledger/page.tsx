@@ -76,7 +76,8 @@ export default function LedgerPage() {
   });
   const entriesQuery = useQuery({
     queryKey: ledgerKeys.entries,
-    queryFn: () => listJournalEntries({ limit: 200 }),
+    // The service caps limit at 100 and silently falls back to 20 above that.
+    queryFn: () => listJournalEntries({ limit: 100 }),
   });
   const trialQuery = useQuery({
     queryKey: ledgerKeys.trial,
