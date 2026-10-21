@@ -252,8 +252,11 @@ func (s *Service) GetJournalEntry(ctx context.Context, tenantID, id uuid.UUID) (
 
 // ListJournalEntries lists journal entries with optional period and status filters.
 func (s *Service) ListJournalEntries(ctx context.Context, tenantID uuid.UUID, periodID *uuid.UUID, status string, limit, offset int) ([]JournalEntry, error) {
-	if limit <= 0 || limit > 100 {
+	switch {
+	case limit <= 0:
 		limit = 20
+	case limit > 100:
+		limit = 100
 	}
 	entries, err := s.repo.ListJournalEntries(ctx, tenantID, periodID, status, limit, offset)
 	if err != nil {

@@ -726,7 +726,7 @@ func TestListJournalEntries_MaxLimitEnforced(t *testing.T) {
 
 	_, err := svc.ListJournalEntries(context.Background(), fixedTenantID, nil, "", 9999, 0)
 	require.NoError(t, err)
-	assert.Equal(t, 20, capturedLimit)
+	assert.Equal(t, 100, capturedLimit)
 }
 
 func TestSeedChartOfAccounts_CreateError(t *testing.T) {
