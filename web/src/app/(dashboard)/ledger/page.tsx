@@ -76,7 +76,8 @@ export default function LedgerPage() {
   });
   const entriesQuery = useQuery({
     queryKey: ledgerKeys.entries,
-    queryFn: () => listJournalEntries({ limit: 200 }),
+    // The service caps limit at 100 and silently falls back to 20 above that.
+    queryFn: () => listJournalEntries({ limit: 100 }),
   });
   const trialQuery = useQuery({
     queryKey: ledgerKeys.trial,
@@ -95,6 +96,7 @@ export default function LedgerPage() {
   const [reference, setReference] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([{ ...EMPTY_LINE }, { ...EMPTY_LINE }]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [postError, setPostError] = useState<string | null>(null);
 
   // ---- Bank account form state ---------------------------------------------
   const [showBankForm, setShowBankForm] = useState(false);
@@ -165,6 +167,15 @@ export default function LedgerPage() {
       queryClient.invalidateQueries({ queryKey: ["ledger"] });
     },
     onError: (err: Error) => setFormError(err.message),
+  });
+
+  // Posts an existing draft. The service validates balance and period, so a
+  // failure comes back as the error text shown above the table.
+  const postEntryMutation = useMutation({
+    mutationFn: (id: string) => postJournalEntry(id),
+    onMutate: () => setPostError(null),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ledger"] }),
+    onError: (err: Error) => setPostError(err.message),
   });
 
   const bankMutation = useMutation({
@@ -294,6 +305,7 @@ export default function LedgerPage() {
   }));
 
   const entryRows = (entriesQuery.data?.entries ?? []).map((e) => ({
+    id: e.id,
     entry_number: e.entry_number,
     narration: e.narration,
     status: e.status,
@@ -352,6 +364,21 @@ export default function LedgerPage() {
     },
     { key: "amount", header: "Amount", type: "number" },
     { key: "lines", header: "Lines", type: "number" },
+    {
+      key: "action",
+      header: "",
+      render: (row) =>
+        row.status === "draft" ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={postEntryMutation.isPending}
+            onClick={() => postEntryMutation.mutate(String(row.id))}
+          >
+            Post
+          </Button>
+        ) : null,
+    },
   ];
   const trialColumns: Column<Record<string, unknown>>[] = [
     { key: "code", header: "Code" },
@@ -586,6 +613,7 @@ export default function LedgerPage() {
             {formError && <p className="text-sm text-red-700">{formError}</p>}
           </section>
 
+          {postError && <p className="text-sm text-red-700">{postError}</p>}
           <DataTable<Record<string, unknown>>
             columns={entryColumns}
             data={entryRows}
