@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-10-21T07:21:21+00:00",
+  "generated": "2026-10-22T07:22:08+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -1585,8 +1585,26 @@
     {
       "id": "#264",
       "name": "feat(ledger): post draft journal entries from the list",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#265",
+      "name": "Vulnerabilities detected in dependencies (2026-10-21)",
       "status": "pending",
       "commits": 0
+    },
+    {
+      "id": "#266",
+      "name": "fix(ledger): cap journal entry list limit at 100 instead of 20",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#267",
+      "name": "chore(infra): bump CI Go toolchain to 1.26.10",
+      "status": "done",
+      "commits": 1
     }
   ]
 }
