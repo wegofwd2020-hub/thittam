@@ -485,6 +485,12 @@ func (r *ledgerRepo) ListParties(_ context.Context, _ uuid.UUID, _ string, _ boo
 	return nil, nil
 }
 func (r *ledgerRepo) UpdateParty(_ context.Context, _ *ledger.Party) error { return nil }
+func (r *ledgerRepo) SetAccountCostBehavior(_ context.Context, _, _ uuid.UUID, _ string) (*ledger.Account, error) {
+	return nil, nil
+}
+func (r *ledgerRepo) GetMonthlyCostBehavior(_ context.Context, _ uuid.UUID, _, _ string) ([]ledger.MonthlyCostBehaviorRow, error) {
+	return nil, nil
+}
 func (r *ledgerRepo) ListPartyLedgerLines(_ context.Context, _, _ uuid.UUID) ([]ledger.PartyLedgerLine, error) {
 	return nil, nil
 }

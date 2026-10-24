@@ -460,6 +460,86 @@ func local_request_LedgerService_ListJournalEntries_0(ctx context.Context, marsh
 	return msg, metadata, err
 }
 
+func request_LedgerService_SetAccountCostBehavior_0(ctx context.Context, marshaler runtime.Marshaler, client LedgerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SetAccountCostBehaviorRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
+	}
+	protoReq.Id, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+	}
+	msg, err := client.SetAccountCostBehavior(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_LedgerService_SetAccountCostBehavior_0(ctx context.Context, marshaler runtime.Marshaler, server LedgerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SetAccountCostBehaviorRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
+	}
+	protoReq.Id, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+	}
+	msg, err := server.SetAccountCostBehavior(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+var filter_LedgerService_GetMonthlyCostBehavior_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+
+func request_LedgerService_GetMonthlyCostBehavior_0(ctx context.Context, marshaler runtime.Marshaler, client LedgerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetMonthlyCostBehaviorRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_LedgerService_GetMonthlyCostBehavior_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.GetMonthlyCostBehavior(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_LedgerService_GetMonthlyCostBehavior_0(ctx context.Context, marshaler runtime.Marshaler, server LedgerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetMonthlyCostBehaviorRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_LedgerService_GetMonthlyCostBehavior_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.GetMonthlyCostBehavior(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 var filter_LedgerService_GetTrialBalance_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
 
 func request_LedgerService_GetTrialBalance_0(ctx context.Context, marshaler runtime.Marshaler, client LedgerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -721,6 +801,46 @@ func RegisterLedgerServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		}
 		forward_LedgerService_ListJournalEntries_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPut, pattern_LedgerService_SetAccountCostBehavior_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/thittam.ledger.v1.LedgerService/SetAccountCostBehavior", runtime.WithHTTPPathPattern("/api/v1/ledger/accounts/{id}/cost-behavior"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_LedgerService_SetAccountCostBehavior_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_LedgerService_SetAccountCostBehavior_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_LedgerService_GetMonthlyCostBehavior_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/thittam.ledger.v1.LedgerService/GetMonthlyCostBehavior", runtime.WithHTTPPathPattern("/api/v1/ledger/reports/monthly-cost-behavior"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_LedgerService_GetMonthlyCostBehavior_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_LedgerService_GetMonthlyCostBehavior_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_LedgerService_GetTrialBalance_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -968,6 +1088,40 @@ func RegisterLedgerServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		}
 		forward_LedgerService_ListJournalEntries_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPut, pattern_LedgerService_SetAccountCostBehavior_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/thittam.ledger.v1.LedgerService/SetAccountCostBehavior", runtime.WithHTTPPathPattern("/api/v1/ledger/accounts/{id}/cost-behavior"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_LedgerService_SetAccountCostBehavior_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_LedgerService_SetAccountCostBehavior_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_LedgerService_GetMonthlyCostBehavior_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/thittam.ledger.v1.LedgerService/GetMonthlyCostBehavior", runtime.WithHTTPPathPattern("/api/v1/ledger/reports/monthly-cost-behavior"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_LedgerService_GetMonthlyCostBehavior_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_LedgerService_GetMonthlyCostBehavior_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_LedgerService_GetTrialBalance_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -989,31 +1143,35 @@ func RegisterLedgerServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 }
 
 var (
-	pattern_LedgerService_CreateAccount_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "accounts"}, ""))
-	pattern_LedgerService_ListAccounts_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "accounts"}, ""))
-	pattern_LedgerService_CreateParty_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "parties"}, ""))
-	pattern_LedgerService_GetParty_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "ledger", "parties", "id"}, ""))
-	pattern_LedgerService_ListParties_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "parties"}, ""))
-	pattern_LedgerService_UpdateParty_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "ledger", "parties", "id"}, ""))
-	pattern_LedgerService_ListPartyTransactions_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "ledger", "parties", "party_id", "transactions"}, ""))
-	pattern_LedgerService_ListAccountingPeriods_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "periods"}, ""))
-	pattern_LedgerService_CreateJournalEntry_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "journal-entries"}, ""))
-	pattern_LedgerService_PostJournalEntry_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "ledger", "journal-entries", "id", "post"}, ""))
-	pattern_LedgerService_ListJournalEntries_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "journal-entries"}, ""))
-	pattern_LedgerService_GetTrialBalance_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "trial-balance"}, ""))
+	pattern_LedgerService_CreateAccount_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "accounts"}, ""))
+	pattern_LedgerService_ListAccounts_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "accounts"}, ""))
+	pattern_LedgerService_CreateParty_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "parties"}, ""))
+	pattern_LedgerService_GetParty_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "ledger", "parties", "id"}, ""))
+	pattern_LedgerService_ListParties_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "parties"}, ""))
+	pattern_LedgerService_UpdateParty_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "ledger", "parties", "id"}, ""))
+	pattern_LedgerService_ListPartyTransactions_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "ledger", "parties", "party_id", "transactions"}, ""))
+	pattern_LedgerService_ListAccountingPeriods_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "periods"}, ""))
+	pattern_LedgerService_CreateJournalEntry_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "journal-entries"}, ""))
+	pattern_LedgerService_PostJournalEntry_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "ledger", "journal-entries", "id", "post"}, ""))
+	pattern_LedgerService_ListJournalEntries_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "journal-entries"}, ""))
+	pattern_LedgerService_SetAccountCostBehavior_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v1", "ledger", "accounts", "id", "cost-behavior"}, ""))
+	pattern_LedgerService_GetMonthlyCostBehavior_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "ledger", "reports", "monthly-cost-behavior"}, ""))
+	pattern_LedgerService_GetTrialBalance_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "ledger", "trial-balance"}, ""))
 )
 
 var (
-	forward_LedgerService_CreateAccount_0         = runtime.ForwardResponseMessage
-	forward_LedgerService_ListAccounts_0          = runtime.ForwardResponseMessage
-	forward_LedgerService_CreateParty_0           = runtime.ForwardResponseMessage
-	forward_LedgerService_GetParty_0              = runtime.ForwardResponseMessage
-	forward_LedgerService_ListParties_0           = runtime.ForwardResponseMessage
-	forward_LedgerService_UpdateParty_0           = runtime.ForwardResponseMessage
-	forward_LedgerService_ListPartyTransactions_0 = runtime.ForwardResponseMessage
-	forward_LedgerService_ListAccountingPeriods_0 = runtime.ForwardResponseMessage
-	forward_LedgerService_CreateJournalEntry_0    = runtime.ForwardResponseMessage
-	forward_LedgerService_PostJournalEntry_0      = runtime.ForwardResponseMessage
-	forward_LedgerService_ListJournalEntries_0    = runtime.ForwardResponseMessage
-	forward_LedgerService_GetTrialBalance_0       = runtime.ForwardResponseMessage
+	forward_LedgerService_CreateAccount_0          = runtime.ForwardResponseMessage
+	forward_LedgerService_ListAccounts_0           = runtime.ForwardResponseMessage
+	forward_LedgerService_CreateParty_0            = runtime.ForwardResponseMessage
+	forward_LedgerService_GetParty_0               = runtime.ForwardResponseMessage
+	forward_LedgerService_ListParties_0            = runtime.ForwardResponseMessage
+	forward_LedgerService_UpdateParty_0            = runtime.ForwardResponseMessage
+	forward_LedgerService_ListPartyTransactions_0  = runtime.ForwardResponseMessage
+	forward_LedgerService_ListAccountingPeriods_0  = runtime.ForwardResponseMessage
+	forward_LedgerService_CreateJournalEntry_0     = runtime.ForwardResponseMessage
+	forward_LedgerService_PostJournalEntry_0       = runtime.ForwardResponseMessage
+	forward_LedgerService_ListJournalEntries_0     = runtime.ForwardResponseMessage
+	forward_LedgerService_SetAccountCostBehavior_0 = runtime.ForwardResponseMessage
+	forward_LedgerService_GetMonthlyCostBehavior_0 = runtime.ForwardResponseMessage
+	forward_LedgerService_GetTrialBalance_0        = runtime.ForwardResponseMessage
 )

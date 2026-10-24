@@ -29,6 +29,12 @@ WHERE tenant_id = $1 AND ($2 = '' OR account_type = $2) AND is_active = true
 ORDER BY code ASC
 LIMIT $3 OFFSET $4;
 
+-- name: SetAccountCostBehavior :one
+-- $3 NULL clears the classification. Tenant-scoped through the WHERE clause.
+UPDATE accounts SET cost_behavior = $3
+WHERE id = $1 AND tenant_id = $2
+RETURNING *;
+
 -- name: CreateAccountingPeriod :one
 INSERT INTO accounting_periods (id, tenant_id, year, month, status)
 VALUES ($1, $2, $3, $4, $5)

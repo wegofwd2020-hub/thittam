@@ -330,6 +330,69 @@ func (s *Service) GetTrialBalance(ctx context.Context, tenantID uuid.UUID, asOf 
 	return entries, nil
 }
 
+// SetAccountCostBehavior classifies an expense account as fixed or variable.
+// An empty costBehavior clears the classification back to unclassified.
+func (s *Service) SetAccountCostBehavior(ctx context.Context, tenantID, id uuid.UUID, costBehavior string) (*Account, error) {
+	switch costBehavior {
+	case "", "fixed", "variable":
+	default:
+		return nil, ErrCostBehaviorInvalid
+	}
+	acct, err := s.repo.GetAccountByID(ctx, tenantID, id)
+	if err != nil {
+		return nil, fmt.Errorf("ledger: set cost behavior: %w", err)
+	}
+	if acct.AccountType != "expense" {
+		return nil, ErrCostBehaviorNotExpense
+	}
+	updated, err := s.repo.SetAccountCostBehavior(ctx, tenantID, id, costBehavior)
+	if err != nil {
+		return nil, fmt.Errorf("ledger: set cost behavior: %w", err)
+	}
+	return updated, nil
+}
+
+// GetMonthlyCostBehavior returns fixed vs variable expense per month for
+// fromMonth..toMonth inclusive. Both bounds are "YYYY-MM"; the range is capped
+// at 36 months to keep the report bounded.
+func (s *Service) GetMonthlyCostBehavior(ctx context.Context, tenantID uuid.UUID, fromMonth, toMonth string) ([]MonthlyCostBehaviorRow, error) {
+	from, errFrom := time.Parse("2006-01", fromMonth)
+	to, errTo := time.Parse("2006-01", toMonth)
+	if errFrom != nil || errTo != nil || from.After(to) {
+		return nil, ErrMonthRangeInvalid
+	}
+	if months := (to.Year()-from.Year())*12 + int(to.Month()-from.Month()) + 1; months > 36 {
+		return nil, ErrMonthRangeInvalid
+	}
+	rows, err := s.repo.GetMonthlyCostBehavior(ctx, tenantID, fromMonth, toMonth)
+	if err != nil {
+		return nil, fmt.Errorf("ledger: monthly cost behavior: %w", err)
+	}
+
+	// Months with no postings are absent from the query; emit them as zero so
+	// the report has one row per month in range.
+	byMonth := make(map[string]MonthlyCostBehaviorRow, len(rows))
+	for _, r := range rows {
+		byMonth[r.Month] = r
+	}
+	out := make([]MonthlyCostBehaviorRow, 0, 36)
+	for m := from; !m.After(to); m = m.AddDate(0, 1, 0) {
+		key := m.Format("2006-01")
+		r, ok := byMonth[key]
+		if !ok {
+			r = MonthlyCostBehaviorRow{
+				Month:        key,
+				Fixed:        decimal.Zero,
+				Variable:     decimal.Zero,
+				Unclassified: decimal.Zero,
+				Total:        decimal.Zero,
+			}
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
 // --- Helpers ---
 
 func validateBalance(lines []JournalLine) error {

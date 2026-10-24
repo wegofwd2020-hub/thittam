@@ -27,6 +27,8 @@ var (
 // --- Mock Repository ---
 
 type mockRepo struct {
+	setCostBehaviorFn     func(ctx context.Context, tenantID, id uuid.UUID, costBehavior string) (*Account, error)
+	monthlyCostBehaviorFn func(ctx context.Context, tenantID uuid.UUID, fromMonth, toMonth string) ([]MonthlyCostBehaviorRow, error)
 	createAccountFn       func(ctx context.Context, account *Account) error
 	nextBankCodeFn        func(ctx context.Context, tenantID uuid.UUID) (int, error)
 	createPartyFn         func(ctx context.Context, p *Party) error
@@ -89,6 +91,18 @@ func (m *mockRepo) UpdateParty(ctx context.Context, p *Party) error {
 func (m *mockRepo) ListPartyLedgerLines(ctx context.Context, tenantID, partyID uuid.UUID) ([]PartyLedgerLine, error) {
 	if m.listPartyLinesFn != nil {
 		return m.listPartyLinesFn(ctx, tenantID, partyID)
+	}
+	return nil, nil
+}
+func (m *mockRepo) SetAccountCostBehavior(ctx context.Context, tenantID, id uuid.UUID, costBehavior string) (*Account, error) {
+	if m.setCostBehaviorFn != nil {
+		return m.setCostBehaviorFn(ctx, tenantID, id, costBehavior)
+	}
+	return &Account{ID: id, TenantID: tenantID, AccountType: "expense", CostBehavior: costBehavior}, nil
+}
+func (m *mockRepo) GetMonthlyCostBehavior(ctx context.Context, tenantID uuid.UUID, fromMonth, toMonth string) ([]MonthlyCostBehaviorRow, error) {
+	if m.monthlyCostBehaviorFn != nil {
+		return m.monthlyCostBehaviorFn(ctx, tenantID, fromMonth, toMonth)
 	}
 	return nil, nil
 }
