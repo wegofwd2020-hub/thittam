@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PartyRolodex } from "@/components/ledger/party-rolodex";
+import { CostBehaviorReport } from "@/components/ledger/cost-behavior-report";
 import {
   createBankAccount,
   createJournalEntry,
@@ -404,6 +405,7 @@ export default function LedgerPage() {
           <TabsTrigger value="entries">Journal entries</TabsTrigger>
           <TabsTrigger value="accounts">Accounts</TabsTrigger>
           <TabsTrigger value="trial">Trial balance</TabsTrigger>
+          <TabsTrigger value="cost-behavior">Fixed vs variable</TabsTrigger>
           <TabsTrigger value="parties">Customers &amp; vendors</TabsTrigger>
         </TabsList>
 
@@ -816,6 +818,10 @@ export default function LedgerPage() {
                 : "No posted entries yet."
             }
           />
+        </TabsContent>
+
+        <TabsContent value="cost-behavior" className="pt-4">
+          <CostBehaviorReport />
         </TabsContent>
       </Tabs>
     </div>

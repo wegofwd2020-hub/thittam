@@ -26,24 +26,26 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	LedgerService_CreateAccount_FullMethodName         = "/thittam.ledger.v1.LedgerService/CreateAccount"
-	LedgerService_GetAccount_FullMethodName            = "/thittam.ledger.v1.LedgerService/GetAccount"
-	LedgerService_ListAccounts_FullMethodName          = "/thittam.ledger.v1.LedgerService/ListAccounts"
-	LedgerService_CreateParty_FullMethodName           = "/thittam.ledger.v1.LedgerService/CreateParty"
-	LedgerService_GetParty_FullMethodName              = "/thittam.ledger.v1.LedgerService/GetParty"
-	LedgerService_ListParties_FullMethodName           = "/thittam.ledger.v1.LedgerService/ListParties"
-	LedgerService_UpdateParty_FullMethodName           = "/thittam.ledger.v1.LedgerService/UpdateParty"
-	LedgerService_ListPartyTransactions_FullMethodName = "/thittam.ledger.v1.LedgerService/ListPartyTransactions"
-	LedgerService_SeedChartOfAccounts_FullMethodName   = "/thittam.ledger.v1.LedgerService/SeedChartOfAccounts"
-	LedgerService_ListAccountingPeriods_FullMethodName = "/thittam.ledger.v1.LedgerService/ListAccountingPeriods"
-	LedgerService_OpenAccountingPeriod_FullMethodName  = "/thittam.ledger.v1.LedgerService/OpenAccountingPeriod"
-	LedgerService_CloseAccountingPeriod_FullMethodName = "/thittam.ledger.v1.LedgerService/CloseAccountingPeriod"
-	LedgerService_CreateJournalEntry_FullMethodName    = "/thittam.ledger.v1.LedgerService/CreateJournalEntry"
-	LedgerService_PostJournalEntry_FullMethodName      = "/thittam.ledger.v1.LedgerService/PostJournalEntry"
-	LedgerService_GetJournalEntry_FullMethodName       = "/thittam.ledger.v1.LedgerService/GetJournalEntry"
-	LedgerService_ListJournalEntries_FullMethodName    = "/thittam.ledger.v1.LedgerService/ListJournalEntries"
-	LedgerService_VoidJournalEntry_FullMethodName      = "/thittam.ledger.v1.LedgerService/VoidJournalEntry"
-	LedgerService_GetTrialBalance_FullMethodName       = "/thittam.ledger.v1.LedgerService/GetTrialBalance"
+	LedgerService_CreateAccount_FullMethodName          = "/thittam.ledger.v1.LedgerService/CreateAccount"
+	LedgerService_GetAccount_FullMethodName             = "/thittam.ledger.v1.LedgerService/GetAccount"
+	LedgerService_ListAccounts_FullMethodName           = "/thittam.ledger.v1.LedgerService/ListAccounts"
+	LedgerService_CreateParty_FullMethodName            = "/thittam.ledger.v1.LedgerService/CreateParty"
+	LedgerService_GetParty_FullMethodName               = "/thittam.ledger.v1.LedgerService/GetParty"
+	LedgerService_ListParties_FullMethodName            = "/thittam.ledger.v1.LedgerService/ListParties"
+	LedgerService_UpdateParty_FullMethodName            = "/thittam.ledger.v1.LedgerService/UpdateParty"
+	LedgerService_ListPartyTransactions_FullMethodName  = "/thittam.ledger.v1.LedgerService/ListPartyTransactions"
+	LedgerService_SeedChartOfAccounts_FullMethodName    = "/thittam.ledger.v1.LedgerService/SeedChartOfAccounts"
+	LedgerService_ListAccountingPeriods_FullMethodName  = "/thittam.ledger.v1.LedgerService/ListAccountingPeriods"
+	LedgerService_OpenAccountingPeriod_FullMethodName   = "/thittam.ledger.v1.LedgerService/OpenAccountingPeriod"
+	LedgerService_CloseAccountingPeriod_FullMethodName  = "/thittam.ledger.v1.LedgerService/CloseAccountingPeriod"
+	LedgerService_CreateJournalEntry_FullMethodName     = "/thittam.ledger.v1.LedgerService/CreateJournalEntry"
+	LedgerService_PostJournalEntry_FullMethodName       = "/thittam.ledger.v1.LedgerService/PostJournalEntry"
+	LedgerService_GetJournalEntry_FullMethodName        = "/thittam.ledger.v1.LedgerService/GetJournalEntry"
+	LedgerService_ListJournalEntries_FullMethodName     = "/thittam.ledger.v1.LedgerService/ListJournalEntries"
+	LedgerService_VoidJournalEntry_FullMethodName       = "/thittam.ledger.v1.LedgerService/VoidJournalEntry"
+	LedgerService_SetAccountCostBehavior_FullMethodName = "/thittam.ledger.v1.LedgerService/SetAccountCostBehavior"
+	LedgerService_GetMonthlyCostBehavior_FullMethodName = "/thittam.ledger.v1.LedgerService/GetMonthlyCostBehavior"
+	LedgerService_GetTrialBalance_FullMethodName        = "/thittam.ledger.v1.LedgerService/GetTrialBalance"
 )
 
 // LedgerServiceClient is the client API for LedgerService service.
@@ -77,7 +79,13 @@ type LedgerServiceClient interface {
 	// VoidJournalEntry marks a posted entry as void and automatically creates
 	// and posts a reversing entry. Returns the reversing entry.
 	VoidJournalEntry(ctx context.Context, in *VoidJournalEntryRequest, opts ...grpc.CallOption) (*JournalEntry, error)
+	// SetAccountCostBehavior classifies an expense account as fixed or variable.
+	// An empty cost_behavior clears the classification.
+	SetAccountCostBehavior(ctx context.Context, in *SetAccountCostBehaviorRequest, opts ...grpc.CallOption) (*Account, error)
 	// --- Reports ---
+	// GetMonthlyCostBehavior returns posted expense spend per month, split into
+	// fixed, variable, and unclassified. Months are inclusive "YYYY-MM" bounds.
+	GetMonthlyCostBehavior(ctx context.Context, in *GetMonthlyCostBehaviorRequest, opts ...grpc.CallOption) (*GetMonthlyCostBehaviorResponse, error)
 	GetTrialBalance(ctx context.Context, in *GetTrialBalanceRequest, opts ...grpc.CallOption) (*GetTrialBalanceResponse, error)
 }
 
@@ -242,6 +250,24 @@ func (c *ledgerServiceClient) VoidJournalEntry(ctx context.Context, in *VoidJour
 	return out, nil
 }
 
+func (c *ledgerServiceClient) SetAccountCostBehavior(ctx context.Context, in *SetAccountCostBehaviorRequest, opts ...grpc.CallOption) (*Account, error) {
+	out := new(Account)
+	err := c.cc.Invoke(ctx, LedgerService_SetAccountCostBehavior_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ledgerServiceClient) GetMonthlyCostBehavior(ctx context.Context, in *GetMonthlyCostBehaviorRequest, opts ...grpc.CallOption) (*GetMonthlyCostBehaviorResponse, error) {
+	out := new(GetMonthlyCostBehaviorResponse)
+	err := c.cc.Invoke(ctx, LedgerService_GetMonthlyCostBehavior_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *ledgerServiceClient) GetTrialBalance(ctx context.Context, in *GetTrialBalanceRequest, opts ...grpc.CallOption) (*GetTrialBalanceResponse, error) {
 	out := new(GetTrialBalanceResponse)
 	err := c.cc.Invoke(ctx, LedgerService_GetTrialBalance_FullMethodName, in, out, opts...)
@@ -282,7 +308,13 @@ type LedgerServiceServer interface {
 	// VoidJournalEntry marks a posted entry as void and automatically creates
 	// and posts a reversing entry. Returns the reversing entry.
 	VoidJournalEntry(context.Context, *VoidJournalEntryRequest) (*JournalEntry, error)
+	// SetAccountCostBehavior classifies an expense account as fixed or variable.
+	// An empty cost_behavior clears the classification.
+	SetAccountCostBehavior(context.Context, *SetAccountCostBehaviorRequest) (*Account, error)
 	// --- Reports ---
+	// GetMonthlyCostBehavior returns posted expense spend per month, split into
+	// fixed, variable, and unclassified. Months are inclusive "YYYY-MM" bounds.
+	GetMonthlyCostBehavior(context.Context, *GetMonthlyCostBehaviorRequest) (*GetMonthlyCostBehaviorResponse, error)
 	GetTrialBalance(context.Context, *GetTrialBalanceRequest) (*GetTrialBalanceResponse, error)
 	mustEmbedUnimplementedLedgerServiceServer()
 }
@@ -341,6 +373,12 @@ func (UnimplementedLedgerServiceServer) ListJournalEntries(context.Context, *Lis
 }
 func (UnimplementedLedgerServiceServer) VoidJournalEntry(context.Context, *VoidJournalEntryRequest) (*JournalEntry, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VoidJournalEntry not implemented")
+}
+func (UnimplementedLedgerServiceServer) SetAccountCostBehavior(context.Context, *SetAccountCostBehaviorRequest) (*Account, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetAccountCostBehavior not implemented")
+}
+func (UnimplementedLedgerServiceServer) GetMonthlyCostBehavior(context.Context, *GetMonthlyCostBehaviorRequest) (*GetMonthlyCostBehaviorResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetMonthlyCostBehavior not implemented")
 }
 func (UnimplementedLedgerServiceServer) GetTrialBalance(context.Context, *GetTrialBalanceRequest) (*GetTrialBalanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTrialBalance not implemented")
@@ -664,6 +702,42 @@ func _LedgerService_VoidJournalEntry_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LedgerService_SetAccountCostBehavior_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetAccountCostBehaviorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LedgerServiceServer).SetAccountCostBehavior(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LedgerService_SetAccountCostBehavior_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LedgerServiceServer).SetAccountCostBehavior(ctx, req.(*SetAccountCostBehaviorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LedgerService_GetMonthlyCostBehavior_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMonthlyCostBehaviorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LedgerServiceServer).GetMonthlyCostBehavior(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LedgerService_GetMonthlyCostBehavior_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LedgerServiceServer).GetMonthlyCostBehavior(ctx, req.(*GetMonthlyCostBehaviorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _LedgerService_GetTrialBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetTrialBalanceRequest)
 	if err := dec(in); err != nil {
@@ -756,6 +830,14 @@ var LedgerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VoidJournalEntry",
 			Handler:    _LedgerService_VoidJournalEntry_Handler,
+		},
+		{
+			MethodName: "SetAccountCostBehavior",
+			Handler:    _LedgerService_SetAccountCostBehavior_Handler,
+		},
+		{
+			MethodName: "GetMonthlyCostBehavior",
+			Handler:    _LedgerService_GetMonthlyCostBehavior_Handler,
 		},
 		{
 			MethodName: "GetTrialBalance",

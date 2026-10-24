@@ -279,6 +279,95 @@ func (p *Postgres) ListAccounts(ctx context.Context, tenantID uuid.UUID, limit, 
 	return result, nil
 }
 
+// SetAccountCostBehavior sets or clears an account's fixed/variable tag.
+// An empty costBehavior stores NULL (unclassified).
+func (p *Postgres) SetAccountCostBehavior(ctx context.Context, tenantID, id uuid.UUID, costBehavior string) (*ledger.Account, error) {
+	row, err := p.q.SetAccountCostBehavior(ctx, SetAccountCostBehaviorParams{
+		ID:           id,
+		TenantID:     tenantID,
+		CostBehavior: pgTextFromString(costBehavior),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ledger.ErrAccountNotFound
+		}
+		return nil, fmt.Errorf("ledger: set cost behavior: %w", err)
+	}
+	return accountFromDB(row), nil
+}
+
+// GetMonthlyCostBehavior sums posted expense lines by posting month and cost
+// behavior. Only months with activity are returned; the service fills gaps.
+// Both account and entry are tenant-scoped.
+func (p *Postgres) GetMonthlyCostBehavior(ctx context.Context, tenantID uuid.UUID, fromMonth, toMonth string) ([]ledger.MonthlyCostBehaviorRow, error) {
+	const sql = `
+SELECT
+    to_char(je.posted_at AT TIME ZONE 'UTC', 'YYYY-MM') AS month,
+    COALESCE(a.cost_behavior, 'unclassified')          AS behavior,
+    COALESCE(SUM(jl.debit_amount - jl.credit_amount), 0) AS net
+FROM journal_lines jl
+JOIN journal_entries je ON je.id = jl.journal_id
+JOIN accounts a         ON a.id = jl.account_id
+WHERE je.tenant_id = $1
+  AND a.tenant_id = $1
+  AND je.status = 'posted'
+  AND je.posted_at IS NOT NULL
+  AND a.account_type = 'expense'
+  AND to_char(je.posted_at AT TIME ZONE 'UTC', 'YYYY-MM') BETWEEN $2 AND $3
+GROUP BY 1, 2
+ORDER BY 1`
+
+	rows, err := p.db.Query(ctx, sql, tenantID, fromMonth, toMonth)
+	if err != nil {
+		return nil, fmt.Errorf("ledger: monthly cost behavior: %w", err)
+	}
+	defer rows.Close()
+
+	byMonth := map[string]*ledger.MonthlyCostBehaviorRow{}
+	var order []string
+	for rows.Next() {
+		var (
+			month    string
+			behavior string
+			netNum   pgtype.Numeric
+		)
+		if err := rows.Scan(&month, &behavior, &netNum); err != nil {
+			return nil, fmt.Errorf("ledger: scan monthly cost behavior: %w", err)
+		}
+		r, ok := byMonth[month]
+		if !ok {
+			r = &ledger.MonthlyCostBehaviorRow{
+				Month:        month,
+				Fixed:        decimal.Zero,
+				Variable:     decimal.Zero,
+				Unclassified: decimal.Zero,
+				Total:        decimal.Zero,
+			}
+			byMonth[month] = r
+			order = append(order, month)
+		}
+		amt := decimalFromPgNumeric(netNum)
+		switch behavior {
+		case "fixed":
+			r.Fixed = r.Fixed.Add(amt)
+		case "variable":
+			r.Variable = r.Variable.Add(amt)
+		default:
+			r.Unclassified = r.Unclassified.Add(amt)
+		}
+		r.Total = r.Total.Add(amt)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("ledger: monthly cost behavior rows: %w", err)
+	}
+
+	out := make([]ledger.MonthlyCostBehaviorRow, 0, len(order))
+	for _, m := range order {
+		out = append(out, *byMonth[m])
+	}
+	return out, nil
+}
+
 // --- Accounting Periods ---
 
 func (p *Postgres) CreatePeriod(ctx context.Context, period *ledger.AccountingPeriod) error {
@@ -593,6 +682,7 @@ func accountFromDB(row Account) *ledger.Account {
 		BankName:     stringFromPgText(row.BankName),
 		AccountLast4: stringFromPgText(row.AccountLast4),
 		BankCurrency: stringFromPgText(row.BankCurrency),
+		CostBehavior: stringFromPgText(row.CostBehavior),
 	}
 	if row.ParentID.Valid {
 		id := uuid.UUID(row.ParentID.Bytes)

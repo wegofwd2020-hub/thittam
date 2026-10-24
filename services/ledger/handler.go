@@ -470,6 +470,60 @@ func (h *Handler) GetTrialBalance(ctx context.Context, req *ledgerv1.GetTrialBal
 	return &ledgerv1.GetTrialBalanceResponse{Entries: out}, nil
 }
 
+// SetAccountCostBehavior is admin-only: the tag changes how spend is reported,
+// so it is treated like other chart-of-accounts configuration.
+func (h *Handler) SetAccountCostBehavior(ctx context.Context, req *ledgerv1.SetAccountCostBehaviorRequest) (*ledgerv1.Account, error) {
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
+	if err != nil {
+		return nil, err
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerAdmin); err != nil {
+		return nil, err
+	}
+
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid account ID")
+	}
+
+	account, err := h.svc.SetAccountCostBehavior(ctx, tenantID, id, req.GetCostBehavior())
+	if err != nil {
+		return nil, grpcErr(err)
+	}
+	return accountToProto(account), nil
+}
+
+// --- Monthly cost behavior ---
+
+func (h *Handler) GetMonthlyCostBehavior(ctx context.Context, req *ledgerv1.GetMonthlyCostBehaviorRequest) (*ledgerv1.GetMonthlyCostBehaviorResponse, error) {
+	tenantID, err := interceptor.TenantFromRequest(ctx, req.GetTenantId())
+	if err != nil {
+		return nil, err
+	}
+
+	if err := interceptor.RequirePermission(ctx, h.perm, permLedgerRead); err != nil {
+		return nil, err
+	}
+
+	rows, err := h.svc.GetMonthlyCostBehavior(ctx, tenantID, req.GetFromMonth(), req.GetToMonth())
+	if err != nil {
+		return nil, grpcErr(err)
+	}
+
+	out := make([]*ledgerv1.MonthlyCostBehavior, len(rows))
+	for i, r := range rows {
+		out[i] = &ledgerv1.MonthlyCostBehavior{
+			Month:        r.Month,
+			Fixed:        r.Fixed.StringFixed(2),
+			Variable:     r.Variable.StringFixed(2),
+			Unclassified: r.Unclassified.StringFixed(2),
+			Total:        r.Total.StringFixed(2),
+		}
+	}
+	return &ledgerv1.GetMonthlyCostBehaviorResponse{Months: out}, nil
+}
+
 // --- proto conversion helpers ---
 
 // --- Parties ---
@@ -625,6 +679,7 @@ func accountToProto(a *Account) *ledgerv1.Account {
 		BankName:     a.BankName,
 		AccountLast4: a.AccountLast4,
 		BankCurrency: a.BankCurrency,
+		CostBehavior: a.CostBehavior,
 	}
 	if a.ParentID != nil {
 		out.ParentId = a.ParentID.String()
@@ -702,6 +757,10 @@ func grpcErr(err error) error {
 		errors.Is(err, ErrAccountNumberInvalid),
 		errors.Is(err, ErrBankCurrencyInvalid),
 		errors.Is(err, ErrBankAccountNotAsset):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, ErrCostBehaviorInvalid),
+		errors.Is(err, ErrCostBehaviorNotExpense),
+		errors.Is(err, ErrMonthRangeInvalid):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, ErrNoBankCodeAvailable):
 		return status.Error(codes.FailedPrecondition, err.Error())

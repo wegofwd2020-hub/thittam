@@ -17,6 +17,12 @@ type Repository interface {
 	// NextBankAccountCode returns the highest existing 1xxx account code for the
 	// tenant as an integer, or 0 when there is none.
 	NextBankAccountCode(ctx context.Context, tenantID uuid.UUID) (int, error)
+	// SetAccountCostBehavior sets or clears (empty string) an account's
+	// fixed/variable classification and returns the updated account.
+	SetAccountCostBehavior(ctx context.Context, tenantID, id uuid.UUID, costBehavior string) (*Account, error)
+	// GetMonthlyCostBehavior returns posted expense postings grouped by month
+	// and cost behavior, for months fromMonth..toMonth inclusive ("YYYY-MM").
+	GetMonthlyCostBehavior(ctx context.Context, tenantID uuid.UUID, fromMonth, toMonth string) ([]MonthlyCostBehaviorRow, error)
 
 	// Parties (customers and suppliers)
 	CreateParty(ctx context.Context, p *Party) error

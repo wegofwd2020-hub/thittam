@@ -23,6 +23,9 @@ type Account struct {
 	// Bank accounts only. AccountLast4 is the sole stored form of the number.
 	BankName     string `json:"bank_name,omitempty"`
 	AccountLast4 string `json:"account_last4,omitempty"`
+	// CostBehavior classifies an expense account as "fixed" or "variable".
+	// Empty means unclassified. Only expense accounts are meaningful here.
+	CostBehavior string `json:"cost_behavior,omitempty"`
 	BankCurrency string `json:"bank_currency,omitempty"`
 }
 
@@ -77,4 +80,16 @@ type TrialBalanceEntry struct {
 	Debit       decimal.Decimal `json:"debit"`
 	Credit      decimal.Decimal `json:"credit"`
 	Balance     decimal.Decimal `json:"balance"` // Debit − Credit
+}
+
+// MonthlyCostBehaviorRow is one month of expense postings split by cost
+// behavior. Amounts are net debit (debit − credit) on posted expense lines,
+// bucketed by the month the entry was posted. Unclassified holds expense
+// lines whose account has no cost behavior, so the buckets sum to Total.
+type MonthlyCostBehaviorRow struct {
+	Month        string          `json:"month"` // "2026-01"
+	Fixed        decimal.Decimal `json:"fixed"`
+	Variable     decimal.Decimal `json:"variable"`
+	Unclassified decimal.Decimal `json:"unclassified"`
+	Total        decimal.Decimal `json:"total"`
 }

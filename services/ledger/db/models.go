@@ -22,6 +22,7 @@ type Account struct {
 	BankName     pgtype.Text `json:"bank_name"`
 	AccountLast4 pgtype.Text `json:"account_last4"`
 	BankCurrency pgtype.Text `json:"bank_currency"`
+	CostBehavior pgtype.Text `json:"cost_behavior"`
 }
 
 type AccountingPeriod struct {

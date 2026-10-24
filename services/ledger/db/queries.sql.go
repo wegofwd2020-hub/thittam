@@ -46,7 +46,7 @@ INSERT INTO accounts (id, tenant_id, code, name, account_type, parent_id, is_act
                       bank_name, account_last4, bank_currency)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (tenant_id, code) DO NOTHING
-RETURNING id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency
+RETURNING id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency, cost_behavior
 `
 
 type CreateAccountParams struct {
@@ -88,6 +88,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.BankName,
 		&i.AccountLast4,
 		&i.BankCurrency,
+		&i.CostBehavior,
 	)
 	return i, err
 }
@@ -325,7 +326,7 @@ func (q *Queries) DeletePartyContacts(ctx context.Context, arg DeletePartyContac
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency FROM accounts WHERE id = $1 AND tenant_id = $2
+SELECT id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency, cost_behavior FROM accounts WHERE id = $1 AND tenant_id = $2
 `
 
 type GetAccountParams struct {
@@ -347,6 +348,7 @@ func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (Account
 		&i.BankName,
 		&i.AccountLast4,
 		&i.BankCurrency,
+		&i.CostBehavior,
 	)
 	return i, err
 }
@@ -395,7 +397,7 @@ func (q *Queries) GetAccountBalance(ctx context.Context, arg GetAccountBalancePa
 }
 
 const getAccountByCode = `-- name: GetAccountByCode :one
-SELECT id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency FROM accounts WHERE code = $1 AND tenant_id = $2
+SELECT id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency, cost_behavior FROM accounts WHERE code = $1 AND tenant_id = $2
 `
 
 type GetAccountByCodeParams struct {
@@ -417,6 +419,7 @@ func (q *Queries) GetAccountByCode(ctx context.Context, arg GetAccountByCodePara
 		&i.BankName,
 		&i.AccountLast4,
 		&i.BankCurrency,
+		&i.CostBehavior,
 	)
 	return i, err
 }
@@ -559,7 +562,7 @@ func (q *Queries) ListAccountingPeriods(ctx context.Context, tenantID uuid.UUID)
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency FROM accounts
+SELECT id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency, cost_behavior FROM accounts
 WHERE tenant_id = $1 AND ($2 = '' OR account_type = $2) AND is_active = true
 ORDER BY code ASC
 LIMIT $3 OFFSET $4
@@ -597,6 +600,7 @@ func (q *Queries) ListAccounts(ctx context.Context, arg ListAccountsParams) ([]A
 			&i.BankName,
 			&i.AccountLast4,
 			&i.BankCurrency,
+			&i.CostBehavior,
 		); err != nil {
 			return nil, err
 		}
@@ -962,6 +966,38 @@ func (q *Queries) PostJournalEntry(ctx context.Context, arg PostJournalEntryPara
 		&i.PostedBy,
 		&i.PostedAt,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const setAccountCostBehavior = `-- name: SetAccountCostBehavior :one
+UPDATE accounts SET cost_behavior = $3
+WHERE id = $1 AND tenant_id = $2
+RETURNING id, tenant_id, code, name, account_type, parent_id, is_active, bank_name, account_last4, bank_currency, cost_behavior
+`
+
+type SetAccountCostBehaviorParams struct {
+	ID           uuid.UUID   `json:"id"`
+	TenantID     uuid.UUID   `json:"tenant_id"`
+	CostBehavior pgtype.Text `json:"cost_behavior"`
+}
+
+// $3 NULL clears the classification. Tenant-scoped through the WHERE clause.
+func (q *Queries) SetAccountCostBehavior(ctx context.Context, arg SetAccountCostBehaviorParams) (Account, error) {
+	row := q.db.QueryRow(ctx, setAccountCostBehavior, arg.ID, arg.TenantID, arg.CostBehavior)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Code,
+		&i.Name,
+		&i.AccountType,
+		&i.ParentID,
+		&i.IsActive,
+		&i.BankName,
+		&i.AccountLast4,
+		&i.BankCurrency,
+		&i.CostBehavior,
 	)
 	return i, err
 }

@@ -70,7 +70,18 @@ service LedgerService {
   // and posts a reversing entry. Returns the reversing entry.
   rpc VoidJournalEntry(VoidJournalEntryRequest) returns (JournalEntry);
 
+  // SetAccountCostBehavior classifies an expense account as fixed or variable.
+  // An empty cost_behavior clears the classification.
+  rpc SetAccountCostBehavior(SetAccountCostBehaviorRequest) returns (Account) {
+    option (google.api.http) = { put: "/api/v1/ledger/accounts/{id}/cost-behavior" body: "*" };
+  }
+
   // --- Reports ---
+  // GetMonthlyCostBehavior returns posted expense spend per month, split into
+  // fixed, variable, and unclassified. Months are inclusive "YYYY-MM" bounds.
+  rpc GetMonthlyCostBehavior(GetMonthlyCostBehaviorRequest) returns (GetMonthlyCostBehaviorResponse) {
+    option (google.api.http) = { get: "/api/v1/ledger/reports/monthly-cost-behavior" };
+  }
   rpc GetTrialBalance(GetTrialBalanceRequest) returns (GetTrialBalanceResponse) {
     option (google.api.http) = { get: "/api/v1/ledger/trial-balance" };
   }
@@ -92,6 +103,8 @@ message Account {
   string bank_name = 8;
   string account_last4 = 9;
   string bank_currency = 10; // ISO 4217
+  // fixed|variable for expense accounts; empty when unclassified.
+  string cost_behavior = 11;
 }
 
 // AccountingPeriod represents a calendar month. Posting to a closed period
@@ -432,4 +445,32 @@ message ListPartyTransactionsResponse {
   repeated PartyLedgerLine lines = 1;
   string total_debit = 2;
   string total_credit = 3;
+}
+
+message SetAccountCostBehaviorRequest {
+  // Ignored. The tenant is derived from the caller's verified token (#144).
+  string tenant_id = 1;
+  string id = 2;
+  string cost_behavior = 3; // fixed|variable, or empty to clear
+}
+
+message GetMonthlyCostBehaviorRequest {
+  // Ignored. The tenant is derived from the caller's verified token (#144).
+  string tenant_id = 1;
+  string from_month = 2; // YYYY-MM, inclusive
+  string to_month = 3;   // YYYY-MM, inclusive; span at most 36 months
+}
+
+message GetMonthlyCostBehaviorResponse {
+  repeated MonthlyCostBehavior months = 1;
+}
+
+// MonthlyCostBehavior is one month of posted expense spend. Decimal strings,
+// e.g. "1250.00". The three buckets sum to total.
+message MonthlyCostBehavior {
+  string month = 1;        // YYYY-MM
+  string fixed = 2;
+  string variable = 3;
+  string unclassified = 4;
+  string total = 5;
 }

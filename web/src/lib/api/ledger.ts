@@ -17,6 +17,8 @@ export interface LedgerAccount {
   bank_name: string;
   account_last4: string;
   bank_currency: string;
+  // Expense accounts only: fixed|variable, or empty when unclassified.
+  cost_behavior?: string;
 }
 
 export interface AccountingPeriod {
@@ -224,6 +226,39 @@ export async function updateParty(
 
 export async function getTrialBalance(): Promise<{ entries: TrialBalanceEntry[] }> {
   return api.getList<{ entries: TrialBalanceEntry[] }>(`${BASE}/trial-balance`);
+}
+
+// ---------------------------------------------------------------------------
+// Cost behavior (fixed vs variable expense, by posting month)
+// ---------------------------------------------------------------------------
+
+export interface MonthlyCostBehavior {
+  month: string; // YYYY-MM
+  fixed: string;
+  variable: string;
+  unclassified: string;
+  total: string;
+}
+
+export async function getMonthlyCostBehavior(
+  fromMonth: string,
+  toMonth: string,
+): Promise<{ months: MonthlyCostBehavior[] }> {
+  const q = new URLSearchParams({ from_month: fromMonth, to_month: toMonth });
+  return api.getList<{ months: MonthlyCostBehavior[] }>(
+    `${BASE}/reports/monthly-cost-behavior?${q.toString()}`,
+  );
+}
+
+export type CostBehavior = "fixed" | "variable" | "";
+
+export async function setAccountCostBehavior(
+  id: string,
+  costBehavior: CostBehavior,
+): Promise<LedgerAccount> {
+  return api.put<LedgerAccount>(`${BASE}/accounts/${id}/cost-behavior`, {
+    cost_behavior: costBehavior,
+  });
 }
 
 // ---------------------------------------------------------------------------
