@@ -1,6 +1,6 @@
 {
   "project": "Thittam",
-  "generated": "2026-10-24T07:04:09+00:00",
+  "generated": "2026-10-25T07:27:55+00:00",
   "source": "issues",
   "stage": "late-build",
   "features": [
@@ -1603,6 +1603,12 @@
     {
       "id": "#267",
       "name": "chore(infra): bump CI Go toolchain to 1.26.10",
+      "status": "done",
+      "commits": 1
+    },
+    {
+      "id": "#268",
+      "name": "feat(ledger): report monthly fixed vs variable expense",
       "status": "done",
       "commits": 1
     }
